@@ -25,7 +25,7 @@ and the `/api/v1` interface are not supported.
 cargo run --release -- \
   --data-dir ./racebin_data \
   --bind 127.0.0.1 \
-  --port 8080
+  --port 7042
 ```
 
 Create the first administrator:
@@ -44,7 +44,7 @@ All settings have equivalent `RACEBIN_*` environment variables.
 | Option | Default |
 | --- | --- |
 | `--bind` | `0.0.0.0` |
-| `--port` | `8080` |
+| `--port` | `7042` |
 | `--threads` | `1` |
 | `--data-dir` | `racebin_data` |
 | `--title` | `Racebin` |

@@ -13,7 +13,7 @@ lazy_static! {
 #[derive(Parser, Debug, Clone, Serialize)]
 #[clap(author, version, about, long_about = None)]
 pub struct Args {
-    #[clap(short, long, env = "RACEBIN_PORT", default_value_t = 8080)]
+    #[clap(short, long, env = "RACEBIN_PORT", default_value_t = 7042)]
     pub port: u16,
 
     #[clap(short, long, env = "RACEBIN_BIND", default_value_t = IpAddr::from([0, 0, 0, 0]))]

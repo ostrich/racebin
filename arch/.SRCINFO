@@ -19,6 +19,6 @@ pkgbase = racebin-git
 	source = racebin.conf
 	sha256sums = SKIP
 	sha256sums = 6d5a12e7901dd49fa8ee02db20feba855d0cdc3707af53f4ef601b52daa89847
-	sha256sums = 356d111b1e06273a5a6e3a7dffb698f776a6668c5134e1b12851a3814e885650
+	sha256sums = cfad437cfc0d13bc1559dd46dea2f2620734d682957b3c08ca0436d84928e9e0
 
 pkgname = racebin-git
