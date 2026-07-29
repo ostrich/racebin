@@ -1,0 +1,47 @@
+# Maintainer: ostrich <570911+ostrich@users.noreply.github.com>
+pkgname=racebin-git
+pkgver=3.0.0.r2.g1e0dcab
+pkgrel=1
+pkgdesc="API-first self-hosted paste bin and file share"
+arch=('i686' 'pentium4' 'x86_64' 'arm' 'armv7h' 'armv6h' 'aarch64')
+url="https://github.com/ostrich/racebin"
+license=('MIT AND BSD-3-Clause')
+depends=('gcc-libs' 'glibc')
+makedepends=('cargo' 'git')
+provides=('racebin')
+conflicts=('racebin')
+backup=('etc/racebin.conf')
+options=(!lto)
+source=("racebin::git+https://github.com/ostrich/racebin.git#branch=master"
+        "racebin.service"
+        "racebin.conf")
+sha256sums=('SKIP'
+            '6d5a12e7901dd49fa8ee02db20feba855d0cdc3707af53f4ef601b52daa89847'
+            '356d111b1e06273a5a6e3a7dffb698f776a6668c5134e1b12851a3814e885650')
+
+pkgver() {
+    cd "$srcdir/racebin"
+    printf '%s.r%s.g%s' \
+        "$(sed -n 's/^version = \"\([^\"]*\)\"/\1/p' Cargo.toml | head -n1)" \
+        "$(git rev-list --count HEAD -- . ':(exclude)arch')" \
+        "$(git log -1 --format=%h -- . ':(exclude)arch')"
+}
+
+build() {
+    cd "$srcdir/racebin"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    cargo build --release --locked --no-default-features --features no-c-deps,sqlite
+}
+
+package() {
+    cd "$srcdir/racebin"
+    install -Dm0755 target/release/racebin "$pkgdir/usr/bin/racebin"
+    install -Dm0644 LICENSE \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm0644 LICENSE-BSD-3-Clause \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE-BSD-3-Clause"
+    install -Dm0644 "$srcdir/racebin.service" \
+        "$pkgdir/usr/lib/systemd/system/racebin.service"
+    install -Dm0644 "$srcdir/racebin.conf" "$pkgdir/etc/racebin.conf"
+}

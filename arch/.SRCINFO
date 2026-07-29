@@ -1,0 +1,29 @@
+pkgbase = racebin-git
+	pkgdesc = API-first self-hosted paste bin and file share
+	pkgver = 3.0.0.r2.g1e0dcab
+	pkgrel = 1
+	url = https://github.com/ostrich/racebin
+	arch = i686
+	arch = pentium4
+	arch = x86_64
+	arch = arm
+	arch = armv7h
+	arch = armv6h
+	arch = aarch64
+	license = MIT AND BSD-3-Clause
+	makedepends = cargo
+	makedepends = git
+	depends = gcc-libs
+	depends = glibc
+	provides = racebin
+	conflicts = racebin
+	options = !lto
+	backup = etc/racebin.conf
+	source = racebin::git+https://github.com/ostrich/racebin.git#branch=master
+	source = racebin.service
+	source = racebin.conf
+	sha256sums = SKIP
+	sha256sums = 6d5a12e7901dd49fa8ee02db20feba855d0cdc3707af53f4ef601b52daa89847
+	sha256sums = 356d111b1e06273a5a6e3a7dffb698f776a6668c5134e1b12851a3814e885650
+
+pkgname = racebin-git
