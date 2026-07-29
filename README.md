@@ -67,4 +67,6 @@ The migration aborts before changing the database when it encounters encrypted
 or readonly records. Back up `database.sqlite` and the attachment directory
 before upgrading.
 
-Racebin is available under the [BSD 3-Clause License](LICENSE).
+Racebin's original work is available under the [MIT License](LICENSE).
+MicroBin-derived portions remain subject to the preserved
+[BSD 3-Clause License](LICENSE-BSD-3-Clause).
