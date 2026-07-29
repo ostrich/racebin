@@ -1,21 +1,15 @@
-use actix_web::body::EitherBody;
-use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
-use actix_web::{cookie::Cookie, Error, HttpMessage, HttpResponse};
+use actix_web::cookie::Cookie;
 use argon2::password_hash::{
     rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
 };
 use argon2::Argon2;
-use chrono::{Local, TimeZone};
-use futures::future::{ok, LocalBoxFuture, Ready};
 use once_cell::sync::Lazy;
 use rand::{distributions::Alphanumeric, Rng};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
-use std::rc::Rc;
 use std::sync::Mutex;
-use std::task::{Context, Poll};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::args::ARGS;
@@ -23,6 +17,8 @@ use crate::args::ARGS;
 pub const SESSION_COOKIE: &str = "racebin_session";
 static LOGIN_FAILURES: Lazy<Mutex<HashMap<String, Vec<i64>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
+static DUMMY_PASSWORD_HASH: Lazy<String> =
+    Lazy::new(|| password_hash("racebin-dummy-password").expect("valid dummy password"));
 
 #[derive(Clone, Debug)]
 pub struct User {
@@ -55,14 +51,6 @@ pub struct Invite {
 }
 
 impl Invite {
-    pub fn expires_as_string(&self) -> String {
-        Local
-            .timestamp_opt(self.expires, 0)
-            .earliest()
-            .map(|date| date.format("%b %-d, %Y %-I:%M %p %Z").to_string())
-            .unwrap_or_else(|| "Invalid date".to_string())
-    }
-
     pub fn status(&self) -> &'static str {
         if self.used {
             "Used"
@@ -72,26 +60,6 @@ impl Invite {
             "Expired"
         } else {
             "Active"
-        }
-    }
-
-    pub fn relative_expiration(&self) -> String {
-        let seconds = self.expires - now();
-        if seconds <= 0 {
-            let elapsed = -seconds;
-            if elapsed >= 86400 {
-                format!("{} days ago", elapsed / 86400)
-            } else if elapsed >= 3600 {
-                format!("{} hours ago", elapsed / 3600)
-            } else {
-                format!("{} minutes ago", (elapsed / 60).max(1))
-            }
-        } else if seconds >= 86400 {
-            format!("in {} days", seconds / 86400)
-        } else if seconds >= 3600 {
-            format!("in {} hours", seconds / 3600)
-        } else {
-            format!("in {} minutes", (seconds / 60).max(1))
         }
     }
 
@@ -125,6 +93,8 @@ pub fn connection_at(data_dir: &str) -> Result<Connection, String> {
     conn.execute_batch(
         "
         PRAGMA foreign_keys = ON;
+        PRAGMA journal_mode = WAL;
+        PRAGMA busy_timeout = 5000;
         CREATE TABLE IF NOT EXISTS app_user (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
@@ -171,12 +141,7 @@ pub fn password_hash(password: &str) -> Result<String, String> {
         .map_err(|error| error.to_string())
 }
 
-pub fn create_user(
-    username: &str,
-    password: &str,
-    admin: bool,
-    force_password_change: bool,
-) -> Result<User, String> {
+fn validate_username(username: &str) -> Result<&str, String> {
     let username = username.trim();
     if username.len() < 3
         || username.len() > 64
@@ -188,26 +153,7 @@ pub fn create_user(
             "Username must be 3-64 ASCII letters, numbers, underscores, or hyphens".to_string(),
         );
     }
-    let conn = connection()?;
-    conn.execute(
-        "INSERT INTO app_user (username, password_hash, role, force_password_change, created)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![
-            username,
-            password_hash(password)?,
-            if admin { "admin" } else { "user" },
-            force_password_change as i32,
-            now()
-        ],
-    )
-    .map_err(|error| error.to_string())?;
-    Ok(User {
-        id: conn.last_insert_rowid(),
-        username: username.to_string(),
-        role: if admin { "admin" } else { "user" }.to_string(),
-        enabled: true,
-        force_password_change,
-    })
+    Ok(username)
 }
 
 pub fn verify_user(username: &str, password: &str) -> Result<Option<User>, String> {
@@ -233,6 +179,9 @@ pub fn verify_user(username: &str, password: &str) -> Result<Option<User>, Strin
         .optional()
         .map_err(|error| error.to_string())?;
     let Some((user, stored_hash)) = row else {
+        if let Ok(parsed) = PasswordHash::new(&DUMMY_PASSWORD_HASH) {
+            let _ = Argon2::default().verify_password(password.as_bytes(), &parsed);
+        }
         return Ok(None);
     };
     if !user.enabled {
@@ -289,7 +238,7 @@ pub fn session_user(token: &str) -> Result<Option<SessionUser>, String> {
         .map_err(|error| error.to_string())?;
     if let Some((_, id)) = &session {
         let _ = conn.execute(
-            "UPDATE user_session SET last_used = ?2 WHERE id = ?1",
+            "UPDATE user_session SET last_used = ?2 WHERE id = ?1 AND last_used < ?2 - 300",
             params![id, now()],
         );
     }
@@ -328,18 +277,21 @@ pub fn list_users() -> Result<Vec<User>, String> {
 }
 
 pub fn set_enabled(id: i64, enabled: bool) -> Result<(), String> {
-    let conn = connection()?;
+    let mut conn = connection()?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| error.to_string())?;
     if !enabled {
-        let target_is_admin: bool = conn
+        let target_is_admin: bool = tx
             .query_row(
-                "SELECT role = 'admin' FROM app_user WHERE id = ?1",
+                "SELECT role = 'admin' AND enabled = 1 FROM app_user WHERE id = ?1",
                 params![id],
                 |row| row.get(0),
             )
             .optional()
             .map_err(|error| error.to_string())?
             .ok_or_else(|| "User not found".to_string())?;
-        let enabled_admins: i64 = conn
+        let enabled_admins: i64 = tx
             .query_row(
                 "SELECT count(*) FROM app_user WHERE role = 'admin' AND enabled = 1",
                 [],
@@ -350,7 +302,7 @@ pub fn set_enabled(id: i64, enabled: bool) -> Result<(), String> {
             return Err("The last enabled administrator cannot be disabled".to_string());
         }
     }
-    let changed = conn
+    let changed = tx
         .execute(
             "UPDATE app_user SET enabled = ?2 WHERE id = ?1",
             params![id, enabled as i32],
@@ -360,27 +312,30 @@ pub fn set_enabled(id: i64, enabled: bool) -> Result<(), String> {
         return Err("User not found".to_string());
     }
     if !enabled {
-        conn.execute("DELETE FROM user_session WHERE user_id = ?1", params![id])
+        tx.execute("DELETE FROM user_session WHERE user_id = ?1", params![id])
             .map_err(|error| error.to_string())?;
     }
-    Ok(())
+    tx.commit().map_err(|error| error.to_string())
 }
 
 pub fn set_role(id: i64, admin: bool) -> Result<(), String> {
-    let conn = connection()?;
+    let mut conn = connection()?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| error.to_string())?;
     if !admin {
-        let target_is_admin: bool = conn
+        let target_is_admin: bool = tx
             .query_row(
-                "SELECT role = 'admin' FROM app_user WHERE id = ?1",
+                "SELECT role = 'admin' AND enabled = 1 FROM app_user WHERE id = ?1",
                 params![id],
                 |row| row.get(0),
             )
             .optional()
             .map_err(|error| error.to_string())?
             .ok_or_else(|| "User not found".to_string())?;
-        let admins: i64 = conn
+        let admins: i64 = tx
             .query_row(
-                "SELECT count(*) FROM app_user WHERE role = 'admin'",
+                "SELECT count(*) FROM app_user WHERE role = 'admin' AND enabled = 1",
                 [],
                 |row| row.get(0),
             )
@@ -389,7 +344,7 @@ pub fn set_role(id: i64, admin: bool) -> Result<(), String> {
             return Err("The last administrator cannot be demoted".to_string());
         }
     }
-    let changed = conn
+    let changed = tx
         .execute(
             "UPDATE app_user SET role = ?2 WHERE id = ?1",
             params![id, if admin { "admin" } else { "user" }],
@@ -398,7 +353,14 @@ pub fn set_role(id: i64, admin: bool) -> Result<(), String> {
     if changed == 0 {
         return Err("User not found".to_string());
     }
-    Ok(())
+    if !admin {
+        tx.execute(
+            "UPDATE api_key SET enabled=0 WHERE user_id=?1 AND scopes LIKE '%:admin%'",
+            params![id],
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    tx.commit().map_err(|error| error.to_string())
 }
 
 pub fn set_password(id: i64, password: &str, force: bool) -> Result<(), String> {
@@ -472,17 +434,7 @@ pub fn accept_invite(token: &str, username: &str, password: &str) -> Result<User
     let Some(invite_id) = id else {
         return Err("Invitation is invalid or expired".to_string());
     };
-    let username = username.trim();
-    if username.len() < 3
-        || username.len() > 64
-        || !username
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
-    {
-        return Err(
-            "Username must be 3-64 ASCII letters, numbers, underscores, or hyphens".to_string(),
-        );
-    }
+    let username = validate_username(username)?;
     let password_hash = password_hash(password)?;
     transaction
         .execute(
@@ -509,26 +461,22 @@ pub fn accept_invite(token: &str, username: &str, password: &str) -> Result<User
 }
 
 pub fn current(req: &actix_web::HttpRequest) -> Option<SessionUser> {
-    let existing = {
-        let extensions = req.extensions();
-        extensions.get::<SessionUser>().cloned()
-    };
-    if existing.is_some() {
-        return existing;
-    }
     req.cookie(SESSION_COOKIE)
         .and_then(|cookie| session_user(cookie.value()).ok().flatten())
-}
-
-pub fn csrf_valid(req: &actix_web::HttpRequest, supplied: &str) -> bool {
-    current(req).is_some_and(|session| session.csrf_token == supplied)
 }
 
 pub fn login_allowed(username: &str, client: &str) -> bool {
     let key = format!("{}\n{}", username.to_ascii_lowercase(), client);
     let mut failures = LOGIN_FAILURES.lock().unwrap();
+    let cutoff = now() - 900;
+    failures.retain(|_, attempts| {
+        attempts.retain(|timestamp| *timestamp > cutoff);
+        !attempts.is_empty()
+    });
+    if failures.len() > 10_000 {
+        failures.clear();
+    }
     let attempts = failures.entry(key).or_default();
-    attempts.retain(|timestamp| *timestamp > now() - 900);
     attempts.len() < 5
 }
 
@@ -547,85 +495,11 @@ pub fn clear_login_failures(username: &str, client: &str) {
     LOGIN_FAILURES.lock().unwrap().remove(&key);
 }
 
-pub struct SessionAuth;
-
-impl<S, B> Transform<S, ServiceRequest> for SessionAuth
-where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
-    S::Future: 'static,
-    B: 'static,
-{
-    type Response = ServiceResponse<EitherBody<B>>;
-    type Error = Error;
-    type InitError = ();
-    type Transform = SessionAuthMiddleware<S>;
-    type Future = Ready<Result<Self::Transform, Self::InitError>>;
-
-    fn new_transform(&self, service: S) -> Self::Future {
-        ok(SessionAuthMiddleware {
-            service: Rc::new(service),
-        })
-    }
-}
-
-pub struct SessionAuthMiddleware<S> {
-    service: Rc<S>,
-}
-
-impl<S, B> Service<ServiceRequest> for SessionAuthMiddleware<S>
-where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
-    S::Future: 'static,
-    B: 'static,
-{
-    type Response = ServiceResponse<EitherBody<B>>;
-    type Error = Error;
-    type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&self, context: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.service.poll_ready(context)
-    }
-
-    fn call(&self, req: ServiceRequest) -> Self::Future {
-        let service = self.service.clone();
-        Box::pin(async move {
-            let session = req
-                .cookie(SESSION_COOKIE)
-                .and_then(|cookie| session_user(cookie.value()).ok().flatten());
-            if let Some(session) = session {
-                if session.user.force_password_change
-                    && req.path() != format!("{}/account/password", ARGS.public_path_as_str())
-                    && req.path() != format!("{}/logout", ARGS.public_path_as_str())
-                {
-                    let response = HttpResponse::Found()
-                        .append_header((
-                            "Location",
-                            format!("{}/account/password", ARGS.public_path_as_str()),
-                        ))
-                        .finish()
-                        .map_into_right_body();
-                    return Ok(req.into_response(response));
-                }
-                req.extensions_mut().insert(session);
-                return service
-                    .call(req)
-                    .await
-                    .map(ServiceResponse::map_into_left_body);
-            }
-            let response = HttpResponse::Found()
-                .append_header(("Location", format!("{}/login", ARGS.public_path_as_str())))
-                .finish()
-                .map_into_right_body();
-            Ok(req.into_response(response))
-        })
-    }
-}
-
 pub fn session_cookie(token: String, remember: bool) -> Cookie<'static> {
     let mut builder = Cookie::build(SESSION_COOKIE, token)
         .path("/")
         .http_only(true)
-        .secure(true)
+        .secure(!ARGS.insecure_cookie)
         .same_site(actix_web::cookie::SameSite::Lax);
     if remember {
         builder = builder.max_age(actix_web::cookie::time::Duration::days(30));
@@ -672,6 +546,7 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
             let username = arguments.get(3).ok_or_else(|| {
                 "usage: racebin account create USERNAME [--admin] [--password-file PATH] [--data-dir PATH]".to_string()
             })?;
+            let username = validate_username(username)?;
             let password = cli_password(&arguments)?;
             let role = if arguments.iter().any(|value| value == "--admin") {
                 "admin"
@@ -733,6 +608,22 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
                 format!("usage: racebin account {command} USERNAME [--data-dir PATH]")
             })?;
             let enabled = command == "enable";
+            if !enabled {
+                let would_remove_last: bool = conn
+                    .query_row(
+                        "SELECT role='admin' AND enabled=1
+                         AND (SELECT count(*) FROM app_user WHERE role='admin' AND enabled=1)<=1
+                         FROM app_user WHERE username=?1",
+                        params![username],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .map_err(|error| error.to_string())?
+                    .unwrap_or(false);
+                if would_remove_last {
+                    return Err("The last enabled administrator cannot be disabled".to_string());
+                }
+            }
             let changed = conn
                 .execute(
                     "UPDATE app_user SET enabled = ?2 WHERE username = ?1",
@@ -759,6 +650,22 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
             if !matches!(role, "user" | "admin") {
                 return Err("role must be user or admin".to_string());
             }
+            if role == "user" {
+                let would_remove_last: bool = conn
+                    .query_row(
+                        "SELECT role='admin' AND enabled=1
+                         AND (SELECT count(*) FROM app_user WHERE role='admin' AND enabled=1)<=1
+                         FROM app_user WHERE username=?1",
+                        params![username],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .map_err(|error| error.to_string())?
+                    .unwrap_or(false);
+                if would_remove_last {
+                    return Err("The last enabled administrator cannot be demoted".to_string());
+                }
+            }
             let changed = conn
                 .execute(
                     "UPDATE app_user SET role = ?2 WHERE username = ?1",
@@ -767,6 +674,15 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
                 .map_err(|error| error.to_string())?;
             if changed == 0 {
                 return Err(format!("account not found: {username}"));
+            }
+            if role == "user" {
+                conn.execute(
+                    "UPDATE api_key SET enabled=0
+                     WHERE user_id=(SELECT id FROM app_user WHERE username=?1)
+                     AND scopes LIKE '%:admin%'",
+                    params![username],
+                )
+                .map_err(|error| error.to_string())?;
             }
             println!("set {username} role to {role}");
         }

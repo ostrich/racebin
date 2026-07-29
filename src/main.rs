@@ -1,5 +1,3 @@
-extern crate core;
-
 use actix_web::{middleware, web, App, HttpServer};
 use chrono::Local;
 use env_logger::Builder;
@@ -17,7 +15,6 @@ pub mod util {
     pub mod accounts;
     pub mod animalnumbers;
     pub mod api_keys;
-    pub mod hashids;
 }
 
 #[actix_web::main]
@@ -44,15 +41,58 @@ async fn main() -> std::io::Result<()> {
         .filter(None, LevelFilter::Info)
         .init();
 
-    std::fs::create_dir_all(format!("{}/public", ARGS.data_dir))?;
+    if ARGS.threads == 0 {
+        return Err(std::io::Error::other("--threads must be at least 1"));
+    }
+    if ARGS.max_file_size_mb.checked_mul(1024 * 1024).is_none() {
+        return Err(std::io::Error::other("--max-file-size-mb is too large"));
+    }
+    if ARGS.qr && ARGS.public_url.is_none() {
+        return Err(std::io::Error::other(
+            "--public-url is required when --qr is enabled",
+        ));
+    }
+    std::fs::create_dir_all(&ARGS.data_dir)?;
     let repository = repository::Repository::open(&ARGS.data_dir).map_err(std::io::Error::other)?;
     repository.migrate().map_err(std::io::Error::other)?;
+    let repaired = repository
+        .repair_attachment_layout()
+        .map_err(std::io::Error::other)?;
+    if repaired != 0 {
+        log::info!("imported {repaired} legacy attachments");
+    }
+    let purged = repository
+        .purge_expired(services::now())
+        .map_err(std::io::Error::other)?;
+    if purged != 0 {
+        log::info!("removed {purged} expired pastes");
+    }
+    let cleanup_repository = repository.clone();
+    actix_web::rt::spawn(async move {
+        let mut interval = actix_web::rt::time::interval(std::time::Duration::from_secs(3600));
+        loop {
+            interval.tick().await;
+            if let Err(error) = cleanup_repository.purge_expired(services::now()) {
+                log::error!("expiration cleanup failed: {error}");
+            }
+        }
+    });
     let state = web::Data::new(services::Services::new(repository));
 
     log::info!("Racebin starting on http://{}:{}", ARGS.bind, ARGS.port);
     HttpServer::new(move || {
         App::new()
             .app_data(state.clone())
+            .wrap(
+                middleware::DefaultHeaders::new()
+                    .add(("X-Content-Type-Options", "nosniff"))
+                    .add(("X-Frame-Options", "DENY"))
+                    .add(("Referrer-Policy", "no-referrer"))
+                    .add((
+                        "Content-Security-Policy",
+                        "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+                    )),
+            )
             .wrap(middleware::NormalizePath::trim())
             .wrap(middleware::Logger::default())
             .configure(api_v2::configure)

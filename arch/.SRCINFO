@@ -8,6 +8,7 @@ pkgbase = racebin-git
 	license = MIT AND BSD-3-Clause
 	makedepends = cargo
 	makedepends = git
+	makedepends = npm
 	depends = gcc-libs
 	depends = glibc
 	provides = racebin
@@ -19,6 +20,6 @@ pkgbase = racebin-git
 	source = racebin.conf
 	sha256sums = SKIP
 	sha256sums = 6d5a12e7901dd49fa8ee02db20feba855d0cdc3707af53f4ef601b52daa89847
-	sha256sums = cfad437cfc0d13bc1559dd46dea2f2620734d682957b3c08ca0436d84928e9e0
+	sha256sums = 7111a62d72330cf8e2bca9f7523cd5583cb532e5bd83714fc025c17c79306014
 
 pkgname = racebin-git

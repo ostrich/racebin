@@ -1,9 +1,11 @@
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Connection, Transaction};
+use std::collections::HashSet;
+use std::fs;
 use std::path::{Path, PathBuf};
 
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
 
 #[derive(Clone)]
 pub struct Repository {
@@ -47,10 +49,141 @@ impl Repository {
         } else {
             create_paste_schema(&tx)?;
         }
+        if !column_exists(&tx, "pasta_file", "storage_name")? {
+            tx.execute("ALTER TABLE pasta_file ADD COLUMN storage_name TEXT", [])
+                .map_err(|e| e.to_string())?;
+            tx.execute(
+                "UPDATE pasta_file SET storage_name=name WHERE storage_name IS NULL",
+                [],
+            )
+            .map_err(|e| e.to_string())?;
+        }
         normalize_api_key_scopes(&tx)?;
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)
             .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())
+    }
+
+    pub fn purge_expired(&self, now: i64) -> Result<usize, String> {
+        let mut conn = self.conn()?;
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        let slugs = {
+            let mut statement = tx
+                .prepare("SELECT slug FROM pasta WHERE expiration IS NOT NULL AND expiration<=?1")
+                .map_err(|e| e.to_string())?;
+            let slugs = statement
+                .query_map(params![now], |row| row.get::<_, String>(0))
+                .map_err(|e| e.to_string())?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(|e| e.to_string())?;
+            slugs
+        };
+        tx.execute(
+            "DELETE FROM pasta WHERE expiration IS NOT NULL AND expiration<=?1",
+            params![now],
+        )
+        .map_err(|e| e.to_string())?;
+        tx.execute("DELETE FROM user_session WHERE expires<=?1", params![now])
+            .map_err(|e| e.to_string())?;
+        tx.execute(
+            "DELETE FROM user_invite WHERE expires<=?1-2592000",
+            params![now],
+        )
+        .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+        for slug in &slugs {
+            let _ = std::fs::remove_dir_all(self.data_dir.join("attachments").join(slug));
+        }
+        let valid = {
+            let conn = self.conn()?;
+            let mut statement = conn
+                .prepare("SELECT slug FROM pasta")
+                .map_err(|e| e.to_string())?;
+            let valid = statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| e.to_string())?
+                .collect::<rusqlite::Result<HashSet<_>>>()
+                .map_err(|e| e.to_string())?;
+            valid
+        };
+        let attachment_root = self.data_dir.join("attachments");
+        if let Ok(entries) = fs::read_dir(&attachment_root) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if entry.path().is_dir() && !valid.contains(&name) {
+                    let _ = fs::remove_dir_all(entry.path());
+                }
+            }
+        }
+        Ok(slugs.len())
+    }
+
+    pub fn repair_attachment_layout(&self) -> Result<usize, String> {
+        let conn = self.conn()?;
+        let mut statement = conn
+            .prepare(
+                "SELECT p.id,p.slug,f.name,f.storage_name
+                 FROM pasta_file f JOIN pasta p ON p.id=f.pasta_id",
+            )
+            .map_err(|e| e.to_string())?;
+        let files = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(|e| e.to_string())?;
+        let mut repaired = 0;
+        for (id, slug, name, storage_name) in files {
+            for value in [&slug, &name, &storage_name] {
+                let mut components = Path::new(value).components();
+                if !matches!(components.next(), Some(std::path::Component::Normal(_)))
+                    || components.next().is_some()
+                    || value.starts_with('.')
+                {
+                    return Err(format!("unsafe legacy attachment metadata: {value:?}"));
+                }
+            }
+            let destination = self
+                .data_dir
+                .join("attachments")
+                .join(&slug)
+                .join(&storage_name);
+            if destination.is_file() {
+                continue;
+            }
+            let candidates = [
+                self.data_dir
+                    .join("public")
+                    .join(id.to_string())
+                    .join(&name),
+                self.data_dir.join("public").join(&slug).join(&name),
+                self.data_dir
+                    .join("pasta_data")
+                    .join(id.to_string())
+                    .join(&name),
+            ];
+            let source = candidates
+                .iter()
+                .find(|candidate| candidate.is_file())
+                .ok_or_else(|| {
+                    format!(
+                        "attachment {name:?} for paste {slug:?} is missing; checked legacy and current storage"
+                    )
+                })?;
+            let parent = destination
+                .parent()
+                .ok_or_else(|| "invalid attachment destination".to_string())?;
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            fs::copy(source, &destination).map_err(|e| e.to_string())?;
+            repaired += 1;
+        }
+        Ok(repaired)
     }
 }
 
@@ -124,7 +257,7 @@ fn create_paste_schema(conn: &Connection) -> Result<(), String> {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           pasta_id INTEGER NOT NULL REFERENCES pasta(id) ON DELETE CASCADE,
           position INTEGER NOT NULL, role TEXT NOT NULL CHECK(role IN ('primary','attachment')),
-          name TEXT NOT NULL, size INTEGER NOT NULL,
+          name TEXT NOT NULL, storage_name TEXT NOT NULL, size INTEGER NOT NULL,
           UNIQUE(pasta_id, position)
         );",
     )
@@ -206,7 +339,8 @@ fn migrate_legacy_pastes(tx: &Transaction<'_>) -> Result<(), String> {
         let mut position = 0;
         if let Some(name) = primary.filter(|name| !name.is_empty()) {
             tx.execute(
-                "INSERT INTO pasta_file(pasta_id,position,role,name,size) VALUES(?1,?2,'primary',?3,?4)",
+                "INSERT INTO pasta_file(pasta_id,position,role,name,storage_name,size)
+                 VALUES(?1,?2,'primary',?3,?3,?4)",
                 params![pasta_id, position, name, size.unwrap_or(0)],
             )
             .map_err(|e| e.to_string())?;
@@ -221,7 +355,8 @@ fn migrate_legacy_pastes(tx: &Transaction<'_>) -> Result<(), String> {
                     let size = file.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
                     if !name.is_empty() {
                         tx.execute(
-                            "INSERT INTO pasta_file(pasta_id,position,role,name,size) VALUES(?1,?2,'attachment',?3,?4)",
+                            "INSERT INTO pasta_file(pasta_id,position,role,name,storage_name,size)
+                             VALUES(?1,?2,'attachment',?3,?3,?4)",
                             params![pasta_id, position, name, size],
                         )
                         .map_err(|e| e.to_string())?;

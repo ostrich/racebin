@@ -50,6 +50,9 @@ fn connection() -> rusqlite::Result<Connection> {
     let conn = Connection::open(format!("{}/database.sqlite", ARGS.data_dir))?;
     conn.execute_batch(
         "
+        PRAGMA foreign_keys = ON;
+        PRAGMA journal_mode = WAL;
+        PRAGMA busy_timeout = 5000;
         CREATE TABLE IF NOT EXISTS api_key (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER REFERENCES app_user(id),
@@ -100,7 +103,11 @@ pub fn create(
         .take(48)
         .map(char::from)
         .collect();
-    let prefix = secret.chars().take(10).collect::<String>();
+    let prefix: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(10)
+        .map(char::from)
+        .collect();
     let token = format!("mbk_{}_{}", prefix, secret);
     let created = now();
     let conn = connection().map_err(|error| error.to_string())?;
@@ -153,7 +160,8 @@ pub fn authenticate(token: &str) -> Result<Option<ApiKey>, String> {
         .map_err(|error| error.to_string())?;
     if let Some(key) = &key {
         conn.execute(
-            "UPDATE api_key SET last_used = ?2 WHERE id = ?1",
+            "UPDATE api_key SET last_used = ?2 WHERE id = ?1
+             AND (last_used IS NULL OR last_used < ?2 - 300)",
             params![key.id, now()],
         )
         .map_err(|error| error.to_string())?;
@@ -188,10 +196,30 @@ pub fn list() -> Result<Vec<ApiKey>, String> {
 }
 
 pub fn list_for_user(user_id: i64) -> Result<Vec<ApiKey>, String> {
-    Ok(list()?
-        .into_iter()
-        .filter(|key| key.user_id == Some(user_id))
-        .collect())
+    let conn = connection().map_err(|error| error.to_string())?;
+    let mut statement = conn
+        .prepare(
+            "SELECT id, user_id, name, prefix, scopes, created, last_used, enabled
+             FROM api_key WHERE user_id=?1 ORDER BY created DESC",
+        )
+        .map_err(|error| error.to_string())?;
+    let keys = statement
+        .query_map(params![user_id], |row| {
+            Ok(ApiKey {
+                id: row.get(0)?,
+                user_id: row.get(1)?,
+                name: row.get(2)?,
+                prefix: row.get(3)?,
+                scopes: row.get(4)?,
+                created: row.get(5)?,
+                last_used: row.get(6)?,
+                enabled: row.get(7)?,
+            })
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|error| error.to_string())?;
+    Ok(keys)
 }
 
 pub fn set_enabled_for_user(id: i64, user_id: i64, enabled: bool) -> Result<bool, String> {

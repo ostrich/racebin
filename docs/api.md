@@ -66,10 +66,11 @@ Lists return:
 {"items":[],"page":1,"page_size":50,"total":0}
 ```
 
-Read, update, and delete:
+Retrieve without consuming, consume a read, update, and delete:
 
 ```bash
 curl https://example.com/api/v2/pastes/PASTE_ID
+curl https://example.com/api/v2/pastes/PASTE_ID/consume
 curl -X PATCH https://example.com/api/v2/pastes/PASTE_ID \
   -H "Authorization: Bearer $RACEBIN_KEY" \
   -H "Content-Type: application/json" \
@@ -78,7 +79,9 @@ curl -X DELETE -H "Authorization: Bearer $RACEBIN_KEY" \
   https://example.com/api/v2/pastes/PASTE_ID
 ```
 
-Raw content is at `/pastes/{slug}/raw`. File upload uses multipart POST to
+The ordinary paste endpoint is suitable for management and does not increment
+the read count. `/pastes/{slug}/consume` and `/pastes/{slug}/raw` atomically
+consume a read. File upload uses multipart POST to
 `/pastes/{slug}/files`. Download or delete a file at
 `/pastes/{slug}/files/{file_id}`. ZIP and QR output are at
 `/pastes/{slug}/archive` and `/pastes/{slug}/qr`.

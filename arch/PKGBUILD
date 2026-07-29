@@ -7,7 +7,7 @@ arch=('x86_64' 'aarch64')
 url="https://github.com/ostrich/racebin"
 license=('MIT AND BSD-3-Clause')
 depends=('gcc-libs' 'glibc')
-makedepends=('cargo' 'git')
+makedepends=('cargo' 'git' 'npm')
 provides=('racebin')
 conflicts=('racebin')
 backup=('etc/racebin.conf')
@@ -17,7 +17,7 @@ source=("racebin::git+https://github.com/ostrich/racebin.git#branch=master"
         "racebin.conf")
 sha256sums=('SKIP'
             '6d5a12e7901dd49fa8ee02db20feba855d0cdc3707af53f4ef601b52daa89847'
-            'cfad437cfc0d13bc1559dd46dea2f2620734d682957b3c08ca0436d84928e9e0')
+            '7111a62d72330cf8e2bca9f7523cd5583cb532e5bd83714fc025c17c79306014')
 
 pkgver() {
     cd "$srcdir/racebin"
@@ -29,9 +29,11 @@ pkgver() {
 
 build() {
     cd "$srcdir/racebin"
+    npm --prefix web ci
+    npm --prefix web run build
     export RUSTUP_TOOLCHAIN=stable
     export CARGO_TARGET_DIR=target
-    cargo build --release --locked --no-default-features --features no-c-deps,sqlite
+    cargo build --release --locked
 }
 
 package() {

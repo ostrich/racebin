@@ -12,9 +12,11 @@ type Paste = {
 };
 type Page<T> = { items: T[]; page: number; page_size: number; total: number };
 type ApiKey = { id: number; name: string; prefix: string; scopes: string; enabled: boolean; created: number; last_used: number | null };
+type Config = { name: string; max_file_size: number; file_uploads: boolean; qr: boolean };
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 let session: Session = { authenticated: false };
+let config: Config = { name: "Racebin", max_file_size: 0, file_uploads: true, qr: false };
 
 class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -42,7 +44,7 @@ function layout(content: string): void {
   const user = session.user;
   app.innerHTML = `
     <header>
-      <a class="brand" href="/" data-link>Racebin</a>
+      <a class="brand" href="/" data-link>${esc(config.name)}</a>
       <nav>
         <a href="/explore" data-link>Explore</a>
         ${user ? `<a href="/pastes" data-link>My pastes</a><a href="/new" data-link><i data-lucide="plus"></i> New</a>` : ""}
@@ -67,7 +69,13 @@ function notice(message: string, kind = ""): void {
 }
 
 async function loadSession(): Promise<void> {
-  session = await api<Session>("/session").catch(() => ({ authenticated: false }));
+  [session, config] = await Promise.all([
+    api<Session>("/session").catch(() => ({ authenticated: false })),
+    api<Config>("/config")
+  ]);
+  if (session.user?.force_password_change && location.pathname !== "/account/password") {
+    history.replaceState({}, "", "/account/password");
+  }
 }
 
 function navigate(path: string): void {
@@ -116,7 +124,7 @@ async function home(): Promise<void> {
   if (session.user) return pasteForm();
   const page = await api<Page<Paste>>("/pastes?access=public&page_size=8");
   layout(`
-    <section class="welcome"><div><p class="eyebrow">Share text and files</p><h1>Racebin</h1><p>Public pastes are open to everyone. Sign in to create and manage your own.</p>
+    <section class="welcome"><div><p class="eyebrow">Share text and files</p><h1>${esc(config.name)}</h1><p>Public pastes are open to everyone. Sign in to create and manage your own.</p>
     <div class="actions"><a class="button primary" href="/explore" data-link>Explore pastes</a><a class="button" href="/login" data-link>Log in</a></div></div></section>
     <section><div class="section-heading"><h2>Recently shared</h2><a href="/explore" data-link>View all</a></div>${pasteRows(page.items)}</section>`);
 }
@@ -135,6 +143,21 @@ function pasteRows(items: Paste[], manage = false): string {
     </article>`).join("")}</div>`;
 }
 
+function pagination(page: Page<unknown>): string {
+  const pages = Math.max(1, Math.ceil(page.total / page.page_size));
+  if (pages === 1) return "";
+  const link = (number: number, label: string) => {
+    const params = new URLSearchParams(location.search);
+    params.set("page", String(number));
+    return `<a class="button" href="${location.pathname}?${params}" data-link>${label}</a>`;
+  };
+  return `<nav class="pagination" aria-label="Pagination">
+    ${page.page > 1 ? link(page.page - 1, "Previous") : ""}
+    <span>Page ${page.page} of ${pages}</span>
+    ${page.page < pages ? link(page.page + 1, "Next") : ""}
+  </nav>`;
+}
+
 async function pasteList(mine: boolean): Promise<void> {
   if (mine && !session.user) return navigate("/login");
   const params = new URLSearchParams(location.search);
@@ -147,11 +170,11 @@ async function pasteList(mine: boolean): Promise<void> {
     <form class="filters" id="paste-filters"><label><span>Search</span><input name="search" value="${esc(params.get("search") ?? "")}" placeholder="Title, content, or ID"></label>
     <label><span>Access</span><select name="access"><option value="">All access</option>${["public","unlisted","owner"].map(v => `<option ${params.get("access") === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
     <button class="button" type="submit"><i data-lucide="search"></i> Filter</button></form>
-    <p class="result-count">${page.total} paste${page.total === 1 ? "" : "s"}</p>${pasteRows(page.items, mine)}</section>`);
+    <p class="result-count">${page.total} paste${page.total === 1 ? "" : "s"}</p>${pasteRows(page.items, mine)}${pagination(page)}</section>`);
 }
 
 async function pasteView(slug: string): Promise<void> {
-  const paste = await api<Paste>(`/pastes/${encodeURIComponent(slug)}`);
+  const paste = await api<Paste>(`/pastes/${encodeURIComponent(slug)}/consume`);
   const own = session.user && (session.user.id === paste.owner_user_id || session.user.role === "admin");
   if (paste.kind === "url") {
     layout(`<section class="empty"><p class="eyebrow">Short link</p><h1>${esc(title(paste))}</h1><p>Redirecting…</p></section>`);
@@ -160,9 +183,9 @@ async function pasteView(slug: string): Promise<void> {
   }
   layout(`<article class="paste-view">
     <div class="page-heading"><div><p class="eyebrow">${esc(paste.access)} · ${esc(paste.syntax)}</p><h1>${esc(title(paste))}</h1></div>
-    <div class="actions"><a class="button" href="/api/v2/pastes/${esc(paste.slug)}/raw">Raw</a>${own ? `<a class="button primary" href="/pastes/${esc(paste.slug)}/edit" data-link><i data-lucide="edit-3"></i> Edit</a>` : ""}</div></div>
+    <div class="actions"><a class="button" href="/api/v2/pastes/${esc(paste.slug)}/raw">Raw</a>${paste.files.length ? `<a class="button" href="/api/v2/pastes/${esc(paste.slug)}/archive">ZIP</a>` : ""}${config.qr ? `<a class="button" href="/api/v2/pastes/${esc(paste.slug)}/qr">QR</a>` : ""}${own ? `<a class="button primary" href="/pastes/${esc(paste.slug)}/edit" data-link><i data-lucide="edit-3"></i> Edit</a>` : ""}</div></div>
     <pre class="content"><code>${esc(paste.content)}</code></pre>
-    ${paste.files.length ? `<section><h2>Files</h2><div class="files">${paste.files.map(file => `<a href="/api/v2/pastes/${esc(paste.slug)}/files/${file.id}"><i data-lucide="file-text"></i><span>${esc(file.name)}</span><small>${file.size.toLocaleString()} bytes</small></a>`).join("")}</div></section>` : ""}
+    ${paste.files.length ? `<section><h2>Files</h2><div class="files">${paste.files.map(file => `<div class="file-row" data-file-id="${file.id}" data-slug="${esc(paste.slug)}"><a href="/api/v2/pastes/${esc(paste.slug)}/files/${file.id}"><i data-lucide="file-text"></i><span>${esc(file.name)}</span><small>${file.size.toLocaleString()} bytes</small></a>${own ? `<button class="icon-button" type="button" title="Delete file" aria-label="Delete file" data-action="delete-file"><i data-lucide="trash-2"></i></button>` : ""}</div>`).join("")}</div></section>` : ""}
     <footer class="paste-stats"><span>Created ${date(paste.created)}</span><span>Expires ${date(paste.expiration)}</span><span>${paste.read_count} reads</span></footer>
   </article>`);
 }
@@ -174,7 +197,7 @@ async function pasteForm(slug?: string): Promise<void> {
     <div class="page-heading"><div><p class="eyebrow">${paste ? "Edit" : "Create"}</p><h1>${paste ? esc(title(paste)) : "New paste"}</h1></div></div>
     <form id="paste-form">
       <label class="title-field"><span>Title</span><input name="title" maxlength="200" value="${esc(paste?.title ?? "")}" placeholder="Optional title"></label>
-      <label><span>Content</span><textarea name="content" required spellcheck="false">${esc(paste?.content ?? "")}</textarea></label>
+      <label><span>Content</span><textarea name="content" spellcheck="false">${esc(paste?.content ?? "")}</textarea></label>
       <div class="form-grid">
         <label><span>Type</span><select name="kind"><option value="text">Text</option><option value="url" ${paste?.kind === "url" ? "selected" : ""}>URL</option></select></label>
         <label><span>Syntax</span><select name="syntax">${["none","auto","sh","c","cpp","cs","go","html","java","js","json","kt","lua","php","py","r","rb","rs","swift","xml","yaml"].map(v => `<option ${paste?.syntax === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
@@ -182,7 +205,7 @@ async function pasteForm(slug?: string): Promise<void> {
         <label><span>Expires</span><input type="datetime-local" name="expiration" value="${paste?.expiration ? new Date(paste.expiration * 1000).toISOString().slice(0,16) : ""}"></label>
         <label><span>Burn after reads</span><input type="number" min="0" name="burn_after_reads" value="${paste?.burn_after_reads ?? 0}"></label>
       </div>
-      <label><span>Add files</span><input type="file" name="files" multiple></label>
+      ${config.file_uploads ? `<label><span>Add files</span><input type="file" name="files" multiple><small>Combined upload limit: ${Math.floor(config.max_file_size / 1024 / 1024)} MiB</small></label>` : ""}
       <div class="actions"><button class="button primary" type="submit">${paste ? "Save changes" : "Create paste"}</button>${paste ? `<button class="button danger" type="button" data-action="delete-paste">Delete</button>` : ""}</div>
       <input type="hidden" name="slug" value="${esc(slug ?? "")}">
     </form></section>`);
@@ -236,12 +259,12 @@ function adminView(): void {
 async function adminPastes(): Promise<void> {
   if (session.user?.role !== "admin") return navigate("/");
   const params = new URLSearchParams(location.search); params.set("page_size", "100");
-  const page = await api<Page<Paste>>(`/admin/pastes?${params}`).catch(() => api<Page<Paste>>(`/pastes?${params}`));
+  const page = await api<Page<Paste>>(`/admin/pastes?${params}`);
   layout(`<section><div class="page-heading"><div><p class="eyebrow">Administration</p><h1>All pastes</h1></div><a class="button" href="/admin" data-link>Admin home</a></div>
     <form class="filters admin-filters" id="paste-filters"><label><span>Search</span><input name="search" value="${esc(params.get("search") ?? "")}"></label>
     <label><span>Access</span><select name="access"><option value="">All</option>${["public","unlisted","owner"].map(v=>`<option ${params.get("access")===v?"selected":""}>${v}</option>`).join("")}</select></label>
     <label><span>Owner ID</span><input type="number" name="owner_user_id" value="${esc(params.get("owner_user_id") ?? "")}"></label><button class="button" type="submit">Filter</button></form>
-    <p class="result-count">${page.total} pastes</p>${pasteRows(page.items, true)}</section>`);
+    <p class="result-count">${page.total} pastes</p>${pasteRows(page.items, true)}${pagination(page)}</section>`);
 }
 
 document.addEventListener("click", async event => {
@@ -266,6 +289,15 @@ document.addEventListener("click", async event => {
     if (action === "delete-paste") {
       const slug = (document.querySelector<HTMLInputElement>('input[name="slug"]'))?.value;
       if (slug && confirm("Delete this paste permanently?")) { await api(`/pastes/${slug}`, { method: "DELETE" }); navigate("/pastes"); }
+    }
+    if (action === "delete-file") {
+      const row = target.closest<HTMLElement>(".file-row");
+      const slug = row?.dataset.slug;
+      const fileId = row?.dataset.fileId;
+      if (slug && fileId && confirm("Delete this file permanently?")) {
+        await api(`/pastes/${encodeURIComponent(slug)}/files/${fileId}`, { method: "DELETE" });
+        row.remove();
+      }
     }
     if (action === "create-invite") {
       const invite = await api<{url:string}>("/admin/invites", { method: "POST" });
@@ -311,6 +343,8 @@ document.addEventListener("submit", async event => {
   event.preventDefault();
   const form = event.target as HTMLFormElement;
   const data = new FormData(form);
+  const controls = [...form.querySelectorAll<HTMLButtonElement | HTMLInputElement>("button, input[type=submit]")];
+  controls.forEach(control => control.disabled = true);
   try {
     if (form.id === "login-form") {
       await api("/session", { method: "POST", body: JSON.stringify({ username: formValue(data,"username"), password: formValue(data,"password"), remember: data.has("remember") }) });
@@ -334,7 +368,12 @@ document.addEventListener("submit", async event => {
       if (files.length) {
         const upload = new FormData();
         files.forEach(file => upload.append("files", file));
-        await api(`/pastes/${paste.slug}/files`, { method: "POST", body: upload });
+        try {
+          await api(`/pastes/${paste.slug}/files`, { method: "POST", body: upload });
+        } catch (error) {
+          if (!slug) await api(`/pastes/${paste.slug}`, { method: "DELETE" }).catch(() => undefined);
+          throw error;
+        }
       }
       navigate(`/pastes/${paste.slug}`);
     }
@@ -351,7 +390,11 @@ document.addEventListener("submit", async event => {
       data.forEach((value,key) => { if (value) params.set(key,String(value)); });
       navigate(`${location.pathname}?${params}`);
     }
-  } catch (error) { notice(error instanceof Error ? error.message : "Request failed", "error"); }
+  } catch (error) {
+    notice(error instanceof Error ? error.message : "Request failed", "error");
+  } finally {
+    controls.forEach(control => control.disabled = false);
+  }
 });
 
 async function loadAdmin(section: string): Promise<void> {

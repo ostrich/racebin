@@ -11,11 +11,26 @@ use rust_embed::RustEmbed;
 use serde::Deserialize;
 use serde_json::json;
 use std::io::{Cursor, Write};
+use std::path::{Component, Path, PathBuf};
+use tokio::io::AsyncWriteExt;
 use zip::write::SimpleFileOptions;
 
 #[derive(RustEmbed)]
 #[folder = "web/dist"]
 struct Assets;
+
+#[derive(Default)]
+struct UploadCleanup {
+    paths: Vec<PathBuf>,
+}
+
+impl Drop for UploadCleanup {
+    fn drop(&mut self) {
+        for path in &self.paths {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
 
 #[derive(serde::Serialize)]
 struct ErrorEnvelope {
@@ -50,8 +65,47 @@ fn internal(message: impl Into<String>) -> HttpResponse {
     )
 }
 
+fn paste_error(message: String) -> HttpResponse {
+    if message.starts_with("Missing ") || message == "You do not own this paste" {
+        error(StatusCode::FORBIDDEN, "forbidden", message)
+    } else if [
+        "Content is required",
+        "Title exceeds",
+        "Kind must",
+        "Access must",
+        "Burn count",
+        "URL content",
+    ]
+    .iter()
+    .any(|prefix| message.starts_with(prefix))
+    {
+        error(StatusCode::BAD_REQUEST, "invalid_paste", message)
+    } else {
+        internal(message)
+    }
+}
+
+fn attachment_path(data_dir: &Path, slug: &str, name: &str) -> Result<PathBuf, String> {
+    let safe_component = |value: &str| {
+        let mut components = Path::new(value).components();
+        matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
+    };
+    if !safe_component(slug) || !safe_component(name) || name.starts_with('.') {
+        return Err("Unsafe attachment metadata".to_string());
+    }
+    Ok(data_dir.join("attachments").join(slug).join(name))
+}
+
 fn principal(services: &Services, req: &HttpRequest) -> Result<Principal, HttpResponse> {
-    services.principal(req).map_err(internal)
+    services.principal(req).map_err(|message| {
+        if message == "Password change required" {
+            error(StatusCode::FORBIDDEN, "password_change_required", message)
+        } else if message.contains("authorization") || message.contains("bearer") {
+            error(StatusCode::UNAUTHORIZED, "invalid_token", message)
+        } else {
+            internal(message)
+        }
+    })
 }
 
 fn require_auth(value: Principal) -> Result<Principal, HttpResponse> {
@@ -96,6 +150,32 @@ fn require_admin(value: &Principal, scope: &str) -> Result<(), HttpResponse> {
 
 pub fn configure(config: &mut web::ServiceConfig) {
     config
+        .app_data(
+            web::JsonConfig::default()
+                .limit(2 * 1024 * 1024)
+                .error_handler(|parse_error, _| {
+                    actix_web::error::InternalError::from_response(
+                        parse_error,
+                        error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_json",
+                            "Request body is not valid for this endpoint",
+                        ),
+                    )
+                    .into()
+                }),
+        )
+        .app_data(web::QueryConfig::default().error_handler(|parse_error, _| {
+            actix_web::error::InternalError::from_response(
+                parse_error,
+                error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_query",
+                    "Query parameters are not valid for this endpoint",
+                ),
+            )
+            .into()
+        }))
         .service(
             web::scope("/api/v2")
                 .service(get_config)
@@ -107,6 +187,7 @@ pub fn configure(config: &mut web::ServiceConfig) {
                 .service(accept_invite)
                 .service(list_pastes)
                 .service(create_paste)
+                .service(consume_paste)
                 .service(get_paste)
                 .service(update_paste)
                 .service(delete_paste)
@@ -138,7 +219,7 @@ pub fn configure(config: &mut web::ServiceConfig) {
 async fn get_openapi() -> impl Responder {
     HttpResponse::Ok().json(json!({
       "openapi": "3.1.0",
-      "info": {"title":"Racebin API","version":"2.0.0"},
+      "info": {"title":"Racebin API","version":"3.0.0"},
       "servers": [{"url":"/api/v2"}],
       "components": {
         "securitySchemes": {
@@ -168,10 +249,11 @@ async fn get_openapi() -> impl Responder {
           "post":{"summary":"Create a paste"}
         },
         "/pastes/{slug}":{
-          "get":{"summary":"Read a paste"},
+          "get":{"summary":"Get paste metadata and content without consuming a read"},
           "patch":{"summary":"Update a paste"},
           "delete":{"summary":"Delete a paste"}
         },
+        "/pastes/{slug}/consume":{"get":{"summary":"Read and consume a paste"}},
         "/pastes/{slug}/raw":{"get":{"summary":"Read raw paste content"}},
         "/pastes/{slug}/files":{"post":{"summary":"Upload paste files"}},
         "/pastes/{slug}/files/{file_id}":{
@@ -203,10 +285,9 @@ async fn get_openapi() -> impl Responder {
 async fn get_config() -> impl Responder {
     HttpResponse::Ok().json(json!({
         "name": ARGS.title.as_deref().unwrap_or("Racebin"),
-        "max_file_size": ARGS.max_file_size_unencrypted_mb * 1024 * 1024,
+        "max_file_size": ARGS.max_file_size_mb * 1024 * 1024,
         "file_uploads": !ARGS.no_file_upload,
         "qr": ARGS.qr,
-        "default_expiration": if ARGS.default_expiry == "never" { serde_json::Value::Null } else { json!(ARGS.default_expiry) },
         "access_modes": ["public", "unlisted", "owner"]
     }))
 }
@@ -231,6 +312,7 @@ async fn get_session(req: HttpRequest, services: web::Data<Services>) -> HttpRes
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct LoginInput {
     username: String,
     password: String,
@@ -240,10 +322,9 @@ struct LoginInput {
 #[post("/session")]
 async fn login(req: HttpRequest, body: web::Json<LoginInput>) -> HttpResponse {
     let client = req
-        .connection_info()
-        .realip_remote_addr()
-        .unwrap_or("unknown")
-        .to_string();
+        .peer_addr()
+        .map(|address| address.ip().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
     if !accounts::login_allowed(&body.username, &client) {
         return error(
             StatusCode::TOO_MANY_REQUESTS,
@@ -251,17 +332,23 @@ async fn login(req: HttpRequest, body: web::Json<LoginInput>) -> HttpResponse {
             "Too many login attempts",
         );
     }
-    match accounts::verify_user(&body.username, &body.password) {
-        Ok(Some(user)) => {
+    let username = body.username.clone();
+    let password = body.password.clone();
+    let verified = web::block(move || accounts::verify_user(&username, &password)).await;
+    match verified {
+        Ok(Ok(Some(user))) => {
             accounts::clear_login_failures(&body.username, &client);
             match accounts::create_session(user.id, body.remember.unwrap_or(false)) {
                 Ok((token, csrf, _)) => HttpResponse::Ok()
-                    .cookie(accounts::session_cookie(token, body.remember.unwrap_or(false)))
+                    .cookie(accounts::session_cookie(
+                        token,
+                        body.remember.unwrap_or(false),
+                    ))
                     .json(json!({"user": {"id": user.id, "username": user.username, "role": user.role}, "csrf_token": csrf})),
                 Err(e) => internal(e),
             }
         }
-        Ok(None) => {
+        Ok(Ok(None)) => {
             accounts::record_login_failure(&body.username, &client);
             error(
                 StatusCode::UNAUTHORIZED,
@@ -269,7 +356,8 @@ async fn login(req: HttpRequest, body: web::Json<LoginInput>) -> HttpResponse {
                 "Invalid username or password",
             )
         }
-        Err(e) => internal(e),
+        Ok(Err(e)) => internal(e),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -297,7 +385,7 @@ async fn logout(req: HttpRequest, services: web::Data<Services>) -> HttpResponse
             Cookie::build(accounts::SESSION_COOKIE, "")
                 .path("/")
                 .http_only(true)
-                .secure(true)
+                .secure(!ARGS.insecure_cookie)
                 .same_site(SameSite::Lax)
                 .max_age(actix_web::cookie::time::Duration::ZERO)
                 .finish(),
@@ -306,6 +394,7 @@ async fn logout(req: HttpRequest, services: web::Data<Services>) -> HttpResponse
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct PasswordInput {
     current_password: String,
     new_password: String,
@@ -329,21 +418,35 @@ async fn change_password(
         }
         Err(response) => return response,
     };
-    match accounts::verify_user(&value.user.username, &body.current_password) {
-        Ok(Some(_)) => match accounts::set_password(value.user.id, &body.new_password, false) {
-            Ok(()) => HttpResponse::NoContent().finish(),
-            Err(e) => error(StatusCode::BAD_REQUEST, "invalid_password", e),
-        },
-        Ok(None) => error(
+    let username = value.user.username;
+    let current_password = body.current_password.clone();
+    let new_password = body.new_password.clone();
+    let user_id = value.user.id;
+    let result = web::block(move || {
+        if accounts::verify_user(&username, &current_password)?.is_none() {
+            return Ok::<_, String>(false);
+        }
+        accounts::set_password(user_id, &new_password, false)?;
+        Ok(true)
+    })
+    .await;
+    match result {
+        Ok(Ok(true)) => HttpResponse::NoContent().finish(),
+        Ok(Ok(false)) => error(
             StatusCode::UNAUTHORIZED,
             "invalid_credentials",
             "Current password is incorrect",
         ),
-        Err(e) => internal(e),
+        Ok(Err(e)) if e.starts_with("Password must") => {
+            error(StatusCode::BAD_REQUEST, "invalid_password", e)
+        }
+        Ok(Err(e)) => internal(e),
+        Err(e) => internal(e.to_string()),
     }
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct InviteInput {
     username: String,
     password: String,
@@ -351,14 +454,18 @@ struct InviteInput {
 
 #[post("/invites/{token}/accept")]
 async fn accept_invite(token: web::Path<String>, body: web::Json<InviteInput>) -> HttpResponse {
-    match accounts::accept_invite(&token, &body.username, &body.password) {
-        Ok(user) => match accounts::create_session(user.id, false) {
+    let token = token.into_inner();
+    let username = body.username.clone();
+    let password = body.password.clone();
+    match web::block(move || accounts::accept_invite(&token, &username, &password)).await {
+        Ok(Ok(user)) => match accounts::create_session(user.id, false) {
             Ok((session, csrf, _)) => HttpResponse::Created()
                 .cookie(accounts::session_cookie(session, false))
                 .json(json!({"user": {"id": user.id, "username": user.username, "role": user.role}, "csrf_token": csrf})),
             Err(e) => internal(e),
         },
-        Err(e) => error(StatusCode::BAD_REQUEST, "invalid_invitation", e),
+        Ok(Err(e)) => error(StatusCode::BAD_REQUEST, "invalid_invitation", e),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -372,6 +479,24 @@ async fn list_pastes(
         Ok(v) => v,
         Err(r) => return r,
     };
+    if query.mine.unwrap_or(false) && value.user_id().is_none() {
+        return error(
+            StatusCode::UNAUTHORIZED,
+            "authentication_required",
+            "Authentication required for mine=true",
+        );
+    }
+    if query
+        .access
+        .as_deref()
+        .is_some_and(|access| !matches!(access, "public" | "unlisted" | "owner"))
+    {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "invalid_query",
+            "Access must be public, unlisted, or owner",
+        );
+    }
     let wants_private = query.owner_user_id.is_some() || query.access.as_deref() != Some("public");
     if matches!(value, Principal::Key(_)) && wants_private && !value.can("paste:list") {
         return error(
@@ -399,7 +524,7 @@ async fn create_paste(
     };
     match services.create_paste(&value, &body) {
         Ok(paste) => HttpResponse::Created().json(paste),
-        Err(e) => error(StatusCode::BAD_REQUEST, "invalid_paste", e),
+        Err(e) => paste_error(e),
     }
 }
 
@@ -412,6 +537,23 @@ async fn get_paste(
     let value = match principal(&services, &req) {
         Ok(v) => v,
         Err(r) => return r,
+    };
+    match services.get_paste(&value, &slug) {
+        Ok(Some(paste)) => HttpResponse::Ok().json(paste),
+        Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
+        Err(e) => internal(e),
+    }
+}
+
+#[get("/pastes/{slug}/consume")]
+async fn consume_paste(
+    req: HttpRequest,
+    services: web::Data<Services>,
+    slug: web::Path<String>,
+) -> HttpResponse {
+    let value = match principal(&services, &req) {
+        Ok(value) => value,
+        Err(response) => return response,
     };
     match services.read_paste(&value, &slug) {
         Ok(Some(paste)) => HttpResponse::Ok().json(paste),
@@ -433,9 +575,12 @@ async fn update_paste(
         Err(r) => return r,
     };
     match services.update_paste(&value, &slug, &body) {
+        Ok(Some(_)) if matches!(&value, Principal::Key(key) if !key.has_scope("paste:read") && !key.has_scope("paste:admin")) => {
+            HttpResponse::NoContent().finish()
+        }
         Ok(Some(paste)) => HttpResponse::Ok().json(paste),
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
-        Err(e) => error(StatusCode::FORBIDDEN, "forbidden", e),
+        Err(e) => paste_error(e),
     }
 }
 
@@ -453,7 +598,10 @@ async fn delete_paste(
     match services.delete_paste(&value, &slug) {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
-        Err(e) => error(StatusCode::FORBIDDEN, "forbidden", e),
+        Err(e) if e == "You do not own this paste" || e.starts_with("Missing ") => {
+            error(StatusCode::FORBIDDEN, "forbidden", e)
+        }
+        Err(e) => internal(e),
     }
 }
 
@@ -495,30 +643,53 @@ async fn upload_files(
         Ok(value) => value,
         Err(response) => return response,
     };
-    let directory = services
-        .repo
-        .data_dir
-        .join("attachments")
-        .join(slug.as_str());
-    if let Err(e) = std::fs::create_dir_all(&directory) {
+    let paste = match services.ensure_can_update(&value, &slug) {
+        Ok(paste) => paste,
+        Err(e) => return error(StatusCode::NOT_FOUND, "not_found", e),
+    };
+    let directory = services.repo.data_dir.join("attachments").join(&paste.slug);
+    if let Err(e) = tokio::fs::create_dir_all(&directory).await {
         return internal(e.to_string());
     }
-    let limit = ARGS.max_file_size_unencrypted_mb * 1024 * 1024;
-    let mut created = Vec::new();
-    while let Ok(Some(mut field)) = payload.try_next().await {
+    let Some(limit) = ARGS.max_file_size_mb.checked_mul(1024 * 1024) else {
+        return internal("Configured upload size is too large");
+    };
+    let mut staged: Vec<(PathBuf, PathBuf, String, String, i64)> = Vec::new();
+    let mut cleanup = UploadCleanup::default();
+    let mut total_size = 0usize;
+    loop {
+        let mut field = match payload.try_next().await {
+            Ok(Some(field)) => field,
+            Ok(None) => break,
+            Err(e) => {
+                return error(StatusCode::BAD_REQUEST, "invalid_upload", e.to_string());
+            }
+        };
+        if staged.len() >= 32 {
+            return error(
+                StatusCode::PAYLOAD_TOO_LARGE,
+                "too_many_files",
+                "A paste may contain at most 32 files",
+            );
+        }
         let Some(filename) = field
             .content_disposition()
             .and_then(|value| value.get_filename())
             .map(sanitize_filename::sanitize)
             .filter(|value| !value.is_empty())
         else {
-            continue;
+            return error(
+                StatusCode::BAD_REQUEST,
+                "invalid_upload",
+                "Every multipart field must contain a filename",
+            );
         };
         let temporary = directory.join(format!(".upload-{}", uuid::Uuid::new_v4()));
-        let mut output = match std::fs::File::create(&temporary) {
+        let mut output = match tokio::fs::File::create(&temporary).await {
             Ok(file) => file,
             Err(e) => return internal(e.to_string()),
         };
+        cleanup.paths.push(temporary.clone());
         let mut size = 0usize;
         while let Some(chunk) = field.next().await {
             let chunk = match chunk {
@@ -529,21 +700,30 @@ async fn upload_files(
                 }
             };
             size += chunk.len();
-            if size > limit {
+            total_size = total_size.saturating_add(chunk.len());
+            if size > limit || total_size > limit {
                 let _ = std::fs::remove_file(&temporary);
                 return error(
                     StatusCode::PAYLOAD_TOO_LARGE,
                     "file_too_large",
-                    "File exceeds configured size limit",
+                    "Upload exceeds configured size limit",
                 );
             }
-            if let Err(e) = output.write_all(&chunk) {
+            if let Err(e) = output.write_all(&chunk).await {
                 let _ = std::fs::remove_file(&temporary);
                 return internal(e.to_string());
             }
         }
-        let destination = directory.join(&filename);
-        if destination.exists() {
+        let storage_name = uuid::Uuid::new_v4().simple().to_string();
+        let destination = match attachment_path(&services.repo.data_dir, &paste.slug, &storage_name)
+        {
+            Ok(path) => path,
+            Err(e) => {
+                let _ = std::fs::remove_file(&temporary);
+                return error(StatusCode::BAD_REQUEST, "invalid_file", e);
+            }
+        };
+        if tokio::fs::try_exists(&destination).await.unwrap_or(true) {
             let _ = std::fs::remove_file(&temporary);
             return error(
                 StatusCode::CONFLICT,
@@ -551,18 +731,44 @@ async fn upload_files(
                 format!("{filename} already exists"),
             );
         }
-        if let Err(e) = std::fs::rename(&temporary, &destination) {
-            let _ = std::fs::remove_file(&temporary);
+        staged.push((temporary, destination, filename, storage_name, size as i64));
+    }
+    let mut promoted = Vec::new();
+    for (temporary, destination, _, _, _) in &staged {
+        if let Err(e) = tokio::fs::rename(temporary, destination).await {
+            let _ = std::fs::remove_file(temporary);
+            for path in promoted {
+                let _ = std::fs::remove_file(path);
+            }
+            for (path, _, _, _, _) in &staged {
+                let _ = std::fs::remove_file(path);
+            }
             return internal(e.to_string());
         }
-        match services.add_file(&value, &slug, &filename, size as i64) {
-            Ok(file) => created.push(file),
-            Err(e) => {
-                let _ = std::fs::remove_file(destination);
-                return error(StatusCode::BAD_REQUEST, "invalid_file", e);
-            }
-        }
+        cleanup.paths.push(destination.clone());
+        promoted.push(destination.clone());
     }
+    let inputs = staged
+        .iter()
+        .map(|(_, _, name, storage_name, size)| (name.clone(), storage_name.clone(), *size))
+        .collect::<Vec<_>>();
+    let created = match services.add_files(&value, &slug, &inputs) {
+        Ok(files) => files,
+        Err(e) => {
+            for path in promoted {
+                let _ = std::fs::remove_file(path);
+            }
+            return error(StatusCode::BAD_REQUEST, "invalid_file", e);
+        }
+    };
+    if created.is_empty() {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "invalid_upload",
+            "No valid files were supplied",
+        );
+    }
+    cleanup.paths.clear();
     HttpResponse::Created().json(json!({"items": created}))
 }
 
@@ -571,28 +777,39 @@ async fn get_file(
     req: HttpRequest,
     services: web::Data<Services>,
     path: web::Path<(String, i64)>,
-) -> actix_web::Result<HttpResponse> {
+) -> HttpResponse {
     let value = match principal(&services, &req) {
         Ok(value) => value,
-        Err(response) => return Ok(response),
+        Err(response) => return response,
     };
     let (slug, file_id) = path.into_inner();
-    let paste = services
-        .get_paste(&value, &slug)
-        .map_err(actix_web::error::ErrorInternalServerError)?
-        .ok_or_else(|| actix_web::error::ErrorNotFound("Paste not found"))?;
-    let file = paste
-        .files
-        .iter()
-        .find(|file| file.id == file_id)
-        .ok_or_else(|| actix_web::error::ErrorNotFound("File not found"))?;
-    let path = services
-        .repo
-        .data_dir
-        .join("attachments")
-        .join(&paste.slug)
-        .join(&file.name);
-    Ok(NamedFile::open(path)?.into_response(&req))
+    let paste = match services.get_paste(&value, &slug) {
+        Ok(Some(paste)) => paste,
+        Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
+        Err(e) => return internal(e),
+    };
+    let Some(file) = paste.files.iter().find(|file| file.id == file_id) else {
+        return error(StatusCode::NOT_FOUND, "not_found", "File not found");
+    };
+    let path = match attachment_path(&services.repo.data_dir, &paste.slug, &file.storage_name) {
+        Ok(path) => path,
+        Err(e) => return internal(e),
+    };
+    let content_type = mime_guess::from_path(&file.name).first_or_octet_stream();
+    let named = match NamedFile::open(path) {
+        Ok(named) => named,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return error(StatusCode::NOT_FOUND, "not_found", "File data is missing")
+        }
+        Err(e) => return internal(e.to_string()),
+    };
+    named
+        .set_content_type(content_type)
+        .set_content_disposition(header::ContentDisposition {
+            disposition: header::DispositionType::Attachment,
+            parameters: vec![header::DispositionParam::Filename(file.name.clone())],
+        })
+        .into_response(&req)
 }
 
 #[delete("/pastes/{slug}/files/{file_id}")]
@@ -608,19 +825,12 @@ async fn delete_file(
     };
     let (slug, file_id) = path.into_inner();
     match services.delete_file(&value, &slug, file_id) {
-        Ok(Some(name)) => {
-            let _ = std::fs::remove_file(
-                services
-                    .repo
-                    .data_dir
-                    .join("attachments")
-                    .join(slug)
-                    .join(name),
-            );
-            HttpResponse::NoContent().finish()
+        Ok(true) => HttpResponse::NoContent().finish(),
+        Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "File not found"),
+        Err(e) if e == "You do not own this paste" || e.starts_with("Missing ") => {
+            error(StatusCode::FORBIDDEN, "forbidden", e)
         }
-        Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "File not found"),
-        Err(e) => error(StatusCode::FORBIDDEN, "forbidden", e),
+        Err(e) => internal(e),
     }
 }
 
@@ -639,36 +849,53 @@ async fn get_archive(
         Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
         Err(e) => return internal(e),
     };
-    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-    if !paste.content.is_empty()
-        && (zip.start_file("paste.txt", options).is_err()
-            || zip.write_all(paste.content.as_bytes()).is_err())
-    {
-        return internal("Failed to create archive");
+    const MAX_ARCHIVE_INPUT: u64 = 64 * 1024 * 1024;
+    let archive_input = paste.content.len() as u64
+        + paste
+            .files
+            .iter()
+            .map(|file| file.size.max(0) as u64)
+            .sum::<u64>();
+    if archive_input > MAX_ARCHIVE_INPUT {
+        return error(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "archive_too_large",
+            "Archive input exceeds 64 MiB",
+        );
     }
-    for file in &paste.files {
-        let path = services
-            .repo
-            .data_dir
-            .join("attachments")
-            .join(&paste.slug)
-            .join(&file.name);
-        let Ok(bytes) = std::fs::read(path) else {
-            continue;
-        };
-        if zip.start_file(&file.name, options).is_err() || zip.write_all(&bytes).is_err() {
-            return internal("Failed to create archive");
+    let data_dir = services.repo.data_dir.clone();
+    let archive_slug = paste.slug.clone();
+    let archive = web::block(move || {
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let options =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        if !paste.content.is_empty() {
+            zip.start_file("paste.txt", options)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(paste.content.as_bytes())
+                .map_err(|e| e.to_string())?;
         }
-    }
-    match zip.finish() {
-        Ok(cursor) => HttpResponse::Ok()
+        for file in &paste.files {
+            let path = attachment_path(&data_dir, &paste.slug, &file.storage_name)?;
+            let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+            zip.start_file(&file.name, options)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(&bytes).map_err(|e| e.to_string())?;
+        }
+        zip.finish()
+            .map(|cursor| cursor.into_inner())
+            .map_err(|e| e.to_string())
+    })
+    .await;
+    match archive {
+        Ok(Ok(bytes)) => HttpResponse::Ok()
             .insert_header((header::CONTENT_TYPE, "application/zip"))
             .insert_header((
                 header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"{}.zip\"", paste.slug),
+                format!("attachment; filename=\"{archive_slug}.zip\""),
             ))
-            .body(cursor.into_inner()),
+            .body(bytes),
+        Ok(Err(e)) => internal(e),
         Err(e) => internal(e.to_string()),
     }
 }
@@ -686,10 +913,17 @@ async fn get_qr(
         Ok(value) => value,
         Err(response) => return response,
     };
-    if let Ok(None) = services.get_paste(&value, &slug) {
-        return error(StatusCode::NOT_FOUND, "not_found", "Paste not found");
+    match services.get_paste(&value, &slug) {
+        Ok(Some(_)) => {}
+        Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
+        Err(e) => return internal(e),
     }
-    let origin = req.connection_info().scheme().to_string() + "://" + req.connection_info().host();
+    let origin = ARGS
+        .public_url
+        .as_ref()
+        .expect("validated at startup")
+        .as_str()
+        .trim_end_matches('/');
     match qrcode_generator::to_png_to_vec(
         format!("{origin}/pastes/{slug}"),
         qrcode_generator::QrCodeEcc::Low,
@@ -711,6 +945,13 @@ async fn list_keys(req: HttpRequest, services: web::Data<Services>) -> HttpRespo
     let Some(user_id) = value.user_id() else {
         return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
     };
+    if matches!(&value, Principal::Key(key) if !key.has_scope("key:admin")) {
+        return error(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "Missing key:admin permission",
+        );
+    }
     match api_keys::list_for_user(user_id) {
         Ok(v) => HttpResponse::Ok().json(v),
         Err(e) => internal(e),
@@ -718,6 +959,7 @@ async fn list_keys(req: HttpRequest, services: web::Data<Services>) -> HttpRespo
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct KeyInput {
     name: String,
     scopes: Vec<String>,
@@ -737,6 +979,13 @@ async fn create_key(
     let Some(user_id) = value.user_id() else {
         return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
     };
+    if matches!(&value, Principal::Key(key) if !key.has_scope("key:admin")) {
+        return error(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "Missing key:admin permission",
+        );
+    }
     if let Principal::Key(key) = &value {
         if !key.has_scope("key:admin") || body.scopes.iter().any(|scope| !key.has_scope(scope)) {
             return error(
@@ -759,6 +1008,7 @@ async fn create_key(
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct EnabledInput {
     enabled: bool,
 }
@@ -778,6 +1028,13 @@ async fn update_key(
     let Some(user_id) = value.user_id() else {
         return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
     };
+    if matches!(&value, Principal::Key(key) if !key.has_scope("key:admin")) {
+        return error(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "Missing key:admin permission",
+        );
+    }
     match api_keys::set_enabled_for_user(*id, user_id, body.enabled) {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "API key not found"),
@@ -799,6 +1056,13 @@ async fn delete_key(
     let Some(user_id) = value.user_id() else {
         return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
     };
+    if matches!(&value, Principal::Key(key) if !key.has_scope("key:admin")) {
+        return error(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "Missing key:admin permission",
+        );
+    }
     match api_keys::delete_for_user(*id, user_id) {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "API key not found"),
@@ -841,6 +1105,7 @@ async fn admin_pastes(
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct UserUpdate {
     enabled: Option<bool>,
     role: Option<String>,
@@ -866,7 +1131,12 @@ async fn admin_update_user(
             accounts::set_enabled(*id, enabled)?;
         }
         if let Some(role) = &body.role {
-            accounts::set_role(*id, role == "admin")?;
+            let admin = match role.as_str() {
+                "admin" => true,
+                "user" => false,
+                _ => return Err("Role must be user or admin".to_string()),
+            };
+            accounts::set_role(*id, admin)?;
         }
         Ok::<_, String>(())
     })();
@@ -1039,4 +1309,20 @@ fn spa_route(path: &str) -> bool {
             let pieces: Vec<_> = v.split('/').collect();
             pieces.len() == 1 || (pieces.len() == 2 && pieces[1] == "edit")
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::attachment_path;
+    use std::path::Path;
+
+    #[test]
+    fn attachment_paths_reject_traversal_and_absolute_components() {
+        let root = Path::new("/tmp/racebin-test");
+        assert!(attachment_path(root, "safe-slug", "safe-name").is_ok());
+        assert!(attachment_path(root, "..", "safe-name").is_err());
+        assert!(attachment_path(root, "safe-slug", "../secret").is_err());
+        assert!(attachment_path(root, "safe-slug", "/etc/passwd").is_err());
+        assert!(attachment_path(root, "safe-slug", ".hidden").is_err());
+    }
 }

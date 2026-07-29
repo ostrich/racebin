@@ -25,7 +25,8 @@ and the `/api/v1` interface are not supported.
 cargo run --release -- \
   --data-dir ./racebin_data \
   --bind 127.0.0.1 \
-  --port 7042
+  --port 7042 \
+  --insecure-cookie
 ```
 
 Create the first administrator:
@@ -45,13 +46,14 @@ All settings have equivalent `RACEBIN_*` environment variables.
 | --- | --- |
 | `--bind` | `0.0.0.0` |
 | `--port` | `7042` |
-| `--threads` | `1` |
+| `--threads` | `2` |
 | `--data-dir` | `racebin_data` |
 | `--title` | `Racebin` |
-| `--default-expiry` | `never` |
 | `--no-file-upload` | disabled |
 | `--max-file-size-mb` | `2048` |
 | `--qr` | disabled |
+| `--public-url` | unset; required for QR output |
+| `--insecure-cookie` | disabled; use only for local HTTP |
 
 See [docs/api.md](docs/api.md) or the live `/api/v2/openapi.json` document for
 the API.
