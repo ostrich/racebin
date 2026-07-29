@@ -1,0 +1,51 @@
+[package]
+name = "racebin"
+version = "3.0.0"
+edition = "2021"
+rust-version = "1.88.0"
+authors = ["Racebin contributors"]
+license = "BSD-3-Clause"
+description = "API-first, self-hosted paste bin and URL shortener."
+readme = "README.md"
+repository = "https://github.com/ostrich/racebin"
+keywords = ["pastebin", "filesharing", "racebin", "actix", "selfhosted"]
+
+
+[dependencies]
+actix-files = "0.6.6"
+actix-multipart = "0.7.2"
+actix-web = { version = "4", default-features = false, features = [
+"compat","compress-brotli", "compress-gzip", "cookies", "http2", "macros", "unicode"] }
+argon2 = "0.5"
+chrono = "0.4.19"
+clap = { version = "3.1.12", features = ["derive", "env"] }
+env_logger = "0.9.0"
+futures = "0.3"
+harsh = "0.2"
+lazy_static = "1.4.0"
+log = "0.4.21"
+mime_guess = "2.0.4"
+once_cell = "1.19.0"
+qrcode-generator = "4.1.9"
+rand = "0.8.5"
+rpassword = "7.3"
+rusqlite = { version = "0.32", features = ["bundled"] }
+r2d2 = "0.8"
+r2d2_sqlite = "0.25"
+rust-embed = "8.3.0"
+sanitize-filename = "0.5.0"
+serde_json = "1.0.114"
+serde = { version = "1.0.197", features = ["derive"] }
+sha2 = "0.10"
+zip = { version = "2.4.2", default-features = false, features = ["deflate"] }
+uuid = { version = "1", features = ["v4"] }
+url = "2"
+
+[features]
+default = ["sqlite"]
+sqlite = []
+no-c-deps = []
+
+[profile.release]
+lto = true
+strip = true
