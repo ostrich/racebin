@@ -8,7 +8,8 @@ application uses that same API.
 ## Features
 
 - Public, unlisted, and owner-only pastes
-- Text, syntax metadata, URL pastes, titles, expiration, and burn-after-read
+- Text with light/dark syntax highlighting, URL pastes, titles, expiration, and burn-after-read
+- Searchable language selection, automatic detection, and lazy-loaded uncommon grammars
 - Multiple file uploads, individual downloads, and ZIP archives
 - Session authentication with CSRF protection
 - Invitation-based account creation and administrator controls

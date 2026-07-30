@@ -1,4 +1,10 @@
 import { api } from "../api";
+import {
+  connectHighlightedEditor,
+  highlightElement,
+  languageDataList,
+  normalizeSyntax
+} from "../highlighting";
 import { navigate } from "../router";
 import { state } from "../state";
 import type { Page, Paste } from "../types";
@@ -68,23 +74,29 @@ export async function pasteView(slug: string): Promise<void> {
   layout(`<article class="paste-view">
     <div class="page-heading"><div><p class="eyebrow">${esc(paste.access)} · ${esc(paste.syntax)}</p><h1>${esc(title(paste))}</h1></div>
     <div class="actions"><a class="button" href="/api/v2/pastes/${esc(paste.slug)}/raw">Raw</a>${paste.files.length ? `<a class="button" href="/api/v2/pastes/${esc(paste.slug)}/archive">ZIP</a>` : ""}${state.config.qr ? `<a class="button" href="/api/v2/pastes/${esc(paste.slug)}/qr">QR</a>` : ""}${own ? `<a class="button primary" href="/pastes/${esc(paste.slug)}/edit" data-link><i data-icon="edit-3"></i> Edit</a>` : ""}</div></div>
-    <pre class="content"><code>${esc(paste.content)}</code></pre>
+    <pre class="content"><code id="paste-code">${esc(paste.content)}</code></pre>
     ${paste.files.length ? `<section><h2>Files</h2><div class="files">${paste.files.map(file => `<div class="file-row" data-file-id="${file.id}" data-slug="${esc(paste.slug)}"><a href="/api/v2/pastes/${esc(paste.slug)}/files/${file.id}"><i data-icon="file-text"></i><span>${esc(file.name)}</span><small>${file.size.toLocaleString()} bytes</small></a>${own ? `<button class="icon-button" type="button" title="Delete file" aria-label="Delete file" data-action="delete-file"><i data-icon="trash-2"></i></button>` : ""}</div>`).join("")}</div></section>` : ""}
     <footer class="paste-stats"><span>Created ${date(paste.created)}</span><span>Expires ${date(paste.expiration)}</span><span>${paste.read_count} reads</span></footer>
   </article>`);
+  const code = document.querySelector<HTMLElement>("#paste-code");
+  if (code) await highlightElement(code, paste.content, paste.syntax);
 }
 
 export async function pasteForm(slug?: string): Promise<void> {
   if (!state.session.user) return navigate("/login");
   const paste = slug ? await api<Paste>(`/pastes/${encodeURIComponent(slug)}`) : undefined;
+  const syntax = normalizeSyntax(paste?.syntax ?? "none") ?? "none";
   layout(`<section class="editor">
     <div class="page-heading"><div><p class="eyebrow">${paste ? "Edit" : "Create"}</p><h1>${paste ? esc(title(paste)) : "New paste"}</h1></div></div>
     <form id="paste-form">
       <label class="title-field"><span>Title</span><input name="title" maxlength="200" value="${esc(paste?.title ?? "")}" placeholder="Optional title"></label>
-      <label><span>Content</span><textarea name="content" spellcheck="false">${esc(paste?.content ?? "")}</textarea></label>
+      <label class="content-field"><span>Content</span><div class="code-editor">
+        <pre aria-hidden="true"><code id="editor-highlight" class="hljs"></code></pre>
+        <textarea name="content" spellcheck="false" aria-label="Paste content">${esc(paste?.content ?? "")}</textarea>
+      </div></label>
       <div class="form-grid">
         <label><span>Type</span><select name="kind"><option value="text">Text</option><option value="url" ${paste?.kind === "url" ? "selected" : ""}>URL</option></select></label>
-        <label><span>Syntax</span><select name="syntax">${["none","auto","sh","c","cpp","cs","go","html","java","js","json","kt","lua","php","py","r","rb","rs","swift","xml","yaml"].map(v => `<option ${paste?.syntax === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+        <label><span>Syntax</span><input id="syntax-input" name="syntax" list="syntax-languages" value="${esc(syntax)}" autocomplete="off" placeholder="Type or choose"><datalist id="syntax-languages">${languageDataList()}</datalist><small>Type to filter languages.</small></label>
         <label><span>Access</span><select name="access">${["public","unlisted","owner"].map(v => `<option ${paste?.access === v || (!paste && v === "unlisted") ? "selected" : ""}>${v}</option>`).join("")}</select></label>
         <label><span>Expires</span><input type="datetime-local" name="expiration" value="${paste?.expiration ? new Date(paste.expiration * 1000).toISOString().slice(0,16) : ""}"></label>
         <label><span>Burn after reads</span><input type="number" min="0" name="burn_after_reads" value="${paste?.burn_after_reads ?? 0}"></label>
@@ -93,4 +105,8 @@ export async function pasteForm(slug?: string): Promise<void> {
       <div class="actions"><button class="button primary" type="submit">${paste ? "Save changes" : "Create paste"}</button>${paste ? `<button class="button danger" type="button" data-action="delete-paste">Delete</button>` : ""}</div>
       <input type="hidden" name="slug" value="${esc(slug ?? "")}">
     </form></section>`);
+  const textarea = document.querySelector<HTMLTextAreaElement>('#paste-form textarea[name="content"]');
+  const output = document.querySelector<HTMLElement>("#editor-highlight");
+  const language = document.querySelector<HTMLInputElement>("#syntax-input");
+  if (textarea && output && language) connectHighlightedEditor(textarea, output, language);
 }

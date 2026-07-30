@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { normalizeSyntax } from "./highlighting";
 import { navigate } from "./router";
 import { loadSession } from "./session";
 import { state } from "./state";
@@ -96,9 +97,17 @@ document.addEventListener("submit", async event => {
     }
     if (form.id === "paste-form") {
       const expiration = formValue(data,"expiration");
+      const syntaxInput = form.elements.namedItem("syntax") as HTMLInputElement;
+      const syntax = normalizeSyntax(formValue(data,"syntax"));
+      if (!syntax) {
+        syntaxInput.setCustomValidity("Choose a supported language.");
+        syntaxInput.reportValidity();
+        throw new Error("Choose a supported syntax language.");
+      }
+      syntaxInput.setCustomValidity("");
       const body = {
         title: formValue(data,"title"), content: formValue(data,"content"), kind: formValue(data,"kind"),
-        syntax: formValue(data,"syntax"), access: formValue(data,"access"),
+        syntax, access: formValue(data,"access"),
         expiration: expiration ? Math.floor(new Date(expiration).getTime()/1000) : null,
         burn_after_reads: Number(formValue(data,"burn_after_reads") || 0)
       };
