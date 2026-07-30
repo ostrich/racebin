@@ -1,6 +1,6 @@
 pkgbase = racebin-git
 	pkgdesc = API-first self-hosted paste bin with attachments
-	pkgver = 4.0.0.r55.g60f2a3f
+	pkgver = 4.0.0.r56.gc1d0e78
 	pkgrel = 1
 	url = https://github.com/ostrich/racebin
 	arch = x86_64
