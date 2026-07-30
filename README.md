@@ -1,27 +1,34 @@
 # Racebin
 
-Racebin is an API-first, self-hosted paste bin with attachments and URL redirects
-with user accounts, invitation links, scoped API keys, and a Vanilla TypeScript
-single-page application. The supported interface is `/api/v1`; the browser
-application uses that same API.
+**Share code, notes, and files—simply.**
 
-## Features
+Racebin is a self-hosted place to create and share syntax-highlighted code,
+rich-text documents, attachments, and short links. Keep a paste private, share
+it with an unlisted URL, or publish it for anyone to discover. Everything you
+create stays manageable from your account.
 
-- Public, unlisted, and private pastes
-- Plain text with syntax highlighting, rich text, redirects, expiration, and optional read limits
-- Rich-text editing with safe HTML clipboard import and plain-text conversion
-- Searchable language selection, automatic detection, and lazy-loaded uncommon grammars
-- Multiple attachments, individual downloads, and ZIP archives
-- Session authentication with CSRF protection
-- Invitation-based account creation and administrator controls
-- User-owned API keys with explicit paste and administration scopes
-- SQLite or PostgreSQL as the authoritative store
-- Embedded responsive TypeScript application with no separate web server
+## What you can do
 
-Encryption, readonly/editable modes, the JSON database, and server-rendered
-forms are not supported.
+- Share plain text with automatic language detection and syntax highlighting.
+- Create rich-text pastes with headings, lists, links, quotes, code blocks, and
+  other practical formatting.
+- Move between plain text and rich text with a conversion preview.
+- Add multiple files, download them individually, or bundle a paste and its
+  attachments as a ZIP archive.
+- Choose public, unlisted, or private visibility.
+- Set an expiration time or limit how many times a paste can be read.
+- Create short-link redirects.
+- Search, edit, and manage your pastes from one account.
 
-## Run
+## Built for self-hosting
+
+- Invitation-based accounts and administrator controls
+- User-owned API keys with explicit scopes
+- SQLite by default, with PostgreSQL support when you need it
+- A responsive browser application embedded in the Racebin binary
+- A supported `/api/v1` used by both API clients and the browser application
+
+## Quick start
 
 ```bash
 cargo run --release -- \

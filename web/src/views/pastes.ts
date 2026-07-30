@@ -23,7 +23,7 @@ export async function home(): Promise<void> {
   if (state.session.user) return pasteForm();
   const page = await requestApi<Page<Paste>>("/pastes?visibility=public&page_size=8");
   renderLayout(`
-    <section class="welcome"><div><p class="eyebrow">Share text and attachments</p><h1>${escapeHtml(state.config.site_name)}</h1><p>Public pastes are open to everyone. Sign in to create and manage your own.</p>
+    <section class="welcome"><div><p class="eyebrow">Code, notes, and files—shared simply</p><h1>${escapeHtml(state.config.site_name)}</h1><p>Browse public pastes below, or sign in to create syntax-highlighted and rich-text pastes of your own.</p>
     <div class="actions"><a class="button primary" href="/explore" data-link>Explore pastes</a><a class="button" href="/login" data-link>Log in</a></div></div></section>
     <section><div class="section-heading"><h2>Recently shared</h2><a href="/explore" data-link>View all</a></div>${pasteRows(page.items)}</section>`);
 }
