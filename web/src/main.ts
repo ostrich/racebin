@@ -1,64 +1,18 @@
 import "./style.css";
-
-type User = { id: number; username: string; role: "user" | "admin"; force_password_change: boolean };
-type Session = { authenticated: boolean; user?: User; csrf_token?: string };
-type PasteFile = { id: number; role: string; name: string; size: number };
-type Paste = {
-  id: number; slug: string; owner_user_id: number | null; title: string; content: string;
-  kind: "text" | "url"; syntax: string; access: "public" | "unlisted" | "owner";
-  created: number; expiration: number | null; read_count: number; burn_after_reads: number;
-  files: PasteFile[];
-};
-type Page<T> = { items: T[]; page: number; page_size: number; total: number };
-type ApiKey = { id: number; name: string; prefix: string; scopes: string; enabled: boolean; created: number; last_used: number | null };
-type Config = { name: string; max_file_size: number; file_uploads: boolean; qr: boolean };
+import { api } from "./api";
+import { renderIcons } from "./icons";
+import { state } from "./state";
+import type { ApiKey, Config, Page, Paste, Session } from "./types";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
-let session: Session = { authenticated: false };
-let config: Config = { name: "Racebin", max_file_size: 0, file_uploads: true, qr: false };
-
-class ApiError extends Error {
-  constructor(public status: number, message: string) { super(message); }
-}
-
-async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers = new Headers(init.headers);
-  if (init.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
-  if (session.csrf_token && init.method && init.method !== "GET") headers.set("X-CSRF-Token", session.csrf_token);
-  const response = await fetch(`/api/v2${path}`, { ...init, headers });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({ error: { message: response.statusText } }));
-    throw new ApiError(response.status, body.error?.message ?? response.statusText);
-  }
-  return response.status === 204 ? undefined as T : response.json() as Promise<T>;
-}
+let session = state.session;
+let config = state.config;
 
 const esc = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 const date = (value: number | null) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(value * 1000) : "Never";
 const title = (paste: Paste) => paste.title || paste.slug;
 const icon = (name: string, label: string) => `<button class="icon-button" type="button" title="${esc(label)}" aria-label="${esc(label)}" data-action="${name}"><i data-icon="${name}"></i></button>`;
 const formValue = (form: FormData, key: string) => String(form.get(key) ?? "");
-const iconShapes: Record<string, string> = {
-  "copy": '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
-  "edit-3": '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/>',
-  "external-link": '<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
-  "file-text": '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h8"/>',
-  "key-round": '<circle cx="8" cy="15" r="5"/><path d="m12 11 9-9M18 5l3 3M15 8l3 3"/>',
-  "log-in": '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>',
-  "log-out": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
-  "plus": '<path d="M12 5v14M5 12h14"/>',
-  "search": '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
-  "settings": '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
-  "trash-2": '<path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6"/>',
-  "user-round": '<circle cx="12" cy="8" r="5"/><path d="M4 21a8 8 0 0 1 16 0"/>'
-};
-
-function renderIcons(root: ParentNode = document): void {
-  root.querySelectorAll<HTMLElement>("[data-icon]").forEach(node => {
-    const name = node.dataset.icon ?? "";
-    node.outerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconShapes[name] ?? ""}</svg>`;
-  });
-}
 
 function layout(content: string): void {
   const user = session.user;
@@ -93,6 +47,8 @@ async function loadSession(): Promise<void> {
     api<Session>("/session").catch(() => ({ authenticated: false })),
     api<Config>("/config")
   ]);
+  state.session = session;
+  state.config = config;
   if (session.user?.force_password_change && location.pathname !== "/account/password") {
     history.replaceState({}, "", "/account/password");
   }
@@ -293,7 +249,7 @@ document.addEventListener("click", async event => {
   if (link) { event.preventDefault(); navigate(link.pathname + link.search); return; }
   const action = target.closest<HTMLElement>("[data-action]")?.dataset.action;
   try {
-    if (action === "log-out") { await api("/session", { method: "DELETE" }); session = { authenticated: false }; navigate("/"); }
+    if (action === "log-out") { await api("/session", { method: "DELETE" }); session = state.session = { authenticated: false }; navigate("/"); }
     if (action === "copy") {
       const slug = target.closest<HTMLElement>(".paste-row")?.querySelector<HTMLInputElement>('input[type="hidden"]')?.value;
       if (slug) { await navigator.clipboard.writeText(`${location.origin}/pastes/${slug}`); notice("Link copied."); }
@@ -399,7 +355,7 @@ document.addEventListener("submit", async event => {
     }
     if (form.id === "password-form") {
       await api("/account/password", { method: "PATCH", body: JSON.stringify({ current_password: formValue(data,"current_password"), new_password: formValue(data,"new_password") }) });
-      session = { authenticated:false }; navigate("/login");
+      session = state.session = { authenticated:false }; navigate("/login");
     }
     if (form.id === "key-form") {
       const result = await api<{token:string}>("/account/api-keys", { method: "POST", body: JSON.stringify({ name: formValue(data,"name"), scopes: data.getAll("scopes") }) });
