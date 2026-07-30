@@ -38,6 +38,15 @@ racebin account create admin --admin --data-dir ./racebin_data
 The account command prompts for a password. Passwords must contain at least 12
 characters.
 
+To use PostgreSQL, set a database URL while keeping `data-dir` for uploaded
+files:
+
+```bash
+RACEBIN_DATABASE_URL='postgresql://racebin:password@localhost/racebin' \
+RACEBIN_DATA_DIR=/var/lib/racebin \
+racebin
+```
+
 ## Configuration
 
 All settings have equivalent `RACEBIN_*` environment variables.
@@ -56,15 +65,17 @@ All settings have equivalent `RACEBIN_*` environment variables.
 | `--public-url` | unset; required for QR output |
 | `--insecure-cookie` | disabled; use only for local HTTP |
 
-See [docs/api.md](docs/api.md) or the live `/api/v2/openapi.json` document for
-the API.
+See the [database guide](docs/database.md), [account guide](docs/accounts.md),
+[API guide](docs/api.md), and [testing guide](docs/testing.md). The running
+server also exposes a machine-readable route list at `/api/v2/openapi.json`.
 
-## Migration
+## Databases
 
 Startup selects the database from `--database-url` or
 `RACEBIN_DATABASE_URL` and runs the migrations for that backend. SQLite URLs
 and both `postgres://` and `postgresql://` URLs are supported. The data
-directory continues to hold uploaded attachments when PostgreSQL is used.
+directory continues to hold uploaded attachments when PostgreSQL is used, so
+database backups alone are not sufficient for installations with files.
 
 To move an existing SQLite installation to an empty PostgreSQL database, stop
 Racebin and run:
@@ -80,6 +91,21 @@ The command migrates the destination schema, verifies that it contains no
 application data, copies all records while preserving IDs and credentials,
 checks attachment references and row counts, resets PostgreSQL identity
 sequences, and commits the destination transaction only after verification.
+Racebin must remain stopped for the duration of the copy. See
+[docs/database.md](docs/database.md) for setup, backup, and migration details.
+
+## Development
+
+```bash
+cargo fmt -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+```
+
+The ordinary test run uses temporary SQLite databases. Set
+`RACEBIN_TEST_POSTGRES_URL` to a dedicated disposable PostgreSQL database to
+run the same storage contract and copy tests against PostgreSQL. The test
+suite drops that database's `public` schema; never point it at real data.
 
 Racebin is available under the terms in [LICENSE](LICENSE) and
 [LICENSE-BSD-3-Clause](LICENSE-BSD-3-Clause).

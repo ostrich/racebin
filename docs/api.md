@@ -18,8 +18,8 @@ Keys are displayed only once and stored as SHA-256 digests. Available scopes:
 
 | Scope | Permission |
 | --- | --- |
-| `paste:read` | Read owner-only pastes |
-| `paste:write` | Create and update owned pastes and files |
+| `paste:read` | Read owner-only pastes owned by the key's user |
+| `paste:write` | Create and update that user's pastes and files |
 | `paste:delete` | Delete owned pastes |
 | `paste:list` | List owned pastes |
 | `paste:admin` | Manage every paste |
@@ -27,8 +27,11 @@ Keys are displayed only once and stored as SHA-256 digests. Available scopes:
 | `invite:admin` | Manage invitations |
 | `key:admin` | Manage keys and delegate held scopes |
 
-A key can grant only scopes it already has. Browser administrators may grant
-any scope; ordinary browser users may grant only paste scopes.
+A key with `key:admin` can grant only scopes it already has. Browser
+administrators may grant any scope. Ordinary browser users may grant
+`paste:read`, `paste:write`, `paste:delete`, and `paste:list`, but not
+`paste:admin` or any other administrative scope. Disabled keys and keys owned
+by disabled users do not authenticate.
 
 ## Pastes
 
