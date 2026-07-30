@@ -1,8 +1,8 @@
 use clap::Parser;
-use once_cell::sync::Lazy;
 use std::net::IpAddr;
+use std::sync::LazyLock;
 
-pub static ARGS: Lazy<Args> = Lazy::new(|| {
+pub static ARGS: LazyLock<Args> = LazyLock::new(|| {
     #[cfg(test)]
     {
         Args::parse_from(["racebin"])

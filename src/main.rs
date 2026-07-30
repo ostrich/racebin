@@ -1,8 +1,6 @@
 use actix_web::{middleware, web, App, HttpServer};
-use chrono::Local;
 use env_logger::Builder;
 use log::LevelFilter;
-use std::io::Write;
 
 use crate::args::ARGS;
 
@@ -37,18 +35,7 @@ async fn main() -> std::io::Result<()> {
         }
     }
 
-    Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{} [{}] - {}",
-                Local::now().format("%Y-%m-%dT%H:%M:%S"),
-                record.level(),
-                record.args()
-            )
-        })
-        .filter(None, LevelFilter::Info)
-        .init();
+    Builder::new().filter(None, LevelFilter::Info).init();
 
     if ARGS.threads == 0 {
         return Err(std::io::Error::other("--threads must be at least 1"));

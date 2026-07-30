@@ -3,24 +3,23 @@ use argon2::password_hash::{
     rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
 };
 use argon2::Argon2;
-use once_cell::sync::Lazy;
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::{Digest, Sha256};
 use sqlx::any::AnyRow;
 use sqlx::{FromRow, Row};
 use std::collections::HashMap;
 use std::fs;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::args::ARGS;
 use crate::repository::{DatabaseKind, Repository};
 
 pub const SESSION_COOKIE: &str = "racebin_session";
-static LOGIN_FAILURES: Lazy<Mutex<HashMap<String, Vec<i64>>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static DUMMY_PASSWORD_HASH: Lazy<String> =
-    Lazy::new(|| password_hash("racebin-dummy-password").expect("valid dummy password"));
+static LOGIN_FAILURES: LazyLock<Mutex<HashMap<String, Vec<i64>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+static DUMMY_PASSWORD_HASH: LazyLock<String> =
+    LazyLock::new(|| password_hash("racebin-dummy-password").expect("valid dummy password"));
 
 #[derive(Clone, Debug)]
 pub struct User {

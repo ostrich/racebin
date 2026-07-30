@@ -7,7 +7,6 @@ use actix_web::cookie::{Cookie, SameSite};
 use actix_web::http::{header, Method, StatusCode};
 use actix_web::{delete, get, patch, post, web, HttpRequest, HttpResponse, Responder};
 use futures::{StreamExt, TryStreamExt};
-use rust_embed::RustEmbed;
 use serde::Deserialize;
 use serde_json::json;
 use std::io::{Cursor, Write};
@@ -15,9 +14,9 @@ use std::path::{Component, Path, PathBuf};
 use tokio::io::AsyncWriteExt;
 use zip::write::SimpleFileOptions;
 
-#[derive(RustEmbed)]
-#[folder = "web/dist"]
-struct Assets;
+const SPA_INDEX: &[u8] = include_bytes!("../web/dist/index.html");
+const SPA_SCRIPT: &[u8] = include_bytes!("../web/dist/assets/app.js");
+const SPA_STYLE: &[u8] = include_bytes!("../web/dist/assets/app.css");
 
 #[derive(Default)]
 struct UploadCleanup {
@@ -94,6 +93,25 @@ fn attachment_path(data_dir: &Path, slug: &str, name: &str) -> Result<PathBuf, S
         return Err("Unsafe attachment metadata".to_string());
     }
     Ok(data_dir.join("attachments").join(slug).join(name))
+}
+
+fn sanitize_upload_filename(value: &str) -> String {
+    let basename = value.rsplit(['/', '\\']).next().unwrap_or("");
+    let mut sanitized = String::with_capacity(basename.len().min(255));
+    for character in basename.chars() {
+        let character = if character.is_control() || r#"<>:"/\|?*"#.contains(character) {
+            '_'
+        } else {
+            character
+        };
+        if sanitized.len() + character.len_utf8() > 255 {
+            break;
+        }
+        sanitized.push(character);
+    }
+    sanitized
+        .trim_matches(|character: char| character == '.' || character.is_whitespace())
+        .to_string()
 }
 
 async fn principal(services: &Services, req: &HttpRequest) -> Result<Principal, HttpResponse> {
@@ -690,7 +708,7 @@ async fn upload_files(
         let Some(filename) = field
             .content_disposition()
             .and_then(|value| value.get_filename())
-            .map(sanitize_filename::sanitize)
+            .map(sanitize_upload_filename)
             .filter(|value| !value.is_empty())
         else {
             return error(
@@ -1296,15 +1314,16 @@ async fn admin_delete_key(
 }
 
 async fn asset(path: web::Path<String>) -> HttpResponse {
-    let embedded_path = format!("assets/{}", path.as_str());
-    match Assets::get(&embedded_path) {
-        Some(asset) => {
-            let content_type = mime_guess::from_path(path.as_str()).first_or_octet_stream();
-            HttpResponse::Ok()
-                .insert_header((header::CONTENT_TYPE, content_type.as_ref()))
-                .insert_header((header::CACHE_CONTROL, "public, max-age=31536000, immutable"))
-                .body(asset.data.into_owned())
-        }
+    let asset = match path.as_str() {
+        "app.js" => Some((SPA_SCRIPT, "text/javascript; charset=utf-8")),
+        "app.css" => Some((SPA_STYLE, "text/css; charset=utf-8")),
+        _ => None,
+    };
+    match asset {
+        Some((bytes, content_type)) => HttpResponse::Ok()
+            .insert_header((header::CONTENT_TYPE, content_type))
+            .insert_header((header::CACHE_CONTROL, "public, max-age=31536000, immutable"))
+            .body(bytes),
         None => HttpResponse::NotFound().finish(),
     }
 }
@@ -1313,13 +1332,10 @@ async fn spa(req: HttpRequest) -> HttpResponse {
     if req.method() != Method::GET || req.path().starts_with("/api/") || !spa_route(req.path()) {
         return error(StatusCode::NOT_FOUND, "not_found", "Route not found");
     }
-    match Assets::get("index.html") {
-        Some(asset) => HttpResponse::Ok()
-            .insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"))
-            .insert_header((header::CACHE_CONTROL, "no-cache"))
-            .body(asset.data.into_owned()),
-        None => internal("SPA index is missing"),
-    }
+    HttpResponse::Ok()
+        .insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"))
+        .insert_header((header::CACHE_CONTROL, "no-cache"))
+        .body(SPA_INDEX)
 }
 
 fn spa_route(path: &str) -> bool {
@@ -1347,7 +1363,7 @@ fn spa_route(path: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{attachment_path, configure};
+    use super::{attachment_path, configure, sanitize_upload_filename};
     use crate::repository::Repository;
     use crate::services::{now, PasteInput, Principal, Services};
     use crate::util::{accounts, api_keys};
@@ -1363,6 +1379,25 @@ mod tests {
         assert!(attachment_path(root, "safe-slug", "../secret").is_err());
         assert!(attachment_path(root, "safe-slug", "/etc/passwd").is_err());
         assert!(attachment_path(root, "safe-slug", ".hidden").is_err());
+    }
+
+    #[actix_web::test]
+    async fn upload_filenames_are_reduced_to_safe_components() {
+        assert_eq!(sanitize_upload_filename("hello.txt"), "hello.txt");
+        assert_eq!(sanitize_upload_filename("../hello.txt"), "hello.txt");
+        assert_eq!(
+            sanitize_upload_filename(r"C:\Users\someone\hello.txt"),
+            "hello.txt"
+        );
+        assert_eq!(
+            sanitize_upload_filename(" bad:<name>?.txt "),
+            "bad__name__.txt"
+        );
+        assert_eq!(sanitize_upload_filename("..."), "");
+
+        let long = sanitize_upload_filename(&"é".repeat(200));
+        assert!(long.len() <= 255);
+        assert!(long.is_char_boundary(long.len()));
     }
 
     #[actix_web::test]

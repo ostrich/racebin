@@ -1,4 +1,3 @@
-import { createIcons, Copy, Edit3, ExternalLink, FileText, KeyRound, LogIn, LogOut, Plus, Search, Settings, Trash2, UserRound } from "lucide";
 import "./style.css";
 
 type User = { id: number; username: string; role: "user" | "admin"; force_password_change: boolean };
@@ -37,8 +36,29 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 const esc = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 const date = (value: number | null) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(value * 1000) : "Never";
 const title = (paste: Paste) => paste.title || paste.slug;
-const icon = (name: string, label: string) => `<button class="icon-button" type="button" title="${esc(label)}" aria-label="${esc(label)}" data-action="${name}"><i data-lucide="${name}"></i></button>`;
+const icon = (name: string, label: string) => `<button class="icon-button" type="button" title="${esc(label)}" aria-label="${esc(label)}" data-action="${name}"><i data-icon="${name}"></i></button>`;
 const formValue = (form: FormData, key: string) => String(form.get(key) ?? "");
+const iconShapes: Record<string, string> = {
+  "copy": '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  "edit-3": '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/>',
+  "external-link": '<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  "file-text": '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h8"/>',
+  "key-round": '<circle cx="8" cy="15" r="5"/><path d="m12 11 9-9M18 5l3 3M15 8l3 3"/>',
+  "log-in": '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>',
+  "log-out": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  "plus": '<path d="M12 5v14M5 12h14"/>',
+  "search": '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  "settings": '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
+  "trash-2": '<path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6"/>',
+  "user-round": '<circle cx="12" cy="8" r="5"/><path d="M4 21a8 8 0 0 1 16 0"/>'
+};
+
+function renderIcons(root: ParentNode = document): void {
+  root.querySelectorAll<HTMLElement>("[data-icon]").forEach(node => {
+    const name = node.dataset.icon ?? "";
+    node.outerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconShapes[name] ?? ""}</svg>`;
+  });
+}
 
 function layout(content: string): void {
   const user = session.user;
@@ -47,17 +67,17 @@ function layout(content: string): void {
       <a class="brand" href="/" data-link>${esc(config.name)}</a>
       <nav>
         <a href="/explore" data-link>Explore</a>
-        ${user ? `<a href="/pastes" data-link>My pastes</a><a href="/new" data-link><i data-lucide="plus"></i> New</a>` : ""}
+        ${user ? `<a href="/pastes" data-link>My pastes</a><a href="/new" data-link><i data-icon="plus"></i> New</a>` : ""}
         ${user?.role === "admin" ? `<a href="/admin" data-link>Admin</a>` : ""}
       </nav>
       <div class="session">
-        ${user ? `<a href="/account" data-link><i data-lucide="user-round"></i><span>${esc(user.username)}</span></a>${icon("log-out", "Log out")}` :
-          `<a href="/login" data-link><i data-lucide="log-in"></i><span>Log in</span></a>`}
+        ${user ? `<a href="/account" data-link><i data-icon="user-round"></i><span>${esc(user.username)}</span></a>${icon("log-out", "Log out")}` :
+          `<a href="/login" data-link><i data-icon="log-in"></i><span>Log in</span></a>`}
       </div>
     </header>
     <main>${content}</main>
     <div id="toast" role="status" aria-live="polite"></div>`;
-  createIcons({ icons: { Copy, Edit3, ExternalLink, FileText, KeyRound, LogIn, LogOut, Plus, Search, Settings, Trash2, UserRound } });
+  renderIcons();
 }
 
 function notice(message: string, kind = ""): void {
@@ -138,7 +158,7 @@ function pasteRows(items: Paste[], manage = false): string {
       <div class="paste-meta"><span>${esc(paste.syntax)}</span><span>${esc(paste.access)}</span><time>${date(paste.created)}</time></div>
       <div class="row-actions">
         ${icon("copy", "Copy link")}
-        ${manage ? `<a class="icon-button" title="Edit" aria-label="Edit" href="/pastes/${esc(paste.slug)}/edit" data-link><i data-lucide="edit-3"></i></a>${icon("trash-2", "Delete")}` : ""}
+        ${manage ? `<a class="icon-button" title="Edit" aria-label="Edit" href="/pastes/${esc(paste.slug)}/edit" data-link><i data-icon="edit-3"></i></a>${icon("trash-2", "Delete")}` : ""}
       </div><input type="hidden" value="${esc(paste.slug)}">
     </article>`).join("")}</div>`;
 }
@@ -166,10 +186,10 @@ async function pasteList(mine: boolean): Promise<void> {
   if (!mine) params.set("access", "public");
   const page = await api<Page<Paste>>(`/pastes?${params}`);
   layout(`<section>
-    <div class="page-heading"><div><p class="eyebrow">${mine ? "Workspace" : "Public"}</p><h1>${mine ? "My pastes" : "Explore"}</h1></div>${mine ? `<a class="button primary" href="/new" data-link><i data-lucide="plus"></i> New paste</a>` : ""}</div>
+    <div class="page-heading"><div><p class="eyebrow">${mine ? "Workspace" : "Public"}</p><h1>${mine ? "My pastes" : "Explore"}</h1></div>${mine ? `<a class="button primary" href="/new" data-link><i data-icon="plus"></i> New paste</a>` : ""}</div>
     <form class="filters" id="paste-filters"><label><span>Search</span><input name="search" value="${esc(params.get("search") ?? "")}" placeholder="Title, content, or ID"></label>
     <label><span>Access</span><select name="access"><option value="">All access</option>${["public","unlisted","owner"].map(v => `<option ${params.get("access") === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
-    <button class="button" type="submit"><i data-lucide="search"></i> Filter</button></form>
+    <button class="button" type="submit"><i data-icon="search"></i> Filter</button></form>
     <p class="result-count">${page.total} paste${page.total === 1 ? "" : "s"}</p>${pasteRows(page.items, mine)}${pagination(page)}</section>`);
 }
 
@@ -183,9 +203,9 @@ async function pasteView(slug: string): Promise<void> {
   }
   layout(`<article class="paste-view">
     <div class="page-heading"><div><p class="eyebrow">${esc(paste.access)} · ${esc(paste.syntax)}</p><h1>${esc(title(paste))}</h1></div>
-    <div class="actions"><a class="button" href="/api/v2/pastes/${esc(paste.slug)}/raw">Raw</a>${paste.files.length ? `<a class="button" href="/api/v2/pastes/${esc(paste.slug)}/archive">ZIP</a>` : ""}${config.qr ? `<a class="button" href="/api/v2/pastes/${esc(paste.slug)}/qr">QR</a>` : ""}${own ? `<a class="button primary" href="/pastes/${esc(paste.slug)}/edit" data-link><i data-lucide="edit-3"></i> Edit</a>` : ""}</div></div>
+    <div class="actions"><a class="button" href="/api/v2/pastes/${esc(paste.slug)}/raw">Raw</a>${paste.files.length ? `<a class="button" href="/api/v2/pastes/${esc(paste.slug)}/archive">ZIP</a>` : ""}${config.qr ? `<a class="button" href="/api/v2/pastes/${esc(paste.slug)}/qr">QR</a>` : ""}${own ? `<a class="button primary" href="/pastes/${esc(paste.slug)}/edit" data-link><i data-icon="edit-3"></i> Edit</a>` : ""}</div></div>
     <pre class="content"><code>${esc(paste.content)}</code></pre>
-    ${paste.files.length ? `<section><h2>Files</h2><div class="files">${paste.files.map(file => `<div class="file-row" data-file-id="${file.id}" data-slug="${esc(paste.slug)}"><a href="/api/v2/pastes/${esc(paste.slug)}/files/${file.id}"><i data-lucide="file-text"></i><span>${esc(file.name)}</span><small>${file.size.toLocaleString()} bytes</small></a>${own ? `<button class="icon-button" type="button" title="Delete file" aria-label="Delete file" data-action="delete-file"><i data-lucide="trash-2"></i></button>` : ""}</div>`).join("")}</div></section>` : ""}
+    ${paste.files.length ? `<section><h2>Files</h2><div class="files">${paste.files.map(file => `<div class="file-row" data-file-id="${file.id}" data-slug="${esc(paste.slug)}"><a href="/api/v2/pastes/${esc(paste.slug)}/files/${file.id}"><i data-icon="file-text"></i><span>${esc(file.name)}</span><small>${file.size.toLocaleString()} bytes</small></a>${own ? `<button class="icon-button" type="button" title="Delete file" aria-label="Delete file" data-action="delete-file"><i data-icon="trash-2"></i></button>` : ""}</div>`).join("")}</div></section>` : ""}
     <footer class="paste-stats"><span>Created ${date(paste.created)}</span><span>Expires ${date(paste.expiration)}</span><span>${paste.read_count} reads</span></footer>
   </article>`);
 }
@@ -234,7 +254,7 @@ async function accountView(): Promise<void> {
       <div class="key-list">${keys.length ? keys.map(key => `<div class="key-row"><div><strong>${esc(key.name)}</strong><code>rbk_${esc(key.prefix)}_...</code><small>${esc(key.scopes)}</small></div><label class="switch"><input type="checkbox" data-key="${key.id}" ${key.enabled ? "checked" : ""}><span></span></label>${icon("trash-2", "Delete API key")}<input type="hidden" value="${key.id}"></div>`).join("") : `<p class="empty compact">No API keys.</p>`}</div>
       <form id="key-form" class="key-form"><label><span>Name</span><input name="name" required maxlength="100"></label>
       <fieldset><legend>Scopes</legend>${["paste:read","paste:write","paste:delete","paste:list"].map(v => `<label class="check"><input type="checkbox" name="scopes" value="${v}"><span>${v}</span></label>`).join("")}</fieldset>
-      <button class="button primary" type="submit"><i data-lucide="key-round"></i> Create key</button></form>
+      <button class="button primary" type="submit"><i data-icon="key-round"></i> Create key</button></form>
     </section></section>`);
 }
 
@@ -249,10 +269,10 @@ function passwordView(): void {
 function adminView(): void {
   if (session.user?.role !== "admin") return navigate("/");
   layout(`<section><div class="page-heading"><div><p class="eyebrow">Administration</p><h1>Admin</h1></div></div>
-    <div class="admin-links"><a href="/admin/pastes" data-link><i data-lucide="file-text"></i><div><strong>All pastes</strong><span>Search, filter, edit, and remove pastes</span></div></a>
-    <button type="button" data-action="admin-users"><i data-lucide="user-round"></i><div><strong>Users</strong><span>Roles and account access</span></div></button>
-    <button type="button" data-action="admin-invites"><i data-lucide="plus"></i><div><strong>Invitations</strong><span>Create and revoke invitation links</span></div></button>
-    <button type="button" data-action="admin-keys"><i data-lucide="key-round"></i><div><strong>API keys</strong><span>Review and revoke keys</span></div></button></div>
+    <div class="admin-links"><a href="/admin/pastes" data-link><i data-icon="file-text"></i><div><strong>All pastes</strong><span>Search, filter, edit, and remove pastes</span></div></a>
+    <button type="button" data-action="admin-users"><i data-icon="user-round"></i><div><strong>Users</strong><span>Roles and account access</span></div></button>
+    <button type="button" data-action="admin-invites"><i data-icon="plus"></i><div><strong>Invitations</strong><span>Create and revoke invitation links</span></div></button>
+    <button type="button" data-action="admin-keys"><i data-icon="key-round"></i><div><strong>API keys</strong><span>Review and revoke keys</span></div></button></div>
     <section id="admin-detail" class="panel hidden"></section></section>`);
 }
 
@@ -408,9 +428,9 @@ async function loadAdmin(section: string): Promise<void> {
     detail.innerHTML = `<div class="section-heading"><h2>Invitations</h2><button class="button primary" data-action="create-invite">Create invitation</button></div><div class="table">${invites.map(i=>`<div data-id="${i.id}"><code>${esc(i.token_prefix)}…</code><span>${esc(i.status)} · ${date(i.expires)}</span>${i.status==="Active" ? `<button class="button" data-action="revoke-invite">Revoke</button>` : `<span></span>`}</div>`).join("")}</div>`;
   } else {
     const keys = await api<ApiKey[]>("/admin/api-keys");
-    detail.innerHTML = `<h2>API keys</h2><div class="table">${keys.map(k=>`<div data-id="${k.id}"><div><strong>${esc(k.name)}</strong><br><code>${esc(k.prefix)}</code></div><label class="check"><input type="checkbox" data-admin-key="${k.id}" ${k.enabled?"checked":""}><span>Enabled</span></label><button class="icon-button" title="Delete API key" aria-label="Delete API key" data-action="delete-admin-key"><i data-lucide="trash-2"></i></button></div>`).join("")}</div>`;
+    detail.innerHTML = `<h2>API keys</h2><div class="table">${keys.map(k=>`<div data-id="${k.id}"><div><strong>${esc(k.name)}</strong><br><code>${esc(k.prefix)}</code></div><label class="check"><input type="checkbox" data-admin-key="${k.id}" ${k.enabled?"checked":""}><span>Enabled</span></label><button class="icon-button" title="Delete API key" aria-label="Delete API key" data-action="delete-admin-key"><i data-icon="trash-2"></i></button></div>`).join("")}</div>`;
   }
-  createIcons({ icons: { Trash2 } });
+  renderIcons();
 }
 
 window.addEventListener("popstate", () => void route());
