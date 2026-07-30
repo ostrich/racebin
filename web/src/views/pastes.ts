@@ -8,9 +8,16 @@ import {
   updateLineNumbers
 } from "../highlighting";
 import { navigate } from "../router";
+import { setUnsavedChangesGuard } from "../navigation_guard";
 import { state } from "../state";
 import type { Page, Paste, RichTextDocument } from "../types";
 import { formatDate, escapeHtml, iconButton, renderLayout, pasteDisplayTitle } from "../ui";
+
+function pasteFormatLabel(paste: Paste): string {
+  if (paste.content_kind === "rich_text") return "Rich text";
+  if (paste.content_kind === "redirect") return "Redirect";
+  return paste.language;
+}
 
 export async function home(): Promise<void> {
   if (state.session.user) return pasteForm();
@@ -27,7 +34,7 @@ export function pasteRows(items: Paste[], manage = false): string {
     <article class="paste-row">
       <div class="paste-main"><a class="paste-title" href="/pastes/${escapeHtml(paste.id)}" data-link>${escapeHtml(pasteDisplayTitle(paste))}</a>
       <p>${escapeHtml(paste.content.slice(0, 160).replace(/\s+/g, " "))}</p></div>
-      <div class="paste-meta"><span>${escapeHtml(paste.language)}</span><span>${escapeHtml(paste.visibility)}</span><time>${formatDate(paste.created_at)}</time></div>
+      <div class="paste-meta"><span>${escapeHtml(pasteFormatLabel(paste))}</span><span>${escapeHtml(paste.visibility)}</span><time>${formatDate(paste.created_at)}</time></div>
       <div class="row-actions">
         ${iconButton("copy", "Copy link")}
         ${manage ? `<a class="icon-button" title="Edit" aria-label="Edit" href="/pastes/${escapeHtml(paste.id)}/edit" data-link><i data-icon="edit-3"></i></a>${iconButton("trash-2", "Delete")}` : ""}
@@ -74,7 +81,7 @@ export async function pasteView(pasteId: string): Promise<void> {
     return;
   }
   renderLayout(`<article class="paste-view">
-    <div class="page-heading"><div><p class="eyebrow">${escapeHtml(paste.visibility)} · ${escapeHtml(paste.content_kind === "rich_text" ? "Rich text" : paste.language)}</p><h1>${escapeHtml(pasteDisplayTitle(paste))}</h1></div>
+    <div class="page-heading"><div><p class="eyebrow">${escapeHtml(paste.visibility)} · ${escapeHtml(pasteFormatLabel(paste))}</p><h1>${escapeHtml(pasteDisplayTitle(paste))}</h1></div>
     <div class="actions"><a class="button" href="/api/v2/pastes/${escapeHtml(paste.id)}/raw">Raw</a><button class="button" type="button" data-action="copy-content"><i data-icon="copy"></i> Copy</button>${paste.attachments.length ? `<a class="button" href="/api/v2/pastes/${escapeHtml(paste.id)}/archive">ZIP</a>` : ""}${state.config.qr_codes_enabled ? `<a class="button" href="/api/v2/pastes/${escapeHtml(paste.id)}/qr">QR</a>` : ""}${own ? `<a class="button primary" href="/pastes/${escapeHtml(paste.id)}/edit" data-link><i data-icon="edit-3"></i> Edit</a>` : ""}</div></div>
     ${paste.content_kind === "rich_text"
       ? `<div id="rich-text-viewer" class="rich-text-viewer"></div>`
@@ -135,7 +142,7 @@ export async function pasteForm(pasteId?: string): Promise<void> {
         <label><span>Read limit</span><input type="number" min="1" name="read_limit" value="${paste?.read_limit ?? ""}" placeholder="Unlimited"></label>
       </div>
       ${state.config.attachments_enabled ? `<label><span>Add attachments</span><input type="file" name="attachments" multiple><small>Combined upload limit: ${Math.floor(state.config.max_attachment_size_bytes / 1024 / 1024)} MiB</small></label>` : ""}
-      <div class="actions"><button class="button primary" type="submit">${paste ? "Save changes" : "Create paste"}</button>${paste ? `<button class="button danger" type="button" data-action="delete-paste">Delete</button>` : ""}</div>
+      <div class="actions"><button class="button primary" type="submit">${paste ? "Save changes" : "Create paste"}</button><a class="button" href="${paste ? `/pastes/${escapeHtml(paste.id)}` : "/pastes"}" data-link>Cancel</a>${paste ? `<button class="button danger" type="button" data-action="delete-paste">Delete</button>` : ""}</div>
       <input type="hidden" name="pasteId" value="${escapeHtml(pasteId ?? "")}">
     </form></section>`);
   const textarea = document.querySelector<HTMLTextAreaElement>('#paste-form textarea[name="content"]');
@@ -147,10 +154,32 @@ export async function pasteForm(pasteId?: string): Promise<void> {
     connectHighlightedEditor(textarea, output, languageInput, lines);
   }
   if (languageInput && languageOptions) connectLanguagePicker(languageInput, languageOptions);
-  await connectContentKindSelector(paste);
+  const getRichDocument = await connectContentKindSelector(paste);
+  const form = document.querySelector<HTMLFormElement>("#paste-form");
+  if (form) {
+    const initialState = pasteFormState(form, getRichDocument);
+    setUnsavedChangesGuard(() => pasteFormState(form, getRichDocument) !== initialState);
+  }
 }
 
 type Conversion = { content: string; document: RichTextDocument | null };
+
+function pasteFormState(
+  form: HTMLFormElement,
+  getRichDocument: () => RichTextDocument | undefined
+): string {
+  const fields = [...new FormData(form).entries()].map(([name, value]) => [
+    name,
+    value instanceof File
+      ? { name: value.name, size: value.size, last_modified: value.lastModified }
+      : value
+  ]);
+  const kind = form.elements.namedItem("content_kind") as HTMLSelectElement | null;
+  return JSON.stringify({
+    fields,
+    document: kind?.value === "rich_text" ? getRichDocument() : null
+  });
+}
 
 async function convertContent(
   sourceKind: "text" | "rich_text",
@@ -196,7 +225,9 @@ async function confirmConversion(targetKind: string, preview: string): Promise<b
   });
 }
 
-async function connectContentKindSelector(paste?: Paste): Promise<void> {
+async function connectContentKindSelector(
+  paste?: Paste
+): Promise<() => RichTextDocument | undefined> {
   const selector = document.querySelector<HTMLSelectElement>("#content-kind");
   const textarea = document.querySelector<HTMLTextAreaElement>('#paste-form textarea[name="content"]');
   const textField = document.querySelector<HTMLElement>("#text-content-field");
@@ -207,7 +238,7 @@ async function connectContentKindSelector(paste?: Paste): Promise<void> {
   if (
     !selector || !textarea || !textField || !richField || !richElement
     || !languageField || !languageInput
-  ) return;
+  ) return () => undefined;
 
   const richModule = await import("../rich_text_editor");
   let richDocument = paste?.document ?? null;
@@ -281,4 +312,5 @@ async function connectContentKindSelector(paste?: Paste): Promise<void> {
       selector.disabled = false;
     }
   });
+  return () => richModule.richTextDocument();
 }

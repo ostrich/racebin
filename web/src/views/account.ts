@@ -36,5 +36,5 @@ export function passwordView(): void {
   renderLayout(`<section class="auth"><form id="password-form"><p class="eyebrow">Security</p><h1>Change password</h1>
     <label><span>Current password</span><input type="password" name="current_password" autocomplete="current-password" required></label>
     <label><span>New password</span><input type="password" name="new_password" minlength="12" autocomplete="new-password" required></label>
-    <button class="button primary" type="submit">Update password</button></form></section>`);
+    <div class="actions"><button class="button primary" type="submit">Update password</button><a class="button" href="/account" data-link>Cancel</a></div></form></section>`);
 }

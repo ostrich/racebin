@@ -1,7 +1,13 @@
 import "./style.css";
 import "./events";
-import { route } from "./router";
+import { hasUnsavedChanges } from "./navigation_guard";
+import { handlePopState, route } from "./router";
 import { loadSession } from "./session";
 
-window.addEventListener("popstate", () => void route());
+window.addEventListener("popstate", () => handlePopState(document.body.dataset.routePath ?? "/"));
+window.addEventListener("beforeunload", event => {
+  if (!hasUnsavedChanges()) return;
+  event.preventDefault();
+  event.returnValue = "";
+});
 void loadSession().then(route);

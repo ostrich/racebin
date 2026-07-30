@@ -1,5 +1,9 @@
 import { requestApi } from "./api";
 import { normalizeLanguage } from "./highlighting";
+import {
+  clearUnsavedChangesGuard,
+  confirmDiscardChanges
+} from "./navigation_guard";
 import { navigate } from "./router";
 import { loadSession } from "./session";
 import { state } from "./state";
@@ -20,7 +24,13 @@ document.addEventListener("click", async event => {
   if (link) { event.preventDefault(); navigate(link.pathname + link.search); return; }
   const action = target.closest<HTMLElement>("[data-action]")?.dataset.action;
   try {
-    if (action === "log-out") { await requestApi("/session", { method: "DELETE" }); state.session = { authenticated: false }; navigate("/"); }
+    if (action === "log-out") {
+      if (!(await confirmDiscardChanges())) return;
+      clearUnsavedChangesGuard();
+      await requestApi("/session", { method: "DELETE" });
+      state.session = { authenticated: false };
+      navigate("/");
+    }
     if (action === "copy") {
       const pasteId = target.closest<HTMLElement>(".paste-row")?.querySelector<HTMLInputElement>('input[type="hidden"]')?.value;
       if (pasteId) { await navigator.clipboard.writeText(`${location.origin}/pastes/${pasteId}`); showNotice("Link copied."); }
@@ -42,7 +52,11 @@ document.addEventListener("click", async event => {
     }
     if (action === "delete-paste") {
       const pasteId = (document.querySelector<HTMLInputElement>('input[name="pasteId"]'))?.value;
-      if (pasteId && confirm("Delete this paste permanently?")) { await requestApi(`/pastes/${pasteId}`, { method: "DELETE" }); navigate("/pastes"); }
+      if (pasteId && confirm("Delete this paste permanently?")) {
+        await requestApi(`/pastes/${pasteId}`, { method: "DELETE" });
+        clearUnsavedChangesGuard();
+        navigate("/pastes");
+      }
     }
     if (action === "delete-attachment") {
       const row = target.closest<HTMLElement>(".attachment-row");
@@ -149,6 +163,7 @@ document.addEventListener("submit", async event => {
           throw error;
         }
       }
+      clearUnsavedChangesGuard();
       navigate(`/pastes/${paste.id}`);
     }
     if (form.id === "password-form") {
