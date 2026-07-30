@@ -10,6 +10,12 @@ import { loadAdmin } from "./views/admin_detail";
 
 document.addEventListener("click", async event => {
   const target = event.target as HTMLElement;
+  const richCommand = target.closest<HTMLElement>("[data-rich-command]")?.dataset.richCommand;
+  if (richCommand) {
+    const { runRichTextCommand } = await import("./rich_text_editor");
+    runRichTextCommand(richCommand);
+    return;
+  }
   const link = target.closest<HTMLAnchorElement>("a[data-link]");
   if (link) { event.preventDefault(); navigate(link.pathname + link.search); return; }
   const action = target.closest<HTMLElement>("[data-action]")?.dataset.action;
@@ -20,7 +26,7 @@ document.addEventListener("click", async event => {
       if (pasteId) { await navigator.clipboard.writeText(`${location.origin}/pastes/${pasteId}`); showNotice("Link copied."); }
     }
     if (action === "copy-content") {
-      const content = document.querySelector<HTMLElement>("#paste-code")?.textContent;
+      const content = document.querySelector<HTMLTextAreaElement>("#paste-plain-content")?.value;
       if (content !== undefined) {
         await navigator.clipboard.writeText(content);
         showNotice("Paste copied.");
@@ -67,6 +73,11 @@ document.addEventListener("click", async event => {
 
 document.addEventListener("change", async event => {
   const input = event.target as HTMLInputElement;
+  if (input.id === "rich-block-type") {
+    const { runRichTextCommand } = await import("./rich_text_editor");
+    runRichTextCommand(input.value);
+    return;
+  }
   if (input.dataset.userEnabled) {
     try { await requestApi(`/admin/users/${input.dataset.userEnabled}`, { method: "PATCH", body: JSON.stringify({ enabled: input.checked }) }); }
     catch (error) { input.checked = !input.checked; showNotice(error instanceof Error ? error.message : "Request failed", "error"); }
@@ -104,16 +115,23 @@ document.addEventListener("submit", async event => {
     }
     if (form.id === "paste-form") {
       const expiresAt = formValue(data,"expires_at");
+      const contentKind = formValue(data,"content_kind");
       const languageInput = form.elements.namedItem("language") as HTMLInputElement;
-      const language = normalizeLanguage(formValue(data,"language"));
+      const language = contentKind === "text"
+        ? normalizeLanguage(formValue(data,"language"))
+        : "plaintext";
       if (!language) {
         languageInput.setCustomValidity("Choose a supported language.");
         languageInput.reportValidity();
         throw new Error("Choose a supported language.");
       }
       languageInput.setCustomValidity("");
+      const document = contentKind === "rich_text"
+        ? (await import("./rich_text_editor")).richTextDocument()
+        : undefined;
+      if (contentKind === "rich_text" && !document) throw new Error("Rich-text editor is not ready.");
       const body = {
-        title: formValue(data,"title"), content: formValue(data,"content"), content_kind: formValue(data,"content_kind"),
+        title: formValue(data,"title"), content: formValue(data,"content"), document, content_kind: contentKind,
         language, visibility: formValue(data,"visibility"),
         expires_at: expiresAt ? Math.floor(new Date(expiresAt).getTime()/1000) : null,
         read_limit: formValue(data,"read_limit") ? Number(formValue(data,"read_limit")) : null

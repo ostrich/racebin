@@ -8,7 +8,8 @@ application uses that same API.
 ## Features
 
 - Public, unlisted, and private pastes
-- Text with light/dark syntax highlighting, redirect pastes, expiration, and optional read limits
+- Plain text with syntax highlighting, rich text, redirects, expiration, and optional read limits
+- Rich-text editing with safe HTML clipboard import and plain-text conversion
 - Searchable language selection, automatic detection, and lazy-loaded uncommon grammars
 - Multiple attachments, individual downloads, and ZIP archives
 - Session authentication with CSRF protection

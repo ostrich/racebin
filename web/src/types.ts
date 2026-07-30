@@ -8,13 +8,15 @@ export type User = {
 
 export type Session = { authenticated: boolean; user?: User; csrf_token?: string };
 export type Attachment = { id: number; filename: string; size_bytes: number };
+export type RichTextDocument = Record<string, unknown>;
 
 export type Paste = {
   id: string;
   owner_id: number | null;
   title: string;
   content: string;
-  content_kind: "text" | "redirect";
+  document: RichTextDocument | null;
+  content_kind: "text" | "rich_text" | "redirect";
   language: string;
   visibility: "public" | "unlisted" | "private";
   created_at: number;

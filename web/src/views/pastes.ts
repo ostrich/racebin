@@ -9,7 +9,7 @@ import {
 } from "../highlighting";
 import { navigate } from "../router";
 import { state } from "../state";
-import type { Page, Paste } from "../types";
+import type { Page, Paste, RichTextDocument } from "../types";
 import { formatDate, escapeHtml, iconButton, renderLayout, pasteDisplayTitle } from "../ui";
 
 export async function home(): Promise<void> {
@@ -74,12 +74,20 @@ export async function pasteView(pasteId: string): Promise<void> {
     return;
   }
   renderLayout(`<article class="paste-view">
-    <div class="page-heading"><div><p class="eyebrow">${escapeHtml(paste.visibility)} · ${escapeHtml(paste.language)}</p><h1>${escapeHtml(pasteDisplayTitle(paste))}</h1></div>
+    <div class="page-heading"><div><p class="eyebrow">${escapeHtml(paste.visibility)} · ${escapeHtml(paste.content_kind === "rich_text" ? "Rich text" : paste.language)}</p><h1>${escapeHtml(pasteDisplayTitle(paste))}</h1></div>
     <div class="actions"><a class="button" href="/api/v2/pastes/${escapeHtml(paste.id)}/raw">Raw</a><button class="button" type="button" data-action="copy-content"><i data-icon="copy"></i> Copy</button>${paste.attachments.length ? `<a class="button" href="/api/v2/pastes/${escapeHtml(paste.id)}/archive">ZIP</a>` : ""}${state.config.qr_codes_enabled ? `<a class="button" href="/api/v2/pastes/${escapeHtml(paste.id)}/qr">QR</a>` : ""}${own ? `<a class="button primary" href="/pastes/${escapeHtml(paste.id)}/edit" data-link><i data-icon="edit-3"></i> Edit</a>` : ""}</div></div>
-    <div class="paste-code"><div id="paste-lines" class="line-numbers" aria-hidden="true"></div><pre class="content"><code id="paste-code">${escapeHtml(paste.content)}</code></pre></div>
+    ${paste.content_kind === "rich_text"
+      ? `<div id="rich-text-viewer" class="rich-text-viewer"></div>`
+      : `<div class="paste-code"><div id="paste-lines" class="line-numbers" aria-hidden="true"></div><pre class="content"><code id="paste-code">${escapeHtml(paste.content)}</code></pre></div>`}
+    <textarea id="paste-plain-content" hidden>${escapeHtml(paste.content)}</textarea>
     ${paste.attachments.length ? `<section><h2>Attachments</h2><div class="attachments">${paste.attachments.map(attachment => `<div class="attachment-row" data-attachment-id="${attachment.id}" data-paste-id="${escapeHtml(paste.id)}"><a href="/api/v2/pastes/${escapeHtml(paste.id)}/attachments/${attachment.id}"><i data-icon="file-text"></i><span>${escapeHtml(attachment.filename)}</span><small>${attachment.size_bytes.toLocaleString()} bytes</small></a>${own ? `<button class="icon-button" type="button" title="Delete attachment" aria-label="Delete attachment" data-action="delete-attachment"><i data-icon="trash-2"></i></button>` : ""}</div>`).join("")}</div></section>` : ""}
     <footer class="paste-stats"><span>Created ${formatDate(paste.created_at)}</span><span>Expires ${formatDate(paste.expires_at)}</span><span>${paste.read_count} reads</span></footer>
   </article>`);
+  if (paste.content_kind === "rich_text" && paste.document) {
+    const { mountRichTextViewer } = await import("../rich_text_editor");
+    const viewer = document.querySelector<HTMLElement>("#rich-text-viewer");
+    if (viewer) mountRichTextViewer(viewer, paste.document);
+  }
   const code = document.querySelector<HTMLElement>("#paste-code");
   const lines = document.querySelector<HTMLElement>("#paste-lines");
   if (code) await highlightElement(code, paste.content, paste.language);
@@ -94,14 +102,31 @@ export async function pasteForm(pasteId?: string): Promise<void> {
     <div class="page-heading"><div><p class="eyebrow">${paste ? "Edit" : "Create"}</p><h1>${paste ? escapeHtml(pasteDisplayTitle(paste)) : "New paste"}</h1></div></div>
     <form id="paste-form">
       <label class="title-field"><span>Title</span><input name="title" maxlength="200" value="${escapeHtml(paste?.title ?? "")}" placeholder="Optional title"></label>
-      <label class="content-field"><span>Content</span><div class="code-editor">
+      <label id="text-content-field" class="content-field"><span>Content</span><div class="code-editor">
         <div id="editor-lines" class="line-numbers" aria-hidden="true"></div>
         <pre aria-hidden="true"><code id="editor-highlight" class="hljs"></code></pre>
         <textarea name="content" spellcheck="false" aria-label="Paste content">${escapeHtml(paste?.content ?? "")}</textarea>
       </div></label>
+      <div id="rich-content-field" class="content-field hidden"><span>Content</span>
+        <div class="rich-text-toolbar" role="toolbar" aria-label="Rich-text formatting">
+          <select id="rich-block-type" aria-label="Block type">
+            <option value="paragraph">Paragraph</option><option value="heading-1">Heading 1</option>
+            <option value="heading-2">Heading 2</option><option value="heading-3">Heading 3</option>
+          </select>
+          ${[
+            ["bold","Bold"],["italic","Italic"],["underline","Underline"],["strike","Strike"],
+            ["link","Link"],["bullet-list","Bulleted list"],["ordered-list","Numbered list"],
+            ["blockquote","Quote"],["code","Inline code"],["code-block","Code block"],
+            ["horizontal-rule","Separator"],["align-left","Align left"],["align-center","Align center"],
+            ["align-right","Align right"],["clear-formatting","Clear formatting"],
+            ["undo","Undo"],["redo","Redo"]
+          ].map(([command,label]) => `<button type="button" data-rich-command="${command}" title="${label}" aria-label="${label}">${label}</button>`).join("")}
+        </div>
+        <div id="rich-text-editor" class="rich-text-editor"></div>
+      </div>
       <div class="form-grid">
-        <label><span>Type</span><select name="content_kind"><option value="text">Text</option><option value="redirect" ${paste?.content_kind === "redirect" ? "selected" : ""}>Redirect</option></select></label>
-        <div class="language-field"><label for="language-input">Language <small>Type to filter languages.</small></label><div class="language-picker">
+        <label><span>Type</span><select id="content-kind" name="content_kind" data-current-kind="${paste?.content_kind ?? "text"}"><option value="text">Text</option><option value="rich_text" ${paste?.content_kind === "rich_text" ? "selected" : ""}>Rich text</option><option value="redirect" ${paste?.content_kind === "redirect" ? "selected" : ""}>Redirect</option></select></label>
+        <div id="language-field" class="language-field"><label for="language-input">Language <small>Type to filter languages.</small></label><div class="language-picker">
           <input id="language-input" name="language" value="${escapeHtml(selectedLanguage)}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="language-options-menu" placeholder="Type or choose">
           <div id="language-options-menu" class="language-options" role="listbox" hidden>${languageMenu()}</div>
         </div></div>
@@ -122,4 +147,115 @@ export async function pasteForm(pasteId?: string): Promise<void> {
     connectHighlightedEditor(textarea, output, languageInput, lines);
   }
   if (languageInput && languageOptions) connectLanguagePicker(languageInput, languageOptions);
+  await connectContentKindSelector(paste);
+}
+
+type Conversion = { content: string; document: RichTextDocument | null };
+
+async function convertContent(
+  sourceKind: "text" | "rich_text",
+  targetKind: "text" | "rich_text",
+  content: string,
+  document: RichTextDocument | null
+): Promise<Conversion> {
+  return requestApi<Conversion>("/pastes/convert", {
+    method: "POST",
+    body: JSON.stringify({
+      source_kind: sourceKind,
+      target_kind: targetKind,
+      content,
+      document
+    })
+  });
+}
+
+async function confirmConversion(targetKind: string, preview: string): Promise<boolean> {
+  const dialog = document.createElement("dialog");
+  dialog.className = "conversion-dialog";
+  dialog.innerHTML = `<form method="dialog"><h2>Convert to ${escapeHtml(targetKind.replace("_", " "))}?</h2>
+    <p class="muted">${targetKind === "text" ? "Formatting will be removed when you save." : "Review the converted text before continuing."}</p>
+    <pre>${escapeHtml(preview.slice(0, 4000))}</pre>
+    <div class="actions"><button class="button" value="cancel">Cancel</button><button class="button primary" value="confirm">Convert</button></div></form>`;
+  document.body.append(dialog);
+  dialog.showModal();
+  return new Promise(resolve => dialog.addEventListener("close", () => {
+    resolve(dialog.returnValue === "confirm");
+    dialog.remove();
+  }, { once: true }));
+}
+
+async function connectContentKindSelector(paste?: Paste): Promise<void> {
+  const selector = document.querySelector<HTMLSelectElement>("#content-kind");
+  const textarea = document.querySelector<HTMLTextAreaElement>('#paste-form textarea[name="content"]');
+  const textField = document.querySelector<HTMLElement>("#text-content-field");
+  const richField = document.querySelector<HTMLElement>("#rich-content-field");
+  const richElement = document.querySelector<HTMLElement>("#rich-text-editor");
+  const languageField = document.querySelector<HTMLElement>("#language-field");
+  if (!selector || !textarea || !textField || !richField || !richElement || !languageField) return;
+
+  const richModule = await import("../rich_text_editor");
+  let richDocument = paste?.document ?? null;
+  let richPlaintext = paste?.content ?? "";
+  const drafts = new Map<string, string>([
+    [paste?.content_kind ?? "text", paste?.content ?? ""]
+  ]);
+
+  const showKind = (kind: string) => {
+    const rich = kind === "rich_text";
+    richField.classList.toggle("hidden", !rich);
+    textField.classList.toggle("hidden", rich);
+    languageField.classList.toggle("hidden", kind !== "text");
+    selector.dataset.currentKind = kind;
+    if (rich && richDocument) {
+      richModule.mountRichTextEditor(richElement, richDocument);
+    }
+  };
+
+  if (paste?.content_kind === "rich_text" && richDocument) showKind("rich_text");
+  else showKind(paste?.content_kind ?? "text");
+
+  selector.addEventListener("change", async () => {
+    const sourceKind = (selector.dataset.currentKind ?? "text") as "text" | "rich_text" | "redirect";
+    const targetKind = selector.value as "text" | "rich_text" | "redirect";
+    if (sourceKind === targetKind) return;
+    selector.disabled = true;
+    try {
+      if (sourceKind === "rich_text") {
+        richDocument = richModule.richTextDocument() ?? richDocument;
+        const converted = await convertContent("rich_text", "text", richPlaintext, richDocument);
+        richPlaintext = converted.content;
+        if (!(await confirmConversion(targetKind, converted.content))) {
+          selector.value = sourceKind;
+          return;
+        }
+        drafts.set(targetKind, drafts.get(targetKind) ?? converted.content);
+        textarea.value = drafts.get(targetKind)!;
+      } else if (targetKind === "rich_text") {
+        drafts.set(sourceKind, textarea.value);
+        const source = textarea.value;
+        if (!richDocument || source !== richPlaintext) {
+          const converted = await convertContent("text", "rich_text", source, null);
+          richDocument = converted.document;
+          richPlaintext = converted.content;
+        }
+        if (!(await confirmConversion(targetKind, richPlaintext))) {
+          selector.value = sourceKind;
+          return;
+        }
+      } else {
+        drafts.set(sourceKind, textarea.value);
+        if (!(await confirmConversion(targetKind, drafts.get(targetKind) ?? textarea.value))) {
+          selector.value = sourceKind;
+          return;
+        }
+        textarea.value = drafts.get(targetKind) ?? textarea.value;
+      }
+      showKind(targetKind);
+    } catch (error) {
+      selector.value = sourceKind;
+      throw error;
+    } finally {
+      selector.disabled = false;
+    }
+  });
 }

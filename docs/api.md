@@ -51,9 +51,28 @@ curl https://example.com/api/v2/pastes \
   }'
 ```
 
-`content_kind` is `text` or `redirect`. `visibility` is `public`, `unlisted`,
+`content_kind` is `text`, `rich_text`, or `redirect`. `visibility` is `public`, `unlisted`,
 or `private`. Timestamp fields are Unix seconds. A null `expires_at` never
 expires, and a null `read_limit` permits unlimited reads.
+
+Rich-text pastes include a validated ProseMirror `document` object. Their
+`content` field is server-generated plaintext used for search, previews, raw
+downloads, copying, and clients that do not render rich text. Supported nodes
+are paragraphs, headings 1–3, lists, blockquotes, horizontal rules, hard
+breaks, text, and code blocks. Supported marks are bold, italic, underline,
+strike, inline code, and safe HTTP(S) or mail links.
+
+Convert between text and rich text without saving a paste:
+
+```bash
+curl -X POST https://example.com/api/v2/pastes/convert \
+  -H "Content-Type: application/json" \
+  -H "X-CSRF-Token: $RACEBIN_CSRF" \
+  -d '{"source_kind":"text","target_kind":"rich_text","content":"SCENE 1\n\nADA\nHello.","document":null}'
+```
+
+The reverse conversion accepts the rich-text `document` and returns normalized
+plaintext. Conversion intentionally excludes redirects.
 
 List and filter:
 
