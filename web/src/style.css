@@ -60,6 +60,12 @@
 .code-editor pre{overflow:hidden}
 .editor .code-editor textarea{overscroll-behavior:contain}
 .content-field>span{display:block;margin-bottom:7px;font-size:12px;font-weight:700;color:#505a66}
+.content-editor{height:410px}
+.content-editor-text .code-editor,.content-editor-text .code-editor pre,.content-editor-text .code-editor textarea{height:100%;min-height:0}
+.content-editor-text .code-editor textarea{resize:none}
+.content-editor-rich{display:grid;grid-template-rows:auto minmax(0,1fr)}
+.content-editor-rich .rich-text-editor{min-height:0;overflow:auto}
+.content-editor-rich .rich-text-content{min-height:100%}
 .language-empty{margin:8px;padding:8px}
 .code-editor>.line-numbers{position:absolute;z-index:2;inset:0 auto 0 0;width:calc(var(--line-number-width) + 8px);padding:10px 8px;overflow:hidden;background:#f4f6f7;border-right:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:inherit;line-height:1.55}
 .code-editor .hljs,.paste-code .hljs{font:inherit;line-height:inherit;white-space:inherit}

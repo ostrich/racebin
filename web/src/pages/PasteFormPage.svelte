@@ -205,13 +205,19 @@
       <label class="title-field"><span>Title</span><input bind:value={title} maxlength="200" placeholder="Optional title"/></label>
       {#if contentKind === "rich_text"}
         <div class="content-field"><span>Content</span>
-          {#await import("../components/RichTextEditor.svelte") then module}
-            {@const RichTextEditor = module.default}
-            <RichTextEditor bind:document/>
-          {/await}
+          <div class="content-editor content-editor-rich">
+            {#await import("../components/RichTextEditor.svelte") then module}
+              {@const RichTextEditor = module.default}
+              <RichTextEditor bind:document/>
+            {/await}
+          </div>
         </div>
       {:else}
-        <label class="content-field"><span>Content</span><CodeEditor bind:value={content} bind:language/></label>
+        <label class="content-field"><span>Content</span>
+          <div class="content-editor content-editor-text">
+            <CodeEditor bind:value={content} bind:language/>
+          </div>
+        </label>
       {/if}
       <div class="form-grid">
         <label><span>Type</span><select value={contentKind} disabled={switching} onchange={changeKind}>
