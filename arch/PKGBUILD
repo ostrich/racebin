@@ -1,6 +1,6 @@
 # Maintainer: ostrich <570911+ostrich@users.noreply.github.com>
 pkgname=racebin-git
-pkgver=4.0.0.r36.g327137f
+pkgver=4.0.0.r37.gf6666f5
 pkgrel=1
 pkgdesc="API-first self-hosted paste bin with attachments"
 arch=('x86_64' 'aarch64')
