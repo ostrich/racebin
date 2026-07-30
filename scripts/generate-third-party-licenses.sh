@@ -5,7 +5,7 @@ cargo about generate licenses/about.hbs \
     --config licenses/about.toml \
     --fail \
     --locked \
-    --output-file THIRD_PARTY_RUST_LICENSES.html
+    --output-file THIRD_PARTY_RUST_LICENSES.md
 
 frontend_notice=$(mktemp)
 trap 'rm -f "$frontend_notice"' EXIT

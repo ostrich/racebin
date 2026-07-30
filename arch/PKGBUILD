@@ -37,8 +37,8 @@ package() {
     install -Dm0755 target/release/racebin "$pkgdir/usr/bin/racebin"
     install -Dm0644 LICENSE \
         "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-    install -Dm0644 THIRD_PARTY_RUST_LICENSES.html \
-        "$pkgdir/usr/share/licenses/$pkgname/THIRD_PARTY_RUST_LICENSES.html"
+    install -Dm0644 THIRD_PARTY_RUST_LICENSES.md \
+        "$pkgdir/usr/share/licenses/$pkgname/THIRD_PARTY_RUST_LICENSES.md"
     install -Dm0644 THIRD_PARTY_FRONTEND_LICENSES.md \
         "$pkgdir/usr/share/licenses/$pkgname/THIRD_PARTY_FRONTEND_LICENSES.md"
     install -Dm0644 packaging/racebin.service \

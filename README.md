@@ -122,5 +122,5 @@ the frontend dependencies present.
 
 Racebin is available under the [MIT License](LICENSE). Licenses for bundled
 third-party components are collected in
-[THIRD_PARTY_RUST_LICENSES.html](THIRD_PARTY_RUST_LICENSES.html) and
+[THIRD_PARTY_RUST_LICENSES.md](THIRD_PARTY_RUST_LICENSES.md) and
 [THIRD_PARTY_FRONTEND_LICENSES.md](THIRD_PARTY_FRONTEND_LICENSES.md).
