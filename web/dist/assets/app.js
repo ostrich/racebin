@@ -37,7 +37,7 @@ https://github.com/highlightjs/highlight.js/issues/2277`),te=g,G=A),D===void 0&&
     <label><span>Current password</span><input type="password" name="current_password" autocomplete="current-password" required></label>
     <label><span>New password</span><input type="password" name="new_password" minlength="12" autocomplete="new-password" required></label>
     <div class="actions"><button class="button primary" type="submit">Update password</button><a class="button" href="/account" data-link>Cancel</a></div></form></section>`)}function Bn(e){return e.content_kind==="rich_text"?"Rich text":e.content_kind==="redirect"?"Redirect":e.language}async function Si(){if(Z.session.user)return Dt();const e=await $("/pastes?visibility=public&page_size=8");be(`
-    <section class="welcome"><div><p class="eyebrow">Code, notes, and files—shared simply</p><h1>${I(Z.config.site_name)}</h1><p>Browse public pastes below, or sign in to create syntax-highlighted and rich-text pastes of your own.</p>
+    <section class="welcome"><div><p class="eyebrow">Simple sharing for code, notes, and files.</p><h1>${I(Z.config.site_name)}</h1><p>Browse public pastes below, or sign in to create syntax-highlighted and rich-text pastes of your own.</p>
     <div class="actions"><a class="button primary" href="/explore" data-link>Explore pastes</a><a class="button" href="/login" data-link>Log in</a></div></div></section>
     <section><div class="section-heading"><h2>Recently shared</h2><a href="/explore" data-link>View all</a></div>${Ut(e.items)}</section>`)}function Ut(e,t=!1){return e.length?`<div class="paste-list">${e.map(n=>`
     <article class="paste-row">

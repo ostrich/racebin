@@ -1,6 +1,6 @@
 # Racebin
 
-**Share code, notes, and files—simply.**
+**Simple sharing for code, notes, and files.**
 
 Racebin is a self-hosted place to create and share syntax-highlighted code,
 rich-text documents, attachments, and short links. Keep a paste private, share
