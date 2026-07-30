@@ -4,15 +4,18 @@
   import Link from "../components/Link.svelte";
   import PasteRows from "../components/PasteRows.svelte";
   import { showNotice } from "../notices";
+  import { deferRouteReady } from "../router";
   import { appState } from "../state";
   import type { Page, Paste } from "../types";
 
   let page = $state<Page<Paste> | null>(null);
+  const initialLoadReady = deferRouteReady();
 
   onMount(() => {
     void requestApi<Page<Paste>>("/pastes?visibility=public&page_size=8")
       .then(result => { page = result; })
-      .catch(error => showNotice(error instanceof Error ? error.message : "Unable to load pastes", "error"));
+      .catch(error => showNotice(error instanceof Error ? error.message : "Unable to load pastes", "error"))
+      .finally(initialLoadReady);
   });
 </script>
 

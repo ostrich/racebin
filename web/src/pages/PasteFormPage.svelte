@@ -9,7 +9,7 @@
   import { pasteDisplayTitle } from "../format";
   import { normalizeLanguage } from "../highlighting";
   import { showNotice } from "../notices";
-  import { guardUnsavedChanges, navigate } from "../router";
+  import { deferRouteReady, guardUnsavedChanges, navigate } from "../router";
   import { appState } from "../state";
   import type { Paste, RichTextDocument } from "../types";
 
@@ -35,6 +35,7 @@
   let switching = $state(false);
   let baseline = $state("");
   let initialized = $state(false);
+  const initialLoadReady = deferRouteReady();
   const drafts = new Map<ContentKind, string>();
 
   function snapshot(): string {
@@ -67,6 +68,7 @@
     void tick().then(() => {
       baseline = snapshot();
       initialized = true;
+      initialLoadReady();
     });
   }
 
@@ -80,7 +82,10 @@
     void requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}`)
       .then(initialize)
       .catch(reason => { error = reason instanceof Error ? reason.message : "Unable to load paste"; })
-      .finally(() => { loading = false; });
+      .finally(() => {
+        loading = false;
+        initialLoadReady();
+      });
   });
 
   async function convert(

@@ -25,6 +25,12 @@ export type LocationState = {
 
 type ScrollPosition = { scroll_x: number; scroll_y: number };
 type DiscardPrompt = () => Promise<boolean>;
+type RouteReadiness = {
+  pending: number;
+  sealed: boolean;
+  promise: Promise<void>;
+  resolve: () => void;
+};
 
 let dirtyCheck: (() => boolean) | undefined;
 let discardPrompt: DiscardPrompt = async () => window.confirm("Discard unsaved changes?");
@@ -32,6 +38,7 @@ let currentPath = "/";
 let currentScroll: ScrollPosition = { scroll_x: 0, scroll_y: 0 };
 let scrollPaused = false;
 let scrollFrame: number | undefined;
+let routeReadiness = createRouteReadiness();
 
 export const locationState = writable<LocationState>(
   parseLocation(location.pathname, location.search)
@@ -77,16 +84,58 @@ function saveScroll(position: ScrollPosition = {
   history.replaceState({ ...(history.state ?? {}), ...position }, "");
 }
 
+function createRouteReadiness(): RouteReadiness {
+  let resolve = () => {};
+  const promise = new Promise<void>(ready => {
+    resolve = ready;
+  });
+  return { pending: 0, sealed: false, promise, resolve };
+}
+
+function beginRouteReadiness(): RouteReadiness {
+  routeReadiness.resolve();
+  routeReadiness = createRouteReadiness();
+  return routeReadiness;
+}
+
+function settleRouteReadiness(readiness: RouteReadiness): void {
+  if (readiness.sealed && readiness.pending === 0) readiness.resolve();
+}
+
+/**
+ * Defers scroll restoration until this route's initial asynchronous rendering
+ * is complete. The returned callback is idempotent and scoped to the current
+ * navigation, so a stale request cannot release a newer route.
+ */
+export function deferRouteReady(): () => void {
+  const readiness = routeReadiness;
+  readiness.pending += 1;
+  let complete = false;
+  return () => {
+    if (complete) return;
+    complete = true;
+    readiness.pending -= 1;
+    settleRouteReadiness(readiness);
+  };
+}
+
 async function renderAt(position: ScrollPosition): Promise<void> {
+  const readiness = beginRouteReadiness();
   scrollPaused = true;
   currentPath = `${location.pathname}${location.search}`;
   locationState.set(parseLocation(location.pathname, location.search));
   await tick();
+  readiness.sealed = true;
+  settleRouteReadiness(readiness);
+  await readiness.promise;
+  if (readiness !== routeReadiness) return;
+  await tick();
   await new Promise<void>(resolve =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
   );
+  if (readiness !== routeReadiness) return;
   window.scrollTo(position.scroll_x, position.scroll_y);
-  saveScroll(position);
+  saveScroll();
   scrollPaused = false;
 }
 

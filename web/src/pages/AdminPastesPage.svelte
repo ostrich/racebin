@@ -7,12 +7,14 @@
   import PasteFilters from "../components/PasteFilters.svelte";
   import { formatByteSize, formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
   import { showNotice } from "../notices";
+  import { deferRouteReady } from "../router";
   import type { Page, Paste, User } from "../types";
 
   let { query }: { query: URLSearchParams } = $props();
   let page = $state<Page<Paste> | null>(null);
   let users = $state<User[]>([]);
   let ownerNames = $derived(new Map(users.map(user => [user.id, user.username])));
+  const initialLoadReady = deferRouteReady();
 
   onMount(() => {
     const params = new URLSearchParams(query);
@@ -23,7 +25,8 @@
     ]).then(([result, loadedUsers]) => {
       page = result;
       users = loadedUsers;
-    }).catch(error => showNotice(error instanceof Error ? error.message : "Unable to load pastes", "error"));
+    }).catch(error => showNotice(error instanceof Error ? error.message : "Unable to load pastes", "error"))
+      .finally(initialLoadReady);
   });
 
   function filterUrl(key: string, value: string): string {

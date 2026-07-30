@@ -1,11 +1,17 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { Editor } from "@tiptap/core";
   import TextAlign from "@tiptap/extension-text-align";
   import StarterKit from "@tiptap/starter-kit";
   import type { RichTextDocument } from "../types";
 
-  let { document }: { document: RichTextDocument } = $props();
+  let {
+    document,
+    onready
+  }: {
+    document: RichTextDocument;
+    onready?: () => void;
+  } = $props();
   let element: HTMLDivElement;
 
   onMount(() => {
@@ -28,6 +34,7 @@
       editable: false,
       editorProps: { attributes: { class: "rich-text-content" } }
     });
+    void tick().then(onready);
     return () => editor.destroy();
   });
 </script>

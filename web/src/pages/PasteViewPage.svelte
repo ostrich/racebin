@@ -7,12 +7,15 @@
   import Link from "../components/Link.svelte";
   import { formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
   import { showNotice } from "../notices";
+  import { deferRouteReady } from "../router";
   import { appState } from "../state";
   import type { Paste } from "../types";
 
   let { pasteId }: { pasteId: string } = $props();
   let paste = $state<Paste | null>(null);
   let error = $state("");
+  let wrapLines = $state(false);
+  const initialLoadReady = deferRouteReady();
   let own = $derived(Boolean(
     paste && $appState.session.user &&
     ($appState.session.user.id === paste.owner_id || $appState.session.user.role === "admin")
@@ -23,6 +26,7 @@
       .then(result => { paste = result; })
       .catch(reason => {
         error = reason instanceof Error ? reason.message : "Unable to load paste";
+        initialLoadReady();
       });
   });
 
@@ -40,6 +44,10 @@
         <div class="actions">
           <a class="button" href={`/api/v1/pastes/${encodeURIComponent(paste.id)}/raw`}>Raw</a>
           <button class="button" type="button" onclick={copyContent}><Icon name="copy"/> Copy</button>
+          {#if paste.content_kind === "text"}
+            <button class="button" class:active={wrapLines} type="button" aria-pressed={wrapLines}
+              onclick={() => { wrapLines = !wrapLines; }}><Icon name="wrap-text"/> Wrap lines</button>
+          {/if}
           {#if paste.attachments.length}<a class="button" href={`/api/v1/pastes/${encodeURIComponent(paste.id)}/archive`}>ZIP</a>{/if}
           {#if $appState.config.qr_codes_enabled}<a class="button" href={`/api/v1/pastes/${encodeURIComponent(paste.id)}/qr`}>QR</a>{/if}
           {#if own}<Link class="button primary" href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/> Edit</Link>{/if}
@@ -48,10 +56,11 @@
       {#if paste.content_kind === "rich_text" && paste.document}
         {#await import("../components/RichTextViewer.svelte") then module}
           {@const RichTextViewer = module.default}
-          <RichTextViewer document={paste.document}/>
+          <RichTextViewer document={paste.document} onready={initialLoadReady}/>
         {/await}
       {:else}
-        <CodeViewer code={paste.content} language={paste.language}/>
+        <CodeViewer code={paste.content} language={paste.language} wrap={wrapLines}
+          onready={initialLoadReady}/>
       {/if}
       {#if paste.attachments.length}
         <section><h2>Attachments</h2>

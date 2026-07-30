@@ -7,11 +7,13 @@
   import PasteFilters from "../components/PasteFilters.svelte";
   import PasteRows from "../components/PasteRows.svelte";
   import { showNotice } from "../notices";
+  import { deferRouteReady } from "../router";
   import type { Page, Paste } from "../types";
 
   let { mine, query }: { mine: boolean; query: URLSearchParams } = $props();
   let page = $state<Page<Paste> | null>(null);
   let error = $state("");
+  const initialLoadReady = deferRouteReady();
 
   onMount(() => {
     const params = new URLSearchParams(query);
@@ -23,7 +25,8 @@
       .catch(reason => {
         error = reason instanceof Error ? reason.message : "Unable to load pastes";
         showNotice(error, "error");
-      });
+      })
+      .finally(initialLoadReady);
   });
 </script>
 

@@ -15,6 +15,7 @@
   import Link from "./components/Link.svelte";
   import Shell from "./components/Shell.svelte";
   import {
+    deferRouteReady,
     hasUnsavedChanges,
     initializeRouter,
     locationState,
@@ -35,6 +36,7 @@
       dangerous: true
     }));
     const stopRouter = initializeRouter();
+    const startupReady = deferRouteReady();
     const beforeUnload = (event: BeforeUnloadEvent) => {
       if (!hasUnsavedChanges()) return;
       event.preventDefault();
@@ -48,7 +50,8 @@
           await navigate("/account/password", { replace: true });
         }
       })
-      .catch(error => { startupError = error instanceof Error ? error.message : "Unable to start Racebin"; });
+      .catch(error => { startupError = error instanceof Error ? error.message : "Unable to start Racebin"; })
+      .finally(startupReady);
     return () => {
       stopRouter();
       window.removeEventListener("beforeunload", beforeUnload);

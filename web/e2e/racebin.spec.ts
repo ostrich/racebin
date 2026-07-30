@@ -40,7 +40,16 @@ async function json(route: Route, value: unknown, status = 200): Promise<void> {
   });
 }
 
-async function mockApi(page: Page, authenticated = false): Promise<void> {
+async function mockApi(
+  page: Page,
+  authenticated = false,
+  options: {
+    items?: Array<typeof paste>;
+    delay?: number;
+    viewPaste?: typeof paste;
+  } = {}
+): Promise<void> {
+  const viewPaste = options.viewPaste ?? paste;
   await page.route("**/api/v1/**", async route => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/v1/session") {
@@ -49,8 +58,8 @@ async function mockApi(page: Page, authenticated = false): Promise<void> {
         : { authenticated: false });
     }
     if (url.pathname === "/api/v1/config") return json(route, config);
-    if (url.pathname.endsWith("/consume")) return json(route, paste);
-    if (url.pathname === "/api/v1/pastes/sample-paste") return json(route, paste);
+    if (url.pathname.endsWith("/consume")) return json(route, viewPaste);
+    if (url.pathname === "/api/v1/pastes/sample-paste") return json(route, viewPaste);
     if (url.pathname === "/api/v1/pastes/convert") {
       const body = route.request().postDataJSON() as { source_kind: string; content?: string };
       return json(route, body.source_kind === "text"
@@ -79,7 +88,9 @@ async function mockApi(page: Page, authenticated = false): Promise<void> {
     }]);
     if (url.pathname === "/api/v1/pastes") {
       if (route.request().method() === "POST") return json(route, paste, 201);
-      return json(route, { items: [paste], page: 1, page_size: 50, total_items: 1 });
+      if (options.delay) await new Promise(resolve => setTimeout(resolve, options.delay));
+      const items = options.items ?? [paste];
+      return json(route, { items, page: 1, page_size: 50, total_items: items.length });
     }
     return json(route, {});
   });
@@ -96,6 +107,43 @@ test("renders the public homepage and paste viewer", async ({ page }) => {
   await expect(page.getByRole("link", { name: /example.txt/ })).toBeVisible();
 });
 
+test("wide paste offers synchronized sticky scrolling and aligned wrapped lines", async ({ page }) => {
+  const content = Array.from(
+    { length: 60 },
+    (_, index) => `${String(index + 1).padStart(3, "0")} ${"wide content ".repeat(24)}`
+  ).join("\n");
+  await mockApi(page, false, { viewPaste: { ...paste, content } });
+  await page.goto("/pastes/sample-paste");
+  const code = page.locator(".paste-code");
+  await expect.poll(() => code.evaluate(
+    element => element.scrollWidth > element.clientWidth
+  )).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 500));
+  const floating = page.getByRole("region", { name: "Horizontal paste scrollbar" });
+  await expect(floating).toHaveClass(/visible/);
+  await floating.evaluate(element => {
+    element.scrollLeft = 240;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  await expect.poll(() => code.evaluate(element => element.scrollLeft)).toBeGreaterThan(200);
+
+  await page.getByRole("button", { name: "Wrap lines" }).click();
+  await expect(page.getByRole("button", { name: "Wrap lines" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".paste-floating-scrollbar")).not.toHaveClass(/visible/);
+  await expect.poll(() => code.evaluate(
+    element => element.scrollWidth <= element.clientWidth + 1
+  )).toBe(true);
+  const lineLayout = await page.locator(".line-numbers.wrapped").evaluate(gutter => {
+    const numbers = [...gutter.querySelectorAll<HTMLElement>("span")];
+    return {
+      count: numbers.length,
+      firstGap: numbers[1].offsetTop - numbers[0].offsetTop
+    };
+  });
+  expect(lineLayout.count).toBe(60);
+  expect(lineLayout.firstGap).toBeGreaterThan(22);
+});
+
 test("untouched paste form navigates without a discard prompt", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
@@ -103,6 +151,29 @@ test("untouched paste form navigates without a discard prompt", async ({ page })
   await page.getByRole("link", { name: "My pastes" }).click();
   await expect(page).toHaveURL(/\/pastes$/);
   await expect(page.getByRole("heading", { name: "My pastes" })).toBeVisible();
+});
+
+test("back and forward navigation restore list scroll positions after loading", async ({ page }) => {
+  const items = Array.from({ length: 50 }, (_, index) => ({
+    ...paste,
+    id: `sample-paste-${index}`,
+    title: `Paste ${String(index + 1).padStart(2, "0")}`
+  }));
+  await mockApi(page, true, { items, delay: 150 });
+  await page.goto("/pastes");
+  const link = page.getByRole("link", { name: "Paste 30" });
+  await link.scrollIntoViewIfNeeded();
+  const listScroll = await page.evaluate(() => window.scrollY);
+  expect(listScroll).toBeGreaterThan(0);
+  await link.click();
+  await expect(page).toHaveURL(/\/pastes\/sample-paste-29$/);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/pastes$/);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(listScroll);
+  await page.goForward();
+  await expect(page).toHaveURL(/\/pastes\/sample-paste-29$/);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 });
 
 test("editing triggers the custom discard dialog and detects JavaScript", async ({ page }) => {

@@ -5,12 +5,14 @@
   import Link from "../components/Link.svelte";
   import { formatDate } from "../format";
   import { showNotice } from "../notices";
+  import { deferRouteReady } from "../router";
   import type { ApiKey } from "../types";
 
   const scopes = ["paste:read", "paste:write", "paste:delete", "paste:list"];
   let keys = $state<ApiKey[]>([]);
   let loading = $state(true);
   let submitting = $state(false);
+  const initialLoadReady = deferRouteReady();
 
   async function load(): Promise<void> {
     loading = true;
@@ -20,6 +22,7 @@
       showNotice(error instanceof Error ? error.message : "Unable to load API keys", "error");
     } finally {
       loading = false;
+      initialLoadReady();
     }
   }
 
