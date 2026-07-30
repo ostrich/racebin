@@ -8,7 +8,16 @@
 .file-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
 @media(max-width:760px){.form-grid,.filters.admin-filters{grid-template-columns:1fr}}
 
-.editor label small{color:var(--muted);font-size:11px;font-weight:400;margin-left:5px}
+.editor label small,.syntax-field small{color:var(--muted);font-size:11px;font-weight:400;margin-left:5px}
+.syntax-field{display:grid;gap:7px;min-width:0}
+.syntax-field>label{display:block;font-size:12px;font-weight:700;color:#505a66}
+.language-picker{position:relative}
+.language-picker>input{width:100%}
+.language-options{position:absolute;z-index:10;top:calc(100% + 4px);left:0;right:0;max-height:280px;overflow:auto;padding:4px;background:#fff;border:1px solid #bfc6ce;border-radius:5px;box-shadow:0 10px 28px rgba(20,30,40,.18)}
+.language-options button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;padding:8px;border:0;border-radius:3px;background:transparent;color:#20242a;text-align:left;cursor:pointer}
+.language-options button:hover,.language-options button.active{background:#e9edef}
+.language-options button.selected{font-weight:700;color:var(--accent)}
+.language-options button small{margin:0;color:var(--muted);font-weight:400}
 .code-editor{position:relative;min-height:410px;border:1px solid #bfc6ce;border-radius:5px;overflow:hidden;background:#fff}
 .code-editor pre,.code-editor textarea{width:100%;min-height:410px;margin:0;padding:10px 11px;border:0;border-radius:0;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:inherit;line-height:1.55;tab-size:4;white-space:pre;overflow:auto}
 .code-editor pre{position:absolute;inset:0;pointer-events:none}
@@ -31,6 +40,10 @@
 .hljs-addition{color:#22863a;background:#f0fff4}.hljs-deletion{color:#b31d28;background:#ffeef0}
 
 @media(prefers-color-scheme:dark){
+  .syntax-field>label{color:#a4adb3}
+  .language-options{background:#192126;border-color:#343d43;box-shadow:0 10px 28px rgba(0,0,0,.4)}
+  .language-options button{color:#e8edf0}
+  .language-options button:hover,.language-options button.active{background:#2b353b}
   .code-editor{background:#0d1117;border-color:#343d43}
   .editor .code-editor textarea{caret-color:#e8edf0}
   .paste-view .content{background:#0d1117;color:#c9d1d9}

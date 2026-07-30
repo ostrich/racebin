@@ -1,8 +1,9 @@
 import { api } from "../api";
 import {
   connectHighlightedEditor,
+  connectLanguagePicker,
   highlightElement,
-  languageDataList,
+  languageMenu,
   normalizeSyntax
 } from "../highlighting";
 import { navigate } from "../router";
@@ -85,7 +86,7 @@ export async function pasteView(slug: string): Promise<void> {
 export async function pasteForm(slug?: string): Promise<void> {
   if (!state.session.user) return navigate("/login");
   const paste = slug ? await api<Paste>(`/pastes/${encodeURIComponent(slug)}`) : undefined;
-  const syntax = normalizeSyntax(paste?.syntax ?? "none") ?? "none";
+  const syntax = normalizeSyntax(paste?.syntax ?? "auto") ?? "auto";
   layout(`<section class="editor">
     <div class="page-heading"><div><p class="eyebrow">${paste ? "Edit" : "Create"}</p><h1>${paste ? esc(title(paste)) : "New paste"}</h1></div></div>
     <form id="paste-form">
@@ -96,7 +97,10 @@ export async function pasteForm(slug?: string): Promise<void> {
       </div></label>
       <div class="form-grid">
         <label><span>Type</span><select name="kind"><option value="text">Text</option><option value="url" ${paste?.kind === "url" ? "selected" : ""}>URL</option></select></label>
-        <label><span>Syntax <small>Type to filter languages.</small></span><input id="syntax-input" name="syntax" list="syntax-languages" value="${esc(syntax)}" autocomplete="off" placeholder="Type or choose"><datalist id="syntax-languages">${languageDataList()}</datalist></label>
+        <div class="syntax-field"><label for="syntax-input">Syntax <small>Type to filter languages.</small></label><div class="language-picker">
+          <input id="syntax-input" name="syntax" value="${esc(syntax)}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="syntax-languages" placeholder="Type or choose">
+          <div id="syntax-languages" class="language-options" role="listbox" hidden>${languageMenu()}</div>
+        </div></div>
         <label><span>Access</span><select name="access">${["public","unlisted","owner"].map(v => `<option ${paste?.access === v || (!paste && v === "unlisted") ? "selected" : ""}>${v}</option>`).join("")}</select></label>
         <label><span>Expires</span><input type="datetime-local" name="expiration" value="${paste?.expiration ? new Date(paste.expiration * 1000).toISOString().slice(0,16) : ""}"></label>
         <label><span>Burn after reads</span><input type="number" min="0" name="burn_after_reads" value="${paste?.burn_after_reads ?? 0}"></label>
@@ -108,5 +112,7 @@ export async function pasteForm(slug?: string): Promise<void> {
   const textarea = document.querySelector<HTMLTextAreaElement>('#paste-form textarea[name="content"]');
   const output = document.querySelector<HTMLElement>("#editor-highlight");
   const language = document.querySelector<HTMLInputElement>("#syntax-input");
+  const languageOptions = document.querySelector<HTMLElement>("#syntax-languages");
   if (textarea && output && language) connectHighlightedEditor(textarea, output, language);
+  if (language && languageOptions) connectLanguagePicker(language, languageOptions);
 }

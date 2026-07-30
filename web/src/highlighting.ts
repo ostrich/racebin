@@ -197,10 +197,83 @@ export function normalizeSyntax(value: string): string | undefined {
   return aliases.get(value.trim().toLowerCase());
 }
 
-export function languageDataList(): string {
+export function languageMenu(): string {
   return languageOptions
-    .map(language => `<option value="${language.id}">${language.label}</option>`)
+    .map(language => {
+      const search = [language.id, language.label, ...(language.aliases ?? [])]
+        .join(" ")
+        .toLowerCase();
+      return `<button type="button" role="option" data-language="${language.id}" data-search="${search}">${language.label}<small>${language.id}</small></button>`;
+    })
     .join("");
+}
+
+export function connectLanguagePicker(
+  input: HTMLInputElement,
+  menu: HTMLElement
+): void {
+  const options = [...menu.querySelectorAll<HTMLButtonElement>("[data-language]")];
+  let active = -1;
+
+  const visible = () => options.filter(option => !option.hidden);
+  const setActive = (index: number) => {
+    const choices = visible();
+    choices.forEach(option => option.classList.remove("active"));
+    if (!choices.length) {
+      active = -1;
+      return;
+    }
+    active = (index + choices.length) % choices.length;
+    choices[active]!.classList.add("active");
+    choices[active]!.scrollIntoView({ block: "nearest" });
+  };
+  const open = (query = "") => {
+    const term = query.trim().toLowerCase();
+    options.forEach(option => {
+      option.hidden = Boolean(term && !option.dataset.search!.includes(term));
+      option.classList.toggle(
+        "selected",
+        option.dataset.language === normalizeSyntax(input.value)
+      );
+    });
+    menu.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+    active = -1;
+  };
+  const close = () => {
+    menu.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    active = -1;
+  };
+  const choose = (option: HTMLButtonElement) => {
+    input.value = option.dataset.language!;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    close();
+  };
+
+  input.addEventListener("focus", () => {
+    input.select();
+    open();
+  });
+  input.addEventListener("input", () => open(input.value));
+  input.addEventListener("blur", () => window.setTimeout(close, 100));
+  input.addEventListener("keydown", event => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (menu.hidden) open();
+      setActive(active + (event.key === "ArrowDown" ? 1 : -1));
+    } else if (event.key === "Enter" && active >= 0) {
+      event.preventDefault();
+      choose(visible()[active]!);
+    } else if (event.key === "Escape") {
+      close();
+    }
+  });
+  menu.addEventListener("mousedown", event => event.preventDefault());
+  menu.addEventListener("click", event => {
+    const option = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-language]");
+    if (option) choose(option);
+  });
 }
 
 async function ensureLanguage(language: string): Promise<boolean> {
