@@ -1,18 +1,65 @@
-import { errorView, renderLayout } from "./ui";
-import {
-  clearUnsavedChangesGuard,
-  confirmDiscardChanges
-} from "./navigation_guard";
-import { accountView, invitationView, loginView, passwordView } from "./views/account";
-import { adminPastes, adminView } from "./views/admin";
-import { guideView } from "./views/guide";
-import { home, pasteForm, pasteList, pasteView } from "./views/pastes";
+import { tick } from "svelte";
+import { get, writable } from "svelte/store";
+
+export type Route =
+  | { name: "home" }
+  | { name: "explore" }
+  | { name: "login" }
+  | { name: "new-paste" }
+  | { name: "my-pastes" }
+  | { name: "paste"; pasteId: string }
+  | { name: "edit-paste"; pasteId: string }
+  | { name: "account" }
+  | { name: "password" }
+  | { name: "admin" }
+  | { name: "admin-pastes" }
+  | { name: "guide" }
+  | { name: "invitation"; token: string }
+  | { name: "not-found" };
+
+export type LocationState = {
+  route: Route;
+  path: string;
+  query: URLSearchParams;
+};
 
 type ScrollPosition = { scroll_x: number; scroll_y: number };
+type DiscardPrompt = () => Promise<boolean>;
 
+let dirtyCheck: (() => boolean) | undefined;
+let discardPrompt: DiscardPrompt = async () => window.confirm("Discard unsaved changes?");
+let currentPath = "/";
 let currentScroll: ScrollPosition = { scroll_x: 0, scroll_y: 0 };
-let scrollRecordingPaused = false;
+let scrollPaused = false;
 let scrollFrame: number | undefined;
+
+export const locationState = writable<LocationState>(
+  parseLocation(location.pathname, location.search)
+);
+
+export function parseRoute(path: string): Route {
+  if (path === "/") return { name: "home" };
+  if (path === "/explore") return { name: "explore" };
+  if (path === "/login") return { name: "login" };
+  if (path === "/pastes/new") return { name: "new-paste" };
+  if (path === "/pastes") return { name: "my-pastes" };
+  if (path === "/account") return { name: "account" };
+  if (path === "/account/password") return { name: "password" };
+  if (path === "/admin") return { name: "admin" };
+  if (path === "/admin/pastes") return { name: "admin-pastes" };
+  if (path === "/guide") return { name: "guide" };
+  const invitation = path.match(/^\/invitations\/([^/]+)$/);
+  if (invitation?.[1]) return { name: "invitation", token: invitation[1] };
+  const edit = path.match(/^\/pastes\/([^/]+)\/edit$/);
+  if (edit?.[1]) return { name: "edit-paste", pasteId: edit[1] };
+  const paste = path.match(/^\/pastes\/([^/]+)$/);
+  if (paste?.[1]) return { name: "paste", pasteId: paste[1] };
+  return { name: "not-found" };
+}
+
+function parseLocation(path: string, search: string): LocationState {
+  return { route: parseRoute(path), path, query: new URLSearchParams(search) };
+}
 
 function scrollPosition(state: unknown = history.state): ScrollPosition {
   const candidate = state as Partial<ScrollPosition> | null;
@@ -22,7 +69,7 @@ function scrollPosition(state: unknown = history.state): ScrollPosition {
   };
 }
 
-function saveScrollPosition(position: ScrollPosition = {
+function saveScroll(position: ScrollPosition = {
   scroll_x: window.scrollX,
   scroll_y: window.scrollY
 }): void {
@@ -30,88 +77,83 @@ function saveScrollPosition(position: ScrollPosition = {
   history.replaceState({ ...(history.state ?? {}), ...position }, "");
 }
 
-function nextPaint(): Promise<void> {
-  return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-}
-
 async function renderAt(position: ScrollPosition): Promise<void> {
-  scrollRecordingPaused = true;
-  await route();
-  await nextPaint();
+  scrollPaused = true;
+  currentPath = `${location.pathname}${location.search}`;
+  locationState.set(parseLocation(location.pathname, location.search));
+  await tick();
+  await new Promise<void>(resolve =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  );
   window.scrollTo(position.scroll_x, position.scroll_y);
-  saveScrollPosition(position);
-  scrollRecordingPaused = false;
+  saveScroll(position);
+  scrollPaused = false;
 }
 
-export function initializeScrollRestoration(): void {
+export function setDiscardPrompt(prompt: DiscardPrompt): void {
+  discardPrompt = prompt;
+}
+
+export function guardUnsavedChanges(check?: () => boolean): void {
+  dirtyCheck = check;
+}
+
+export function hasUnsavedChanges(): boolean {
+  return dirtyCheck?.() ?? false;
+}
+
+export async function confirmDiscardChanges(): Promise<boolean> {
+  return !hasUnsavedChanges() || discardPrompt();
+}
+
+export async function navigate(path: string, options: { replace?: boolean } = {}): Promise<boolean> {
+  if (!(await confirmDiscardChanges())) return false;
+  dirtyCheck = undefined;
+  saveScroll();
+  const top = { scroll_x: 0, scroll_y: 0 };
+  if (options.replace) history.replaceState(top, "", path);
+  else history.pushState(top, "", path);
+  await renderAt(top);
+  return true;
+}
+
+export function initializeRouter(): () => void {
   history.scrollRestoration = "manual";
-  currentScroll = {
-    scroll_x: window.scrollX,
-    scroll_y: window.scrollY
-  };
-  saveScrollPosition(currentScroll);
-  window.addEventListener("scroll", () => {
-    if (scrollRecordingPaused || scrollFrame !== undefined) return;
+  currentPath = `${location.pathname}${location.search}`;
+  currentScroll = { scroll_x: window.scrollX, scroll_y: window.scrollY };
+  saveScroll(currentScroll);
+
+  const onScroll = () => {
+    if (scrollPaused || scrollFrame !== undefined) return;
     scrollFrame = requestAnimationFrame(() => {
       scrollFrame = undefined;
-      if (!scrollRecordingPaused) saveScrollPosition();
+      if (!scrollPaused) saveScroll();
     });
-  }, { passive: true });
+  };
+  const onPopState = (event: PopStateEvent) => {
+    scrollPaused = true;
+    const previousPath = currentPath;
+    const previousScroll = currentScroll;
+    void (async () => {
+      if (!(await confirmDiscardChanges())) {
+        history.pushState(previousScroll, "", previousPath);
+        window.scrollTo(previousScroll.scroll_x, previousScroll.scroll_y);
+        scrollPaused = false;
+        return;
+      }
+      dirtyCheck = undefined;
+      await renderAt(scrollPosition(event.state));
+    })();
+  };
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("popstate", onPopState);
+  void renderAt(scrollPosition());
+  return () => {
+    window.removeEventListener("scroll", onScroll);
+    window.removeEventListener("popstate", onPopState);
+  };
 }
 
-export function initialRoute(): Promise<void> {
-  return renderAt(scrollPosition());
-}
-
-export function navigate(path: string): void {
-  void (async () => {
-    if (!(await confirmDiscardChanges())) return;
-    clearUnsavedChangesGuard();
-    saveScrollPosition();
-    const top = { scroll_x: 0, scroll_y: 0 };
-    history.pushState(top, "", path);
-    await renderAt(top);
-  })();
-}
-
-export function handlePopState(previousPath: string, state: unknown): void {
-  scrollRecordingPaused = true;
-  const previousScroll = currentScroll;
-  void (async () => {
-    if (!(await confirmDiscardChanges())) {
-      history.pushState(previousScroll, "", previousPath);
-      window.scrollTo(previousScroll.scroll_x, previousScroll.scroll_y);
-      scrollRecordingPaused = false;
-      return;
-    }
-    clearUnsavedChangesGuard();
-    await renderAt(scrollPosition(state));
-  })();
-}
-
-export async function route(): Promise<void> {
-  const path = location.pathname;
-  document.body.dataset.routePath = `${path}${location.search}`;
-  try {
-    if (path === "/") return await home();
-    if (path === "/explore") return await pasteList(false);
-    if (path === "/login") return loginView();
-    if (path === "/pastes/new") return pasteForm();
-    if (path === "/pastes") return await pasteList(true);
-    if (path === "/account") return await accountView();
-    if (path === "/account/password") return passwordView();
-    if (path === "/admin") return adminView();
-    if (path === "/admin/pastes") return await adminPastes();
-    if (path === "/guide") return guideView();
-    if (path.startsWith("/invitations/")) return invitationView(path.slice(13));
-    const edit = path.match(/^\/pastes\/([^/]+)\/edit$/);
-    if (edit?.[1]) return await pasteForm(edit[1]);
-    const view = path.match(/^\/pastes\/([^/]+)$/);
-    if (view?.[1]) return await pasteView(view[1]);
-    renderLayout(
-      `<section class="empty"><h1>Page not found</h1><p>The requested page does not exist.</p></section>`
-    );
-  } catch (error) {
-    errorView(error);
-  }
+export function currentLocation(): LocationState {
+  return get(locationState);
 }

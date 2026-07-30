@@ -4,18 +4,29 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "tsc --noEmit && vite build",
-    "dev": "vite"
+    "build": "svelte-check --tsconfig ./tsconfig.json && vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "dev": "vite",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
-    "typescript": "^5.7.2",
-    "vite": "^6.0.5"
+    "@playwright/test": "^1.54.1",
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "@types/node": "^24.1.0",
+    "@testing-library/jest-dom": "^6.6.4",
+    "@testing-library/svelte": "^5.2.8",
+    "jsdom": "^26.1.0",
+    "svelte": "^5.56.8",
+    "svelte-check": "^4.3.0",
+    "typescript": "^5.8.3",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.0"
   },
   "dependencies": {
     "@tiptap/core": "^3.29.2",
-    "@tiptap/extension-link": "^3.29.2",
     "@tiptap/extension-text-align": "^3.29.2",
-    "@tiptap/extension-underline": "^3.29.2",
     "@tiptap/starter-kit": "^3.29.2",
     "highlight.js": "^11.11.1"
   }

@@ -1,0 +1,95 @@
+<script lang="ts">
+  import { requestApi } from "../api";
+  import { formatByteSize, formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
+  import { showNotice } from "../notices";
+  import type { Paste } from "../types";
+  import Icon from "./Icon.svelte";
+  import Link from "./Link.svelte";
+
+  let {
+    items,
+    manage = false,
+    ownerNames,
+    filterable = false
+  }: {
+    items: Paste[];
+    manage?: boolean;
+    ownerNames?: Map<number, string>;
+    filterable?: boolean;
+  } = $props();
+
+  let visible = $state<Paste[]>([]);
+  $effect(() => { visible = items; });
+
+  function filterUrl(key: string, value: string): string {
+    const params = new URLSearchParams(location.search);
+    params.set(key, value);
+    params.delete("page");
+    return `${location.pathname}?${params}`;
+  }
+
+  async function copyLink(paste: Paste): Promise<void> {
+    await navigator.clipboard.writeText(`${location.origin}/pastes/${paste.id}`);
+    showNotice("Link copied.");
+  }
+
+  async function remove(paste: Paste): Promise<void> {
+    if (!confirm("Delete this paste permanently?")) return;
+    try {
+      await requestApi(`/pastes/${encodeURIComponent(paste.id)}`, { method: "DELETE" });
+      visible = visible.filter(candidate => candidate.id !== paste.id);
+      showNotice("Paste deleted.");
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "Request failed", "error");
+    }
+  }
+</script>
+
+{#if visible.length === 0}
+  <div class="empty compact"><p>No pastes found.</p></div>
+{:else}
+  <div class="paste-list">
+    {#each visible as paste (paste.id)}
+      <article class="paste-row">
+        <div class="paste-main">
+          <Link class="paste-title" href={`/pastes/${paste.id}`}>{pasteDisplayTitle(paste)}</Link>
+          <p>{paste.content.slice(0, 160).replace(/\s+/g, " ")}</p>
+        </div>
+        <div class="paste-meta">
+          {#if ownerNames}
+            <span>Owner: {paste.owner_id === null ? "No owner" : ownerNames.get(paste.owner_id) ?? `User #${paste.owner_id}`}</span>
+          {/if}
+          {#if filterable}
+            <Link href={filterUrl(
+              paste.content_kind === "text" ? "language" : "content_kind",
+              paste.content_kind === "text" ? paste.language : paste.content_kind
+            )}>{pasteFormatLabel(paste)}</Link>
+            <Link href={filterUrl("visibility", paste.visibility)}>{paste.visibility}</Link>
+            {#if paste.attachment_count}
+              <Link href={filterUrl("has_attachments", "true")}>
+                {paste.attachment_count} attachment{paste.attachment_count === 1 ? "" : "s"}
+              </Link>
+            {/if}
+          {:else}
+            <span>{pasteFormatLabel(paste)}</span><span>{paste.visibility}</span>
+            {#if paste.attachment_count}
+              <span>{paste.attachment_count} attachment{paste.attachment_count === 1 ? "" : "s"}</span>
+            {/if}
+          {/if}
+          <span>{formatByteSize(paste.size_bytes)}</span>
+          <time datetime={new Date(paste.created_at * 1000).toISOString()}>{formatDate(paste.created_at)}</time>
+        </div>
+        <div class="row-actions">
+          <button class="icon-button" type="button" title="Copy link" aria-label="Copy link"
+            onclick={() => copyLink(paste)}><Icon name="copy"/></button>
+          {#if manage}
+            <Link class="icon-button" title="Edit" aria-label="Edit"
+              href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/></Link>
+            <button class="icon-button" type="button" title="Delete" aria-label="Delete"
+              onclick={() => remove(paste)}><Icon name="trash-2"/></button>
+          {/if}
+        </div>
+      </article>
+    {/each}
+  </div>
+{/if}

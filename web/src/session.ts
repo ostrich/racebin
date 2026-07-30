@@ -1,5 +1,5 @@
 import { requestApi } from "./api";
-import { state } from "./state";
+import { appState } from "./state";
 import type { Config, Session } from "./types";
 
 export async function loadSession(): Promise<void> {
@@ -9,12 +9,9 @@ export async function loadSession(): Promise<void> {
     ),
     requestApi<Config>("/config")
   ]);
-  state.session = session;
-  state.config = config;
-  if (
-    session.user?.password_change_required &&
-    location.pathname !== "/account/password"
-  ) {
-    history.replaceState({}, "", "/account/password");
-  }
+  appState.set({ session, config, ready: true });
+}
+
+export function replaceSession(session: Session): void {
+  appState.update(state => ({ ...state, session }));
 }

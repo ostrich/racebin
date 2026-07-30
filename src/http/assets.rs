@@ -34,7 +34,6 @@ fn spa_route(path: &str) -> bool {
             path,
             "/explore"
                 | "/login"
-                | "/new"
                 | "/pastes"
                 | "/account"
                 | "/account/password"
@@ -70,12 +69,10 @@ mod tests {
     fn every_built_frontend_asset_is_embedded() {
         assert!(EMBEDDED_ASSET_PATHS.contains(&"app.js"));
         assert!(EMBEDDED_ASSET_PATHS.contains(&"app.css"));
-        assert!(EMBEDDED_ASSET_PATHS.contains(&"rich_text_editor.js"));
         assert!(
             EMBEDDED_ASSET_PATHS
                 .iter()
-                .any(|path| path.ends_with(".js")
-                    && !matches!(*path, "app.js" | "rich_text_editor.js")),
+                .any(|path| path.ends_with(".js") && *path != "app.js"),
             "the frontend build should include at least one lazy-loaded JavaScript chunk"
         );
         for path in EMBEDDED_ASSET_PATHS {

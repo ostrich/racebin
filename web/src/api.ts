@@ -1,4 +1,4 @@
-import { state } from "./state";
+import { currentState } from "./state";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -11,8 +11,9 @@ export async function requestApi<T>(path: string, init: RequestInit = {}): Promi
   if (init.body && !(init.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
-  if (state.session.csrf_token && init.method && init.method !== "GET") {
-    headers.set("X-CSRF-Token", state.session.csrf_token);
+  const { session } = currentState();
+  if (session.csrf_token && init.method && init.method !== "GET") {
+    headers.set("X-CSRF-Token", session.csrf_token);
   }
   const response = await fetch(`/api/v1${path}`, { ...init, headers });
   if (!response.ok) {
