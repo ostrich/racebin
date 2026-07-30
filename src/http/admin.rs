@@ -102,7 +102,20 @@ async fn admin_invitations(req: HttpRequest, services: web::Data<PasteService>) 
         return r;
     }
     match accounts::list_invitations(&services.storage).await {
-        Ok(items) => HttpResponse::Ok().json(items.into_iter().map(|i| json!({"id":i.id,"token_prefix":i.token_prefix,"expires_at":i.expires_at,"status":i.status()})).collect::<Vec<_>>()),
+        Ok(items) => HttpResponse::Ok().json(
+            items
+                .into_iter()
+                .map(|i| {
+                    json!({
+                        "id":i.id,
+                        "token_prefix":i.token_prefix,
+                        "expires_at":i.expires_at,
+                        "status":i.status(),
+                        "redeemed_by_username":i.redeemed_by_username
+                    })
+                })
+                .collect::<Vec<_>>(),
+        ),
         Err(e) => internal(e),
     }
 }

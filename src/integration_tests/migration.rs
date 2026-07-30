@@ -4,10 +4,6 @@ use super::*;
 async fn sqlite_migration_repeatability_and_checksum_validation() {
     let (repo, data_dir) = sqlite_repository("migration").await;
     repo.migrate().await.unwrap();
-    sqlx::query("DELETE FROM _sqlx_migrations")
-        .execute(repo.pool())
-        .await
-        .unwrap();
     repo.migrate().await.unwrap();
     sqlx::query("UPDATE _sqlx_migrations SET checksum=$1")
         .bind(vec![0_u8])

@@ -59,6 +59,7 @@ pub struct Invitation {
     pub token_prefix: String,
     pub expires_at: i64,
     pub redeemed: bool,
+    pub redeemed_by_username: Option<String>,
     pub revoked: bool,
 }
 
@@ -69,6 +70,7 @@ impl<'r> FromRow<'r, AnyRow> for Invitation {
             token_prefix: row.try_get("token_prefix")?,
             expires_at: row.try_get("expires_at")?,
             redeemed: row.try_get::<i64, _>("redeemed")? != 0,
+            redeemed_by_username: row.try_get("redeemed_by_username")?,
             revoked: row.try_get::<i64, _>("revoked")? != 0,
         })
     }
@@ -388,8 +390,11 @@ pub async fn create_invitation(
 
 pub async fn list_invitations(repo: &Repository) -> Result<Vec<Invitation>, String> {
     sqlx::query_as(
-        "SELECT id,substr(token_hash,1,10) AS token_prefix,expires_at,redeemed,revoked
-         FROM invitations ORDER BY id DESC",
+        "SELECT i.id,substr(i.token_hash,1,10) AS token_prefix,i.expires_at,i.redeemed,
+                u.username AS redeemed_by_username,i.revoked
+         FROM invitations i
+         LEFT JOIN users u ON u.id=i.redeemed_by_user_id
+         ORDER BY i.id DESC",
     )
     .fetch_all(repo.pool())
     .await
@@ -440,8 +445,9 @@ pub async fn redeem_invitation(
     .fetch_one(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
-    sqlx::query("UPDATE invitations SET redeemed=1 WHERE id=$1")
+    sqlx::query("UPDATE invitations SET redeemed=1,redeemed_by_user_id=$2 WHERE id=$1")
         .bind(invitation_id)
+        .bind(id)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -497,6 +503,7 @@ mod tests {
             token_prefix: "example".to_string(),
             expires_at,
             redeemed,
+            redeemed_by_username: None,
             revoked,
         };
         assert_eq!(invitation(i64::MAX, false, false).status(), "Active");

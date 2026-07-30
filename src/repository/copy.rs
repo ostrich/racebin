@@ -46,7 +46,8 @@ pub async fn copy_database(
     .await
     .map_err(|e| e.to_string())?;
     let invitations = sqlx::query(
-        "SELECT id,token_hash,created_by_user_id,expires_at,redeemed,revoked FROM invitations",
+        "SELECT id,token_hash,created_by_user_id,expires_at,redeemed,redeemed_by_user_id,revoked
+         FROM invitations",
     )
     .fetch_all(&mut *source_tx)
     .await
@@ -164,8 +165,9 @@ pub async fn copy_database(
     }
     for row in invitations {
         sqlx::query(
-            "INSERT INTO invitations(id,token_hash,created_by_user_id,expires_at,redeemed,revoked)
-             VALUES($1,$2,$3,$4,$5,$6)",
+            "INSERT INTO invitations(
+                id,token_hash,created_by_user_id,expires_at,redeemed,redeemed_by_user_id,revoked
+             ) VALUES($1,$2,$3,$4,$5,$6,$7)",
         )
         .bind(row.try_get::<i64, _>("id").map_err(|e| e.to_string())?)
         .bind(
@@ -182,6 +184,10 @@ pub async fn copy_database(
         )
         .bind(
             row.try_get::<i64, _>("redeemed")
+                .map_err(|e| e.to_string())?,
+        )
+        .bind(
+            row.try_get::<Option<i64>, _>("redeemed_by_user_id")
                 .map_err(|e| e.to_string())?,
         )
         .bind(

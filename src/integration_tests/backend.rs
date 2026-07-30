@@ -38,6 +38,11 @@ pub(super) async fn backend_contract(repo: Repository) {
     )
     .await
     .unwrap();
+    let invitations = accounts::list_invitations(&repo).await.unwrap();
+    assert_eq!(
+        invitations[0].redeemed_by_username.as_deref(),
+        Some("invited-user")
+    );
     assert_eq!(invited.username, "invited-user");
 
     let scopes = vec!["paste:read".to_string(), "paste:list".to_string()];

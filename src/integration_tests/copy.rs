@@ -30,8 +30,9 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO invitations(id,token_hash,created_by_user_id,expires_at,redeemed,revoked)
-         VALUES(61,'invitation-hash',42,9999999999,0,0)",
+        "INSERT INTO invitations(
+            id,token_hash,created_by_user_id,expires_at,redeemed,redeemed_by_user_id,revoked
+         ) VALUES(61,'invitation-hash',42,9999999999,1,42,0)",
     )
     .execute(source.pool())
     .await
@@ -88,6 +89,12 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
             .await
             .unwrap();
     assert!(rich_document.contains("\"hardBreak\""));
+    let invitation_redeemer: Option<i64> =
+        sqlx::query_scalar("SELECT redeemed_by_user_id FROM invitations WHERE id=61")
+            .fetch_one(destination.pool())
+            .await
+            .unwrap();
+    assert_eq!(invitation_redeemer, Some(42));
     let next_user: i64 = sqlx::query_scalar(
         "INSERT INTO users(username,password_hash,role,created_at)
          VALUES('after-copy','hash','user',1) RETURNING id",
