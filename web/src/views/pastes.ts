@@ -191,7 +191,11 @@ async function connectContentKindSelector(paste?: Paste): Promise<void> {
   const richField = document.querySelector<HTMLElement>("#rich-content-field");
   const richElement = document.querySelector<HTMLElement>("#rich-text-editor");
   const languageField = document.querySelector<HTMLElement>("#language-field");
-  if (!selector || !textarea || !textField || !richField || !richElement || !languageField) return;
+  const languageInput = document.querySelector<HTMLInputElement>("#language-input");
+  if (
+    !selector || !textarea || !textField || !richField || !richElement
+    || !languageField || !languageInput
+  ) return;
 
   const richModule = await import("../rich_text_editor");
   let richDocument = paste?.document ?? null;
@@ -205,6 +209,7 @@ async function connectContentKindSelector(paste?: Paste): Promise<void> {
     richField.classList.toggle("hidden", !rich);
     textField.classList.toggle("hidden", rich);
     languageField.classList.toggle("hidden", kind !== "text");
+    languageInput.disabled = kind !== "text";
     selector.dataset.currentKind = kind;
     if (rich && richDocument) {
       richModule.mountRichTextEditor(richElement, richDocument);

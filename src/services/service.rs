@@ -228,7 +228,11 @@ impl PasteService {
         .bind(content)
         .bind(document_json)
         .bind(content_kind)
-        .bind(input.language.as_deref().unwrap_or("plaintext"))
+        .bind(if content_kind == "text" {
+            input.language.as_deref().unwrap_or("plaintext")
+        } else {
+            "plaintext"
+        })
         .bind(input.visibility.as_deref().unwrap_or("unlisted"))
         .bind(now)
         .bind(input.expires_at.flatten())
@@ -265,10 +269,15 @@ impl PasteService {
         };
         let (content, document_json) =
             normalized_content(content_kind, requested_content, requested_document)?;
+        let language = if content_kind == "text" {
+            input.language.as_deref().unwrap_or(&current.language)
+        } else {
+            "plaintext"
+        };
         validate_url(content_kind, &content)?;
         sqlx::query(
             "UPDATE pastes SET title=coalesce($2,title),content=$3,document_json=$4,
-             content_kind=$5,language=coalesce($6,language),visibility=coalesce($7,visibility),
+             content_kind=$5,language=$6,visibility=coalesce($7,visibility),
              expires_at=CASE WHEN $8=1 THEN $9 ELSE expires_at END,
              read_limit=CASE WHEN $10=1 THEN $11 ELSE read_limit END WHERE id=$1",
         )
@@ -277,7 +286,7 @@ impl PasteService {
         .bind(content)
         .bind(document_json)
         .bind(content_kind)
-        .bind(input.language.as_deref())
+        .bind(language)
         .bind(input.visibility.as_deref())
         .bind(i64::from(input.expires_at.is_some()))
         .bind(input.expires_at.flatten())
