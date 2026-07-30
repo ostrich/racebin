@@ -241,7 +241,10 @@ async function connectContentKindSelector(paste?: Paste): Promise<void> {
         richDocument = richModule.richTextDocument() ?? richDocument;
         const converted = await convertContent("rich_text", "text", richPlaintext, richDocument);
         richPlaintext = converted.content;
-        if (!(await confirmConversion(targetKind, converted.content))) {
+        if (
+          converted.content.length > 0 &&
+          !(await confirmConversion(targetKind, converted.content))
+        ) {
           selector.value = sourceKind;
           return;
         }
@@ -255,7 +258,10 @@ async function connectContentKindSelector(paste?: Paste): Promise<void> {
           richDocument = converted.document;
           richPlaintext = converted.content;
         }
-        if (!(await confirmConversion(targetKind, richPlaintext))) {
+        if (
+          richPlaintext.length > 0 &&
+          !(await confirmConversion(targetKind, richPlaintext))
+        ) {
           selector.value = sourceKind;
           return;
         }
