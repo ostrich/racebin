@@ -17,6 +17,8 @@ racebin_data/*
 /web/node_modules
 /playwright-report
 /test-results
+/web/playwright-report
+/web/test-results
 /arch/racebin/
 /arch/src/
 /arch/pkg/

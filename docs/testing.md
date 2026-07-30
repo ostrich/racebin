@@ -8,13 +8,20 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-Build the embedded frontend separately:
+Check, test, and build the embedded Svelte frontend separately:
 
 ```bash
 cd web
 npm ci
+npx playwright install chromium-headless-shell
+npm run check
+npm test
 npm run build
 ```
+
+Vitest covers route, formatting, and Svelte component behavior in jsdom.
+Playwright runs critical navigation, editor, highlighting, and dirty-form
+workflows in Chromium against deterministic API fixtures.
 
 ## PostgreSQL Tests
 

@@ -109,12 +109,20 @@ Racebin must remain stopped for the duration of the copy. See
 cargo fmt -- --check
 cargo clippy --all-targets -- -D warnings
 cargo test
+cd web
+npm ci
+npm run check
+npm test
+npm run build
 ```
 
 The ordinary test run uses temporary SQLite databases. Set
 `RACEBIN_TEST_POSTGRES_URL` to a dedicated disposable PostgreSQL database to
 run the same storage contract and copy tests against PostgreSQL. The test
 suite drops that database's `public` schema; never point it at real data.
+The browser interface is a Svelte 5 application compiled by Vite and embedded
+in the Racebin binary. Frontend component tests use Vitest; critical browser
+workflows use Playwright.
 
 After changing Rust or frontend dependencies, run
 `scripts/generate-third-party-licenses.sh` with `cargo-about` installed and
