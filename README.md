@@ -66,15 +66,6 @@ Startup selects the database from `--database-url` or
 and both `postgres://` and `postgresql://` URLs are supported. The data
 directory continues to hold uploaded attachments when PostgreSQL is used.
 
-SQLite startup also performs a transactionally guarded legacy migration.
-Public records remain public; legacy private records become unlisted when they
-have no owner and owner-only otherwise. Existing IDs, titles, content, files,
-owners, and read statistics are retained.
-
-The migration aborts before changing the database when it encounters encrypted
-or readonly records. Back up `database.sqlite` and the attachment directory
-before upgrading.
-
 To move an existing SQLite installation to an empty PostgreSQL database, stop
 Racebin and run:
 
@@ -90,6 +81,5 @@ application data, copies all records while preserving IDs and credentials,
 checks attachment references and row counts, resets PostgreSQL identity
 sequences, and commits the destination transaction only after verification.
 
-Racebin's original work is available under the [MIT License](LICENSE).
-MicroBin-derived portions remain subject to the preserved
-[BSD 3-Clause License](LICENSE-BSD-3-Clause).
+Racebin is available under the terms in [LICENSE](LICENSE) and
+[LICENSE-BSD-3-Clause](LICENSE-BSD-3-Clause).

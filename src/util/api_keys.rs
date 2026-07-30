@@ -101,7 +101,7 @@ pub async fn create(
         .take(10)
         .map(char::from)
         .collect();
-    let token = format!("mbk_{prefix}_{secret}");
+    let token = format!("rbk_{prefix}_{secret}");
     let created = now();
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO api_key(user_id,name,prefix,token_hash,scopes,created)
@@ -132,7 +132,7 @@ pub async fn create(
 }
 
 pub async fn authenticate(repo: &Repository, token: &str) -> Result<Option<ApiKey>, String> {
-    if !token.starts_with("mbk_") {
+    if !token.starts_with("rbk_") {
         return Ok(None);
     }
     let key = sqlx::query_as::<_, ApiKey>(

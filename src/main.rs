@@ -13,7 +13,6 @@ pub mod services;
 
 pub mod util {
     pub mod accounts;
-    pub mod animalnumbers;
     pub mod api_keys;
 }
 
@@ -66,13 +65,6 @@ async fn main() -> std::io::Result<()> {
         .await
         .map_err(std::io::Error::other)?;
     repository.migrate().await.map_err(std::io::Error::other)?;
-    let repaired = repository
-        .repair_attachment_layout()
-        .await
-        .map_err(std::io::Error::other)?;
-    if repaired != 0 {
-        log::info!("imported {repaired} legacy attachments");
-    }
     let purged = repository
         .purge_expired(services::now())
         .await

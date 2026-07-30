@@ -7,7 +7,7 @@ The API is rooted at `/api/v2`. `/api/v1` is intentionally unavailable.
 API clients send a key as a bearer token:
 
 ```http
-Authorization: Bearer mbk_PREFIX_SECRET
+Authorization: Bearer rbk_PREFIX_SECRET
 ```
 
 Browser sessions use the `racebin_session` Secure, HttpOnly, SameSite=Lax

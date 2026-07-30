@@ -112,7 +112,7 @@ async function route(): Promise<void> {
 
 function guideView(): void {
   layout(`<section><div class="page-heading"><div><p class="eyebrow">Reference</p><h1>API guide</h1></div><a class="button" href="/api/v2/openapi.json">OpenAPI JSON</a></div>
-    <section class="panel"><h2>Authentication</h2><p>Use <code>Authorization: Bearer mbk_…</code>. Browser requests use the secure session cookie and send <code>X-CSRF-Token</code> for mutations.</p>
+    <section class="panel"><h2>Authentication</h2><p>Use <code>Authorization: Bearer rbk_…</code>. Browser requests use the secure session cookie and send <code>X-CSRF-Token</code> for mutations.</p>
     <h2>Paste example</h2><pre class="content"><code>curl -H "Authorization: Bearer $RACEBIN_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"title":"Example","content":"Hello","syntax":"none","access":"unlisted"}' \\
@@ -231,7 +231,7 @@ async function accountView(): Promise<void> {
   const keys = await api<ApiKey[]>("/account/api-keys");
   layout(`<section><div class="page-heading"><div><p class="eyebrow">Settings</p><h1>Account</h1></div><a class="button" href="/account/password" data-link>Change password</a></div>
     <section class="panel"><h2>API keys</h2><p class="muted">Tokens are shown once when created.</p>
-      <div class="key-list">${keys.length ? keys.map(key => `<div class="key-row"><div><strong>${esc(key.name)}</strong><code>mbk_${esc(key.prefix)}_...</code><small>${esc(key.scopes)}</small></div><label class="switch"><input type="checkbox" data-key="${key.id}" ${key.enabled ? "checked" : ""}><span></span></label>${icon("trash-2", "Delete API key")}<input type="hidden" value="${key.id}"></div>`).join("") : `<p class="empty compact">No API keys.</p>`}</div>
+      <div class="key-list">${keys.length ? keys.map(key => `<div class="key-row"><div><strong>${esc(key.name)}</strong><code>rbk_${esc(key.prefix)}_...</code><small>${esc(key.scopes)}</small></div><label class="switch"><input type="checkbox" data-key="${key.id}" ${key.enabled ? "checked" : ""}><span></span></label>${icon("trash-2", "Delete API key")}<input type="hidden" value="${key.id}"></div>`).join("") : `<p class="empty compact">No API keys.</p>`}</div>
       <form id="key-form" class="key-form"><label><span>Name</span><input name="name" required maxlength="100"></label>
       <fieldset><legend>Scopes</legend>${["paste:read","paste:write","paste:delete","paste:list"].map(v => `<label class="check"><input type="checkbox" name="scopes" value="${v}"><span>${v}</span></label>`).join("")}</fieldset>
       <button class="button primary" type="submit"><i data-lucide="key-round"></i> Create key</button></form>
