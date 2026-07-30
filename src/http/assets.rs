@@ -5,11 +5,13 @@ use actix_web::{web, HttpRequest, HttpResponse};
 const SPA_INDEX: &[u8] = include_bytes!("../../web/dist/index.html");
 const SPA_SCRIPT: &[u8] = include_bytes!("../../web/dist/assets/app.js");
 const SPA_STYLE: &[u8] = include_bytes!("../../web/dist/assets/app.css");
+const RICH_TEXT_SCRIPT: &[u8] = include_bytes!("../../web/dist/assets/rich_text_editor.js");
 
 pub(super) async fn asset(path: web::Path<String>) -> HttpResponse {
     let asset = match path.as_str() {
         "app.js" => Some((SPA_SCRIPT, "text/javascript; charset=utf-8")),
         "app.css" => Some((SPA_STYLE, "text/css; charset=utf-8")),
+        "rich_text_editor.js" => Some((RICH_TEXT_SCRIPT, "text/javascript; charset=utf-8")),
         _ => None,
     };
     match asset {
