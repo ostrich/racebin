@@ -1,6 +1,6 @@
 pkgbase = racebin-git
-	pkgdesc = API-first self-hosted paste bin and file share
-	pkgver = 3.0.0.r27.g99de7bf
+	pkgdesc = API-first self-hosted paste bin with attachments
+	pkgver = 4.0.0.r28.gbb00695
 	pkgrel = 1
 	url = https://github.com/ostrich/racebin
 	arch = x86_64
@@ -20,6 +20,6 @@ pkgbase = racebin-git
 	source = racebin.conf
 	sha256sums = SKIP
 	sha256sums = 6d5a12e7901dd49fa8ee02db20feba855d0cdc3707af53f4ef601b52daa89847
-	sha256sums = 7111a62d72330cf8e2bca9f7523cd5583cb532e5bd83714fc025c17c79306014
+	sha256sums = 6f0345a4f747c097d263f5094dcf62cd5a62fd4c1474e488826ad862247a7f07
 
 pkgname = racebin-git
