@@ -114,21 +114,33 @@ test("wide paste offers synchronized sticky scrolling and aligned wrapped lines"
   ).join("\n");
   await mockApi(page, false, { viewPaste: { ...paste, content } });
   await page.goto("/pastes/sample-paste");
-  const code = page.locator(".paste-code");
+  const code = page.locator(".paste-code-content-scroll");
   await expect.poll(() => code.evaluate(
     element => element.scrollWidth > element.clientWidth
   )).toBe(true);
   await page.evaluate(() => window.scrollTo(0, 500));
   const floating = page.getByRole("region", { name: "Horizontal paste scrollbar" });
   await expect(floating).toHaveClass(/visible/);
+  const scrollbarAlignment = await page.locator(".paste-code-shell").evaluate(shell => {
+    const gutteredViewer = shell.querySelector(".paste-code")!.getBoundingClientRect();
+    const content = shell.querySelector(".paste-code-content-scroll")!.getBoundingClientRect();
+    const stickyScrollbar = shell.querySelector(".paste-floating-scrollbar")!.getBoundingClientRect();
+    return {
+      startsAfterGutter: content.left > gutteredViewer.left,
+      alignedWithContent: Math.abs(stickyScrollbar.left - content.left) < 1
+    };
+  });
+  expect(scrollbarAlignment).toEqual({
+    startsAfterGutter: true,
+    alignedWithContent: true
+  });
   await floating.evaluate(element => {
     element.scrollLeft = 240;
     element.dispatchEvent(new Event("scroll"));
   });
   await expect.poll(() => code.evaluate(element => element.scrollLeft)).toBeGreaterThan(200);
 
-  await page.getByRole("button", { name: "Wrap lines" }).click();
-  await expect(page.getByRole("button", { name: "Wrap lines" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("checkbox", { name: "Wrap" }).check();
   await expect(page.locator(".paste-floating-scrollbar")).not.toHaveClass(/visible/);
   await expect.poll(() => code.evaluate(
     element => element.scrollWidth <= element.clientWidth + 1

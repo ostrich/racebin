@@ -45,8 +45,10 @@
           <a class="button" href={`/api/v1/pastes/${encodeURIComponent(paste.id)}/raw`}>Raw</a>
           <button class="button" type="button" onclick={copyContent}><Icon name="copy"/> Copy</button>
           {#if paste.content_kind === "text"}
-            <button class="button" class:active={wrapLines} type="button" aria-pressed={wrapLines}
-              onclick={() => { wrapLines = !wrapLines; }}><Icon name="wrap-text"/> Wrap lines</button>
+            <label class="paste-wrap-toggle">
+              <input type="checkbox" bind:checked={wrapLines}/>
+              <span>Wrap</span>
+            </label>
           {/if}
           {#if paste.attachments.length}<a class="button" href={`/api/v1/pastes/${encodeURIComponent(paste.id)}/archive`}>ZIP</a>{/if}
           {#if $appState.config.qr_codes_enabled}<a class="button" href={`/api/v1/pastes/${encodeURIComponent(paste.id)}/qr`}>QR</a>{/if}

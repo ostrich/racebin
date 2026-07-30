@@ -24,7 +24,5 @@
     <path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6"/>
   {:else if name === "user-round"}
     <circle cx="12" cy="8" r="5"/><path d="M4 21a8 8 0 0 1 16 0"/>
-  {:else if name === "wrap-text"}
-    <path d="M3 6h18M3 12h15a3 3 0 0 1 0 6h-4"/><path d="m16 16-2 2 2 2M3 18h7"/>
   {/if}
 </svg>

@@ -93,8 +93,7 @@
 </script>
 
 <div class:wrap-lines={wrap} class="paste-code-shell">
-  <div bind:this={viewport} class="paste-code" style={`--line-number-width:${width}`}
-    onscroll={syncFromViewport}>
+  <div class="paste-code" style={`--line-number-width:${width}`}>
     <div bind:this={gutter} class="line-numbers" class:wrapped={wrap} aria-hidden="true">
       {#if wrap}
         {#each lineOffsets as offset, index}
@@ -102,9 +101,11 @@
         {/each}
       {:else}{lines}{/if}
     </div>
-    <pre class="content"><code bind:this={highlighted} class="hljs">{@html wrap
-      ? `<span class="line-anchor"></span>${html.replaceAll("\n", "\n<span class=\"line-anchor\"></span>")}`
-      : html}</code></pre>
+    <div bind:this={viewport} class="paste-code-content-scroll" onscroll={syncFromViewport}>
+      <pre class="content"><code bind:this={highlighted} class="hljs">{@html wrap
+        ? `<span class="line-anchor"></span>${html.replaceAll("\n", "\n<span class=\"line-anchor\"></span>")}`
+        : html}</code></pre>
+    </div>
   </div>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex (Native scroll region needs keyboard focus.) -->
   <div bind:this={floatingScrollbar} class="paste-floating-scrollbar"
