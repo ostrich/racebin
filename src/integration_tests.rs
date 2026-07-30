@@ -1,6 +1,6 @@
+use crate::account::{self as accounts, api_keys};
 use crate::repository::{copy_database, DatabaseKind, Repository};
 use crate::services::{now, PasteInput, PasteQuery, Principal, Services};
-use crate::util::{accounts, api_keys};
 use std::path::{Path, PathBuf};
 
 fn sqlite_url(data_dir: &Path) -> String {

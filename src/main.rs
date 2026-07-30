@@ -4,21 +4,18 @@ use log::LevelFilter;
 
 use crate::args::ARGS;
 
+pub mod account;
 pub mod args;
+mod cli;
 pub mod http;
 #[cfg(test)]
 mod integration_tests;
 pub mod repository;
 pub mod services;
 
-pub mod util {
-    pub mod accounts;
-    pub mod api_keys;
-}
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    match repository::run_cli_if_requested().await {
+    match cli::database::run_if_requested().await {
         Ok(true) => return Ok(()),
         Ok(false) => {}
         Err(error) => {
@@ -26,7 +23,7 @@ async fn main() -> std::io::Result<()> {
             return Err(std::io::Error::other(error));
         }
     }
-    match util::accounts::run_cli_if_requested().await {
+    match cli::account::run_if_requested().await {
         Ok(true) => return Ok(()),
         Ok(false) => {}
         Err(error) => {

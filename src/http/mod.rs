@@ -1,6 +1,6 @@
+use crate::account::{self as accounts, api_keys};
 use crate::args::ARGS;
 use crate::services::{PasteInput, PasteQuery, Principal, Services};
-use crate::util::{accounts, api_keys};
 use actix_files::NamedFile;
 use actix_multipart::Multipart;
 use actix_web::cookie::{Cookie, SameSite};
@@ -18,6 +18,7 @@ use zip::write::SimpleFileOptions;
 
 mod assets;
 mod auth;
+mod cookies;
 mod errors;
 
 #[derive(Default)]
@@ -256,7 +257,7 @@ async fn login(
             accounts::clear_login_failures(&body.username, &client);
             match accounts::create_session(&services.repo, user.id, body.remember.unwrap_or(false)).await {
                 Ok((token, csrf, _)) => HttpResponse::Ok()
-                    .cookie(accounts::session_cookie(
+                    .cookie(cookies::session_cookie(
                         token,
                         body.remember.unwrap_or(false),
                     ))
@@ -383,7 +384,7 @@ async fn accept_invite(
     match accounts::accept_invite(&services.repo, &token, &username, &password).await {
         Ok(user) => match accounts::create_session(&services.repo, user.id, false).await {
             Ok((session, csrf, _)) => HttpResponse::Created()
-                .cookie(accounts::session_cookie(session, false))
+                .cookie(cookies::session_cookie(session, false))
                 .json(json!({"user": {"id": user.id, "username": user.username, "role": user.role}, "csrf_token": csrf})),
             Err(e) => internal(e),
         },
@@ -1213,9 +1214,9 @@ async fn admin_delete_key(
 #[cfg(test)]
 mod tests {
     use super::{attachment_path, configure, sanitize_upload_filename};
+    use crate::account::{self as accounts, api_keys};
     use crate::repository::Repository;
     use crate::services::{now, PasteInput, Principal, Services};
-    use crate::util::{accounts, api_keys};
     use actix_web::{http::StatusCode, test, web, App};
     use serde_json::{json, Value};
     use std::path::Path;

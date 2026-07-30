@@ -1,4 +1,3 @@
-use actix_web::cookie::Cookie;
 use argon2::password_hash::{
     rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
 };
@@ -8,12 +7,12 @@ use sha2::{Digest, Sha256};
 use sqlx::any::AnyRow;
 use sqlx::{FromRow, Row};
 use std::collections::HashMap;
-use std::fs;
 use std::sync::{LazyLock, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::args::ARGS;
 use crate::repository::{DatabaseKind, Repository};
+
+pub mod api_keys;
 
 pub const SESSION_COOKIE: &str = "racebin_session";
 static LOGIN_FAILURES: LazyLock<Mutex<HashMap<String, Vec<i64>>>> =
@@ -93,7 +92,7 @@ impl Invite {
     }
 }
 
-fn now() -> i64 {
+pub(crate) fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|value| value.as_secs() as i64)
@@ -122,7 +121,7 @@ pub fn password_hash(password: &str) -> Result<String, String> {
         .map_err(|error| error.to_string())
 }
 
-fn validate_username(username: &str) -> Result<&str, String> {
+pub(crate) fn validate_username(username: &str) -> Result<&str, String> {
     let username = username.trim();
     if username.len() < 3
         || username.len() > 64
@@ -489,140 +488,6 @@ pub fn clear_login_failures(username: &str, client: &str) {
         username.to_ascii_lowercase(),
         client
     ));
-}
-
-pub fn session_cookie(token: String, remember: bool) -> Cookie<'static> {
-    let mut builder = Cookie::build(SESSION_COOKIE, token)
-        .path("/")
-        .http_only(true)
-        .secure(!ARGS.insecure_cookie)
-        .same_site(actix_web::cookie::SameSite::Lax);
-    if remember {
-        builder = builder.max_age(actix_web::cookie::time::Duration::days(30));
-    }
-    builder.finish()
-}
-
-fn cli_password(arguments: &[String]) -> Result<String, String> {
-    if let Some(index) = arguments
-        .iter()
-        .position(|value| value == "--password-file")
-    {
-        let path = arguments
-            .get(index + 1)
-            .ok_or("--password-file requires a path")?;
-        return fs::read_to_string(path)
-            .map(|password| password.trim_end_matches(['\r', '\n']).to_string())
-            .map_err(|error| error.to_string());
-    }
-    rpassword::prompt_password("Password: ").map_err(|error| error.to_string())
-}
-
-fn cli_option(arguments: &[String], name: &str) -> Option<String> {
-    arguments
-        .iter()
-        .position(|value| value == name)
-        .and_then(|index| arguments.get(index + 1))
-        .cloned()
-}
-
-pub async fn run_cli_if_requested() -> Result<bool, String> {
-    let arguments: Vec<String> = std::env::args().collect();
-    if arguments.get(1).map(String::as_str) != Some("account") {
-        return Ok(false);
-    }
-    let data_dir = cli_option(&arguments, "--data-dir")
-        .or_else(|| std::env::var("RACEBIN_DATA_DIR").ok())
-        .unwrap_or_else(|| "racebin_data".to_string());
-    fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
-    let database_url = cli_option(&arguments, "--database-url")
-        .or_else(|| std::env::var("RACEBIN_DATABASE_URL").ok())
-        .unwrap_or_else(|| format!("sqlite://{data_dir}/database.sqlite?mode=rwc"));
-    let repo = Repository::open(&database_url, &data_dir).await?;
-    repo.migrate().await?;
-    let command = arguments.get(2).map(String::as_str).unwrap_or("help");
-    match command {
-        "create" => {
-            let username = validate_username(arguments.get(3).ok_or(
-                "usage: racebin account create USERNAME [--admin] [--password-file PATH]",
-            )?)?;
-            let role = if arguments.iter().any(|value| value == "--admin") {
-                "admin"
-            } else {
-                "user"
-            };
-            sqlx::query(
-                "INSERT INTO app_user(username,password_hash,role,enabled,force_password_change,created)
-                 VALUES($1,$2,$3,1,0,$4)",
-            )
-            .bind(username)
-            .bind(password_hash(&cli_password(&arguments)?)?)
-            .bind(role)
-            .bind(now())
-            .execute(repo.pool())
-            .await
-            .map_err(|e| e.to_string())?;
-            println!("created {role} account {username}");
-        }
-        "list" => {
-            for user in list_users(&repo).await? {
-                println!(
-                    "{}\t{}\t{}",
-                    user.username,
-                    user.role,
-                    if user.enabled { "enabled" } else { "disabled" }
-                );
-            }
-        }
-        "password" => {
-            let username = arguments
-                .get(3)
-                .ok_or("usage: racebin account password USERNAME [--password-file PATH]")?;
-            let id: Option<i64> = sqlx::query_scalar("SELECT id FROM app_user WHERE username=$1")
-                .bind(username)
-                .fetch_optional(repo.pool())
-                .await
-                .map_err(|e| e.to_string())?;
-            let id = id.ok_or_else(|| format!("account not found: {username}"))?;
-            set_password(&repo, id, &cli_password(&arguments)?, false).await?;
-            println!("password updated for {username}; existing sessions revoked");
-        }
-        "enable" | "disable" => {
-            let username = arguments
-                .get(3)
-                .ok_or_else(|| format!("usage: racebin account {command} USERNAME"))?;
-            let id: Option<i64> = sqlx::query_scalar("SELECT id FROM app_user WHERE username=$1")
-                .bind(username)
-                .fetch_optional(repo.pool())
-                .await
-                .map_err(|e| e.to_string())?;
-            let id = id.ok_or_else(|| format!("account not found: {username}"))?;
-            set_enabled(&repo, id, command == "enable").await?;
-            println!("{command}d account {username}");
-        }
-        "role" => {
-            let username = arguments
-                .get(3)
-                .ok_or("usage: racebin account role USERNAME user|admin")?;
-            let role = arguments.get(4).map(String::as_str).unwrap_or("");
-            if !matches!(role, "user" | "admin") {
-                return Err("role must be user or admin".to_string());
-            }
-            let id: Option<i64> = sqlx::query_scalar("SELECT id FROM app_user WHERE username=$1")
-                .bind(username)
-                .fetch_optional(repo.pool())
-                .await
-                .map_err(|e| e.to_string())?;
-            let id = id.ok_or_else(|| format!("account not found: {username}"))?;
-            set_role(&repo, id, role == "admin").await?;
-            println!("set {username} role to {role}");
-        }
-        _ => println!(
-            "usage: racebin account <create|list|password|enable|disable|role> [arguments]\n\
-             use --database-url URL to select the database"
-        ),
-    }
-    Ok(true)
 }
 
 #[cfg(test)]

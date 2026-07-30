@@ -1,5 +1,5 @@
+use crate::account::{self as accounts, api_keys};
 use crate::repository::Repository;
-use crate::util::{accounts, api_keys};
 use actix_web::HttpRequest;
 use serde::{Deserialize, Serialize};
 use sqlx::{Any, Executor, FromRow};
@@ -628,9 +628,9 @@ pub fn now() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::{can_read, validate_url, Paste, PasteFile, Principal, Services};
+    use crate::account::api_keys::ApiKey;
+    use crate::account::{SessionUser, User};
     use crate::repository::Repository;
-    use crate::util::accounts::{SessionUser, User};
-    use crate::util::api_keys::ApiKey;
 
     #[test]
     fn url_pastes_accept_only_http_destinations() {
