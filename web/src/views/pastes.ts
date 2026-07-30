@@ -172,16 +172,28 @@ async function convertContent(
 async function confirmConversion(targetKind: string, preview: string): Promise<boolean> {
   const dialog = document.createElement("dialog");
   dialog.className = "conversion-dialog";
-  dialog.innerHTML = `<form method="dialog"><h2>Convert to ${escapeHtml(targetKind.replace("_", " "))}?</h2>
+  dialog.innerHTML = `<div><h2>Convert to ${escapeHtml(targetKind.replace("_", " "))}?</h2>
     <p class="muted">${targetKind === "text" ? "Formatting will be removed when you save." : "Review the converted text before continuing."}</p>
     <pre>${escapeHtml(preview.slice(0, 4000))}</pre>
-    <div class="actions"><button class="button" value="cancel">Cancel</button><button class="button primary" value="confirm">Convert</button></div></form>`;
+    <div class="actions"><button class="button" type="button" data-conversion="cancel">Cancel</button><button class="button primary" type="button" data-conversion="confirm">Convert</button></div></div>`;
   document.body.append(dialog);
   dialog.showModal();
-  return new Promise(resolve => dialog.addEventListener("close", () => {
-    resolve(dialog.returnValue === "confirm");
-    dialog.remove();
-  }, { once: true }));
+  return new Promise(resolve => {
+    const finish = (confirmed: boolean) => {
+      dialog.close();
+      dialog.remove();
+      resolve(confirmed);
+    };
+    dialog.addEventListener("click", event => {
+      const choice = (event.target as HTMLElement).closest<HTMLElement>("[data-conversion]")
+        ?.dataset.conversion;
+      if (choice) finish(choice === "confirm");
+    });
+    dialog.addEventListener("cancel", event => {
+      event.preventDefault();
+      finish(false);
+    }, { once: true });
+  });
 }
 
 async function connectContentKindSelector(paste?: Paste): Promise<void> {
