@@ -1,6 +1,5 @@
 use crate::account::{self as accounts, api_keys};
 use crate::repository::Repository;
-use actix_web::HttpRequest;
 use sqlx::{Any, Executor};
 use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -45,48 +44,6 @@ impl Principal {
 impl Services {
     pub fn new(repo: Repository) -> Self {
         Self { repo }
-    }
-
-    pub async fn principal(&self, req: &HttpRequest) -> Result<Principal, String> {
-        if let Some(header) = req.headers().get("Authorization") {
-            let header = header
-                .to_str()
-                .map_err(|_| "Invalid authorization header")?;
-            let value = header
-                .strip_prefix("Bearer ")
-                .ok_or("Invalid authorization scheme")?;
-            return api_keys::authenticate(&self.repo, value)
-                .await?
-                .map(Principal::Key)
-                .ok_or_else(|| "Invalid bearer token".to_string());
-        }
-        match accounts::current(&self.repo, req).await {
-            Some(session)
-                if session.user.force_password_change
-                    && !matches!(
-                        (req.method().as_str(), req.path()),
-                        ("GET", "/api/v2/session")
-                            | ("DELETE", "/api/v2/session")
-                            | ("PATCH", "/api/v2/account/password")
-                    ) =>
-            {
-                Err("Password change required".to_string())
-            }
-            Some(session) => Ok(Principal::User(session)),
-            None => Ok(Principal::Anonymous),
-        }
-    }
-
-    pub fn csrf_valid(&self, req: &HttpRequest, principal: &Principal) -> bool {
-        match principal {
-            Principal::Key(_) => true,
-            Principal::User(session) => req
-                .headers()
-                .get("X-CSRF-Token")
-                .and_then(|v| v.to_str().ok())
-                .is_some_and(|v| v == session.csrf_token),
-            Principal::Anonymous => false,
-        }
     }
 
     pub async fn list_pastes(

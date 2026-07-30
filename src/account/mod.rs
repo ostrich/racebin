@@ -452,13 +452,6 @@ pub async fn accept_invite(
     })
 }
 
-pub async fn current(repo: &Repository, req: &actix_web::HttpRequest) -> Option<SessionUser> {
-    let token = req
-        .cookie(SESSION_COOKIE)
-        .map(|cookie| cookie.value().to_string())?;
-    session_user(repo, &token).await.ok().flatten()
-}
-
 pub fn login_allowed(username: &str, client: &str) -> bool {
     let key = format!("{}\n{}", username.to_ascii_lowercase(), client);
     let mut failures = LOGIN_FAILURES.lock().unwrap();
