@@ -185,7 +185,17 @@ document.addEventListener("submit", async event => {
     }
     if (form.id === "paste-filters") {
       const params = new URLSearchParams();
-      data.forEach((value,key) => { if (value) params.set(key,String(value)); });
+      data.forEach((value,key) => {
+        if (!value) return;
+        if (key === "created_after" || key === "created_before") {
+          const suffix = key === "created_before" ? "T23:59:59" : "T00:00:00";
+          params.set(key, String(Math.floor(new Date(`${value}${suffix}`).getTime() / 1000)));
+        } else if (key === "min_size_kib" || key === "max_size_kib") {
+          params.set(key.replace("_kib", "_bytes"), String(Math.round(Number(value) * 1024)));
+        } else {
+          params.set(key,String(value));
+        }
+      });
       navigate(`${location.pathname}?${params}`);
     }
   } catch (error) {

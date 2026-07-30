@@ -82,6 +82,17 @@ curl -H "Authorization: Bearer $RACEBIN_KEY" \
   'https://example.com/api/v1/pastes?mine=true'
 ```
 
+Available filters are `search`, `visibility`, `owner_id`, `content_kind`,
+`language`, `has_attachments`, `created_after`, `created_before`,
+`expiration` (`never` or `scheduled`), `min_reads`, `max_reads`, and
+`read_limit` (`unlimited` or `limited`). `min_size_bytes` and
+`max_size_bytes` filter the combined UTF-8 content, rich-text document JSON,
+and attachment size. Sort with `sort` (`created`, `title`, `reads`, `expires`,
+or `size`) and `direction` (`asc` or `desc`). Administrative
+searches also match owner usernames; all searches match attachment filenames.
+List items include `attachment_count` and `size_bytes` without loading the
+complete attachment records.
+
 Lists return:
 
 ```json

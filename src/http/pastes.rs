@@ -99,16 +99,8 @@ async fn list_pastes(
             "Authentication required for mine=true",
         );
     }
-    if query
-        .visibility
-        .as_deref()
-        .is_some_and(|visibility| !matches!(visibility, "public" | "unlisted" | "private"))
-    {
-        return error(
-            StatusCode::BAD_REQUEST,
-            "invalid_query",
-            "Visibility must be public, unlisted, or private",
-        );
+    if let Err(message) = validate_paste_query(&query) {
+        return error(StatusCode::BAD_REQUEST, "invalid_query", message);
     }
     let wants_private = query.owner_id.is_some() || query.visibility.as_deref() != Some("public");
     if matches!(value, Principal::ApiKey(_)) && wants_private && !value.can("paste:list") {
@@ -122,6 +114,80 @@ async fn list_pastes(
         Ok(page) => HttpResponse::Ok().json(page),
         Err(e) => internal(e),
     }
+}
+
+pub(super) fn validate_paste_query(query: &PasteQuery) -> Result<(), &'static str> {
+    if query
+        .visibility
+        .as_deref()
+        .is_some_and(|value| !matches!(value, "public" | "unlisted" | "private"))
+    {
+        return Err("Visibility must be public, unlisted, or private");
+    }
+    if query
+        .content_kind
+        .as_deref()
+        .is_some_and(|value| !matches!(value, "text" | "rich_text" | "redirect"))
+    {
+        return Err("Format must be text, rich_text, or redirect");
+    }
+    if query
+        .expiration
+        .as_deref()
+        .is_some_and(|value| !matches!(value, "never" | "scheduled"))
+    {
+        return Err("Expiration must be never or scheduled");
+    }
+    if query
+        .read_limit
+        .as_deref()
+        .is_some_and(|value| !matches!(value, "unlimited" | "limited"))
+    {
+        return Err("Read limit must be unlimited or limited");
+    }
+    if query
+        .sort
+        .as_deref()
+        .is_some_and(|value| !matches!(value, "created" | "title" | "reads" | "expires" | "size"))
+    {
+        return Err("Unknown sort field");
+    }
+    if query
+        .direction
+        .as_deref()
+        .is_some_and(|value| !matches!(value, "asc" | "desc"))
+    {
+        return Err("Direction must be asc or desc");
+    }
+    if matches!(
+        (query.created_after, query.created_before),
+        (Some(after), Some(before)) if after > before
+    ) {
+        return Err("Created-after date must precede created-before date");
+    }
+    if matches!(
+        (query.min_reads, query.max_reads),
+        (Some(minimum), Some(maximum)) if minimum > maximum
+    ) {
+        return Err("Minimum reads cannot exceed maximum reads");
+    }
+    if query.min_reads.is_some_and(|value| value < 0)
+        || query.max_reads.is_some_and(|value| value < 0)
+        || query.min_size_bytes.is_some_and(|value| value < 0)
+        || query.max_size_bytes.is_some_and(|value| value < 0)
+    {
+        return Err("Read counts and sizes cannot be negative");
+    }
+    if matches!(
+        (query.min_size_bytes, query.max_size_bytes),
+        (Some(minimum), Some(maximum)) if minimum > maximum
+    ) {
+        return Err("Minimum size cannot exceed maximum size");
+    }
+    if query.owner_id.is_some_and(|value| value < 1) {
+        return Err("Owner ID must be positive");
+    }
+    Ok(())
 }
 
 #[post("/pastes")]

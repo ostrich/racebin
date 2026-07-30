@@ -249,6 +249,27 @@ pub(super) async fn backend_contract(repo: Repository) {
         )
         .await
         .unwrap();
+    let attached = services
+        .list_pastes(
+            &owner,
+            &PasteQuery {
+                mine: Some(true),
+                search: Some("file.txt".to_string()),
+                content_kind: Some("text".to_string()),
+                has_attachments: Some(true),
+                min_reads: Some(0),
+                max_reads: Some(0),
+                min_size_bytes: Some(4),
+                read_limit: Some("unlimited".to_string()),
+                ..PasteQuery::default()
+            },
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(attached.items.len(), 1);
+    assert_eq!(attached.items[0].attachment_count, 1);
+    assert!(attached.items[0].size_bytes >= 4);
     sqlx::query("DELETE FROM pastes WHERE id=$1")
         .bind(&cascade.id)
         .execute(repo.pool())

@@ -24,6 +24,8 @@ export type Paste = {
   last_read_at: number | null;
   read_count: number;
   read_limit: number | null;
+  attachment_count: number;
+  size_bytes: number;
   attachments: Attachment[];
 };
 

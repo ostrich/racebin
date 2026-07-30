@@ -56,18 +56,77 @@ impl PasteService {
         let user_id = principal.user_id();
         let search = format!("%{}%", query.search.as_deref().unwrap_or(""));
         let visibility = query.visibility.as_deref();
+        let content_kind = query.content_kind.as_deref();
+        let language = query.language.as_deref();
+        let has_attachments = query.has_attachments.map(i64::from);
+        let expiration = query
+            .expiration
+            .as_deref()
+            .map(|value| i64::from(value == "scheduled"));
+        let limited = query
+            .read_limit
+            .as_deref()
+            .map(|value| i64::from(value == "limited"));
         let owner = if query.mine.unwrap_or(false) {
             user_id
         } else {
             query.owner_id
         };
-        let filter = "(($1=1) OR (($2 IS NULL AND visibility='public') OR
+        let text_size = if self.storage.kind() == crate::repository::DatabaseKind::Postgres {
+            "CAST(octet_length(content) AS BIGINT) + \
+             COALESCE(CAST(octet_length(document_json) AS BIGINT),0)"
+        } else {
+            "length(CAST(content AS BLOB)) + \
+             COALESCE(length(CAST(document_json AS BLOB)),0)"
+        };
+        let total_size = format!(
+            "({text_size} + COALESCE((SELECT sum(size_bytes) FROM attachments size_files \
+             WHERE size_files.paste_id=pastes.id),0))"
+        );
+        let order = match query.sort.as_deref().unwrap_or("created") {
+            "title" => "lower(title)",
+            "reads" => "read_count",
+            "expires" => "expires_at",
+            "size" => total_size.as_str(),
+            _ => "created_at",
+        };
+        let direction = if query.direction.as_deref() == Some("asc") {
+            "ASC"
+        } else {
+            "DESC"
+        };
+        let filter = format!(
+            "(($1=1) OR (($2 IS NULL AND visibility='public') OR
               ($2 IS NOT NULL AND (visibility='public' OR owner_id=$2))))
              AND ($3 IS NULL OR visibility=$3)
              AND ($4 IS NULL OR owner_id=$4)
              AND (expires_at IS NULL OR expires_at>$5)
              AND (lower(title) LIKE lower($6) OR lower(content) LIKE lower($6)
-                  OR lower(id) LIKE lower($6))";
+                  OR lower(id) LIKE lower($6) OR lower(language) LIKE lower($6)
+                  OR lower(content_kind) LIKE lower($6)
+                  OR EXISTS(SELECT 1 FROM attachments search_files
+                            WHERE search_files.paste_id=pastes.id
+                              AND lower(search_files.filename) LIKE lower($6))
+                  OR ($1=1 AND EXISTS(SELECT 1 FROM users search_owner
+                                     WHERE search_owner.id=pastes.owner_id
+                                       AND lower(search_owner.username) LIKE lower($6))))
+             AND ($7 IS NULL OR content_kind=$7)
+             AND ($8 IS NULL OR language=$8)
+             AND ($9 IS NULL OR ($9=1 AND EXISTS(SELECT 1 FROM attachments filter_files
+                                                 WHERE filter_files.paste_id=pastes.id))
+                              OR ($9=0 AND NOT EXISTS(SELECT 1 FROM attachments filter_files
+                                                     WHERE filter_files.paste_id=pastes.id)))
+             AND ($10 IS NULL OR created_at>=$10)
+             AND ($11 IS NULL OR created_at<=$11)
+             AND ($12 IS NULL OR ($12=0 AND expires_at IS NULL)
+                               OR ($12=1 AND expires_at IS NOT NULL))
+             AND ($13 IS NULL OR read_count>=$13)
+             AND ($14 IS NULL OR read_count<=$14)
+             AND ($15 IS NULL OR ($15=0 AND read_limit IS NULL)
+                               OR ($15=1 AND read_limit IS NOT NULL))
+             AND ($16 IS NULL OR {total_size}>=$16)
+             AND ($17 IS NULL OR {total_size}<=$17)"
+        );
         let total: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM pastes WHERE {filter}"))
             .bind(i64::from(admin))
             .bind(user_id)
@@ -75,13 +134,27 @@ impl PasteService {
             .bind(owner)
             .bind(unix_timestamp())
             .bind(&search)
+            .bind(content_kind)
+            .bind(language)
+            .bind(has_attachments)
+            .bind(query.created_after)
+            .bind(query.created_before)
+            .bind(expiration)
+            .bind(query.min_reads)
+            .bind(query.max_reads)
+            .bind(limited)
+            .bind(query.min_size_bytes)
+            .bind(query.max_size_bytes)
             .fetch_one(self.storage.pool())
             .await
             .map_err(|e| e.to_string())?;
         let items = sqlx::query_as::<_, Paste>(&format!(
             "SELECT id,owner_id,title,substr(content,1,500) AS content,NULL AS document_json,
-                    content_kind,language,visibility,created_at,expires_at,last_read_at,read_count,read_limit
-             FROM pastes WHERE {filter} ORDER BY created_at DESC LIMIT $7 OFFSET $8"
+                    content_kind,language,visibility,created_at,expires_at,last_read_at,read_count,read_limit,
+                    (SELECT count(*) FROM attachments summary_files
+                     WHERE summary_files.paste_id=pastes.id) AS attachment_count,
+                    {total_size} AS size_bytes
+             FROM pastes WHERE {filter} ORDER BY {order} {direction},id ASC LIMIT $18 OFFSET $19"
         ))
         .bind(i64::from(admin))
         .bind(user_id)
@@ -89,6 +162,17 @@ impl PasteService {
         .bind(owner)
         .bind(unix_timestamp())
         .bind(search)
+        .bind(content_kind)
+        .bind(language)
+        .bind(has_attachments)
+        .bind(query.created_after)
+        .bind(query.created_before)
+        .bind(expiration)
+        .bind(query.min_reads)
+        .bind(query.max_reads)
+        .bind(limited)
+        .bind(query.min_size_bytes)
+        .bind(query.max_size_bytes)
         .bind(i64::from(page_size))
         .bind(offset)
         .fetch_all(self.storage.pool())
@@ -126,6 +210,8 @@ impl PasteService {
         .map_err(|e| e.to_string())?;
         if let Some(value) = &mut paste {
             value.attachments = self.load_attachments(&value.id).await?;
+            value.attachment_count = value.attachments.len() as i64;
+            value.size_bytes = paste_size(value);
         }
         Ok(paste)
     }
@@ -165,6 +251,8 @@ impl PasteService {
             .read_limit
             .is_some_and(|read_limit| next_reads >= read_limit);
         paste.attachments = load_attachments_from(&mut *tx, &paste.id).await?;
+        paste.attachment_count = paste.attachments.len() as i64;
+        paste.size_bytes = paste_size(&paste);
         if consumed {
             sqlx::query("DELETE FROM pastes WHERE id=$1")
                 .bind(&paste.id)
@@ -502,6 +590,20 @@ where
     .map_err(|e| e.to_string())
 }
 
+fn paste_size(paste: &Paste) -> i64 {
+    let document_size = paste
+        .document
+        .as_ref()
+        .and_then(|document| serde_json::to_vec(document).ok())
+        .map_or(0, |document| document.len());
+    let attachment_size: i64 = paste
+        .attachments
+        .iter()
+        .map(|attachment| attachment.size_bytes.max(0))
+        .sum();
+    paste.content.len() as i64 + document_size as i64 + attachment_size
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Attachment, Paste, PasteService, Principal};
@@ -533,6 +635,8 @@ mod tests {
             last_read_at: None,
             read_count: 0,
             read_limit: None,
+            attachment_count: 0,
+            size_bytes: 0,
             attachments: Vec::<Attachment>::new(),
         }
     }

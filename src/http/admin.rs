@@ -41,6 +41,9 @@ async fn admin_pastes(
     if let Err(response) = require_admin(&value, "paste:manage") {
         return response;
     }
+    if let Err(message) = super::pastes::validate_paste_query(&query) {
+        return error(StatusCode::BAD_REQUEST, "invalid_query", message);
+    }
     match services.list_pastes(&value, &query, true).await {
         Ok(page) => HttpResponse::Ok().json(page),
         Err(e) => internal(e),

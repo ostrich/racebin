@@ -3,6 +3,7 @@ import {
   connectHighlightedEditor,
   connectLanguagePicker,
   highlightElement,
+  languageOptions,
   languageMenu,
   normalizeLanguage,
   updateLineNumbers
@@ -13,10 +14,16 @@ import { state } from "../state";
 import type { Page, Paste, RichTextDocument } from "../types";
 import { formatDate, escapeHtml, iconButton, renderLayout, pasteDisplayTitle } from "../ui";
 
-function pasteFormatLabel(paste: Paste): string {
+export function pasteFormatLabel(paste: Paste): string {
   if (paste.content_kind === "rich_text") return "Rich text";
   if (paste.content_kind === "redirect") return "Redirect";
   return paste.language;
+}
+
+export function formatByteSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KiB`;
+  return `${(bytes / 1024 / 1024).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MiB`;
 }
 
 function attachmentRows(paste: Paste, canDelete: boolean): string {
@@ -39,21 +46,105 @@ export async function home(): Promise<void> {
 type PasteRowsOptions = {
   manage?: boolean;
   ownerNames?: Map<number, string>;
+  filterable?: boolean;
 };
 
 export function pasteRows(items: Paste[], options: PasteRowsOptions = {}): string {
-  const { manage = false, ownerNames } = options;
+  const { manage = false, ownerNames, filterable = false } = options;
   if (!items.length) return `<div class="empty compact"><p>No pastes found.</p></div>`;
+  const badge = (label: string, key?: string, value?: string) => {
+    if (!filterable || !key || !value) return `<span>${escapeHtml(label)}</span>`;
+    const params = new URLSearchParams(location.search);
+    params.set(key, value);
+    params.delete("page");
+    return `<a href="${location.pathname}?${escapeHtml(params.toString())}" data-link>${escapeHtml(label)}</a>`;
+  };
   return `<div class="paste-list">${items.map(paste => `
     <article class="paste-row">
       <div class="paste-main"><a class="paste-title" href="/pastes/${escapeHtml(paste.id)}" data-link>${escapeHtml(pasteDisplayTitle(paste))}</a>
       <p>${escapeHtml(paste.content.slice(0, 160).replace(/\s+/g, " "))}</p></div>
-      <div class="paste-meta">${ownerNames ? `<span>Owner: ${paste.owner_id === null ? "No owner" : escapeHtml(ownerNames.get(paste.owner_id) ?? `User #${paste.owner_id}`)}</span>` : ""}<span>${escapeHtml(pasteFormatLabel(paste))}</span><span>${escapeHtml(paste.visibility)}</span><time>${formatDate(paste.created_at)}</time></div>
+      <div class="paste-meta">${ownerNames ? `<span>Owner: ${paste.owner_id === null ? "No owner" : escapeHtml(ownerNames.get(paste.owner_id) ?? `User #${paste.owner_id}`)}</span>` : ""}${badge(pasteFormatLabel(paste), paste.content_kind === "text" ? "language" : "content_kind", paste.content_kind === "text" ? paste.language : paste.content_kind)}${badge(paste.visibility, "visibility", paste.visibility)}${paste.attachment_count ? badge(`${paste.attachment_count} attachment${paste.attachment_count === 1 ? "" : "s"}`, "has_attachments", "true") : ""}${badge(formatByteSize(paste.size_bytes))}<time>${formatDate(paste.created_at)}</time></div>
       <div class="row-actions">
         ${iconButton("copy", "Copy link")}
         ${manage ? `<a class="icon-button" title="Edit" aria-label="Edit" href="/pastes/${escapeHtml(paste.id)}/edit" data-link><i data-icon="edit-3"></i></a>${iconButton("trash-2", "Delete")}` : ""}
       </div><input type="hidden" value="${escapeHtml(paste.id)}">
     </article>`).join("")}</div>`;
+}
+
+export type PasteListMode = "mine" | "explore" | "admin";
+
+function dateFilterValue(value: string | null): string {
+  if (!value) return "";
+  const timestamp = Number(value);
+  if (!Number.isFinite(timestamp)) return "";
+  const date = new Date(timestamp * 1000);
+  const part = (number: number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${part(date.getMonth() + 1)}-${part(date.getDate())}`;
+}
+
+export function pasteFilters(
+  params: URLSearchParams,
+  mode: PasteListMode,
+  ownerNames?: Map<number, string>
+): string {
+  const select = (name: string, label: string, choices: Array<[string, string]>) =>
+    `<label><span>${label}</span><select name="${name}"><option value="">Any</option>${choices.map(([value, text]) => `<option value="${value}" ${params.get(name) === value ? "selected" : ""}>${text}</option>`).join("")}</select></label>`;
+  const advancedKeys = ["language","owner_id","created_after","created_before","expiration","min_reads","max_reads","min_size_bytes","max_size_bytes","read_limit","sort","direction"];
+  const advanced = advancedKeys.some(key => params.has(key));
+  const labels: Record<string, string> = {
+    search: "Search", content_kind: "Format", language: "Language", visibility: "Visibility",
+    has_attachments: "Attachments", owner_id: "Owner", created_after: "Created after",
+    created_before: "Created before", expiration: "Expiration", min_reads: "Minimum reads",
+    max_reads: "Maximum reads", min_size_bytes: "Minimum size",
+    max_size_bytes: "Maximum size", read_limit: "Read limit", sort: "Sort",
+    direction: "Direction"
+  };
+  const chips = [...params.entries()]
+    .filter(([key, value]) => value && key in labels && key !== "page_size")
+    .map(([key, value]) => {
+      const next = new URLSearchParams(params);
+      next.delete(key);
+      next.delete("page");
+      let shown = value;
+      if (key === "owner_id") shown = ownerNames?.get(Number(value)) ?? `User #${value}`;
+      if (key === "created_after" || key === "created_before") shown = dateFilterValue(value);
+      if (key === "content_kind") shown = { text: "Text", rich_text: "Rich text", redirect: "Redirect" }[value] ?? value;
+      if (key === "language") shown = languageOptions.find(language => language.id === value)?.label ?? value;
+      if (key === "visibility") shown = value.charAt(0).toUpperCase() + value.slice(1);
+      if (key === "has_attachments") shown = value === "true" ? "With attachments" : "Without attachments";
+      if (key === "read_limit") shown = value === "limited" ? "Limited" : "Unlimited";
+      if (key === "expiration") shown = value === "scheduled" ? "Scheduled" : "Never";
+      if (key === "sort") shown = { created: "Created", title: "Title", reads: "Reads", expires: "Expiration", size: "Size" }[value] ?? value;
+      if (key === "direction") shown = value === "asc" ? "Ascending" : "Descending";
+      if (key === "min_size_bytes" || key === "max_size_bytes") shown = formatByteSize(Number(value));
+      return `<a class="filter-chip" href="${location.pathname}${next.size ? `?${escapeHtml(next.toString())}` : ""}" data-link>${escapeHtml(labels[key])}: ${escapeHtml(shown)} <span aria-hidden="true">×</span></a>`;
+    }).join("");
+  return `<form class="paste-filter-form" id="paste-filters">
+    <div class="paste-filter-primary">
+      <label><span>Search</span><input name="search" value="${escapeHtml(params.get("search") ?? "")}" placeholder="${mode === "admin" ? "Title, content, ID, owner, file…" : "Title, content, ID, language, file…"}"></label>
+      ${select("content_kind", "Format", [["text","Text"],["rich_text","Rich text"],["redirect","Redirect"]])}
+      ${mode === "explore" ? "" : select("visibility", "Visibility", [["public","Public"],["unlisted","Unlisted"],["private","Private"]])}
+      ${select("has_attachments", "Attachments", [["true","With attachments"],["false","Without attachments"]])}
+      <button class="button primary" type="submit"><i data-icon="search"></i> Apply</button>
+    </div>
+    <details class="advanced-filters" ${advanced ? "open" : ""}><summary>More filters</summary>
+      <div class="advanced-filter-grid">
+        ${select("language", "Language", languageOptions.filter(language => language.id !== "auto").map(language => [language.id, language.label] as [string, string]))}
+        ${mode === "admin" ? `<label><span>Owner ID</span><input type="number" min="1" name="owner_id" value="${escapeHtml(params.get("owner_id") ?? "")}"></label>` : ""}
+        <label><span>Created after</span><input type="date" name="created_after" value="${dateFilterValue(params.get("created_after"))}"></label>
+        <label><span>Created before</span><input type="date" name="created_before" value="${dateFilterValue(params.get("created_before"))}"></label>
+        ${select("expiration", "Expiration", [["never","Never"],["scheduled","Scheduled"]])}
+        <label><span>Minimum reads</span><input type="number" min="0" name="min_reads" value="${escapeHtml(params.get("min_reads") ?? "")}"></label>
+        <label><span>Maximum reads</span><input type="number" min="0" name="max_reads" value="${escapeHtml(params.get("max_reads") ?? "")}"></label>
+        <label><span>Minimum size (KiB)</span><input type="number" min="0" step="0.1" name="min_size_kib" value="${params.get("min_size_bytes") ? Number(params.get("min_size_bytes")) / 1024 : ""}"></label>
+        <label><span>Maximum size (KiB)</span><input type="number" min="0" step="0.1" name="max_size_kib" value="${params.get("max_size_bytes") ? Number(params.get("max_size_bytes")) / 1024 : ""}"></label>
+        ${select("read_limit", "Read limit", [["unlimited","Unlimited"],["limited","Limited"]])}
+        ${select("sort", "Sort by", [["created","Created"],["title","Title"],["reads","Reads"],["expires","Expiration"],["size","Size"]])}
+        ${select("direction", "Direction", [["desc","Descending"],["asc","Ascending"]])}
+      </div>
+    </details>
+    ${chips ? `<div class="active-filters">${chips}<a class="clear-filters" href="${location.pathname}" data-link>Clear all</a></div>` : ""}
+  </form>`;
 }
 
 export function pagination(page: Page<unknown>): string {
@@ -74,16 +165,15 @@ export function pagination(page: Page<unknown>): string {
 export async function pasteList(mine: boolean): Promise<void> {
   if (mine && !state.session.user) return navigate("/login");
   const params = new URLSearchParams(location.search);
-  params.set("page_size", "50");
-  if (mine) params.set("mine", "true");
-  if (!mine) params.set("visibility", "public");
-  const page = await requestApi<Page<Paste>>(`/pastes?${params}`);
+  const requestParams = new URLSearchParams(params);
+  requestParams.set("page_size", "50");
+  if (mine) requestParams.set("mine", "true");
+  if (!mine) requestParams.set("visibility", "public");
+  const page = await requestApi<Page<Paste>>(`/pastes?${requestParams}`);
   renderLayout(`<section>
     <div class="page-heading"><div><p class="eyebrow">${mine ? "Workspace" : "Public"}</p><h1>${mine ? "My pastes" : "Explore"}</h1></div>${mine ? `<a class="button primary" href="/pastes/new" data-link><i data-icon="plus"></i> New paste</a>` : ""}</div>
-    <form class="filters" id="paste-filters"><label><span>Search</span><input name="search" value="${escapeHtml(params.get("search") ?? "")}" placeholder="Title, content, or ID"></label>
-    <label><span>Visibility</span><select name="visibility"><option value="">All visibility</option>${["public","unlisted","private"].map(value => `<option ${params.get("visibility") === value ? "selected" : ""}>${value}</option>`).join("")}</select></label>
-    <button class="button" type="submit"><i data-icon="search"></i> Filter</button></form>
-    <p class="result-count">${page.total_items} paste${page.total_items === 1 ? "" : "s"}</p>${pasteRows(page.items, { manage: mine })}${pagination(page)}</section>`);
+    ${pasteFilters(params, mine ? "mine" : "explore")}
+    <p class="result-count">${page.total_items} paste${page.total_items === 1 ? "" : "s"}</p>${pasteRows(page.items, { manage: mine, filterable: true })}${pagination(page)}</section>`);
 }
 
 export async function pasteView(pasteId: string): Promise<void> {

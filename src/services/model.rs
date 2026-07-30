@@ -18,6 +18,8 @@ pub struct Paste {
     pub last_read_at: Option<i64>,
     pub read_count: i64,
     pub read_limit: Option<i64>,
+    pub attachment_count: i64,
+    pub size_bytes: i64,
     pub attachments: Vec<Attachment>,
 }
 
@@ -41,6 +43,8 @@ impl<'r> FromRow<'r, AnyRow> for Paste {
             last_read_at: row.try_get("last_read_at")?,
             read_count: row.try_get("read_count")?,
             read_limit: row.try_get("read_limit")?,
+            attachment_count: row.try_get("attachment_count").unwrap_or(0),
+            size_bytes: row.try_get("size_bytes").unwrap_or(0),
             attachments: Vec::new(),
         })
     }
@@ -79,6 +83,19 @@ pub struct PasteQuery {
     pub visibility: Option<String>,
     pub owner_id: Option<i64>,
     pub mine: Option<bool>,
+    pub content_kind: Option<String>,
+    pub language: Option<String>,
+    pub has_attachments: Option<bool>,
+    pub created_after: Option<i64>,
+    pub created_before: Option<i64>,
+    pub expiration: Option<String>,
+    pub min_reads: Option<i64>,
+    pub max_reads: Option<i64>,
+    pub min_size_bytes: Option<i64>,
+    pub max_size_bytes: Option<i64>,
+    pub read_limit: Option<String>,
+    pub sort: Option<String>,
+    pub direction: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
