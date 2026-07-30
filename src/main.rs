@@ -81,7 +81,7 @@ async fn main() -> std::io::Result<()> {
     let state = web::Data::new(services::PasteService::new(repository));
 
     log::info!("Racebin starting on http://{}:{}", ARGS.bind, ARGS.port);
-    HttpServer::new(move || {
+    let server = HttpServer::new(move || {
         App::new()
             .app_data(state.clone())
             .wrap(
@@ -98,8 +98,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Logger::default())
             .configure(http::configure)
     })
-    .bind((ARGS.bind, ARGS.port))?
     .workers(ARGS.threads as usize)
-    .run()
-    .await
+    .bind((ARGS.bind, ARGS.port))?;
+    server.run().await
 }

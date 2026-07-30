@@ -1,11 +1,11 @@
 # Maintainer: ostrich <570911+ostrich@users.noreply.github.com>
 pkgname=racebin-git
-pkgver=4.0.0.r39.gd405cd8
+pkgver=4.0.0.r40.ge2b16b5
 pkgrel=1
 pkgdesc="API-first self-hosted paste bin with attachments"
 arch=('x86_64' 'aarch64')
 url="https://github.com/ostrich/racebin"
-license=('MIT AND BSD-3-Clause')
+license=('MIT')
 depends=('gcc-libs' 'glibc')
 makedepends=('cargo' 'git' 'npm')
 provides=('racebin')
@@ -37,8 +37,10 @@ package() {
     install -Dm0755 target/release/racebin "$pkgdir/usr/bin/racebin"
     install -Dm0644 LICENSE \
         "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-    install -Dm0644 LICENSE-BSD-3-Clause \
-        "$pkgdir/usr/share/licenses/$pkgname/LICENSE-BSD-3-Clause"
+    install -Dm0644 THIRD_PARTY_RUST_LICENSES.html \
+        "$pkgdir/usr/share/licenses/$pkgname/THIRD_PARTY_RUST_LICENSES.html"
+    install -Dm0644 THIRD_PARTY_FRONTEND_LICENSES.md \
+        "$pkgdir/usr/share/licenses/$pkgname/THIRD_PARTY_FRONTEND_LICENSES.md"
     install -Dm0644 packaging/racebin.service \
         "$pkgdir/usr/lib/systemd/system/racebin.service"
     install -Dm0644 packaging/racebin.conf.example "$pkgdir/etc/racebin.conf"

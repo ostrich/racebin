@@ -116,5 +116,11 @@ The ordinary test run uses temporary SQLite databases. Set
 run the same storage contract and copy tests against PostgreSQL. The test
 suite drops that database's `public` schema; never point it at real data.
 
-Racebin is available under the terms in [LICENSE](LICENSE) and
-[LICENSE-BSD-3-Clause](LICENSE-BSD-3-Clause).
+After changing Rust or frontend dependencies, run
+`scripts/generate-third-party-licenses.sh` with `cargo-about` installed and
+the frontend dependencies present.
+
+Racebin is available under the [MIT License](LICENSE). Licenses for bundled
+third-party components are collected in
+[THIRD_PARTY_RUST_LICENSES.html](THIRD_PARTY_RUST_LICENSES.html) and
+[THIRD_PARTY_FRONTEND_LICENSES.md](THIRD_PARTY_FRONTEND_LICENSES.md).
