@@ -19,6 +19,14 @@ function pasteFormatLabel(paste: Paste): string {
   return paste.language;
 }
 
+function attachmentRows(paste: Paste, canDelete: boolean): string {
+  return paste.attachments.map(attachment => `
+    <div class="attachment-row" data-attachment-id="${attachment.id}" data-paste-id="${escapeHtml(paste.id)}">
+      <a href="/api/v1/pastes/${escapeHtml(paste.id)}/attachments/${attachment.id}"><i data-icon="file-text"></i><span>${escapeHtml(attachment.filename)}</span><small>${attachment.size_bytes.toLocaleString()} bytes</small></a>
+      ${canDelete ? `<button class="icon-button" type="button" title="Delete attachment" aria-label="Delete attachment" data-action="delete-attachment"><i data-icon="trash-2"></i></button>` : ""}
+    </div>`).join("");
+}
+
 export async function home(): Promise<void> {
   if (state.session.user) return pasteForm();
   const page = await requestApi<Page<Paste>>("/pastes?visibility=public&page_size=8");
@@ -93,7 +101,7 @@ export async function pasteView(pasteId: string): Promise<void> {
       ? `<div id="rich-text-viewer" class="rich-text-viewer"></div>`
       : `<div class="paste-code"><div id="paste-lines" class="line-numbers" aria-hidden="true"></div><pre class="content"><code id="paste-code">${escapeHtml(paste.content)}</code></pre></div>`}
     <textarea id="paste-plain-content" hidden>${escapeHtml(paste.content)}</textarea>
-    ${paste.attachments.length ? `<section><h2>Attachments</h2><div class="attachments">${paste.attachments.map(attachment => `<div class="attachment-row" data-attachment-id="${attachment.id}" data-paste-id="${escapeHtml(paste.id)}"><a href="/api/v1/pastes/${escapeHtml(paste.id)}/attachments/${attachment.id}"><i data-icon="file-text"></i><span>${escapeHtml(attachment.filename)}</span><small>${attachment.size_bytes.toLocaleString()} bytes</small></a>${own ? `<button class="icon-button" type="button" title="Delete attachment" aria-label="Delete attachment" data-action="delete-attachment"><i data-icon="trash-2"></i></button>` : ""}</div>`).join("")}</div></section>` : ""}
+    ${paste.attachments.length ? `<section><h2>Attachments</h2><div class="attachments">${attachmentRows(paste, Boolean(own))}</div></section>` : ""}
     <footer class="paste-stats"><span>Created ${formatDate(paste.created_at)}</span><span>Expires ${formatDate(paste.expires_at)}</span><span>${paste.read_count} reads</span></footer>
   </article>`);
   if (paste.content_kind === "rich_text" && paste.document) {
@@ -147,6 +155,7 @@ export async function pasteForm(pasteId?: string): Promise<void> {
         <label><span>Expires</span><input type="datetime-local" name="expires_at" value="${paste?.expires_at ? new Date(paste.expires_at * 1000).toISOString().slice(0,16) : ""}"></label>
         <label><span>Read limit</span><input type="number" min="1" name="read_limit" value="${paste?.read_limit ?? ""}" placeholder="Unlimited"></label>
       </div>
+      ${paste?.attachments.length ? `<div class="existing-attachments"><span>Current attachments</span><div class="attachments">${attachmentRows(paste, true)}</div><small>Deleting an existing attachment takes effect immediately, even if you cancel editing.</small></div>` : ""}
       ${state.config.attachments_enabled ? `<label><span>Add attachments</span><input type="file" name="attachments" multiple><small>Combined upload limit: ${Math.floor(state.config.max_attachment_size_bytes / 1024 / 1024)} MiB</small></label>` : ""}
       <div class="actions"><button class="button primary" type="submit">${paste ? "Save changes" : "Create paste"}</button><a class="button" href="${paste ? `/pastes/${escapeHtml(paste.id)}` : "/pastes"}" data-link>Cancel</a>${paste ? `<button class="button danger" type="button" data-action="delete-paste">Delete</button>` : ""}</div>
       <input type="hidden" name="pasteId" value="${escapeHtml(pasteId ?? "")}">

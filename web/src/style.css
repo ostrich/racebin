@@ -6,6 +6,9 @@
 .filters label,.filters input,.filters select{min-width:0;width:100%}
 .pagination{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:24px;height:auto}
 .attachment-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+.existing-attachments{display:grid;gap:7px}
+.existing-attachments>span{font-size:12px;font-weight:700;color:#505a66}
+.existing-attachments>small{color:var(--muted);font-size:11px}
 @media(max-width:760px){.form-grid,.filters.admin-filters{grid-template-columns:1fr}}
 
 .editor label small,.language-field small{color:var(--muted);font-size:11px;font-weight:400;margin-left:5px}

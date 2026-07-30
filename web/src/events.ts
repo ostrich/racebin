@@ -62,9 +62,18 @@ document.addEventListener("click", async event => {
       const row = target.closest<HTMLElement>(".attachment-row");
       const pasteId = row?.dataset.pasteId;
       const attachmentId = row?.dataset.attachmentId;
-      if (pasteId && attachmentId && confirm("Delete this attachment permanently?")) {
+      const editing = Boolean(row?.closest("#paste-form"));
+      const message = editing
+        ? "Delete this attachment permanently?\n\nThis takes effect immediately, even if you cancel editing."
+        : "Delete this attachment permanently?";
+      if (pasteId && attachmentId && confirm(message)) {
         await requestApi(`/pastes/${encodeURIComponent(pasteId)}/attachments/${attachmentId}`, { method: "DELETE" });
+        const container = row.parentElement;
         row.remove();
+        if (editing && container && !container.children.length) {
+          container.closest(".existing-attachments")?.remove();
+        }
+        showNotice("Attachment deleted.");
       }
     }
     if (action === "create-invitation") {
