@@ -69,7 +69,7 @@ mod tests {
         assert!(spa_route("/pastes/example"));
         assert!(spa_route("/pastes/example/edit"));
         assert!(spa_route("/invitations/token"));
-        assert!(!spa_route("/api/v2/pastes"));
+        assert!(!spa_route("/api/v1/pastes"));
         assert!(!spa_route("/pastes/example/unknown"));
         assert!(!spa_route("/invitations/token/nested"));
     }

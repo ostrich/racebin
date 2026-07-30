@@ -14,7 +14,7 @@ export async function requestApi<T>(path: string, init: RequestInit = {}): Promi
   if (state.session.csrf_token && init.method && init.method !== "GET") {
     headers.set("X-CSRF-Token", state.session.csrf_token);
   }
-  const response = await fetch(`/api/v2${path}`, { ...init, headers });
+  const response = await fetch(`/api/v1${path}`, { ...init, headers });
   if (!response.ok) {
     const body = await response
       .json()

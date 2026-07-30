@@ -64,7 +64,7 @@ pub fn configure(config: &mut web::ServiceConfig) {
             .into()
         }))
         .service(
-            web::scope("/api/v2")
+            web::scope("/api/v1")
                 .configure(meta::configure)
                 .configure(account::configure)
                 .configure(pastes::configure)

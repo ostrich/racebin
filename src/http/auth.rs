@@ -50,9 +50,9 @@ async fn resolve_principal(
             if session.user.password_change_required
                 && !matches!(
                     (request.method().as_str(), request.path()),
-                    ("GET", "/api/v2/session")
-                        | ("DELETE", "/api/v2/session")
-                        | ("PATCH", "/api/v2/account/password")
+                    ("GET", "/api/v1/session")
+                        | ("DELETE", "/api/v1/session")
+                        | ("PATCH", "/api/v1/account/password")
                 )
     ) {
         Err("Password change required".to_string())

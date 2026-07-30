@@ -130,7 +130,7 @@ mod tests {
             let response = test::call_service(
                 &app,
                 test::TestRequest::get()
-                    .uri(&format!("/api/v2/pastes/{id}"))
+                    .uri(&format!("/api/v1/pastes/{id}"))
                     .to_request(),
             )
             .await;
@@ -140,7 +140,7 @@ mod tests {
         let login = test::call_service(
             &app,
             test::TestRequest::post()
-                .uri("/api/v2/session")
+                .uri("/api/v1/session")
                 .set_json(json!({
                     "username": "http-user",
                     "password": "correct horse battery staple"
@@ -156,7 +156,7 @@ mod tests {
         let converted = test::call_service(
             &app,
             test::TestRequest::post()
-                .uri("/api/v2/pastes/convert")
+                .uri("/api/v1/pastes/convert")
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
                 .set_json(json!({
@@ -179,7 +179,7 @@ mod tests {
         let unsafe_document = test::call_service(
             &app,
             test::TestRequest::post()
-                .uri("/api/v2/pastes")
+                .uri("/api/v1/pastes")
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
                 .set_json(json!({
@@ -194,7 +194,7 @@ mod tests {
         let without_csrf = test::call_service(
             &app,
             test::TestRequest::post()
-                .uri("/api/v2/pastes")
+                .uri("/api/v1/pastes")
                 .cookie(cookie.clone())
                 .set_json(json!({"title":"blocked","content":"body"}))
                 .to_request(),
@@ -205,7 +205,7 @@ mod tests {
         let created_at = test::call_service(
             &app,
             test::TestRequest::post()
-                .uri("/api/v2/pastes")
+                .uri("/api/v1/pastes")
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
                 .set_json(json!({"title":"files","content":"body","visibility":"private"}))
@@ -223,7 +223,7 @@ mod tests {
         let uploaded = test::call_service(
             &app,
             test::TestRequest::post()
-                .uri(&format!("/api/v2/pastes/{id}/attachments"))
+                .uri(&format!("/api/v1/pastes/{id}/attachments"))
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
                 .insert_header((
@@ -241,7 +241,7 @@ mod tests {
         let downloaded = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{id}/attachments/{attachment_id}"))
+                .uri(&format!("/api/v1/pastes/{id}/attachments/{attachment_id}"))
                 .cookie(cookie.clone())
                 .to_request(),
         )
@@ -256,7 +256,7 @@ mod tests {
         let key_read = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{}", owner.id))
+                .uri(&format!("/api/v1/pastes/{}", owner.id))
                 .insert_header(("Authorization", format!("Bearer {read_token}")))
                 .to_request(),
         )
@@ -265,7 +265,7 @@ mod tests {
         let key_write = test::call_service(
             &app,
             test::TestRequest::post()
-                .uri("/api/v2/pastes")
+                .uri("/api/v1/pastes")
                 .insert_header(("Authorization", format!("Bearer {read_token}")))
                 .set_json(json!({"title":"forbidden","content":"body"}))
                 .to_request(),
@@ -276,38 +276,38 @@ mod tests {
         let positive_get_scopes = [
             (
                 "paste:read",
-                format!("/api/v2/pastes/{}", owner.id),
-                "/api/v2/admin/users",
+                format!("/api/v1/pastes/{}", owner.id),
+                "/api/v1/admin/users",
                 StatusCode::FORBIDDEN,
             ),
             (
                 "paste:list",
-                "/api/v2/pastes?mine=true".to_string(),
+                "/api/v1/pastes?mine=true".to_string(),
                 owner.id.as_str(),
                 StatusCode::NOT_FOUND,
             ),
             (
                 "paste:manage",
-                "/api/v2/admin/pastes".to_string(),
-                "/api/v2/admin/users",
+                "/api/v1/admin/pastes".to_string(),
+                "/api/v1/admin/users",
                 StatusCode::FORBIDDEN,
             ),
             (
                 "user:manage",
-                "/api/v2/admin/users".to_string(),
-                "/api/v2/admin/invitations",
+                "/api/v1/admin/users".to_string(),
+                "/api/v1/admin/invitations",
                 StatusCode::FORBIDDEN,
             ),
             (
                 "invitation:manage",
-                "/api/v2/admin/invitations".to_string(),
-                "/api/v2/admin/api-keys",
+                "/api/v1/admin/invitations".to_string(),
+                "/api/v1/admin/api-keys",
                 StatusCode::FORBIDDEN,
             ),
             (
                 "api_key:manage",
-                "/api/v2/admin/api-keys".to_string(),
-                "/api/v2/admin/users",
+                "/api/v1/admin/api-keys".to_string(),
+                "/api/v1/admin/users",
                 StatusCode::FORBIDDEN,
             ),
         ];
@@ -325,7 +325,7 @@ mod tests {
             .await;
             assert_eq!(response.status(), StatusCode::OK, "scope {scope}");
             let denied_uri = if scope == "paste:list" {
-                format!("/api/v2/pastes/{denied_uri}")
+                format!("/api/v1/pastes/{denied_uri}")
             } else {
                 denied_uri.to_string()
             };
@@ -341,11 +341,11 @@ mod tests {
         }
 
         let forbidden_gets = [
-            "/api/v2/pastes?mine=true",
-            "/api/v2/admin/pastes",
-            "/api/v2/admin/users",
-            "/api/v2/admin/invitations",
-            "/api/v2/admin/api-keys",
+            "/api/v1/pastes?mine=true",
+            "/api/v1/admin/pastes",
+            "/api/v1/admin/users",
+            "/api/v1/admin/invitations",
+            "/api/v1/admin/api-keys",
         ];
         for uri in forbidden_gets {
             let response = test::call_service(
@@ -366,7 +366,7 @@ mod tests {
         let write_allowed = test::call_service(
             &app,
             test::TestRequest::patch()
-                .uri(&format!("/api/v2/pastes/{}", owner.id))
+                .uri(&format!("/api/v1/pastes/{}", owner.id))
                 .insert_header(("Authorization", format!("Bearer {write_token}")))
                 .set_json(json!({"title":"written by key"}))
                 .to_request(),
@@ -376,7 +376,7 @@ mod tests {
         let write_create_allowed = test::call_service(
             &app,
             test::TestRequest::post()
-                .uri("/api/v2/pastes")
+                .uri("/api/v1/pastes")
                 .insert_header(("Authorization", format!("Bearer {write_token}")))
                 .set_json(json!({"title":"key-created_at","content":"body"}))
                 .to_request(),
@@ -386,7 +386,7 @@ mod tests {
         let cross_owner_write = test::call_service(
             &app,
             test::TestRequest::patch()
-                .uri(&format!("/api/v2/pastes/{}", other_owner.id))
+                .uri(&format!("/api/v1/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {write_token}")))
                 .set_json(json!({"title":"not allowed"}))
                 .to_request(),
@@ -396,7 +396,7 @@ mod tests {
         let write_cannot_read = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{}", owner.id))
+                .uri(&format!("/api/v1/pastes/{}", owner.id))
                 .insert_header(("Authorization", format!("Bearer {write_token}")))
                 .to_request(),
         )
@@ -410,7 +410,7 @@ mod tests {
         let read_cannot_delete = test::call_service(
             &app,
             test::TestRequest::delete()
-                .uri(&format!("/api/v2/pastes/{}", disposable.id))
+                .uri(&format!("/api/v1/pastes/{}", disposable.id))
                 .insert_header(("Authorization", format!("Bearer {read_token}")))
                 .to_request(),
         )
@@ -427,7 +427,7 @@ mod tests {
         let delete_allowed = test::call_service(
             &app,
             test::TestRequest::delete()
-                .uri(&format!("/api/v2/pastes/{}", disposable.id))
+                .uri(&format!("/api/v1/pastes/{}", disposable.id))
                 .insert_header(("Authorization", format!("Bearer {delete_token}")))
                 .to_request(),
         )
@@ -436,7 +436,7 @@ mod tests {
         let delete_other_denied = test::call_service(
             &app,
             test::TestRequest::delete()
-                .uri(&format!("/api/v2/pastes/{}", other_owner.id))
+                .uri(&format!("/api/v1/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {delete_token}")))
                 .to_request(),
         )
@@ -454,7 +454,7 @@ mod tests {
         let cross_owner_read = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{}", other_owner.id))
+                .uri(&format!("/api/v1/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {read_token}")))
                 .to_request(),
         )
@@ -463,7 +463,7 @@ mod tests {
         let admin_cross_owner_read = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{}", other_owner.id))
+                .uri(&format!("/api/v1/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {paste_admin_token}")))
                 .to_request(),
         )
@@ -472,7 +472,7 @@ mod tests {
         let admin_cross_owner_write = test::call_service(
             &app,
             test::TestRequest::patch()
-                .uri(&format!("/api/v2/pastes/{}", other_owner.id))
+                .uri(&format!("/api/v1/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {paste_admin_token}")))
                 .set_json(json!({"title":"administered"}))
                 .to_request(),
@@ -491,7 +491,7 @@ mod tests {
         let delegation_allowed = test::call_service(
             &app,
             test::TestRequest::post()
-                .uri("/api/v2/account/api-keys")
+                .uri("/api/v1/account/api-keys")
                 .insert_header(("Authorization", format!("Bearer {delegating_token}")))
                 .set_json(json!({"name":"delegated read","scopes":["paste:read"]}))
                 .to_request(),
@@ -501,7 +501,7 @@ mod tests {
         let delegation_denied = test::call_service(
             &app,
             test::TestRequest::post()
-                .uri("/api/v2/account/api-keys")
+                .uri("/api/v1/account/api-keys")
                 .insert_header(("Authorization", format!("Bearer {delegating_token}")))
                 .set_json(json!({"name":"delegated write","scopes":["paste:write"]}))
                 .to_request(),
@@ -511,7 +511,7 @@ mod tests {
         let browser_admin_scope_denied = test::call_service(
             &app,
             test::TestRequest::post()
-                .uri("/api/v2/account/api-keys")
+                .uri("/api/v1/account/api-keys")
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
                 .set_json(json!({"name":"admin attempt","scopes":["user:manage"]}))
@@ -534,7 +534,7 @@ mod tests {
         let disabled_response = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{}", owner.id))
+                .uri(&format!("/api/v1/pastes/{}", owner.id))
                 .insert_header(("Authorization", format!("Bearer {disabled_token}")))
                 .to_request(),
         )
@@ -555,7 +555,7 @@ mod tests {
         let disabled_owner_response = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{}", other_owner.id))
+                .uri(&format!("/api/v1/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {owner_disabled_token}")))
                 .to_request(),
         )
@@ -585,7 +585,7 @@ mod tests {
         let account_delete_other = test::call_service(
             &app,
             test::TestRequest::delete()
-                .uri(&format!("/api/v2/account/api-keys/{}", other_key.id))
+                .uri(&format!("/api/v1/account/api-keys/{}", other_key.id))
                 .insert_header(("Authorization", format!("Bearer {key_admin_token}")))
                 .to_request(),
         )
@@ -594,7 +594,7 @@ mod tests {
         let admin_delete_other = test::call_service(
             &app,
             test::TestRequest::delete()
-                .uri(&format!("/api/v2/admin/api-keys/{}", other_key.id))
+                .uri(&format!("/api/v1/admin/api-keys/{}", other_key.id))
                 .insert_header(("Authorization", format!("Bearer {key_admin_token}")))
                 .to_request(),
         )
@@ -603,7 +603,7 @@ mod tests {
         let admin_cross_owner_delete = test::call_service(
             &app,
             test::TestRequest::delete()
-                .uri(&format!("/api/v2/pastes/{}", other_owner.id))
+                .uri(&format!("/api/v1/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {paste_admin_token}")))
                 .to_request(),
         )
@@ -613,7 +613,7 @@ mod tests {
         let deleted = test::call_service(
             &app,
             test::TestRequest::delete()
-                .uri(&format!("/api/v2/pastes/{id}/attachments/{attachment_id}"))
+                .uri(&format!("/api/v1/pastes/{id}/attachments/{attachment_id}"))
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
                 .to_request(),
@@ -623,7 +623,7 @@ mod tests {
         let missing = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{id}/attachments/{attachment_id}"))
+                .uri(&format!("/api/v1/pastes/{id}/attachments/{attachment_id}"))
                 .cookie(cookie.clone())
                 .to_request(),
         )
@@ -633,7 +633,7 @@ mod tests {
         let logout = test::call_service(
             &app,
             test::TestRequest::delete()
-                .uri("/api/v2/session")
+                .uri("/api/v1/session")
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
                 .to_request(),
@@ -643,7 +643,7 @@ mod tests {
         let session = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri("/api/v2/session")
+                .uri("/api/v1/session")
                 .cookie(cookie)
                 .to_request(),
         )

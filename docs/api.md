@@ -1,7 +1,7 @@
-# Racebin API v2
+# Racebin API v1
 
-The API is rooted at `/api/v2`. This release intentionally resets the v2
-vocabulary; clients written for an earlier Racebin schema must be updated.
+The API is rooted at `/api/v1`. This is Racebin's initial supported API
+contract.
 
 ## Authentication
 
@@ -37,7 +37,7 @@ non-management paste scopes.
 Create a paste:
 
 ```bash
-curl https://example.com/api/v2/pastes \
+curl https://example.com/api/v1/pastes \
   -H "Authorization: Bearer $RACEBIN_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -65,7 +65,7 @@ strike, inline code, and safe HTTP(S) or mail links.
 Convert between text and rich text without saving a paste:
 
 ```bash
-curl -X POST https://example.com/api/v2/pastes/convert \
+curl -X POST https://example.com/api/v1/pastes/convert \
   -H "Content-Type: application/json" \
   -H "X-CSRF-Token: $RACEBIN_CSRF" \
   -d '{"source_kind":"text","target_kind":"rich_text","content":"SCENE 1\n\nADA\nHello.","document":null}'
@@ -77,9 +77,9 @@ plaintext. Conversion intentionally excludes redirects.
 List and filter:
 
 ```bash
-curl 'https://example.com/api/v2/pastes?page=1&page_size=50&search=example&visibility=public'
+curl 'https://example.com/api/v1/pastes?page=1&page_size=50&search=example&visibility=public'
 curl -H "Authorization: Bearer $RACEBIN_KEY" \
-  'https://example.com/api/v2/pastes?mine=true'
+  'https://example.com/api/v1/pastes?mine=true'
 ```
 
 Lists return:
@@ -91,14 +91,14 @@ Lists return:
 Retrieve without consuming, consume a read, update, and delete:
 
 ```bash
-curl https://example.com/api/v2/pastes/PASTE_ID
-curl https://example.com/api/v2/pastes/PASTE_ID/consume
-curl -X PATCH https://example.com/api/v2/pastes/PASTE_ID \
+curl https://example.com/api/v1/pastes/PASTE_ID
+curl https://example.com/api/v1/pastes/PASTE_ID/consume
+curl -X PATCH https://example.com/api/v1/pastes/PASTE_ID \
   -H "Authorization: Bearer $RACEBIN_KEY" \
   -H "Content-Type: application/json" \
   -d '{"title":"Updated","visibility":"public"}'
 curl -X DELETE -H "Authorization: Bearer $RACEBIN_KEY" \
-  https://example.com/api/v2/pastes/PASTE_ID
+  https://example.com/api/v1/pastes/PASTE_ID
 ```
 
 `/pastes/{paste_id}/consume` and `/pastes/{paste_id}/raw` atomically consume a
@@ -119,7 +119,7 @@ read. Upload attachments with multipart POST to
 - `GET|POST /admin/invitations`, `DELETE /admin/invitations/{id}`
 - `GET /admin/api-keys`, `PATCH|DELETE /admin/api-keys/{id}`
 
-The machine-readable route list is `/api/v2/openapi.json`.
+The machine-readable route list is `/api/v1/openapi.json`.
 
 ## Errors
 

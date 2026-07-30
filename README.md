@@ -2,7 +2,7 @@
 
 Racebin is an API-first, self-hosted paste bin with attachments and URL redirects
 with user accounts, invitation links, scoped API keys, and a Vanilla TypeScript
-single-page application. The supported interface is `/api/v2`; the browser
+single-page application. The supported interface is `/api/v1`; the browser
 application uses that same API.
 
 ## Features
@@ -18,8 +18,8 @@ application uses that same API.
 - SQLite or PostgreSQL as the authoritative store
 - Embedded responsive TypeScript application with no separate web server
 
-Encryption, readonly/editable modes, the JSON database, server-rendered forms,
-and the `/api/v1` interface are not supported.
+Encryption, readonly/editable modes, the JSON database, and server-rendered
+forms are not supported.
 
 ## Run
 
@@ -69,7 +69,7 @@ All settings have equivalent `RACEBIN_*` environment variables.
 
 See the [database guide](docs/database.md), [account guide](docs/accounts.md),
 [API guide](docs/api.md), and [testing guide](docs/testing.md). The running
-server also exposes a machine-readable route list at `/api/v2/openapi.json`.
+server also exposes a machine-readable route list at `/api/v1/openapi.json`.
 
 ## Databases
 

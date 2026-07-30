@@ -8,8 +8,8 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
 async fn get_openapi() -> impl Responder {
     HttpResponse::Ok().json(json!({
       "openapi": "3.1.0",
-      "info": {"title":"Racebin API","version":"4.0.0"},
-      "servers": [{"url":"/api/v2"}],
+      "info": {"title":"Racebin API","version":"1.0.0"},
+      "servers": [{"url":"/api/v1"}],
       "components": {
         "securitySchemes": {
           "bearerAuth": {"type":"http","scheme":"bearer"},
