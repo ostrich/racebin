@@ -117,6 +117,38 @@ test("editing triggers the custom discard dialog and detects JavaScript", async 
   await expect(page).toHaveURL(/\/pastes\/new$/);
 });
 
+test("code editor caret and highlighted text retain the same scroll viewport", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  const editor = page.getByRole("textbox", { name: "Paste content" });
+  const content = Array.from(
+    { length: 90 },
+    (_, index) => `${String(index + 1).padStart(3, "0")} ${"long line ".repeat(20)}`
+  ).join("\n");
+  await editor.fill(content);
+  await editor.evaluate(element => {
+    element.scrollTop = element.scrollHeight;
+    element.scrollLeft = element.scrollWidth;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  await expect.poll(() => page.locator(".code-editor").evaluate(container => {
+    const textarea = container.querySelector("textarea")!;
+    const overlay = container.querySelector("pre")!;
+    const gutter = container.querySelector<HTMLElement>(".line-numbers")!;
+    return {
+      heightsMatch: overlay.clientHeight === textarea.clientHeight
+        && gutter.clientHeight === textarea.clientHeight,
+      verticalScrollMatches: Math.abs(overlay.scrollTop - textarea.scrollTop) < 1
+        && Math.abs(gutter.scrollTop - textarea.scrollTop) < 1,
+      horizontalScrollMatches: Math.abs(overlay.scrollLeft - textarea.scrollLeft) < 1
+    };
+  })).toEqual({
+    heightsMatch: true,
+    verticalScrollMatches: true,
+    horizontalScrollMatches: true
+  });
+});
+
 test("empty rich-text conversion skips preview and disables language", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");

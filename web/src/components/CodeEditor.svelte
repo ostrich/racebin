@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { highlightedCode, normalizeLanguage } from "../highlighting";
 
   let {
@@ -25,14 +26,25 @@
     if (current !== revision) return;
     html = `${result.html}\n`;
     if (requested === "auto" && result.language) language = result.language;
+    requestAnimationFrame(syncScroll);
   }
 
   function syncScroll(): void {
     if (!textarea || !pre || !gutter) return;
+    pre.style.width = `${textarea.clientWidth}px`;
+    pre.style.height = `${textarea.clientHeight}px`;
+    gutter.style.height = `${textarea.clientHeight}px`;
     pre.scrollTop = textarea.scrollTop;
     pre.scrollLeft = textarea.scrollLeft;
     gutter.scrollTop = textarea.scrollTop;
   }
+
+  onMount(() => {
+    const observer = new ResizeObserver(syncScroll);
+    observer.observe(textarea);
+    syncScroll();
+    return () => observer.disconnect();
+  });
 
   $effect(() => { void render(value, language); });
 </script>
