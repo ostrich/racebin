@@ -255,7 +255,9 @@ export function connectLanguagePicker(
     input.select();
     open();
   });
-  input.addEventListener("input", () => open(input.value));
+  input.addEventListener("input", () => {
+    if (document.activeElement === input) open(input.value);
+  });
   input.addEventListener("blur", () => window.setTimeout(close, 100));
   input.addEventListener("keydown", event => {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -306,14 +308,18 @@ function escapeHtml(code: string): string {
 export async function highlightedCode(
   code: string,
   syntax: string
-): Promise<{ html: string; language?: string }> {
+): Promise<{ html: string; language?: string; relevance?: number }> {
   const language = normalizeSyntax(syntax) ?? "none";
   if (language === "none" || code.length > MAX_HIGHLIGHT_LENGTH) {
     return { html: escapeHtml(code) };
   }
   if (language === "auto") {
     const result = hljs.highlightAuto(code, commonIds);
-    return { html: result.value, language: result.language };
+    return {
+      html: result.value,
+      language: result.language,
+      relevance: result.relevance
+    };
   }
   if (!(await ensureLanguage(language))) {
     return { html: escapeHtml(code) };
@@ -345,15 +351,21 @@ export function connectHighlightedEditor(
   language: HTMLInputElement
 ): void {
   let revision = 0;
-  const render = async () => {
-    const current = ++revision;
-    const result = await highlightedCode(textarea.value, language.value);
-    if (current !== revision) return;
-    output.innerHTML = `${result.html}\n`;
-  };
   const syncScroll = () => {
     output.parentElement!.scrollTop = textarea.scrollTop;
     output.parentElement!.scrollLeft = textarea.scrollLeft;
+  };
+  const render = async () => {
+    const current = ++revision;
+    const requestedSyntax = normalizeSyntax(language.value);
+    const result = await highlightedCode(textarea.value, language.value);
+    if (current !== revision) return;
+    output.innerHTML = `${result.html}\n`;
+    syncScroll();
+    if (requestedSyntax === "auto" && result.language) {
+      language.value = result.language;
+      language.dispatchEvent(new Event("input", { bubbles: true }));
+    }
   };
   textarea.addEventListener("input", () => void render());
   textarea.addEventListener("scroll", syncScroll);
