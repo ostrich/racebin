@@ -13,7 +13,7 @@ impl Drop for UploadCleanup {
     }
 }
 
-pub(super) fn attachment_path(data_dir: &Path, slug: &str, name: &str) -> Result<PathBuf, String> {
+pub(crate) fn attachment_path(data_dir: &Path, slug: &str, name: &str) -> Result<PathBuf, String> {
     let safe_component = |value: &str| {
         let mut components = Path::new(value).components();
         matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
@@ -24,7 +24,7 @@ pub(super) fn attachment_path(data_dir: &Path, slug: &str, name: &str) -> Result
     Ok(data_dir.join("attachments").join(slug).join(name))
 }
 
-pub(super) fn sanitize_upload_filename(value: &str) -> String {
+pub(crate) fn sanitize_upload_filename(value: &str) -> String {
     let basename = value.rsplit(['/', '\\']).next().unwrap_or("");
     let mut sanitized = String::with_capacity(basename.len().min(255));
     for character in basename.chars() {

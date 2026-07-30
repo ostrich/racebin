@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 mod backend;
 mod concurrency;
 mod copy;
+mod http;
 mod migration;
 mod runners;
 

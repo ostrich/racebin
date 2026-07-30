@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use super::{attachment_path, configure, sanitize_upload_filename};
     use crate::account::{self as accounts, api_keys};
+    use crate::http::configure;
+    use crate::http::files::{attachment_path, sanitize_upload_filename};
     use crate::repository::Repository;
     use crate::services::{now, PasteInput, Principal, Services};
     use actix_web::{http::StatusCode, test, web, App};

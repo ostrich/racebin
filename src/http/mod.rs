@@ -22,7 +22,7 @@ mod assets;
 mod auth;
 mod cookies;
 mod errors;
-mod files;
+pub(crate) mod files;
 mod keys;
 mod meta;
 mod pastes;
@@ -32,9 +32,6 @@ mod pastes;
 struct EnabledInput {
     enabled: bool,
 }
-
-#[cfg(test)]
-use files::{attachment_path, sanitize_upload_filename};
 
 pub fn configure(config: &mut web::ServiceConfig) {
     config
@@ -76,5 +73,3 @@ pub fn configure(config: &mut web::ServiceConfig) {
         .service(web::resource("/assets/{path:.*}").route(web::get().to(assets::asset)))
         .default_service(web::route().to(assets::spa));
 }
-
-include!("tests.rs");
