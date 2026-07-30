@@ -1,12 +1,15 @@
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
+use serde_json::Value;
+use sqlx::any::AnyRow;
+use sqlx::{FromRow, Row};
 
-#[derive(Clone, Debug, Serialize, FromRow)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Paste {
     pub id: String,
     pub owner_id: Option<i64>,
     pub title: String,
     pub content: String,
+    pub document: Option<Value>,
     pub content_kind: String,
     pub language: String,
     pub visibility: String,
@@ -15,8 +18,32 @@ pub struct Paste {
     pub last_read_at: Option<i64>,
     pub read_count: i64,
     pub read_limit: Option<i64>,
-    #[sqlx(skip)]
     pub attachments: Vec<Attachment>,
+}
+
+impl<'r> FromRow<'r, AnyRow> for Paste {
+    fn from_row(row: &'r AnyRow) -> Result<Self, sqlx::Error> {
+        let document_json: Option<String> = row.try_get("document_json")?;
+        Ok(Self {
+            id: row.try_get("id")?,
+            owner_id: row.try_get("owner_id")?,
+            title: row.try_get("title")?,
+            content: row.try_get("content")?,
+            document: document_json
+                .map(|value| serde_json::from_str(&value))
+                .transpose()
+                .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+            content_kind: row.try_get("content_kind")?,
+            language: row.try_get("language")?,
+            visibility: row.try_get("visibility")?,
+            created_at: row.try_get("created_at")?,
+            expires_at: row.try_get("expires_at")?,
+            last_read_at: row.try_get("last_read_at")?,
+            read_count: row.try_get("read_count")?,
+            read_limit: row.try_get("read_limit")?,
+            attachments: Vec::new(),
+        })
+    }
 }
 
 #[derive(Clone, Debug, Serialize, FromRow)]
@@ -35,6 +62,7 @@ pub struct Attachment {
 pub struct PasteInput {
     pub title: Option<String>,
     pub content: Option<String>,
+    pub document: Option<Value>,
     pub content_kind: Option<String>,
     pub language: Option<String>,
     pub visibility: Option<String>,

@@ -48,6 +48,10 @@ pub(super) fn paste_error(message: String) -> HttpResponse {
         "Visibility must",
         "Read limit",
         "URL content",
+        "Rich-text",
+        "Only rich-text",
+        "Unsupported rich-text",
+        "Every rich-text",
     ]
     .iter()
     .any(|prefix| message.starts_with(prefix))

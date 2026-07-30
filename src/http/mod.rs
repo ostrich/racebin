@@ -1,6 +1,8 @@
 use crate::account::{self as accounts, api_keys};
 use crate::args::ARGS;
-use crate::services::{PasteInput, PasteQuery, PasteService, Principal};
+use crate::services::{
+    text_to_document, validate_document, PasteInput, PasteQuery, PasteService, Principal,
+};
 use actix_files::NamedFile;
 use actix_multipart::Multipart;
 use actix_web::cookie::{Cookie, SameSite};
@@ -9,7 +11,7 @@ use actix_web::{delete, get, patch, post, web, HttpRequest, HttpResponse, Respon
 use auth::{principal, require_admin, require_auth, require_mutation};
 use errors::{error, internal, paste_error};
 use futures::{StreamExt, TryStreamExt};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::io::{Cursor, Write};
 use std::path::{Component, Path, PathBuf};

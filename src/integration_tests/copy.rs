@@ -15,6 +15,14 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     .await
     .unwrap();
     sqlx::query(
+        "INSERT INTO pastes(id,owner_id,title,content,document_json,content_kind,language,visibility,created_at,read_count,read_limit)
+         VALUES('copied-rich',42,'script','ADA\nHello.',$1,'rich_text','plaintext','private',1,0,NULL)",
+    )
+    .bind(r#"{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"ADA"},{"type":"hardBreak"},{"type":"text","text":"Hello."}]}]}"#)
+    .execute(source.pool())
+    .await
+    .unwrap();
+    sqlx::query(
         "INSERT INTO sessions(id,user_id,token_hash,csrf_token,created_at,expires_at,last_used_at)
          VALUES(60,42,'session-hash','csrf',1,9999999999,1)",
     )
@@ -72,8 +80,14 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
             .fetch_one(destination.pool())
             .await
             .unwrap();
-        assert_eq!(count, 1, "{table}");
+        assert_eq!(count, if table == "pastes" { 2 } else { 1 }, "{table}");
     }
+    let rich_document: String =
+        sqlx::query_scalar("SELECT document_json FROM pastes WHERE id='copied-rich'")
+            .fetch_one(destination.pool())
+            .await
+            .unwrap();
+    assert!(rich_document.contains("\"hardBreak\""));
     let next_user: i64 = sqlx::query_scalar(
         "INSERT INTO users(username,password_hash,role,created_at)
          VALUES('after-copy','hash','user',1) RETURNING id",

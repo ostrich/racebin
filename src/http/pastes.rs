@@ -4,11 +4,82 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
     config
         .service(list_pastes)
         .service(create_paste)
+        .service(convert_paste_content)
         .service(consume_paste)
         .service(get_paste)
         .service(update_paste)
         .service(delete_paste)
         .service(raw_paste);
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ConversionInput {
+    source_kind: String,
+    target_kind: String,
+    content: Option<String>,
+    document: Option<serde_json::Value>,
+}
+
+#[derive(Serialize)]
+struct ConversionOutput {
+    content: String,
+    document: Option<serde_json::Value>,
+}
+
+#[post("/pastes/convert")]
+async fn convert_paste_content(
+    req: HttpRequest,
+    services: web::Data<PasteService>,
+    body: web::Json<ConversionInput>,
+) -> HttpResponse {
+    if let Err(response) = principal(&services, &req)
+        .await
+        .and_then(|principal| require_mutation(&services, &req, principal))
+    {
+        return response;
+    }
+    let result = match (body.source_kind.as_str(), body.target_kind.as_str()) {
+        ("text", "rich_text") => {
+            let content = body.content.as_deref().unwrap_or("");
+            let document = text_to_document(content);
+            Ok(ConversionOutput {
+                content: content.to_string(),
+                document: Some(document),
+            })
+        }
+        ("rich_text", "text") => {
+            let document = body
+                .document
+                .as_ref()
+                .ok_or_else(|| "Rich-text conversion requires a document".to_string());
+            document.and_then(|document| {
+                validate_document(document).map(|content| ConversionOutput {
+                    content,
+                    document: None,
+                })
+            })
+        }
+        (source, target) if source == target && source == "text" => Ok(ConversionOutput {
+            content: body.content.clone().unwrap_or_default(),
+            document: None,
+        }),
+        (source, target) if source == target && source == "rich_text" => body
+            .document
+            .as_ref()
+            .ok_or_else(|| "Rich-text conversion requires a document".to_string())
+            .and_then(|document| {
+                validate_document(document).map(|content| ConversionOutput {
+                    content,
+                    document: Some(document.clone()),
+                })
+            }),
+        _ => Err("Conversion supports only text and rich_text".to_string()),
+    };
+    match result {
+        Ok(output) => HttpResponse::Ok().json(output),
+        Err(message) => error(StatusCode::BAD_REQUEST, "invalid_conversion", message),
+    }
 }
 
 #[get("/pastes")]

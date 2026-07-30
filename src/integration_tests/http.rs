@@ -81,6 +81,7 @@ mod tests {
         let input = |title: &str, visibility: &str| PasteInput {
             title: Some(title.to_string()),
             content: Some(format!("{title} content")),
+            document: None,
             content_kind: Some("text".to_string()),
             language: Some("plaintext".to_string()),
             visibility: Some(visibility.to_string()),
@@ -151,6 +152,44 @@ mod tests {
         let cookie = login.response().cookies().next().unwrap().into_owned();
         let login_body: Value = test::read_body_json(login).await;
         let csrf = login_body["csrf_token"].as_str().unwrap().to_string();
+
+        let converted = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v2/pastes/convert")
+                .cookie(cookie.clone())
+                .insert_header(("X-CSRF-Token", csrf.as_str()))
+                .set_json(json!({
+                    "source_kind":"text",
+                    "target_kind":"rich_text",
+                    "content":"INT. LAB - NIGHT\n\nADA\nWe should go.",
+                    "document":null
+                }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(converted.status(), StatusCode::OK);
+        let converted: Value = test::read_body_json(converted).await;
+        assert_eq!(converted["document"]["type"], "doc");
+        assert_eq!(
+            converted["content"],
+            "INT. LAB - NIGHT\n\nADA\nWe should go."
+        );
+
+        let unsafe_document = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v2/pastes")
+                .cookie(cookie.clone())
+                .insert_header(("X-CSRF-Token", csrf.as_str()))
+                .set_json(json!({
+                    "content_kind":"rich_text",
+                    "document":{"type":"doc","content":[{"type":"script"}]}
+                }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(unsafe_document.status(), StatusCode::BAD_REQUEST);
 
         let without_csrf = test::call_service(
             &app,

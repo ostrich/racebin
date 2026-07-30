@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 use super::model::{Attachment, Page, Paste, PasteInput, PasteQuery};
+use super::rich_text::validate_document;
 use super::validation::{authorize_owner, can_read, validate_input, validate_url};
 use crate::time::unix_timestamp;
 
@@ -78,7 +79,7 @@ impl PasteService {
             .await
             .map_err(|e| e.to_string())?;
         let items = sqlx::query_as::<_, Paste>(&format!(
-            "SELECT id,owner_id,title,substr(content,1,500) AS content,
+            "SELECT id,owner_id,title,substr(content,1,500) AS content,NULL AS document_json,
                     content_kind,language,visibility,created_at,expires_at,last_read_at,read_count,read_limit
              FROM pastes WHERE {filter} ORDER BY created_at DESC LIMIT $7 OFFSET $8"
         ))
@@ -114,7 +115,7 @@ impl PasteService {
 
     async fn find_paste(&self, id: &str) -> Result<Option<Paste>, String> {
         let mut paste = sqlx::query_as::<_, Paste>(
-            "SELECT id,owner_id,title,content,content_kind,language,visibility,created_at,
+            "SELECT id,owner_id,title,content,document_json,content_kind,language,visibility,created_at,
                     expires_at,last_read_at,read_count,read_limit
              FROM pastes WHERE id=$1 AND (expires_at IS NULL OR expires_at>$2)",
         )
@@ -147,7 +148,7 @@ impl PasteService {
             ""
         };
         let mut paste = sqlx::query_as::<_, Paste>(&format!(
-            "SELECT id,owner_id,title,content,content_kind,language,visibility,created_at,
+            "SELECT id,owner_id,title,content,document_json,content_kind,language,visibility,created_at,
                     expires_at,last_read_at,read_count,read_limit
              FROM pastes WHERE id=$1 AND (expires_at IS NULL OR expires_at>$2){lock}"
         ))
@@ -208,18 +209,25 @@ impl PasteService {
             return Err("Missing paste:write scope".into());
         }
         validate_input(input, true)?;
+        let content_kind = input.content_kind.as_deref().unwrap_or("text");
+        let (content, document_json) = normalized_content(
+            content_kind,
+            input.content.as_deref().unwrap_or(""),
+            input.document.as_ref(),
+        )?;
         let now = unix_timestamp();
         let id = Uuid::new_v4().simple().to_string()[..24].to_string();
         sqlx::query(
-            "INSERT INTO pastes(id,owner_id,title,content,content_kind,language,visibility,created_at,
-                               expires_at,last_read_at,read_count,read_limit)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$8,0,$10)",
+            "INSERT INTO pastes(id,owner_id,title,content,document_json,content_kind,language,visibility,
+                               created_at,expires_at,last_read_at,read_count,read_limit)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$9,0,$11)",
         )
         .bind(&id)
         .bind(owner)
         .bind(input.title.as_deref().unwrap_or("").trim())
-        .bind(input.content.as_deref().unwrap_or(""))
-        .bind(input.content_kind.as_deref().unwrap_or("text"))
+        .bind(content)
+        .bind(document_json)
+        .bind(content_kind)
         .bind(input.language.as_deref().unwrap_or("plaintext"))
         .bind(input.visibility.as_deref().unwrap_or("unlisted"))
         .bind(now)
@@ -245,23 +253,30 @@ impl PasteService {
             None => return Ok(None),
         };
         authorize_owner(principal, &current, "paste:write")?;
-        validate_url(
-            input
-                .content_kind
-                .as_deref()
-                .unwrap_or(&current.content_kind),
-            input.content.as_deref().unwrap_or(&current.content),
-        )?;
+        let content_kind = input
+            .content_kind
+            .as_deref()
+            .unwrap_or(&current.content_kind);
+        let requested_content = input.content.as_deref().unwrap_or(&current.content);
+        let requested_document = if content_kind == "rich_text" {
+            input.document.as_ref().or(current.document.as_ref())
+        } else {
+            input.document.as_ref()
+        };
+        let (content, document_json) =
+            normalized_content(content_kind, requested_content, requested_document)?;
+        validate_url(content_kind, &content)?;
         sqlx::query(
-            "UPDATE pastes SET title=coalesce($2,title),content=coalesce($3,content),
-             content_kind=coalesce($4,content_kind),language=coalesce($5,language),visibility=coalesce($6,visibility),
-             expires_at=CASE WHEN $7=1 THEN $8 ELSE expires_at END,
-             read_limit=CASE WHEN $9=1 THEN $10 ELSE read_limit END WHERE id=$1",
+            "UPDATE pastes SET title=coalesce($2,title),content=$3,document_json=$4,
+             content_kind=$5,language=coalesce($6,language),visibility=coalesce($7,visibility),
+             expires_at=CASE WHEN $8=1 THEN $9 ELSE expires_at END,
+             read_limit=CASE WHEN $10=1 THEN $11 ELSE read_limit END WHERE id=$1",
         )
         .bind(id)
         .bind(input.title.as_deref().map(str::trim))
-        .bind(input.content.as_deref())
-        .bind(input.content_kind.as_deref())
+        .bind(content)
+        .bind(document_json)
+        .bind(content_kind)
         .bind(input.language.as_deref())
         .bind(input.visibility.as_deref())
         .bind(i64::from(input.expires_at.is_some()))
@@ -442,6 +457,25 @@ impl PasteService {
     }
 }
 
+fn normalized_content(
+    content_kind: &str,
+    content: &str,
+    document: Option<&serde_json::Value>,
+) -> Result<(String, Option<String>), String> {
+    if content_kind == "rich_text" {
+        let document = document.ok_or("Rich-text pastes require a document")?;
+        let content = validate_document(document)
+            .map_err(|error| format!("Rich-text document is invalid: {error}"))?;
+        let document_json = serde_json::to_string(document).map_err(|error| error.to_string())?;
+        Ok((content, Some(document_json)))
+    } else {
+        if document.is_some() {
+            return Err("Only rich-text pastes accept a document".into());
+        }
+        Ok((content.to_string(), None))
+    }
+}
+
 async fn load_attachments_from<'e, E>(
     executor: E,
     paste_id: &str,
@@ -481,6 +515,7 @@ mod tests {
             owner_id: Some(7),
             title: String::new(),
             content: "secret".to_string(),
+            document: None,
             content_kind: "text".to_string(),
             language: "plaintext".to_string(),
             visibility: "private".to_string(),

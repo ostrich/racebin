@@ -38,9 +38,9 @@ pub(super) fn validate_input(input: &PasteInput, creating: bool) -> Result<(), S
     if input
         .content_kind
         .as_deref()
-        .is_some_and(|value| !matches!(value, "text" | "redirect"))
+        .is_some_and(|value| !matches!(value, "text" | "rich_text" | "redirect"))
     {
-        return Err("Content kind must be text or redirect".into());
+        return Err("Content kind must be text, rich_text, or redirect".into());
     }
     if input
         .visibility

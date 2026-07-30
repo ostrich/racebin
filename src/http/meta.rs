@@ -37,6 +37,7 @@ async fn get_openapi() -> impl Responder {
           "get":{"summary":"List visible pastes"},
           "post":{"summary":"Create a paste"}
         },
+        "/pastes/convert":{"post":{"summary":"Convert text and rich-text content"}},
         "/pastes/{paste_id}":{
           "get":{"summary":"Get paste metadata and content without consuming a read"},
           "patch":{"summary":"Update a paste"},

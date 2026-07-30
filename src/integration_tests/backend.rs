@@ -112,6 +112,7 @@ pub(super) async fn backend_contract(repo: Repository) {
     let update = PasteInput {
         title: Some("updated title".to_string()),
         content: None,
+        document: None,
         content_kind: None,
         language: None,
         visibility: None,
@@ -139,6 +140,45 @@ pub(super) async fn backend_contract(repo: Repository) {
         .await
         .unwrap();
     assert_eq!(search.items.len(), 1);
+
+    let script_document = serde_json::json!({
+        "type": "doc",
+        "content": [
+            {"type":"heading","attrs":{"level":1,"textAlign":"center"},"content":[
+                {"type":"text","text":"The Test Episode","marks":[{"type":"bold"}]}
+            ]},
+            {"type":"paragraph","content":[
+                {"type":"text","text":"INT. LAB - NIGHT"},
+                {"type":"hardBreak"},
+                {"type":"text","text":"ADA: The conversion works.","marks":[{"type":"italic"}]}
+            ]}
+        ]
+    });
+    let rich_input = PasteInput {
+        title: Some("Rich script".into()),
+        content: None,
+        document: Some(script_document.clone()),
+        content_kind: Some("rich_text".into()),
+        language: Some("plaintext".into()),
+        visibility: Some("public".into()),
+        expires_at: None,
+        read_limit: None,
+    };
+    let rich = services.create_paste(&owner, &rich_input).await.unwrap();
+    assert_eq!(rich.document, Some(script_document));
+    assert!(rich.content.contains("ADA: The conversion works."));
+    let rich_search = services
+        .list_pastes(
+            &anonymous,
+            &PasteQuery {
+                search: Some("conversion works".into()),
+                ..PasteQuery::default()
+            },
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(rich_search.items.len(), 1);
 
     for index in 0..35 {
         services

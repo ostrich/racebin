@@ -68,6 +68,7 @@ fn paste_input(title: &str, visibility: &str) -> PasteInput {
     PasteInput {
         title: Some(title.to_string()),
         content: Some(format!("content for {title}")),
+        document: None,
         content_kind: Some("text".to_string()),
         language: Some("plaintext".to_string()),
         visibility: Some(visibility.to_string()),
