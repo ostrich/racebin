@@ -16,10 +16,6 @@ pkgbase = racebin-git
 	options = !lto
 	backup = etc/racebin.conf
 	source = racebin::git+https://github.com/ostrich/racebin.git#branch=master
-	source = racebin.service
-	source = racebin.conf
 	sha256sums = SKIP
-	sha256sums = 6d5a12e7901dd49fa8ee02db20feba855d0cdc3707af53f4ef601b52daa89847
-	sha256sums = 6f0345a4f747c097d263f5094dcf62cd5a62fd4c1474e488826ad862247a7f07
 
 pkgname = racebin-git

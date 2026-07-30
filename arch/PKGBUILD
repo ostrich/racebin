@@ -12,12 +12,8 @@ provides=('racebin')
 conflicts=('racebin')
 backup=('etc/racebin.conf')
 options=(!lto)
-source=("racebin::git+https://github.com/ostrich/racebin.git#branch=master"
-        "racebin.service"
-        "racebin.conf")
-sha256sums=('SKIP'
-            '6d5a12e7901dd49fa8ee02db20feba855d0cdc3707af53f4ef601b52daa89847'
-            '6f0345a4f747c097d263f5094dcf62cd5a62fd4c1474e488826ad862247a7f07')
+source=("racebin::git+https://github.com/ostrich/racebin.git#branch=master")
+sha256sums=('SKIP')
 
 pkgver() {
     cd "$srcdir/racebin"
@@ -43,7 +39,7 @@ package() {
         "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
     install -Dm0644 LICENSE-BSD-3-Clause \
         "$pkgdir/usr/share/licenses/$pkgname/LICENSE-BSD-3-Clause"
-    install -Dm0644 "$srcdir/racebin.service" \
+    install -Dm0644 packaging/racebin.service \
         "$pkgdir/usr/lib/systemd/system/racebin.service"
-    install -Dm0644 "$srcdir/racebin.conf" "$pkgdir/etc/racebin.conf"
+    install -Dm0644 packaging/racebin.conf.example "$pkgdir/etc/racebin.conf"
 }
