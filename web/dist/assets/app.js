@@ -29,7 +29,7 @@ https://github.com/highlightjs/highlight.js/issues/2277`),te=p,G=T),L===void 0&&
     <section class="panel"><h2>API keys</h2><p class="muted">Tokens are shown once when created.</p>
       <div class="key-list">${e.length?e.map(t=>`<div class="key-row"><div><strong>${M(t.name)}</strong><code>rbk_${M(t.prefix)}_...</code><small>${M(t.scopes)}</small></div><label class="switch"><input type="checkbox" data-key="${t.id}" ${t.enabled?"checked":""}><span></span></label>${ct("trash-2","Delete API key")}<input type="hidden" value="${t.id}"></div>`).join(""):'<p class="empty compact">No API keys.</p>'}</div>
       <form id="key-form" class="key-form"><label><span>Name</span><input name="name" required maxlength="100"></label>
-      <fieldset><legend>Scopes</legend>${["paste:read","paste:write","paste:delete","paste:list"].map(t=>`<label class="check"><input type="checkbox" name="scopes" value="${t}"><span>${t}</span></label>`).join("")}</fieldset>
+      <fieldset><legend>Scopes</legend><div class="scope-options">${["paste:read","paste:write","paste:delete","paste:list"].map(t=>`<label class="check"><input type="checkbox" name="scopes" value="${t}"><span>${t}</span></label>`).join("")}</div></fieldset>
       <button class="button primary" type="submit"><i data-icon="key-round"></i> Create key</button></form>
     </section></section>`)}function ui(){if(!Z.session.user)return ge("/login");be(`<section class="auth"><form id="password-form"><p class="eyebrow">Security</p><h1>Change password</h1>
     <label><span>Current password</span><input type="password" name="current_password" autocomplete="current-password" required></label>

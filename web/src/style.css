@@ -68,3 +68,19 @@
   .hljs-addition{color:#aff5b4;background:#033a16}
   .hljs-deletion{color:#ffdcd7;background:#67060c}
 }
+
+.key-form{grid-template-columns:minmax(0,1fr) auto}
+.key-form>button{grid-column:2;grid-row:1}
+.key-form fieldset{grid-column:1/-1;display:block;margin:0;padding:0;border:0}
+.scope-options{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.scope-options .check{min-height:42px;padding:10px 12px;border:1px solid var(--line);border-radius:5px;background:#f7f8f9;cursor:pointer}
+.scope-options .check span{font-size:13px}
+.scope-options input{accent-color:var(--accent)}
+@media(max-width:760px){
+  .key-form{grid-template-columns:1fr}
+  .key-form>button{grid-column:1;grid-row:auto}
+  .key-form fieldset{grid-column:1}
+  .scope-options{grid-template-columns:1fr 1fr}
+}
+@media(max-width:430px){.scope-options{grid-template-columns:1fr}}
+@media(prefers-color-scheme:dark){.scope-options .check{background:#111619}}
