@@ -4,8 +4,8 @@ use log::LevelFilter;
 
 use crate::args::ARGS;
 
-pub mod api_v2;
 pub mod args;
+pub mod http;
 #[cfg(test)]
 mod integration_tests;
 pub mod repository;
@@ -89,7 +89,7 @@ async fn main() -> std::io::Result<()> {
             )
             .wrap(middleware::NormalizePath::trim())
             .wrap(middleware::Logger::default())
-            .configure(api_v2::configure)
+            .configure(http::configure)
     })
     .bind((ARGS.bind, ARGS.port))?
     .workers(ARGS.threads as usize)

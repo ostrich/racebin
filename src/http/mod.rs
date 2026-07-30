@@ -4,8 +4,10 @@ use crate::util::{accounts, api_keys};
 use actix_files::NamedFile;
 use actix_multipart::Multipart;
 use actix_web::cookie::{Cookie, SameSite};
-use actix_web::http::{header, Method, StatusCode};
+use actix_web::http::{header, StatusCode};
 use actix_web::{delete, get, patch, post, web, HttpRequest, HttpResponse, Responder};
+use auth::{principal, require_admin, require_auth, require_mutation};
+use errors::{error, internal, paste_error};
 use futures::{StreamExt, TryStreamExt};
 use serde::Deserialize;
 use serde_json::json;
@@ -14,9 +16,9 @@ use std::path::{Component, Path, PathBuf};
 use tokio::io::AsyncWriteExt;
 use zip::write::SimpleFileOptions;
 
-const SPA_INDEX: &[u8] = include_bytes!("../web/dist/index.html");
-const SPA_SCRIPT: &[u8] = include_bytes!("../web/dist/assets/app.js");
-const SPA_STYLE: &[u8] = include_bytes!("../web/dist/assets/app.css");
+mod assets;
+mod auth;
+mod errors;
 
 #[derive(Default)]
 struct UploadCleanup {
@@ -28,59 +30,6 @@ impl Drop for UploadCleanup {
         for path in &self.paths {
             let _ = std::fs::remove_file(path);
         }
-    }
-}
-
-#[derive(serde::Serialize)]
-struct ErrorEnvelope {
-    error: ErrorBody,
-}
-
-#[derive(serde::Serialize)]
-struct ErrorBody {
-    code: &'static str,
-    message: String,
-    details: Option<serde_json::Value>,
-}
-
-fn error(status: StatusCode, code: &'static str, message: impl Into<String>) -> HttpResponse {
-    HttpResponse::build(status)
-        .insert_header((header::CACHE_CONTROL, "no-store"))
-        .json(ErrorEnvelope {
-            error: ErrorBody {
-                code,
-                message: message.into(),
-                details: None,
-            },
-        })
-}
-
-fn internal(message: impl Into<String>) -> HttpResponse {
-    log::error!("{}", message.into());
-    error(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "internal_error",
-        "Internal server error",
-    )
-}
-
-fn paste_error(message: String) -> HttpResponse {
-    if message.starts_with("Missing ") || message == "You do not own this paste" {
-        error(StatusCode::FORBIDDEN, "forbidden", message)
-    } else if [
-        "Content is required",
-        "Title exceeds",
-        "Kind must",
-        "Access must",
-        "Burn count",
-        "URL content",
-    ]
-    .iter()
-    .any(|prefix| message.starts_with(prefix))
-    {
-        error(StatusCode::BAD_REQUEST, "invalid_paste", message)
-    } else {
-        internal(message)
     }
 }
 
@@ -112,58 +61,6 @@ fn sanitize_upload_filename(value: &str) -> String {
     sanitized
         .trim_matches(|character: char| character == '.' || character.is_whitespace())
         .to_string()
-}
-
-async fn principal(services: &Services, req: &HttpRequest) -> Result<Principal, HttpResponse> {
-    services.principal(req).await.map_err(|message| {
-        if message == "Password change required" {
-            error(StatusCode::FORBIDDEN, "password_change_required", message)
-        } else if message.contains("authorization") || message.contains("bearer") {
-            error(StatusCode::UNAUTHORIZED, "invalid_token", message)
-        } else {
-            internal(message)
-        }
-    })
-}
-
-fn require_auth(value: Principal) -> Result<Principal, HttpResponse> {
-    if matches!(value, Principal::Anonymous) {
-        Err(error(
-            StatusCode::UNAUTHORIZED,
-            "authentication_required",
-            "Authentication required",
-        ))
-    } else {
-        Ok(value)
-    }
-}
-
-fn require_mutation(
-    services: &Services,
-    req: &HttpRequest,
-    value: Principal,
-) -> Result<Principal, HttpResponse> {
-    let value = require_auth(value)?;
-    if !services.csrf_valid(req, &value) {
-        return Err(error(
-            StatusCode::FORBIDDEN,
-            "csrf_failed",
-            "Missing or invalid CSRF token",
-        ));
-    }
-    Ok(value)
-}
-
-fn require_admin(value: &Principal, scope: &str) -> Result<(), HttpResponse> {
-    if value.can(scope) {
-        Ok(())
-    } else {
-        Err(error(
-            StatusCode::FORBIDDEN,
-            "forbidden",
-            format!("Missing {scope} permission"),
-        ))
-    }
 }
 
 pub fn configure(config: &mut web::ServiceConfig) {
@@ -229,8 +126,8 @@ pub fn configure(config: &mut web::ServiceConfig) {
                 .service(admin_update_key)
                 .service(admin_delete_key),
         )
-        .service(web::resource("/assets/{path:.*}").route(web::get().to(asset)))
-        .default_service(web::route().to(spa));
+        .service(web::resource("/assets/{path:.*}").route(web::get().to(assets::asset)))
+        .default_service(web::route().to(assets::spa));
 }
 
 #[get("/openapi.json")]
@@ -1311,54 +1208,6 @@ async fn admin_delete_key(
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "API key not found"),
         Err(e) => internal(e),
     }
-}
-
-async fn asset(path: web::Path<String>) -> HttpResponse {
-    let asset = match path.as_str() {
-        "app.js" => Some((SPA_SCRIPT, "text/javascript; charset=utf-8")),
-        "app.css" => Some((SPA_STYLE, "text/css; charset=utf-8")),
-        _ => None,
-    };
-    match asset {
-        Some((bytes, content_type)) => HttpResponse::Ok()
-            .insert_header((header::CONTENT_TYPE, content_type))
-            .insert_header((header::CACHE_CONTROL, "public, max-age=31536000, immutable"))
-            .body(bytes),
-        None => HttpResponse::NotFound().finish(),
-    }
-}
-
-async fn spa(req: HttpRequest) -> HttpResponse {
-    if req.method() != Method::GET || req.path().starts_with("/api/") || !spa_route(req.path()) {
-        return error(StatusCode::NOT_FOUND, "not_found", "Route not found");
-    }
-    HttpResponse::Ok()
-        .insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"))
-        .insert_header((header::CACHE_CONTROL, "no-cache"))
-        .body(SPA_INDEX)
-}
-
-fn spa_route(path: &str) -> bool {
-    path == "/"
-        || matches!(
-            path,
-            "/explore"
-                | "/login"
-                | "/new"
-                | "/pastes"
-                | "/account"
-                | "/account/password"
-                | "/admin"
-                | "/admin/pastes"
-                | "/guide"
-        )
-        || path
-            .strip_prefix("/invite/")
-            .is_some_and(|v| !v.is_empty() && !v.contains('/'))
-        || path.strip_prefix("/pastes/").is_some_and(|v| {
-            let pieces: Vec<_> = v.split('/').collect();
-            pieces.len() == 1 || (pieces.len() == 2 && pieces[1] == "edit")
-        })
 }
 
 #[cfg(test)]
