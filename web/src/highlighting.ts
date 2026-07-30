@@ -345,15 +345,26 @@ export async function highlightElement(
   }
 }
 
+export function updateLineNumbers(gutter: HTMLElement, code: string): void {
+  const count = code.split("\n").length;
+  gutter.textContent = Array.from({ length: count }, (_, index) => index + 1).join("\n");
+  gutter.parentElement?.style.setProperty(
+    "--line-number-width",
+    `${Math.max(4, String(count).length + 2)}ch`
+  );
+}
+
 export function connectHighlightedEditor(
   textarea: HTMLTextAreaElement,
   output: HTMLElement,
-  language: HTMLInputElement
+  language: HTMLInputElement,
+  gutter: HTMLElement
 ): void {
   let revision = 0;
   const syncScroll = () => {
     output.parentElement!.scrollTop = textarea.scrollTop;
     output.parentElement!.scrollLeft = textarea.scrollLeft;
+    gutter.scrollTop = textarea.scrollTop;
   };
   const render = async () => {
     const current = ++revision;
@@ -361,6 +372,7 @@ export function connectHighlightedEditor(
     const result = await highlightedCode(textarea.value, language.value);
     if (current !== revision) return;
     output.innerHTML = `${result.html}\n`;
+    updateLineNumbers(gutter, textarea.value);
     syncScroll();
     if (requestedSyntax === "auto" && result.language) {
       language.value = result.language;

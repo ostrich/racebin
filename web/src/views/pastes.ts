@@ -4,7 +4,8 @@ import {
   connectLanguagePicker,
   highlightElement,
   languageMenu,
-  normalizeSyntax
+  normalizeSyntax,
+  updateLineNumbers
 } from "../highlighting";
 import { navigate } from "../router";
 import { state } from "../state";
@@ -75,12 +76,14 @@ export async function pasteView(slug: string): Promise<void> {
   layout(`<article class="paste-view">
     <div class="page-heading"><div><p class="eyebrow">${esc(paste.access)} · ${esc(paste.syntax)}</p><h1>${esc(title(paste))}</h1></div>
     <div class="actions"><a class="button" href="/api/v2/pastes/${esc(paste.slug)}/raw">Raw</a><button class="button" type="button" data-action="copy-content"><i data-icon="copy"></i> Copy</button>${paste.files.length ? `<a class="button" href="/api/v2/pastes/${esc(paste.slug)}/archive">ZIP</a>` : ""}${state.config.qr ? `<a class="button" href="/api/v2/pastes/${esc(paste.slug)}/qr">QR</a>` : ""}${own ? `<a class="button primary" href="/pastes/${esc(paste.slug)}/edit" data-link><i data-icon="edit-3"></i> Edit</a>` : ""}</div></div>
-    <pre class="content"><code id="paste-code">${esc(paste.content)}</code></pre>
+    <div class="paste-code"><div id="paste-lines" class="line-numbers" aria-hidden="true"></div><pre class="content"><code id="paste-code">${esc(paste.content)}</code></pre></div>
     ${paste.files.length ? `<section><h2>Files</h2><div class="files">${paste.files.map(file => `<div class="file-row" data-file-id="${file.id}" data-slug="${esc(paste.slug)}"><a href="/api/v2/pastes/${esc(paste.slug)}/files/${file.id}"><i data-icon="file-text"></i><span>${esc(file.name)}</span><small>${file.size.toLocaleString()} bytes</small></a>${own ? `<button class="icon-button" type="button" title="Delete file" aria-label="Delete file" data-action="delete-file"><i data-icon="trash-2"></i></button>` : ""}</div>`).join("")}</div></section>` : ""}
     <footer class="paste-stats"><span>Created ${date(paste.created)}</span><span>Expires ${date(paste.expiration)}</span><span>${paste.read_count} reads</span></footer>
   </article>`);
   const code = document.querySelector<HTMLElement>("#paste-code");
+  const lines = document.querySelector<HTMLElement>("#paste-lines");
   if (code) await highlightElement(code, paste.content, paste.syntax);
+  if (lines) updateLineNumbers(lines, paste.content);
 }
 
 export async function pasteForm(slug?: string): Promise<void> {
@@ -92,6 +95,7 @@ export async function pasteForm(slug?: string): Promise<void> {
     <form id="paste-form">
       <label class="title-field"><span>Title</span><input name="title" maxlength="200" value="${esc(paste?.title ?? "")}" placeholder="Optional title"></label>
       <label class="content-field"><span>Content</span><div class="code-editor">
+        <div id="editor-lines" class="line-numbers" aria-hidden="true"></div>
         <pre aria-hidden="true"><code id="editor-highlight" class="hljs"></code></pre>
         <textarea name="content" spellcheck="false" aria-label="Paste content">${esc(paste?.content ?? "")}</textarea>
       </div></label>
@@ -111,8 +115,11 @@ export async function pasteForm(slug?: string): Promise<void> {
     </form></section>`);
   const textarea = document.querySelector<HTMLTextAreaElement>('#paste-form textarea[name="content"]');
   const output = document.querySelector<HTMLElement>("#editor-highlight");
+  const lines = document.querySelector<HTMLElement>("#editor-lines");
   const language = document.querySelector<HTMLInputElement>("#syntax-input");
   const languageOptions = document.querySelector<HTMLElement>("#syntax-languages");
-  if (textarea && output && language) connectHighlightedEditor(textarea, output, language);
+  if (textarea && output && language && lines) {
+    connectHighlightedEditor(textarea, output, language, lines);
+  }
   if (language && languageOptions) connectLanguagePicker(language, languageOptions);
 }

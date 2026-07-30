@@ -18,14 +18,18 @@
 .language-options button:hover,.language-options button.active{background:#e9edef}
 .language-options button.selected{font-weight:700;color:var(--accent)}
 .language-options button small{margin:0;color:var(--muted);font-weight:400}
-.code-editor{position:relative;min-height:410px;border:1px solid #bfc6ce;border-radius:5px;overflow:hidden;background:#fff}
-.code-editor pre,.code-editor textarea{width:100%;min-height:410px;margin:0;padding:10px 11px;border:0;border-radius:0;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:inherit;line-height:1.55;tab-size:4;white-space:pre;overflow:auto}
+.line-numbers{user-select:none;-webkit-user-select:none;pointer-events:none;color:var(--muted);text-align:right;white-space:pre}
+.code-editor{--line-number-width:4ch;position:relative;min-height:410px;border:1px solid #bfc6ce;border-radius:5px;overflow:hidden;background:#fff}
+.code-editor pre,.code-editor textarea{width:100%;min-height:410px;margin:0;padding:10px 11px 10px calc(var(--line-number-width) + 16px);border:0;border-radius:0;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:inherit;line-height:1.55;tab-size:4;white-space:pre;overflow:auto}
 .code-editor pre{position:absolute;inset:0;pointer-events:none}
-.code-editor .hljs{font:inherit;line-height:inherit;white-space:inherit}
+.code-editor>.line-numbers{position:absolute;z-index:2;inset:0 auto 0 0;width:calc(var(--line-number-width) + 8px);padding:10px 8px;overflow:hidden;background:#f4f6f7;border-right:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:inherit;line-height:1.55}
+.code-editor .hljs,.paste-code .hljs{font:inherit;line-height:inherit;white-space:inherit}
 .editor .code-editor textarea{position:relative;z-index:1;display:block;background:transparent;color:transparent;caret-color:#20242a;resize:vertical}
 .editor .code-editor textarea::selection{background:rgba(50,115,220,.28);color:transparent}
 .editor .code-editor textarea:focus{outline:2px solid var(--accent);outline-offset:-2px}
-.paste-view .content{background:#fff;color:#24292e}
+.paste-code{display:grid;grid-template-columns:max-content minmax(0,1fr);overflow:auto;min-height:240px;border-radius:6px;background:#fff;color:#24292e;font:14px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace}
+.paste-code>.line-numbers{position:sticky;left:0;z-index:1;min-width:calc(var(--line-number-width) + 18px);padding:24px 12px;background:#f4f6f7;border-right:1px solid var(--line);font:inherit}
+.paste-view .paste-code .content{min-width:max-content;min-height:240px;margin:0;padding:24px;overflow:visible;border-radius:0;background:transparent;color:#24292e;font:inherit;white-space:pre}
 .paste-view .content .hljs,.code-editor .hljs{display:block;background:transparent;color:#24292e;padding:0}
 .hljs-doctag,.hljs-keyword,.hljs-meta .hljs-keyword,.hljs-template-tag,.hljs-template-variable,.hljs-type,.hljs-variable.language_{color:#d73a49}
 .hljs-title,.hljs-title.class_,.hljs-title.class_.inherited__,.hljs-title.function_{color:#6f42c1}
@@ -46,8 +50,10 @@
   .language-options button{color:#e8edf0}
   .language-options button:hover,.language-options button.active{background:#2b353b}
   .code-editor{background:#0d1117;border-color:#343d43}
+  .code-editor>.line-numbers,.paste-code>.line-numbers{background:#161b22}
   .editor .code-editor textarea{caret-color:#e8edf0}
-  .paste-view .content{background:#0d1117;color:#c9d1d9}
+  .paste-code{background:#0d1117;color:#c9d1d9}
+  .paste-view .paste-code .content{color:#c9d1d9}
   .paste-view .content .hljs,.code-editor .hljs{color:#c9d1d9}
   .hljs-doctag,.hljs-keyword,.hljs-meta .hljs-keyword,.hljs-template-tag,.hljs-template-variable,.hljs-type,.hljs-variable.language_{color:#ff7b72}
   .hljs-title,.hljs-title.class_,.hljs-title.class_.inherited__,.hljs-title.function_{color:#d2a8ff}
