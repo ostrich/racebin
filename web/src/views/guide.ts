@@ -1,0 +1,11 @@
+import { layout } from "../ui";
+
+export function guideView(): void {
+  layout(`<section><div class="page-heading"><div><p class="eyebrow">Reference</p><h1>API guide</h1></div><a class="button" href="/api/v2/openapi.json">OpenAPI JSON</a></div>
+    <section class="panel"><h2>Authentication</h2><p>Use <code>Authorization: Bearer rbk_…</code>. Browser requests use the secure session cookie and send <code>X-CSRF-Token</code> for mutations.</p>
+    <h2>Paste example</h2><pre class="content"><code>curl -H "Authorization: Bearer $RACEBIN_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"title":"Example","content":"Hello","syntax":"none","access":"unlisted"}' \\
+  https://example.com/api/v2/pastes</code></pre>
+    <p>All errors use <code>{"error":{"code":"…","message":"…"}}</code>. Timestamps are Unix seconds.</p></section></section>`);
+}
