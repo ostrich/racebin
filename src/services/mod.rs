@@ -1,11 +1,16 @@
 use crate::account::{self as accounts, api_keys};
 use crate::repository::Repository;
 use actix_web::HttpRequest;
-use serde::{Deserialize, Serialize};
-use sqlx::{Any, Executor, FromRow};
+use sqlx::{Any, Executor};
 use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
+
+mod model;
+mod validation;
+
+pub use model::{Page, Paste, PasteFile, PasteInput, PasteQuery};
+use validation::{authorize_owner, can_read, validate_input, validate_url};
 
 #[derive(Clone)]
 pub struct Services {
@@ -35,67 +40,6 @@ impl Principal {
     pub fn can(&self, scope: &str) -> bool {
         self.is_admin() || matches!(self, Self::Key(key) if key.has_scope(scope))
     }
-}
-
-#[derive(Clone, Debug, Serialize, FromRow)]
-pub struct Paste {
-    pub id: i64,
-    pub slug: String,
-    pub owner_user_id: Option<i64>,
-    pub title: String,
-    pub content: String,
-    pub kind: String,
-    pub syntax: String,
-    pub access: String,
-    pub created: i64,
-    pub expiration: Option<i64>,
-    pub last_read: Option<i64>,
-    pub read_count: i64,
-    pub burn_after_reads: i64,
-    #[sqlx(skip)]
-    pub files: Vec<PasteFile>,
-}
-
-#[derive(Clone, Debug, Serialize, FromRow)]
-pub struct PasteFile {
-    pub id: i64,
-    pub position: i64,
-    pub role: String,
-    pub name: String,
-    #[serde(skip)]
-    pub storage_name: String,
-    pub size: i64,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct PasteInput {
-    pub title: Option<String>,
-    pub content: Option<String>,
-    pub kind: Option<String>,
-    pub syntax: Option<String>,
-    pub access: Option<String>,
-    pub expiration: Option<Option<i64>>,
-    pub burn_after_reads: Option<i64>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct PasteQuery {
-    pub page: Option<u32>,
-    pub page_size: Option<u32>,
-    pub search: Option<String>,
-    pub access: Option<String>,
-    pub owner_user_id: Option<i64>,
-    pub mine: Option<bool>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Page<T> {
-    pub items: Vec<T>,
-    pub page: u32,
-    pub page_size: u32,
-    pub total: i64,
 }
 
 impl Services {
@@ -548,76 +492,6 @@ where
     .map_err(|e| e.to_string())
 }
 
-fn can_read(principal: &Principal, paste: &Paste) -> bool {
-    if paste.access != "owner" {
-        return true;
-    }
-    principal.can("paste:admin")
-        || match principal {
-            Principal::User(session) => Some(session.user.id) == paste.owner_user_id,
-            Principal::Key(key) => {
-                key.user_id == paste.owner_user_id && key.has_scope("paste:read")
-            }
-            Principal::Anonymous => false,
-        }
-}
-
-fn authorize_owner(principal: &Principal, paste: &Paste, scope: &str) -> Result<(), String> {
-    if principal.can("paste:admin")
-        || (principal.user_id() == paste.owner_user_id
-            && (matches!(principal, Principal::User(_)) || principal.can(scope)))
-    {
-        Ok(())
-    } else {
-        Err("You do not own this paste".into())
-    }
-}
-
-fn validate_input(input: &PasteInput, creating: bool) -> Result<(), String> {
-    if input
-        .title
-        .as_deref()
-        .is_some_and(|v| v.chars().count() > 200)
-    {
-        return Err("Title exceeds 200 characters".into());
-    }
-    if input
-        .kind
-        .as_deref()
-        .is_some_and(|v| !matches!(v, "text" | "url"))
-    {
-        return Err("Kind must be text or url".into());
-    }
-    if input
-        .access
-        .as_deref()
-        .is_some_and(|v| !matches!(v, "public" | "unlisted" | "owner"))
-    {
-        return Err("Access must be public, unlisted, or owner".into());
-    }
-    if input.burn_after_reads.is_some_and(|v| v < 0) {
-        return Err("Burn count cannot be negative".into());
-    }
-    if creating {
-        validate_url(
-            input.kind.as_deref().unwrap_or("text"),
-            input.content.as_deref().unwrap_or(""),
-        )?;
-    }
-    Ok(())
-}
-
-fn validate_url(kind: &str, content: &str) -> Result<(), String> {
-    if kind != "url" {
-        return Ok(());
-    }
-    let parsed = url::Url::parse(content).map_err(|_| "URL content is invalid")?;
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return Err("URL pastes support only http and https".into());
-    }
-    Ok(())
-}
-
 pub fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -627,10 +501,11 @@ pub fn now() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{can_read, validate_url, Paste, PasteFile, Principal, Services};
+    use super::{Paste, PasteFile, Principal, Services};
     use crate::account::api_keys::ApiKey;
     use crate::account::{SessionUser, User};
     use crate::repository::Repository;
+    use crate::services::validation::{can_read, validate_url};
 
     #[test]
     fn url_pastes_accept_only_http_destinations() {
