@@ -19,7 +19,7 @@ racebin_data/*
 /test-results
 /web/playwright-report
 /web/test-results
-/arch/racebin/
-/arch/src/
-/arch/pkg/
-/arch/*.pkg.tar.*
+/packaging/arch/racebin/
+/packaging/arch/src/
+/packaging/arch/pkg/
+/packaging/arch/*.pkg.tar.*

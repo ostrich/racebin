@@ -1,6 +1,6 @@
 # Maintainer: ostrich <570911+ostrich@users.noreply.github.com>
 pkgname=racebin-git
-pkgver=4.0.0.r47.g84ae42d
+pkgver=4.0.0.r52.gb8ec568
 pkgrel=1
 pkgdesc="API-first self-hosted paste bin with attachments"
 arch=('x86_64' 'aarch64')
@@ -19,8 +19,8 @@ pkgver() {
     cd "$srcdir/racebin"
     printf '%s.r%s.g%s' \
         "$(sed -n 's/^version = \"\([^\"]*\)\"/\1/p' Cargo.toml | head -n1)" \
-        "$(git rev-list --count HEAD -- . ':(exclude)arch')" \
-        "$(git log -1 --format=%h -- . ':(exclude)arch')"
+        "$(git rev-list --count HEAD -- . ':(exclude)arch' ':(exclude)packaging/arch')" \
+        "$(git log -1 --format=%h -- . ':(exclude)arch' ':(exclude)packaging/arch')"
 }
 
 build() {
