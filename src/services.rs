@@ -236,6 +236,7 @@ impl Services {
         principal: &Principal,
         slug: &str,
     ) -> Result<Option<Paste>, String> {
+        let _write_guard = self.repo.lock_writes().await;
         let mut tx = self.repo.pool().begin().await.map_err(|e| e.to_string())?;
         let lock = if self.repo.kind() == crate::repository::DatabaseKind::Postgres {
             " FOR UPDATE"
@@ -412,6 +413,7 @@ impl Services {
         slug: &str,
         inputs: &[(String, String, i64)],
     ) -> Result<Vec<PasteFile>, String> {
+        let _write_guard = self.repo.lock_writes().await;
         let paste = self.find_paste(slug).await?.ok_or("Paste not found")?;
         authorize_owner(principal, &paste, "paste:write")?;
         let mut names = paste

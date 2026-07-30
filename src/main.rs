@@ -8,6 +8,8 @@ use crate::args::ARGS;
 
 pub mod api_v2;
 pub mod args;
+#[cfg(test)]
+mod integration_tests;
 pub mod repository;
 pub mod services;
 

@@ -3,7 +3,8 @@ use sqlx::{AnyPool, Row};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Once;
+use std::sync::{Arc, Once};
+use tokio::sync::{Mutex, MutexGuard};
 
 static INSTALL_DRIVERS: Once = Once::new();
 static SQLITE_MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("migrations/sqlite");
@@ -19,6 +20,7 @@ pub enum DatabaseKind {
 pub struct Repository {
     pool: AnyPool,
     kind: DatabaseKind,
+    write_lock: Arc<Mutex<()>>,
     pub data_dir: PathBuf,
 }
 
@@ -50,6 +52,7 @@ impl Repository {
         let repository = Self {
             pool,
             kind,
+            write_lock: Arc::new(Mutex::new(())),
             data_dir: data_dir.as_ref().to_path_buf(),
         };
         Ok(repository)
@@ -61,6 +64,10 @@ impl Repository {
 
     pub fn kind(&self) -> DatabaseKind {
         self.kind
+    }
+
+    pub async fn lock_writes(&self) -> MutexGuard<'_, ()> {
+        self.write_lock.lock().await
     }
 
     pub async fn migrate(&self) -> Result<(), String> {
@@ -497,7 +504,7 @@ pub async fn run_cli_if_requested() -> Result<bool, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{copy_database, Repository};
+    use super::Repository;
 
     #[actix_web::test]
     async fn sqlite_schema_is_repeatable() {
@@ -520,42 +527,6 @@ mod tests {
         .unwrap();
         assert_eq!(tables, 4);
         drop(repository);
-        let _ = std::fs::remove_dir_all(data_dir);
-    }
-
-    #[actix_web::test]
-    async fn copies_sqlite_into_postgres_when_test_database_is_configured() {
-        let Ok(postgres_url) = std::env::var("RACEBIN_TEST_POSTGRES_URL") else {
-            return;
-        };
-        let data_dir = std::env::temp_dir().join(format!("racebin-copy-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&data_dir).unwrap();
-        let sqlite_url = format!(
-            "sqlite://{}?mode=rwc",
-            data_dir.join("database.sqlite").display()
-        );
-        let source = Repository::open(&sqlite_url, &data_dir).await.unwrap();
-        source.migrate().await.unwrap();
-        sqlx::query(
-            "INSERT INTO app_user(id,username,password_hash,role,enabled,force_password_change,created)
-             VALUES(42,'copy-test','hash','admin',1,0,123)",
-        )
-        .execute(source.pool())
-        .await
-        .unwrap();
-        drop(source);
-
-        copy_database(&sqlite_url, &postgres_url, &data_dir)
-            .await
-            .unwrap();
-        let destination = Repository::open(&postgres_url, &data_dir).await.unwrap();
-        let user: (i64, String, i64) =
-            sqlx::query_as("SELECT id,username,enabled FROM app_user WHERE id=42")
-                .fetch_one(destination.pool())
-                .await
-                .unwrap();
-        assert_eq!(user, (42, "copy-test".to_string(), 1));
-        drop(destination);
         let _ = std::fs::remove_dir_all(data_dir);
     }
 }

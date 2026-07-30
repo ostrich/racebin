@@ -2,7 +2,16 @@ use clap::Parser;
 use once_cell::sync::Lazy;
 use std::net::IpAddr;
 
-pub static ARGS: Lazy<Args> = Lazy::new(Args::parse);
+pub static ARGS: Lazy<Args> = Lazy::new(|| {
+    #[cfg(test)]
+    {
+        Args::parse_from(["racebin"])
+    }
+    #[cfg(not(test))]
+    {
+        Args::parse()
+    }
+});
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]

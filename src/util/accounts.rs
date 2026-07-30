@@ -267,6 +267,7 @@ pub async fn list_users(repo: &Repository) -> Result<Vec<User>, String> {
 }
 
 pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> Result<(), String> {
+    let _write_guard = repo.lock_writes().await;
     let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
     let lock = if repo.kind() == DatabaseKind::Postgres {
         " FOR UPDATE"
@@ -311,6 +312,7 @@ pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> Result<()
 }
 
 pub async fn set_role(repo: &Repository, id: i64, admin: bool) -> Result<(), String> {
+    let _write_guard = repo.lock_writes().await;
     let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
     if !admin {
         let target: Option<(String, i64)> =
@@ -408,6 +410,7 @@ pub async fn accept_invite(
     username: &str,
     password: &str,
 ) -> Result<User, String> {
+    let _write_guard = repo.lock_writes().await;
     let username = validate_username(username)?.to_string();
     let encoded = password_hash(password)?;
     let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
