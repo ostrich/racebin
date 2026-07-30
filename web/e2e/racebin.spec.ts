@@ -155,6 +155,9 @@ test("empty rich-text conversion skips preview and disables language", async ({ 
   const textEditorHeight = await page.locator(".content-editor").evaluate(
     element => element.getBoundingClientRect().height
   );
+  const textControlsTop = await page.locator(".form-grid").evaluate(
+    element => element.getBoundingClientRect().top
+  );
   await page.locator(".form-grid select").first().selectOption("rich_text");
   await expect(page.getByRole("heading", { name: /Convert to/ })).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: /Language/ })).toBeDisabled();
@@ -162,7 +165,11 @@ test("empty rich-text conversion skips preview and disables language", async ({ 
   const richTextEditorHeight = await page.locator(".content-editor").evaluate(
     element => element.getBoundingClientRect().height
   );
+  const richTextControlsTop = await page.locator(".form-grid").evaluate(
+    element => element.getBoundingClientRect().top
+  );
   expect(richTextEditorHeight).toBe(textEditorHeight);
+  expect(richTextControlsTop).toBe(textControlsTop);
 });
 
 test("edit page shows current attachments", async ({ page }) => {

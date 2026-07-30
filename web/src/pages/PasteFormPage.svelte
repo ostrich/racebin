@@ -213,11 +213,11 @@
           </div>
         </div>
       {:else}
-        <label class="content-field"><span>Content</span>
+        <div class="content-field"><span>Content</span>
           <div class="content-editor content-editor-text">
             <CodeEditor bind:value={content} bind:language/>
           </div>
-        </label>
+        </div>
       {/if}
       <div class="form-grid">
         <label><span>Type</span><select value={contentKind} disabled={switching} onchange={changeKind}>
