@@ -109,7 +109,7 @@ const lazyLanguages: Record<string, LanguageLoader> = {
 };
 
 export const languageOptions: readonly LanguageOption[] = [
-  { id: "none", label: "Plain text", aliases: ["text", "txt", "plaintext"] },
+  { id: "plaintext", label: "Plain text", aliases: ["text", "txt"] },
   { id: "auto", label: "Auto detect" },
   { id: "apache", label: "Apache configuration" },
   { id: "armasm", label: "ARM assembly", aliases: ["arm"] },
@@ -193,7 +193,7 @@ const commonIds = commonLanguages.map(([name]) => name);
 const loading = new Map<string, Promise<void>>();
 const MAX_HIGHLIGHT_LENGTH = 250_000;
 
-export function normalizeSyntax(value: string): string | undefined {
+export function normalizeLanguage(value: string): string | undefined {
   return aliases.get(value.trim().toLowerCase());
 }
 
@@ -233,7 +233,7 @@ export function connectLanguagePicker(
       option.hidden = Boolean(term && !option.dataset.search!.includes(term));
       option.classList.toggle(
         "selected",
-        option.dataset.language === normalizeSyntax(input.value)
+        option.dataset.language === normalizeLanguage(input.value)
       );
     });
     menu.hidden = false;
@@ -307,13 +307,13 @@ function escapeHtml(code: string): string {
 
 export async function highlightedCode(
   code: string,
-  syntax: string
+  language: string
 ): Promise<{ html: string; language?: string; relevance?: number }> {
-  const language = normalizeSyntax(syntax) ?? "none";
-  if (language === "none" || code.length > MAX_HIGHLIGHT_LENGTH) {
+  const canonicalLanguage = normalizeLanguage(language) ?? "plaintext";
+  if (canonicalLanguage === "plaintext" || code.length > MAX_HIGHLIGHT_LENGTH) {
     return { html: escapeHtml(code) };
   }
-  if (language === "auto") {
+  if (canonicalLanguage === "auto") {
     const result = hljs.highlightAuto(code, commonIds);
     return {
       html: result.value,
@@ -321,21 +321,21 @@ export async function highlightedCode(
       relevance: result.relevance
     };
   }
-  if (!(await ensureLanguage(language))) {
+  if (!(await ensureLanguage(canonicalLanguage))) {
     return { html: escapeHtml(code) };
   }
   return {
-    html: hljs.highlight(code, { language, ignoreIllegals: true }).value,
-    language
+    html: hljs.highlight(code, { language: canonicalLanguage, ignoreIllegals: true }).value,
+    language: canonicalLanguage
   };
 }
 
 export async function highlightElement(
   element: HTMLElement,
   code: string,
-  syntax: string
+  language: string
 ): Promise<void> {
-  const result = await highlightedCode(code, syntax);
+  const result = await highlightedCode(code, language);
   element.innerHTML = result.html;
   element.classList.add("hljs");
   if (result.language) {
@@ -368,13 +368,13 @@ export function connectHighlightedEditor(
   };
   const render = async () => {
     const current = ++revision;
-    const requestedSyntax = normalizeSyntax(language.value);
+    const requestedLanguage = normalizeLanguage(language.value);
     const result = await highlightedCode(textarea.value, language.value);
     if (current !== revision) return;
     output.innerHTML = `${result.html}\n`;
     updateLineNumbers(gutter, textarea.value);
     syncScroll();
-    if (requestedSyntax === "auto" && result.language) {
+    if (requestedLanguage === "auto" && result.language) {
       language.value = result.language;
       language.dispatchEvent(new Event("input", { bubbles: true }));
     }

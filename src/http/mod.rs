@@ -1,6 +1,6 @@
 use crate::account::{self as accounts, api_keys};
 use crate::args::ARGS;
-use crate::services::{PasteInput, PasteQuery, Principal, Services};
+use crate::services::{PasteInput, PasteQuery, PasteService, Principal};
 use actix_files::NamedFile;
 use actix_multipart::Multipart;
 use actix_web::cookie::{Cookie, SameSite};
@@ -19,10 +19,10 @@ use zip::write::SimpleFileOptions;
 mod account;
 mod admin;
 mod assets;
+pub(crate) mod attachments;
 mod auth;
 mod cookies;
 mod errors;
-pub(crate) mod files;
 mod keys;
 mod meta;
 mod pastes;
@@ -66,7 +66,7 @@ pub fn configure(config: &mut web::ServiceConfig) {
                 .configure(meta::configure)
                 .configure(account::configure)
                 .configure(pastes::configure)
-                .configure(files::configure)
+                .configure(attachments::configure)
                 .configure(keys::configure)
                 .configure(admin::configure),
         )

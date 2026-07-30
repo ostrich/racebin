@@ -16,7 +16,7 @@ mod tests {
         repository.migrate().await.unwrap();
         let tables: i64 = sqlx::query_scalar(
             "SELECT count(*) FROM sqlite_master
-             WHERE type='table' AND name IN ('app_user','pasta','pasta_file','api_key')",
+             WHERE type='table' AND name IN ('users','pastes','attachments','api_keys')",
         )
         .fetch_one(repository.pool())
         .await

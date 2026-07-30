@@ -3,7 +3,7 @@ use super::*;
 pub(super) async fn backend_contract(repo: Repository) {
     insert_user(&repo, 1, "administrator", "admin").await;
     insert_user(&repo, 2, "paste-owner", "user").await;
-    let services = Services::new(repo.clone());
+    let services = PasteService::new(repo.clone());
     let owner = principal(2, "paste-owner", "user");
     let anonymous = Principal::Anonymous;
 
@@ -29,10 +29,10 @@ pub(super) async fn backend_contract(repo: Repository) {
         2
     );
 
-    let invite = accounts::create_invite(&repo, 1).await.unwrap();
-    let invited = accounts::accept_invite(
+    let invitation = accounts::create_invitation(&repo, 1).await.unwrap();
+    let invited = accounts::redeem_invitation(
         &repo,
-        &invite,
+        &invitation,
         "invited-user",
         "another correct horse battery staple",
     )
@@ -63,7 +63,7 @@ pub(super) async fn backend_contract(repo: Repository) {
     assert!(api_keys::set_enabled_for_user(&repo, key.id, 2, true)
         .await
         .unwrap());
-    sqlx::query("UPDATE app_user SET enabled=0 WHERE id=2")
+    sqlx::query("UPDATE users SET enabled=0 WHERE id=2")
         .execute(repo.pool())
         .await
         .unwrap();
@@ -71,7 +71,7 @@ pub(super) async fn backend_contract(repo: Repository) {
         .await
         .unwrap()
         .is_none());
-    sqlx::query("UPDATE app_user SET enabled=1 WHERE id=2")
+    sqlx::query("UPDATE users SET enabled=1 WHERE id=2")
         .execute(repo.pool())
         .await
         .unwrap();
@@ -89,22 +89,22 @@ pub(super) async fn backend_contract(repo: Repository) {
         .create_paste(&owner, &paste_input("private link", "unlisted"))
         .await
         .unwrap();
-    let owner_only = services
-        .create_paste(&owner, &paste_input("owner secret", "owner"))
+    let private_paste = services
+        .create_paste(&owner, &paste_input("owner secret", "private"))
         .await
         .unwrap();
     assert!(services
-        .get_paste(&anonymous, &public.slug)
+        .get_paste(&anonymous, &public.id)
         .await
         .unwrap()
         .is_some());
     assert!(services
-        .get_paste(&anonymous, &unlisted.slug)
+        .get_paste(&anonymous, &unlisted.id)
         .await
         .unwrap()
         .is_some());
     assert!(services
-        .get_paste(&anonymous, &owner_only.slug)
+        .get_paste(&anonymous, &private_paste.id)
         .await
         .unwrap()
         .is_none());
@@ -112,15 +112,15 @@ pub(super) async fn backend_contract(repo: Repository) {
     let update = PasteInput {
         title: Some("updated title".to_string()),
         content: None,
-        kind: None,
-        syntax: None,
-        access: None,
-        expiration: None,
-        burn_after_reads: None,
+        content_kind: None,
+        language: None,
+        visibility: None,
+        expires_at: None,
+        read_limit: None,
     };
     assert_eq!(
         services
-            .update_paste(&owner, &public.slug, &update)
+            .update_paste(&owner, &public.id, &update)
             .await
             .unwrap()
             .unwrap()
@@ -172,45 +172,45 @@ pub(super) async fn backend_contract(repo: Repository) {
         .unwrap();
     assert_eq!(first_page.items.len(), 10);
     assert_eq!(second_page.items.len(), 10);
-    assert!(first_page.total >= 36);
-    assert_ne!(first_page.items[0].slug, second_page.items[0].slug);
+    assert!(first_page.total_items >= 36);
+    assert_ne!(first_page.items[0].id, second_page.items[0].id);
 
     let expired = PasteInput {
-        expiration: Some(Some(now() + 3600)),
+        expires_at: Some(Some(crate::time::unix_timestamp() + 3600)),
         ..paste_input("expired", "public")
     };
     let expired = services.create_paste(&owner, &expired).await.unwrap();
-    sqlx::query("UPDATE pasta SET expiration=$2 WHERE id=$1")
-        .bind(expired.id)
-        .bind(now() - 1)
+    sqlx::query("UPDATE pastes SET expires_at=$2 WHERE id=$1")
+        .bind(&expired.id)
+        .bind(crate::time::unix_timestamp() - 1)
         .execute(repo.pool())
         .await
         .unwrap();
     assert!(services
-        .get_paste(&anonymous, &expired.slug)
+        .get_paste(&anonymous, &expired.id)
         .await
         .unwrap()
         .is_none());
 
     let cascade = services
-        .create_paste(&owner, &paste_input("cascade", "owner"))
+        .create_paste(&owner, &paste_input("cascade", "private"))
         .await
         .unwrap();
     services
-        .add_files(
+        .add_attachments(
             &owner,
-            &cascade.slug,
+            &cascade.id,
             &[("file.txt".to_string(), "stored-file".to_string(), 4)],
         )
         .await
         .unwrap();
-    sqlx::query("DELETE FROM pasta WHERE id=$1")
-        .bind(cascade.id)
+    sqlx::query("DELETE FROM pastes WHERE id=$1")
+        .bind(&cascade.id)
         .execute(repo.pool())
         .await
         .unwrap();
-    let file_count: i64 = sqlx::query_scalar("SELECT count(*) FROM pasta_file WHERE pasta_id=$1")
-        .bind(cascade.id)
+    let file_count: i64 = sqlx::query_scalar("SELECT count(*) FROM attachments WHERE paste_id=$1")
+        .bind(&cascade.id)
         .fetch_one(repo.pool())
         .await
         .unwrap();
@@ -219,20 +219,20 @@ pub(super) async fn backend_contract(repo: Repository) {
     let orphaned = services
         .create_paste(
             &principal(invited.id, "invited-user", "user"),
-            &paste_input("orphaned owner", "owner"),
+            &paste_input("orphaned owner", "private"),
         )
         .await
         .unwrap();
     let (invited_session, _, _) = accounts::create_session(&repo, invited.id, false)
         .await
         .unwrap();
-    sqlx::query("DELETE FROM app_user WHERE id=$1")
+    sqlx::query("DELETE FROM users WHERE id=$1")
         .bind(invited.id)
         .execute(repo.pool())
         .await
         .unwrap();
     let owner_after_delete: Option<i64> =
-        sqlx::query_scalar("SELECT owner_user_id FROM pasta WHERE id=$1")
+        sqlx::query_scalar("SELECT owner_id FROM pastes WHERE id=$1")
             .bind(orphaned.id)
             .fetch_one(repo.pool())
             .await
@@ -243,29 +243,34 @@ pub(super) async fn backend_contract(repo: Repository) {
         .unwrap()
         .is_none());
 
-    let expiration_dir = repo.data_dir.join("attachments").join(&expired.slug);
+    let expiration_dir = repo.data_dir.join("attachments").join(&expired.id);
     std::fs::create_dir_all(&expiration_dir).unwrap();
     std::fs::write(expiration_dir.join("stale"), b"stale").unwrap();
     sqlx::query(
-        "INSERT INTO user_session(user_id,token_hash,csrf_token,created,expires,last_used)
+        "INSERT INTO sessions(user_id,token_hash,csrf_token,created_at,expires_at,last_used_at)
          VALUES(2,'expired-session','csrf',1,1,1)",
     )
     .execute(repo.pool())
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO user_invite(token_hash,created_by,expires,used,revoked)
-         VALUES('expired-invite',1,$1,0,0)",
+        "INSERT INTO invitations(token_hash,created_by_user_id,expires_at,redeemed,revoked)
+         VALUES('expired-invitation',1,$1,0,0)",
     )
-    .bind(now() - 3_000_000)
+    .bind(crate::time::unix_timestamp() - 3_000_000)
     .execute(repo.pool())
     .await
     .unwrap();
-    assert!(repo.purge_expired(now()).await.unwrap() >= 1);
+    assert!(
+        repo.purge_expired(crate::time::unix_timestamp())
+            .await
+            .unwrap()
+            >= 1
+    );
     assert!(!expiration_dir.exists());
     let expired_records: i64 = sqlx::query_scalar(
-        "SELECT (SELECT count(*) FROM user_session WHERE token_hash='expired-session') +
-                (SELECT count(*) FROM user_invite WHERE token_hash='expired-invite')",
+        "SELECT (SELECT count(*) FROM sessions WHERE token_hash='expired-session') +
+                (SELECT count(*) FROM invitations WHERE token_hash='expired-invitation')",
     )
     .fetch_one(repo.pool())
     .await
@@ -279,5 +284,5 @@ pub(super) async fn backend_contract(repo: Repository) {
         .await
         .unwrap()
         .is_none());
-    assert!(services.delete_paste(&owner, &unlisted.slug).await.unwrap());
+    assert!(services.delete_paste(&owner, &unlisted.id).await.unwrap());
 }

@@ -2,48 +2,50 @@ export type User = {
   id: number;
   username: string;
   role: "user" | "admin";
-  force_password_change: boolean;
+  enabled?: boolean;
+  password_change_required: boolean;
 };
 
 export type Session = { authenticated: boolean; user?: User; csrf_token?: string };
-export type PasteFile = { id: number; role: string; name: string; size: number };
+export type Attachment = { id: number; filename: string; size_bytes: number };
 
 export type Paste = {
-  id: number;
-  slug: string;
-  owner_user_id: number | null;
+  id: string;
+  owner_id: number | null;
   title: string;
   content: string;
-  kind: "text" | "url";
-  syntax: string;
-  access: "public" | "unlisted" | "owner";
-  created: number;
-  expiration: number | null;
+  content_kind: "text" | "redirect";
+  language: string;
+  visibility: "public" | "unlisted" | "private";
+  created_at: number;
+  expires_at: number | null;
+  last_read_at: number | null;
   read_count: number;
-  burn_after_reads: number;
-  files: PasteFile[];
+  read_limit: number | null;
+  attachments: Attachment[];
 };
 
 export type Page<T> = {
   items: T[];
   page: number;
   page_size: number;
-  total: number;
+  total_items: number;
 };
 
 export type ApiKey = {
   id: number;
+  user_id: number | null;
   name: string;
-  prefix: string;
-  scopes: string;
+  token_prefix: string;
+  scopes: string[];
   enabled: boolean;
-  created: number;
-  last_used: number | null;
+  created_at: number;
+  last_used_at: number | null;
 };
 
 export type Config = {
-  name: string;
-  max_file_size: number;
-  file_uploads: boolean;
-  qr: boolean;
+  site_name: string;
+  max_attachment_size_bytes: number;
+  attachments_enabled: boolean;
+  qr_codes_enabled: boolean;
 };

@@ -1,6 +1,7 @@
 # Racebin API v2
 
-The API is rooted at `/api/v2`. `/api/v1` is intentionally unavailable.
+The API is rooted at `/api/v2`. This release intentionally resets the v2
+vocabulary; clients written for an earlier Racebin schema must be updated.
 
 ## Authentication
 
@@ -18,20 +19,18 @@ Keys are displayed only once and stored as SHA-256 digests. Available scopes:
 
 | Scope | Permission |
 | --- | --- |
-| `paste:read` | Read owner-only pastes owned by the key's user |
-| `paste:write` | Create and update that user's pastes and files |
+| `paste:read` | Read private pastes owned by the key's user |
+| `paste:write` | Create and update that user's pastes and attachments |
 | `paste:delete` | Delete owned pastes |
 | `paste:list` | List owned pastes |
-| `paste:admin` | Manage every paste |
-| `user:admin` | Manage users |
-| `invite:admin` | Manage invitations |
-| `key:admin` | Manage keys and delegate held scopes |
+| `paste:manage` | Manage every paste |
+| `user:manage` | Manage users |
+| `invitation:manage` | Manage invitations |
+| `api_key:manage` | Manage keys and delegate held scopes |
 
-A key with `key:admin` can grant only scopes it already has. Browser
-administrators may grant any scope. Ordinary browser users may grant
-`paste:read`, `paste:write`, `paste:delete`, and `paste:list`, but not
-`paste:admin` or any other administrative scope. Disabled keys and keys owned
-by disabled users do not authenticate.
+An API key with `api_key:manage` can grant only scopes it already holds.
+Browser administrators may grant any scope. Ordinary users may grant the four
+non-management paste scopes.
 
 ## Pastes
 
@@ -44,21 +43,22 @@ curl https://example.com/api/v2/pastes \
   -d '{
     "title": "Example",
     "content": "console.log(\"hello\")",
-    "kind": "text",
-    "syntax": "js",
-    "access": "unlisted",
-    "expiration": null,
-    "burn_after_reads": 0
+    "content_kind": "text",
+    "language": "javascript",
+    "visibility": "unlisted",
+    "expires_at": null,
+    "read_limit": null
   }'
 ```
 
-`kind` is `text` or `url`. `access` is `public`, `unlisted`, or `owner`.
-Expiration is a Unix timestamp in request bodies; `null` means no expiration.
+`content_kind` is `text` or `redirect`. `visibility` is `public`, `unlisted`,
+or `private`. Timestamp fields are Unix seconds. A null `expires_at` never
+expires, and a null `read_limit` permits unlimited reads.
 
 List and filter:
 
 ```bash
-curl 'https://example.com/api/v2/pastes?page=1&page_size=50&search=example&access=public'
+curl 'https://example.com/api/v2/pastes?page=1&page_size=50&search=example&visibility=public'
 curl -H "Authorization: Bearer $RACEBIN_KEY" \
   'https://example.com/api/v2/pastes?mine=true'
 ```
@@ -66,7 +66,7 @@ curl -H "Authorization: Bearer $RACEBIN_KEY" \
 Lists return:
 
 ```json
-{"items":[],"page":1,"page_size":50,"total":0}
+{"items":[],"page":1,"page_size":50,"total_items":0}
 ```
 
 Retrieve without consuming, consume a read, update, and delete:
@@ -77,17 +77,16 @@ curl https://example.com/api/v2/pastes/PASTE_ID/consume
 curl -X PATCH https://example.com/api/v2/pastes/PASTE_ID \
   -H "Authorization: Bearer $RACEBIN_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"title":"Updated","access":"public"}'
+  -d '{"title":"Updated","visibility":"public"}'
 curl -X DELETE -H "Authorization: Bearer $RACEBIN_KEY" \
   https://example.com/api/v2/pastes/PASTE_ID
 ```
 
-The ordinary paste endpoint is suitable for management and does not increment
-the read count. `/pastes/{slug}/consume` and `/pastes/{slug}/raw` atomically
-consume a read. File upload uses multipart POST to
-`/pastes/{slug}/files`. Download or delete a file at
-`/pastes/{slug}/files/{file_id}`. ZIP and QR output are at
-`/pastes/{slug}/archive` and `/pastes/{slug}/qr`.
+`/pastes/{paste_id}/consume` and `/pastes/{paste_id}/raw` atomically consume a
+read. Upload attachments with multipart POST to
+`/pastes/{paste_id}/attachments`. Download or delete an attachment at
+`/pastes/{paste_id}/attachments/{attachment_id}`. ZIP and QR output are at
+`/pastes/{paste_id}/archive` and `/pastes/{paste_id}/qr`.
 
 ## Accounts And Administration
 
@@ -95,24 +94,16 @@ consume a read. File upload uses multipart POST to
 - `PATCH /account/password`
 - `GET|POST /account/api-keys`
 - `PATCH|DELETE /account/api-keys/{id}`
-- `POST /invites/{token}/accept`
+- `POST /invitations/{token}/redeem`
 - `GET /admin/pastes`
 - `GET /admin/users`, `PATCH /admin/users/{id}`
-- `GET|POST /admin/invites`, `DELETE /admin/invites/{id}`
+- `GET|POST /admin/invitations`, `DELETE /admin/invitations/{id}`
 - `GET /admin/api-keys`, `PATCH|DELETE /admin/api-keys/{id}`
 
-The live machine-readable route list is `/api/v2/openapi.json`.
+The machine-readable route list is `/api/v2/openapi.json`.
 
 ## Errors
 
-Errors have one envelope:
-
 ```json
-{
-  "error": {
-    "code": "not_found",
-    "message": "Paste not found",
-    "details": null
-  }
-}
+{"error":{"code":"not_found","message":"Paste not found","details":null}}
 ```

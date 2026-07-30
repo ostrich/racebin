@@ -8,39 +8,43 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     source.migrate().await.unwrap();
     insert_user(&source, 42, "copied-user", "admin").await;
     sqlx::query(
-        "INSERT INTO pasta(id,slug,owner_user_id,title,content,kind,syntax,access,created,read_count,burn_after_reads)
-         VALUES(100,'copied-paste',42,'copied','body','text','none','owner',1,0,0)",
+        "INSERT INTO pastes(id,owner_id,title,content,content_kind,language,visibility,created_at,read_count,read_limit)
+         VALUES('copied-paste',42,'copied','body','text','plaintext','private',1,0,NULL)",
     )
     .execute(source.pool())
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO user_session(id,user_id,token_hash,csrf_token,created,expires,last_used)
+        "INSERT INTO sessions(id,user_id,token_hash,csrf_token,created_at,expires_at,last_used_at)
          VALUES(60,42,'session-hash','csrf',1,9999999999,1)",
     )
     .execute(source.pool())
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO user_invite(id,token_hash,created_by,expires,used,revoked)
-         VALUES(61,'invite-hash',42,9999999999,0,0)",
+        "INSERT INTO invitations(id,token_hash,created_by_user_id,expires_at,redeemed,revoked)
+         VALUES(61,'invitation-hash',42,9999999999,0,0)",
     )
     .execute(source.pool())
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO api_key(id,user_id,name,prefix,token_hash,scopes,created,enabled)
-         VALUES(62,42,'copied key','prefix','key-hash','paste:read',1,1)",
+        "INSERT INTO api_keys(id,user_id,name,token_prefix,token_hash,created_at,enabled)
+         VALUES(62,42,'copied key','prefix','key-hash',1,1)",
     )
     .execute(source.pool())
     .await
     .unwrap();
+    sqlx::query("INSERT INTO api_key_scopes(api_key_id,scope) VALUES(62,'paste:read')")
+        .execute(source.pool())
+        .await
+        .unwrap();
     let attachment_dir = source_dir.join("attachments/copied-paste");
     std::fs::create_dir_all(&attachment_dir).unwrap();
     std::fs::write(attachment_dir.join("stored"), b"data").unwrap();
     sqlx::query(
-        "INSERT INTO pasta_file(id,pasta_id,position,role,name,storage_name,size)
-         VALUES(70,100,0,'primary','file.txt','stored',4)",
+        "INSERT INTO attachments(id,paste_id,sort_order,filename,storage_key,size_bytes)
+         VALUES(70,'copied-paste',0,'file.txt','stored',4)",
     )
     .execute(source.pool())
     .await
@@ -51,17 +55,18 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
         .await
         .unwrap();
     let destination = Repository::open(postgres_url, &source_dir).await.unwrap();
-    let copied: (i64, String) = sqlx::query_as("SELECT id,username FROM app_user")
+    let copied: (i64, String) = sqlx::query_as("SELECT id,username FROM users")
         .fetch_one(destination.pool())
         .await
         .unwrap();
     assert_eq!(copied, (42, "copied-user".to_string()));
     for table in [
-        "user_session",
-        "user_invite",
-        "api_key",
-        "pasta",
-        "pasta_file",
+        "sessions",
+        "invitations",
+        "api_keys",
+        "api_key_scopes",
+        "pastes",
+        "attachments",
     ] {
         let count: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM {table}"))
             .fetch_one(destination.pool())
@@ -70,23 +75,23 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
         assert_eq!(count, 1, "{table}");
     }
     let next_user: i64 = sqlx::query_scalar(
-        "INSERT INTO app_user(username,password_hash,role,created)
+        "INSERT INTO users(username,password_hash,role,created_at)
          VALUES('after-copy','hash','user',1) RETURNING id",
     )
     .fetch_one(destination.pool())
     .await
     .unwrap();
     assert!(next_user > 42);
-    let next_paste: i64 = sqlx::query_scalar(
-        "INSERT INTO pasta(slug,title,content,kind,syntax,access,created,read_count,burn_after_reads)
-         VALUES('after-copy','','','text','none','public',1,0,0) RETURNING id",
+    let next_paste: String = sqlx::query_scalar(
+        "INSERT INTO pastes(id,title,content,content_kind,language,visibility,created_at,read_count,read_limit)
+         VALUES('after-copy','','','text','plaintext','public',1,0,NULL) RETURNING id",
     )
     .fetch_one(destination.pool())
     .await
     .unwrap();
-    assert!(next_paste > 100);
+    assert_eq!(next_paste, "after-copy");
     let next_session: i64 = sqlx::query_scalar(
-        "INSERT INTO user_session(user_id,token_hash,csrf_token,created,expires,last_used)
+        "INSERT INTO sessions(user_id,token_hash,csrf_token,created_at,expires_at,last_used_at)
          VALUES(42,'after-copy-session','csrf',1,9999999999,1) RETURNING id",
     )
     .fetch_one(destination.pool())
@@ -94,36 +99,36 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     .unwrap();
     assert!(next_session > 60);
     let next_invite: i64 = sqlx::query_scalar(
-        "INSERT INTO user_invite(token_hash,created_by,expires,used,revoked)
-         VALUES('after-copy-invite',42,9999999999,0,0) RETURNING id",
+        "INSERT INTO invitations(token_hash,created_by_user_id,expires_at,redeemed,revoked)
+         VALUES('after-copy-invitation',42,9999999999,0,0) RETURNING id",
     )
     .fetch_one(destination.pool())
     .await
     .unwrap();
     assert!(next_invite > 61);
     let next_key: i64 = sqlx::query_scalar(
-        "INSERT INTO api_key(user_id,name,prefix,token_hash,scopes,created,enabled)
-         VALUES(42,'after copy','after-prefix','after-key-hash','paste:read',1,1)
+        "INSERT INTO api_keys(user_id,name,token_prefix,token_hash,created_at,enabled)
+         VALUES(42,'after copy','after-prefix','after-key-hash',1,1)
          RETURNING id",
     )
     .fetch_one(destination.pool())
     .await
     .unwrap();
     assert!(next_key > 62);
-    let next_file: i64 = sqlx::query_scalar(
-        "INSERT INTO pasta_file(pasta_id,position,role,name,storage_name,size)
-         VALUES(100,1,'attachment','after.txt','after-store',1) RETURNING id",
+    let next_attachment: i64 = sqlx::query_scalar(
+        "INSERT INTO attachments(paste_id,sort_order,filename,storage_key,size_bytes)
+         VALUES('copied-paste',1,'after.txt','after-store',1) RETURNING id",
     )
     .fetch_one(destination.pool())
     .await
     .unwrap();
-    assert!(next_file > 70);
+    assert!(next_attachment > 70);
     let error = copy_database(&source_url, postgres_url, &source_dir)
         .await
         .unwrap_err();
     assert!(error.contains("not empty"));
     sqlx::query(
-        "TRUNCATE pasta_file,pasta,api_key,user_session,user_invite,app_user
+        "TRUNCATE attachments,pastes,api_key_scopes,api_keys,sessions,invitations,users
          RESTART IDENTITY CASCADE",
     )
     .execute(destination.pool())
@@ -138,15 +143,15 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     missing.migrate().await.unwrap();
     insert_user(&missing, 1, "missing-owner", "user").await;
     sqlx::query(
-        "INSERT INTO pasta(id,slug,owner_user_id,title,content,kind,syntax,access,created,read_count,burn_after_reads)
-         VALUES(1,'missing-file',1,'','','text','none','owner',1,0,0)",
+        "INSERT INTO pastes(id,owner_id,title,content,content_kind,language,visibility,created_at,read_count,read_limit)
+         VALUES('missing-attachment',1,'','','text','plaintext','private',1,0,NULL)",
     )
     .execute(missing.pool())
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO pasta_file(id,pasta_id,position,role,name,storage_name,size)
-         VALUES(1,1,0,'primary','missing.txt','not-on-disk',4)",
+        "INSERT INTO attachments(id,paste_id,sort_order,filename,storage_key,size_bytes)
+         VALUES(1,'missing-attachment',0,'missing.txt','not-on-disk',4)",
     )
     .execute(missing.pool())
     .await
@@ -168,7 +173,7 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
         .await
         .unwrap();
     sqlx::query(
-        "INSERT INTO app_user(id,username,password_hash,role,enabled,force_password_change,created)
+        "INSERT INTO users(id,username,password_hash,role,enabled,password_change_required,created_at)
          VALUES(1,'valid-before-failure','hash','user',1,0,1),
                (2,'invalid-role','hash','invalid',1,0,1)",
     )
@@ -181,7 +186,7 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
         .await
         .is_err());
     let destination = Repository::open(postgres_url, data_dir).await.unwrap();
-    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM app_user")
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM users")
         .fetch_one(destination.pool())
         .await
         .unwrap();

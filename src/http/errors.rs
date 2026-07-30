@@ -44,9 +44,9 @@ pub(super) fn paste_error(message: String) -> HttpResponse {
     } else if [
         "Content is required",
         "Title exceeds",
-        "Kind must",
-        "Access must",
-        "Burn count",
+        "Content kind must",
+        "Visibility must",
+        "Read limit",
         "URL content",
     ]
     .iter()

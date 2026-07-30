@@ -85,46 +85,38 @@ impl Repository {
                 .await
                 .map_err(|error| format!("PostgreSQL migration failed: {error}"))?;
         }
-        sqlx::query(
-            "UPDATE api_key SET scopes =
-             replace(scopes, 'admin', 'paste:admin,user:admin,invite:admin,key:admin')
-             WHERE ',' || scopes || ',' LIKE '%,admin,%'",
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(|error| error.to_string())?;
         Ok(())
     }
 
     pub async fn purge_expired(&self, now: i64) -> Result<usize, String> {
         let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
-        let slugs: Vec<String> = sqlx::query_scalar(
-            "SELECT slug FROM pasta WHERE expiration IS NOT NULL AND expiration<=$1",
+        let paste_ids: Vec<String> = sqlx::query_scalar(
+            "SELECT id FROM pastes WHERE expires_at IS NOT NULL AND expires_at<=$1",
         )
         .bind(now)
         .fetch_all(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
-        sqlx::query("DELETE FROM pasta WHERE expiration IS NOT NULL AND expiration<=$1")
+        sqlx::query("DELETE FROM pastes WHERE expires_at IS NOT NULL AND expires_at<=$1")
             .bind(now)
             .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
-        sqlx::query("DELETE FROM user_session WHERE expires<=$1")
+        sqlx::query("DELETE FROM sessions WHERE expires_at<=$1")
             .bind(now)
             .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
-        sqlx::query("DELETE FROM user_invite WHERE expires<=$1-2592000")
+        sqlx::query("DELETE FROM invitations WHERE expires_at<=$1-2592000")
             .bind(now)
             .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
         tx.commit().await.map_err(|e| e.to_string())?;
-        for slug in &slugs {
-            let _ = fs::remove_dir_all(self.data_dir.join("attachments").join(slug));
+        for paste_id in &paste_ids {
+            let _ = fs::remove_dir_all(self.data_dir.join("attachments").join(paste_id));
         }
-        let valid: HashSet<String> = sqlx::query_scalar("SELECT slug FROM pasta")
+        let valid: HashSet<String> = sqlx::query_scalar("SELECT id FROM pastes")
             .fetch_all(&self.pool)
             .await
             .map_err(|e| e.to_string())?
@@ -139,7 +131,7 @@ impl Repository {
                 }
             }
         }
-        Ok(slugs.len())
+        Ok(paste_ids.len())
     }
 }
 

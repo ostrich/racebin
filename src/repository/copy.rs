@@ -17,12 +17,13 @@ pub async fn copy_database(
     destination.migrate().await?;
     let occupied: i64 = sqlx::query_scalar(
         "SELECT
-          (SELECT count(*) FROM app_user) +
-          (SELECT count(*) FROM user_session) +
-          (SELECT count(*) FROM user_invite) +
-          (SELECT count(*) FROM api_key) +
-          (SELECT count(*) FROM pasta) +
-          (SELECT count(*) FROM pasta_file)",
+          (SELECT count(*) FROM users) +
+          (SELECT count(*) FROM sessions) +
+          (SELECT count(*) FROM invitations) +
+          (SELECT count(*) FROM api_keys) +
+          (SELECT count(*) FROM api_key_scopes) +
+          (SELECT count(*) FROM pastes) +
+          (SELECT count(*) FROM attachments)",
     )
     .fetch_one(destination.pool())
     .await
@@ -33,60 +34,67 @@ pub async fn copy_database(
 
     let mut source_tx = source.pool.begin().await.map_err(|e| e.to_string())?;
     let users = sqlx::query(
-        "SELECT id,username,password_hash,role,enabled,force_password_change,created FROM app_user",
+        "SELECT id,username,password_hash,role,enabled,password_change_required,created_at FROM users",
     )
     .fetch_all(&mut *source_tx)
     .await
     .map_err(|e| e.to_string())?;
     let sessions = sqlx::query(
-        "SELECT id,user_id,token_hash,csrf_token,created,expires,last_used FROM user_session",
+        "SELECT id,user_id,token_hash,csrf_token,created_at,expires_at,last_used_at FROM sessions",
     )
     .fetch_all(&mut *source_tx)
     .await
     .map_err(|e| e.to_string())?;
-    let invites =
-        sqlx::query("SELECT id,token_hash,created_by,expires,used,revoked FROM user_invite")
+    let invitations = sqlx::query(
+        "SELECT id,token_hash,created_by_user_id,expires_at,redeemed,revoked FROM invitations",
+    )
+    .fetch_all(&mut *source_tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let api_keys = sqlx::query(
+        "SELECT id,user_id,name,token_prefix,token_hash,created_at,last_used_at,enabled FROM api_keys",
+    )
+    .fetch_all(&mut *source_tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let api_key_scopes =
+        sqlx::query("SELECT api_key_id,scope FROM api_key_scopes ORDER BY api_key_id,scope")
             .fetch_all(&mut *source_tx)
             .await
-            .map_err(|e| e.to_string())?;
-    let keys = sqlx::query(
-        "SELECT id,user_id,name,prefix,token_hash,scopes,created,last_used,enabled FROM api_key",
-    )
-    .fetch_all(&mut *source_tx)
-    .await
-    .map_err(|e| e.to_string())?;
+            .map_err(|error| error.to_string())?;
     let pastes = sqlx::query(
-        "SELECT id,slug,owner_user_id,title,content,kind,syntax,access,created,expiration,
-                last_read,read_count,burn_after_reads FROM pasta",
+        "SELECT id,owner_id,title,content,content_kind,language,visibility,created_at,expires_at,
+                last_read_at,read_count,read_limit FROM pastes",
     )
     .fetch_all(&mut *source_tx)
     .await
     .map_err(|e| e.to_string())?;
-    let files =
-        sqlx::query("SELECT id,pasta_id,position,role,name,storage_name,size FROM pasta_file")
-            .fetch_all(&mut *source_tx)
-            .await
-            .map_err(|e| e.to_string())?;
+    let attachments = sqlx::query(
+        "SELECT id,paste_id,sort_order,filename,storage_key,size_bytes FROM attachments",
+    )
+    .fetch_all(&mut *source_tx)
+    .await
+    .map_err(|e| e.to_string())?;
 
-    for row in &files {
-        let pasta_id: i64 = row.try_get("pasta_id").map_err(|e| e.to_string())?;
-        let storage_name: String = row.try_get("storage_name").map_err(|e| e.to_string())?;
-        let slug = pastes
+    for row in &attachments {
+        let paste_id: String = row.try_get("paste_id").map_err(|e| e.to_string())?;
+        let storage_key: String = row.try_get("storage_key").map_err(|e| e.to_string())?;
+        if !pastes
             .iter()
-            .find_map(|paste| {
-                (paste.try_get::<i64, _>("id").ok() == Some(pasta_id))
-                    .then(|| paste.try_get::<String, _>("slug").ok())
-                    .flatten()
-            })
-            .ok_or_else(|| format!("file {storage_name:?} references missing paste {pasta_id}"))?;
+            .any(|paste| paste.try_get::<String, _>("id").ok().as_ref() == Some(&paste_id))
+        {
+            return Err(format!(
+                "attachment {storage_key:?} references missing paste {paste_id}"
+            ));
+        }
         if !data_dir
             .join("attachments")
-            .join(&slug)
-            .join(&storage_name)
+            .join(&paste_id)
+            .join(&storage_key)
             .is_file()
         {
             return Err(format!(
-                "attachment {storage_name:?} for paste {slug:?} is missing from data-dir"
+                "attachment {storage_key:?} for paste {paste_id:?} is missing from data-dir"
             ));
         }
     }
@@ -94,15 +102,16 @@ pub async fn copy_database(
     let counts = [
         users.len(),
         sessions.len(),
-        invites.len(),
-        keys.len(),
+        invitations.len(),
+        api_keys.len(),
+        api_key_scopes.len(),
         pastes.len(),
-        files.len(),
+        attachments.len(),
     ];
     let mut tx = destination.pool.begin().await.map_err(|e| e.to_string())?;
     for row in users {
         sqlx::query(
-            "INSERT INTO app_user(id,username,password_hash,role,enabled,force_password_change,created)
+            "INSERT INTO users(id,username,password_hash,role,enabled,password_change_required,created_at)
              VALUES($1,$2,$3,$4,$5,$6,$7)",
         )
         .bind(row.try_get::<i64, _>("id").map_err(|e| e.to_string())?)
@@ -111,17 +120,17 @@ pub async fn copy_database(
         .bind(row.try_get::<String, _>("role").map_err(|e| e.to_string())?)
         .bind(row.try_get::<i64, _>("enabled").map_err(|e| e.to_string())?)
         .bind(
-            row.try_get::<i64, _>("force_password_change")
+            row.try_get::<i64, _>("password_change_required")
                 .map_err(|e| e.to_string())?,
         )
-        .bind(row.try_get::<i64, _>("created").map_err(|e| e.to_string())?)
+        .bind(row.try_get::<i64, _>("created_at").map_err(|e| e.to_string())?)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     }
     for row in sessions {
         sqlx::query(
-            "INSERT INTO user_session(id,user_id,token_hash,csrf_token,created,expires,last_used)
+            "INSERT INTO sessions(id,user_id,token_hash,csrf_token,created_at,expires_at,last_used_at)
              VALUES($1,$2,$3,$4,$5,$6,$7)",
         )
         .bind(row.try_get::<i64, _>("id").map_err(|e| e.to_string())?)
@@ -138,24 +147,24 @@ pub async fn copy_database(
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<i64, _>("created")
+            row.try_get::<i64, _>("created_at")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<i64, _>("expires")
+            row.try_get::<i64, _>("expires_at")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<i64, _>("last_used")
+            row.try_get::<i64, _>("last_used_at")
                 .map_err(|e| e.to_string())?,
         )
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     }
-    for row in invites {
+    for row in invitations {
         sqlx::query(
-            "INSERT INTO user_invite(id,token_hash,created_by,expires,used,revoked)
+            "INSERT INTO invitations(id,token_hash,created_by_user_id,expires_at,redeemed,revoked)
              VALUES($1,$2,$3,$4,$5,$6)",
         )
         .bind(row.try_get::<i64, _>("id").map_err(|e| e.to_string())?)
@@ -164,14 +173,17 @@ pub async fn copy_database(
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<i64, _>("created_by")
+            row.try_get::<i64, _>("created_by_user_id")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<i64, _>("expires")
+            row.try_get::<i64, _>("expires_at")
                 .map_err(|e| e.to_string())?,
         )
-        .bind(row.try_get::<i64, _>("used").map_err(|e| e.to_string())?)
+        .bind(
+            row.try_get::<i64, _>("redeemed")
+                .map_err(|e| e.to_string())?,
+        )
         .bind(
             row.try_get::<i64, _>("revoked")
                 .map_err(|e| e.to_string())?,
@@ -180,37 +192,49 @@ pub async fn copy_database(
         .await
         .map_err(|e| e.to_string())?;
     }
-    for row in keys {
+    for row in api_keys {
         sqlx::query(
-            "INSERT INTO api_key(id,user_id,name,prefix,token_hash,scopes,created,last_used,enabled)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+            "INSERT INTO api_keys(id,user_id,name,token_prefix,token_hash,created_at,last_used_at,enabled)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
         )
         .bind(row.try_get::<i64, _>("id").map_err(|e| e.to_string())?)
         .bind(row.try_get::<Option<i64>, _>("user_id").map_err(|e| e.to_string())?)
         .bind(row.try_get::<String, _>("name").map_err(|e| e.to_string())?)
-        .bind(row.try_get::<String, _>("prefix").map_err(|e| e.to_string())?)
+        .bind(row.try_get::<String, _>("token_prefix").map_err(|e| e.to_string())?)
         .bind(row.try_get::<String, _>("token_hash").map_err(|e| e.to_string())?)
-        .bind(row.try_get::<String, _>("scopes").map_err(|e| e.to_string())?)
-        .bind(row.try_get::<i64, _>("created").map_err(|e| e.to_string())?)
-        .bind(row.try_get::<Option<i64>, _>("last_used").map_err(|e| e.to_string())?)
+        .bind(row.try_get::<i64, _>("created_at").map_err(|e| e.to_string())?)
+        .bind(row.try_get::<Option<i64>, _>("last_used_at").map_err(|e| e.to_string())?)
         .bind(row.try_get::<i64, _>("enabled").map_err(|e| e.to_string())?)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     }
+    for row in api_key_scopes {
+        sqlx::query("INSERT INTO api_key_scopes(api_key_id,scope) VALUES($1,$2)")
+            .bind(
+                row.try_get::<i64, _>("api_key_id")
+                    .map_err(|error| error.to_string())?,
+            )
+            .bind(
+                row.try_get::<String, _>("scope")
+                    .map_err(|error| error.to_string())?,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| error.to_string())?;
+    }
     for row in pastes {
         sqlx::query(
-            "INSERT INTO pasta(id,slug,owner_user_id,title,content,kind,syntax,access,created,
-                               expiration,last_read,read_count,burn_after_reads)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
+            "INSERT INTO pastes(id,owner_id,title,content,content_kind,language,visibility,created_at,
+                               expires_at,last_read_at,read_count,read_limit)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
         )
-        .bind(row.try_get::<i64, _>("id").map_err(|e| e.to_string())?)
         .bind(
-            row.try_get::<String, _>("slug")
+            row.try_get::<String, _>("id")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<Option<i64>, _>("owner_user_id")
+            row.try_get::<Option<i64>, _>("owner_id")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
@@ -222,27 +246,27 @@ pub async fn copy_database(
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<String, _>("kind")
+            row.try_get::<String, _>("content_kind")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<String, _>("syntax")
+            row.try_get::<String, _>("language")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<String, _>("access")
+            row.try_get::<String, _>("visibility")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<i64, _>("created")
+            row.try_get::<i64, _>("created_at")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<Option<i64>, _>("expiration")
+            row.try_get::<Option<i64>, _>("expires_at")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<Option<i64>, _>("last_read")
+            row.try_get::<Option<i64>, _>("last_read_at")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
@@ -250,52 +274,50 @@ pub async fn copy_database(
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<i64, _>("burn_after_reads")
+            row.try_get::<Option<i64>, _>("read_limit")
                 .map_err(|e| e.to_string())?,
         )
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     }
-    for row in files {
+    for row in attachments {
         sqlx::query(
-            "INSERT INTO pasta_file(id,pasta_id,position,role,name,storage_name,size)
-             VALUES($1,$2,$3,$4,$5,$6,$7)",
+            "INSERT INTO attachments(id,paste_id,sort_order,filename,storage_key,size_bytes)
+             VALUES($1,$2,$3,$4,$5,$6)",
         )
         .bind(row.try_get::<i64, _>("id").map_err(|e| e.to_string())?)
         .bind(
-            row.try_get::<i64, _>("pasta_id")
+            row.try_get::<String, _>("paste_id")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<i64, _>("position")
+            row.try_get::<i64, _>("sort_order")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<String, _>("role")
+            row.try_get::<String, _>("filename")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<String, _>("name")
+            row.try_get::<String, _>("storage_key")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
-            row.try_get::<String, _>("storage_name")
+            row.try_get::<i64, _>("size_bytes")
                 .map_err(|e| e.to_string())?,
         )
-        .bind(row.try_get::<i64, _>("size").map_err(|e| e.to_string())?)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     }
     if destination.kind == DatabaseKind::Postgres {
         for table in [
-            "app_user",
-            "user_session",
-            "user_invite",
-            "api_key",
-            "pasta",
-            "pasta_file",
+            "users",
+            "sessions",
+            "invitations",
+            "api_keys",
+            "attachments",
         ] {
             sqlx::query(&format!(
                 "SELECT setval(pg_get_serial_sequence('{table}','id'),
@@ -308,12 +330,13 @@ pub async fn copy_database(
         }
     }
     for (table, expected) in [
-        ("app_user", counts[0]),
-        ("user_session", counts[1]),
-        ("user_invite", counts[2]),
-        ("api_key", counts[3]),
-        ("pasta", counts[4]),
-        ("pasta_file", counts[5]),
+        ("users", counts[0]),
+        ("sessions", counts[1]),
+        ("invitations", counts[2]),
+        ("api_keys", counts[3]),
+        ("api_key_scopes", counts[4]),
+        ("pastes", counts[5]),
+        ("attachments", counts[6]),
     ] {
         let actual: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM {table}"))
             .fetch_one(&mut *tx)

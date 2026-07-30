@@ -1,7 +1,7 @@
 use super::*;
 
 #[actix_web::test]
-async fn sqlite_migration_adoption_repeatability_and_checksum_validation() {
+async fn sqlite_migration_repeatability_and_checksum_validation() {
     let (repo, data_dir) = sqlite_repository("migration").await;
     repo.migrate().await.unwrap();
     sqlx::query("DELETE FROM _sqlx_migrations")

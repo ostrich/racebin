@@ -49,7 +49,7 @@ fn spa_route(path: &str) -> bool {
                 | "/guide"
         )
         || path
-            .strip_prefix("/invite/")
+            .strip_prefix("/invitations/")
             .is_some_and(|value| !value.is_empty() && !value.contains('/'))
         || path.strip_prefix("/pastes/").is_some_and(|value| {
             let pieces: Vec<_> = value.split('/').collect();
@@ -66,9 +66,9 @@ mod tests {
         assert!(spa_route("/"));
         assert!(spa_route("/pastes/example"));
         assert!(spa_route("/pastes/example/edit"));
-        assert!(spa_route("/invite/token"));
+        assert!(spa_route("/invitations/token"));
         assert!(!spa_route("/api/v2/pastes"));
         assert!(!spa_route("/pastes/example/unknown"));
-        assert!(!spa_route("/invite/token/nested"));
+        assert!(!spa_route("/invitations/token/nested"));
     }
 }

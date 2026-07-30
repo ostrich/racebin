@@ -26,7 +26,7 @@ fn option(arguments: &[String], name: &str) -> Option<String> {
 }
 
 async fn user_id(repository: &Repository, username: &str) -> Result<i64, String> {
-    sqlx::query_scalar("SELECT id FROM app_user WHERE username=$1")
+    sqlx::query_scalar("SELECT id FROM users WHERE username=$1")
         .bind(username)
         .fetch_optional(repository.pool())
         .await
@@ -60,13 +60,13 @@ pub(crate) async fn run_if_requested() -> Result<bool, String> {
                 "user"
             };
             sqlx::query(
-                "INSERT INTO app_user(username,password_hash,role,enabled,force_password_change,created)
+                "INSERT INTO users(username,password_hash,role,enabled,password_change_required,created_at)
                  VALUES($1,$2,$3,1,0,$4)",
             )
             .bind(username)
             .bind(accounts::password_hash(&password(&arguments)?)?)
             .bind(role)
-            .bind(accounts::now())
+            .bind(crate::time::unix_timestamp())
             .execute(repository.pool())
             .await
             .map_err(|error| error.to_string())?;

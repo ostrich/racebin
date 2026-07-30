@@ -1,15 +1,13 @@
 use super::{Paste, PasteInput, Principal};
 
 pub(super) fn can_read(principal: &Principal, paste: &Paste) -> bool {
-    if paste.access != "owner" {
+    if paste.visibility != "private" {
         return true;
     }
-    principal.can("paste:admin")
+    principal.can("paste:manage")
         || match principal {
-            Principal::User(session) => Some(session.user.id) == paste.owner_user_id,
-            Principal::Key(key) => {
-                key.user_id == paste.owner_user_id && key.has_scope("paste:read")
-            }
+            Principal::Session(session) => Some(session.user.id) == paste.owner_id,
+            Principal::ApiKey(key) => key.user_id == paste.owner_id && key.has_scope("paste:read"),
             Principal::Anonymous => false,
         }
 }
@@ -19,9 +17,9 @@ pub(super) fn authorize_owner(
     paste: &Paste,
     scope: &str,
 ) -> Result<(), String> {
-    if principal.can("paste:admin")
-        || (principal.user_id() == paste.owner_user_id
-            && (matches!(principal, Principal::User(_)) || principal.can(scope)))
+    if principal.can("paste:manage")
+        || (principal.user_id() == paste.owner_id
+            && (matches!(principal, Principal::Session(_)) || principal.can(scope)))
     {
         Ok(())
     } else {
@@ -38,38 +36,41 @@ pub(super) fn validate_input(input: &PasteInput, creating: bool) -> Result<(), S
         return Err("Title exceeds 200 characters".into());
     }
     if input
-        .kind
+        .content_kind
         .as_deref()
-        .is_some_and(|value| !matches!(value, "text" | "url"))
+        .is_some_and(|value| !matches!(value, "text" | "redirect"))
     {
-        return Err("Kind must be text or url".into());
+        return Err("Content kind must be text or redirect".into());
     }
     if input
-        .access
+        .visibility
         .as_deref()
-        .is_some_and(|value| !matches!(value, "public" | "unlisted" | "owner"))
+        .is_some_and(|value| !matches!(value, "public" | "unlisted" | "private"))
     {
-        return Err("Access must be public, unlisted, or owner".into());
+        return Err("Visibility must be public, unlisted, or private".into());
     }
-    if input.burn_after_reads.is_some_and(|value| value < 0) {
-        return Err("Burn count cannot be negative".into());
+    if input
+        .read_limit
+        .is_some_and(|value| value.is_some_and(|limit| limit <= 0))
+    {
+        return Err("Read limit must be positive or null".into());
     }
     if creating {
         validate_url(
-            input.kind.as_deref().unwrap_or("text"),
+            input.content_kind.as_deref().unwrap_or("text"),
             input.content.as_deref().unwrap_or(""),
         )?;
     }
     Ok(())
 }
 
-pub(super) fn validate_url(kind: &str, content: &str) -> Result<(), String> {
-    if kind != "url" {
+pub(super) fn validate_url(content_kind: &str, content: &str) -> Result<(), String> {
+    if content_kind != "redirect" {
         return Ok(());
     }
     let parsed = url::Url::parse(content).map_err(|_| "URL content is invalid")?;
     if !matches!(parsed.scheme(), "http" | "https") {
-        return Err("URL pastes support only http and https".into());
+        return Err("Redirect pastes support only http and https".into());
     }
     Ok(())
 }

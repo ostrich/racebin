@@ -14,7 +14,7 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
 #[get("/pastes")]
 async fn list_pastes(
     req: HttpRequest,
-    services: web::Data<Services>,
+    services: web::Data<PasteService>,
     query: web::Query<PasteQuery>,
 ) -> HttpResponse {
     let value = match principal(&services, &req).await {
@@ -29,18 +29,18 @@ async fn list_pastes(
         );
     }
     if query
-        .access
+        .visibility
         .as_deref()
-        .is_some_and(|access| !matches!(access, "public" | "unlisted" | "owner"))
+        .is_some_and(|visibility| !matches!(visibility, "public" | "unlisted" | "private"))
     {
         return error(
             StatusCode::BAD_REQUEST,
             "invalid_query",
-            "Access must be public, unlisted, or owner",
+            "Visibility must be public, unlisted, or private",
         );
     }
-    let wants_private = query.owner_user_id.is_some() || query.access.as_deref() != Some("public");
-    if matches!(value, Principal::Key(_)) && wants_private && !value.can("paste:list") {
+    let wants_private = query.owner_id.is_some() || query.visibility.as_deref() != Some("public");
+    if matches!(value, Principal::ApiKey(_)) && wants_private && !value.can("paste:list") {
         return error(
             StatusCode::FORBIDDEN,
             "forbidden",
@@ -56,7 +56,7 @@ async fn list_pastes(
 #[post("/pastes")]
 async fn create_paste(
     req: HttpRequest,
-    services: web::Data<Services>,
+    services: web::Data<PasteService>,
     body: web::Json<PasteInput>,
 ) -> HttpResponse {
     let value = match principal(&services, &req)
@@ -72,45 +72,45 @@ async fn create_paste(
     }
 }
 
-#[get("/pastes/{slug}")]
+#[get("/pastes/{paste_id}")]
 async fn get_paste(
     req: HttpRequest,
-    services: web::Data<Services>,
-    slug: web::Path<String>,
+    services: web::Data<PasteService>,
+    paste_id: web::Path<String>,
 ) -> HttpResponse {
     let value = match principal(&services, &req).await {
         Ok(v) => v,
         Err(r) => return r,
     };
-    match services.get_paste(&value, &slug).await {
+    match services.get_paste(&value, &paste_id).await {
         Ok(Some(paste)) => HttpResponse::Ok().json(paste),
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
         Err(e) => internal(e),
     }
 }
 
-#[get("/pastes/{slug}/consume")]
+#[get("/pastes/{paste_id}/consume")]
 async fn consume_paste(
     req: HttpRequest,
-    services: web::Data<Services>,
-    slug: web::Path<String>,
+    services: web::Data<PasteService>,
+    paste_id: web::Path<String>,
 ) -> HttpResponse {
     let value = match principal(&services, &req).await {
         Ok(value) => value,
         Err(response) => return response,
     };
-    match services.read_paste(&value, &slug).await {
+    match services.consume_paste(&value, &paste_id).await {
         Ok(Some(paste)) => HttpResponse::Ok().json(paste),
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
         Err(e) => internal(e),
     }
 }
 
-#[patch("/pastes/{slug}")]
+#[patch("/pastes/{paste_id}")]
 async fn update_paste(
     req: HttpRequest,
-    services: web::Data<Services>,
-    slug: web::Path<String>,
+    services: web::Data<PasteService>,
+    paste_id: web::Path<String>,
     body: web::Json<PasteInput>,
 ) -> HttpResponse {
     let value = match principal(&services, &req)
@@ -120,8 +120,8 @@ async fn update_paste(
         Ok(v) => v,
         Err(r) => return r,
     };
-    match services.update_paste(&value, &slug, &body).await {
-        Ok(Some(_)) if matches!(&value, Principal::Key(key) if !key.has_scope("paste:read") && !key.has_scope("paste:admin")) => {
+    match services.update_paste(&value, &paste_id, &body).await {
+        Ok(Some(_)) if matches!(&value, Principal::ApiKey(key) if !key.has_scope("paste:read") && !key.has_scope("paste:manage")) => {
             HttpResponse::NoContent().finish()
         }
         Ok(Some(paste)) => HttpResponse::Ok().json(paste),
@@ -130,11 +130,11 @@ async fn update_paste(
     }
 }
 
-#[delete("/pastes/{slug}")]
+#[delete("/pastes/{paste_id}")]
 async fn delete_paste(
     req: HttpRequest,
-    services: web::Data<Services>,
-    slug: web::Path<String>,
+    services: web::Data<PasteService>,
+    paste_id: web::Path<String>,
 ) -> HttpResponse {
     let value = match principal(&services, &req)
         .await
@@ -143,7 +143,7 @@ async fn delete_paste(
         Ok(v) => v,
         Err(r) => return r,
     };
-    match services.delete_paste(&value, &slug).await {
+    match services.delete_paste(&value, &paste_id).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
         Err(e) if e == "You do not own this paste" || e.starts_with("Missing ") => {
@@ -153,17 +153,17 @@ async fn delete_paste(
     }
 }
 
-#[get("/pastes/{slug}/raw")]
+#[get("/pastes/{paste_id}/raw")]
 async fn raw_paste(
     req: HttpRequest,
-    services: web::Data<Services>,
-    slug: web::Path<String>,
+    services: web::Data<PasteService>,
+    paste_id: web::Path<String>,
 ) -> HttpResponse {
     let value = match principal(&services, &req).await {
         Ok(v) => v,
         Err(r) => return r,
     };
-    match services.read_paste(&value, &slug).await {
+    match services.consume_paste(&value, &paste_id).await {
         Ok(Some(paste)) => HttpResponse::Ok()
             .insert_header((header::CONTENT_TYPE, "text/plain; charset=utf-8"))
             .body(paste.content),

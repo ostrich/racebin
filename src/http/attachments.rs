@@ -13,15 +13,19 @@ impl Drop for UploadCleanup {
     }
 }
 
-pub(crate) fn attachment_path(data_dir: &Path, slug: &str, name: &str) -> Result<PathBuf, String> {
+pub(crate) fn attachment_path(
+    data_dir: &Path,
+    paste_id: &str,
+    name: &str,
+) -> Result<PathBuf, String> {
     let safe_component = |value: &str| {
         let mut components = Path::new(value).components();
         matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
     };
-    if !safe_component(slug) || !safe_component(name) || name.starts_with('.') {
+    if !safe_component(paste_id) || !safe_component(name) || name.starts_with('.') {
         return Err("Unsafe attachment metadata".to_string());
     }
-    Ok(data_dir.join("attachments").join(slug).join(name))
+    Ok(data_dir.join("attachments").join(paste_id).join(name))
 }
 
 pub(crate) fn sanitize_upload_filename(value: &str) -> String {
@@ -45,25 +49,25 @@ pub(crate) fn sanitize_upload_filename(value: &str) -> String {
 
 pub(super) fn configure(config: &mut web::ServiceConfig) {
     config
-        .service(upload_files)
-        .service(get_file)
-        .service(delete_file)
+        .service(upload_attachments)
+        .service(get_attachment)
+        .service(delete_attachment)
         .service(get_archive)
         .service(get_qr);
 }
 
-#[post("/pastes/{slug}/files")]
-async fn upload_files(
+#[post("/pastes/{paste_id}/attachments")]
+async fn upload_attachments(
     req: HttpRequest,
-    services: web::Data<Services>,
-    slug: web::Path<String>,
+    services: web::Data<PasteService>,
+    paste_id: web::Path<String>,
     mut payload: Multipart,
 ) -> HttpResponse {
-    if ARGS.no_file_upload {
+    if ARGS.attachments_disabled {
         return error(
             StatusCode::FORBIDDEN,
             "uploads_disabled",
-            "File uploads are disabled",
+            "Attachments are disabled",
         );
     }
     let value = match principal(&services, &req)
@@ -73,15 +77,19 @@ async fn upload_files(
         Ok(value) => value,
         Err(response) => return response,
     };
-    let paste = match services.ensure_can_update(&value, &slug).await {
+    let paste = match services.ensure_can_update(&value, &paste_id).await {
         Ok(paste) => paste,
         Err(e) => return error(StatusCode::NOT_FOUND, "not_found", e),
     };
-    let directory = services.repo.data_dir.join("attachments").join(&paste.slug);
+    let directory = services
+        .storage
+        .data_dir
+        .join("attachments")
+        .join(&paste.id);
     if let Err(e) = tokio::fs::create_dir_all(&directory).await {
         return internal(e.to_string());
     }
-    let Some(limit) = ARGS.max_file_size_mb.checked_mul(1024 * 1024) else {
+    let Some(limit) = ARGS.max_attachment_size_mb.checked_mul(1024 * 1024) else {
         return internal("Configured upload size is too large");
     };
     let mut staged: Vec<(PathBuf, PathBuf, String, String, i64)> = Vec::new();
@@ -98,8 +106,8 @@ async fn upload_files(
         if staged.len() >= 32 {
             return error(
                 StatusCode::PAYLOAD_TOO_LARGE,
-                "too_many_files",
-                "A paste may contain at most 32 files",
+                "too_many_attachments",
+                "A paste may contain at most 32 attachments",
             );
         }
         let Some(filename) = field
@@ -135,7 +143,7 @@ async fn upload_files(
                 let _ = std::fs::remove_file(&temporary);
                 return error(
                     StatusCode::PAYLOAD_TOO_LARGE,
-                    "file_too_large",
+                    "attachment_too_large",
                     "Upload exceeds configured size limit",
                 );
             }
@@ -144,24 +152,24 @@ async fn upload_files(
                 return internal(e.to_string());
             }
         }
-        let storage_name = uuid::Uuid::new_v4().simple().to_string();
-        let destination = match attachment_path(&services.repo.data_dir, &paste.slug, &storage_name)
+        let storage_key = uuid::Uuid::new_v4().simple().to_string();
+        let destination = match attachment_path(&services.storage.data_dir, &paste.id, &storage_key)
         {
             Ok(path) => path,
             Err(e) => {
                 let _ = std::fs::remove_file(&temporary);
-                return error(StatusCode::BAD_REQUEST, "invalid_file", e);
+                return error(StatusCode::BAD_REQUEST, "invalid_attachment", e);
             }
         };
         if tokio::fs::try_exists(&destination).await.unwrap_or(true) {
             let _ = std::fs::remove_file(&temporary);
             return error(
                 StatusCode::CONFLICT,
-                "file_exists",
+                "attachment_exists",
                 format!("{filename} already exists"),
             );
         }
-        staged.push((temporary, destination, filename, storage_name, size as i64));
+        staged.push((temporary, destination, filename, storage_key, size as i64));
     }
     let mut promoted = Vec::new();
     for (temporary, destination, _, _, _) in &staged {
@@ -180,56 +188,68 @@ async fn upload_files(
     }
     let inputs = staged
         .iter()
-        .map(|(_, _, name, storage_name, size)| (name.clone(), storage_name.clone(), *size))
+        .map(|(_, _, name, storage_key, size)| (name.clone(), storage_key.clone(), *size))
         .collect::<Vec<_>>();
-    let created = match services.add_files(&value, &slug, &inputs).await {
-        Ok(files) => files,
+    let attachments = match services.add_attachments(&value, &paste_id, &inputs).await {
+        Ok(attachments) => attachments,
         Err(e) => {
             for path in promoted {
                 let _ = std::fs::remove_file(path);
             }
-            return error(StatusCode::BAD_REQUEST, "invalid_file", e);
+            return error(StatusCode::BAD_REQUEST, "invalid_attachment", e);
         }
     };
-    if created.is_empty() {
+    if attachments.is_empty() {
         return error(
             StatusCode::BAD_REQUEST,
             "invalid_upload",
-            "No valid files were supplied",
+            "No valid attachments were supplied",
         );
     }
     cleanup.paths.clear();
-    HttpResponse::Created().json(json!({"items": created}))
+    HttpResponse::Created().json(json!({"items": attachments}))
 }
 
-#[get("/pastes/{slug}/files/{file_id}")]
-async fn get_file(
+#[get("/pastes/{paste_id}/attachments/{attachment_id}")]
+async fn get_attachment(
     req: HttpRequest,
-    services: web::Data<Services>,
+    services: web::Data<PasteService>,
     path: web::Path<(String, i64)>,
 ) -> HttpResponse {
     let value = match principal(&services, &req).await {
         Ok(value) => value,
         Err(response) => return response,
     };
-    let (slug, file_id) = path.into_inner();
-    let paste = match services.get_paste(&value, &slug).await {
+    let (paste_id, attachment_id) = path.into_inner();
+    let paste = match services.get_paste(&value, &paste_id).await {
         Ok(Some(paste)) => paste,
         Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
         Err(e) => return internal(e),
     };
-    let Some(file) = paste.files.iter().find(|file| file.id == file_id) else {
-        return error(StatusCode::NOT_FOUND, "not_found", "File not found");
+    let Some(attachment) = paste
+        .attachments
+        .iter()
+        .find(|attachment| attachment.id == attachment_id)
+    else {
+        return error(StatusCode::NOT_FOUND, "not_found", "Attachment not found");
     };
-    let path = match attachment_path(&services.repo.data_dir, &paste.slug, &file.storage_name) {
+    let path = match attachment_path(
+        &services.storage.data_dir,
+        &paste.id,
+        &attachment.storage_key,
+    ) {
         Ok(path) => path,
         Err(e) => return internal(e),
     };
-    let content_type = mime_guess::from_path(&file.name).first_or_octet_stream();
+    let content_type = mime_guess::from_path(&attachment.filename).first_or_octet_stream();
     let named = match NamedFile::open(path) {
         Ok(named) => named,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return error(StatusCode::NOT_FOUND, "not_found", "File data is missing")
+            return error(
+                StatusCode::NOT_FOUND,
+                "not_found",
+                "Attachment data is missing",
+            )
         }
         Err(e) => return internal(e.to_string()),
     };
@@ -237,15 +257,17 @@ async fn get_file(
         .set_content_type(content_type)
         .set_content_disposition(header::ContentDisposition {
             disposition: header::DispositionType::Attachment,
-            parameters: vec![header::DispositionParam::Filename(file.name.clone())],
+            parameters: vec![header::DispositionParam::Filename(
+                attachment.filename.clone(),
+            )],
         })
         .into_response(&req)
 }
 
-#[delete("/pastes/{slug}/files/{file_id}")]
-async fn delete_file(
+#[delete("/pastes/{paste_id}/attachments/{attachment_id}")]
+async fn delete_attachment(
     req: HttpRequest,
-    services: web::Data<Services>,
+    services: web::Data<PasteService>,
     path: web::Path<(String, i64)>,
 ) -> HttpResponse {
     let value = match principal(&services, &req)
@@ -255,10 +277,13 @@ async fn delete_file(
         Ok(value) => value,
         Err(response) => return response,
     };
-    let (slug, file_id) = path.into_inner();
-    match services.delete_file(&value, &slug, file_id).await {
+    let (paste_id, attachment_id) = path.into_inner();
+    match services
+        .delete_attachment(&value, &paste_id, attachment_id)
+        .await
+    {
         Ok(true) => HttpResponse::NoContent().finish(),
-        Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "File not found"),
+        Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "Attachment not found"),
         Err(e) if e == "You do not own this paste" || e.starts_with("Missing ") => {
             error(StatusCode::FORBIDDEN, "forbidden", e)
         }
@@ -266,17 +291,17 @@ async fn delete_file(
     }
 }
 
-#[get("/pastes/{slug}/archive")]
+#[get("/pastes/{paste_id}/archive")]
 async fn get_archive(
     req: HttpRequest,
-    services: web::Data<Services>,
-    slug: web::Path<String>,
+    services: web::Data<PasteService>,
+    paste_id: web::Path<String>,
 ) -> HttpResponse {
     let value = match principal(&services, &req).await {
         Ok(value) => value,
         Err(response) => return response,
     };
-    let paste = match services.get_paste(&value, &slug).await {
+    let paste = match services.get_paste(&value, &paste_id).await {
         Ok(Some(paste)) => paste,
         Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
         Err(e) => return internal(e),
@@ -284,9 +309,9 @@ async fn get_archive(
     const MAX_ARCHIVE_INPUT: u64 = 64 * 1024 * 1024;
     let archive_input = paste.content.len() as u64
         + paste
-            .files
+            .attachments
             .iter()
-            .map(|file| file.size.max(0) as u64)
+            .map(|attachment| attachment.size_bytes.max(0) as u64)
             .sum::<u64>();
     if archive_input > MAX_ARCHIVE_INPUT {
         return error(
@@ -295,8 +320,8 @@ async fn get_archive(
             "Archive input exceeds 64 MiB",
         );
     }
-    let data_dir = services.repo.data_dir.clone();
-    let archive_slug = paste.slug.clone();
+    let data_dir = services.storage.data_dir.clone();
+    let archive_id = paste.id.clone();
     let archive = web::block(move || {
         let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
         let options =
@@ -307,10 +332,10 @@ async fn get_archive(
             zip.write_all(paste.content.as_bytes())
                 .map_err(|e| e.to_string())?;
         }
-        for file in &paste.files {
-            let path = attachment_path(&data_dir, &paste.slug, &file.storage_name)?;
+        for attachment in &paste.attachments {
+            let path = attachment_path(&data_dir, &paste.id, &attachment.storage_key)?;
             let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-            zip.start_file(&file.name, options)
+            zip.start_file(&attachment.filename, options)
                 .map_err(|e| e.to_string())?;
             zip.write_all(&bytes).map_err(|e| e.to_string())?;
         }
@@ -324,7 +349,7 @@ async fn get_archive(
             .insert_header((header::CONTENT_TYPE, "application/zip"))
             .insert_header((
                 header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"{archive_slug}.zip\""),
+                format!("attachment; filename=\"{archive_id}.zip\""),
             ))
             .body(bytes),
         Ok(Err(e)) => internal(e),
@@ -332,20 +357,20 @@ async fn get_archive(
     }
 }
 
-#[get("/pastes/{slug}/qr")]
+#[get("/pastes/{paste_id}/qr")]
 async fn get_qr(
     req: HttpRequest,
-    services: web::Data<Services>,
-    slug: web::Path<String>,
+    services: web::Data<PasteService>,
+    paste_id: web::Path<String>,
 ) -> HttpResponse {
-    if !ARGS.qr {
+    if !ARGS.qr_codes {
         return error(StatusCode::NOT_FOUND, "not_found", "QR codes are disabled");
     }
     let value = match principal(&services, &req).await {
         Ok(value) => value,
         Err(response) => return response,
     };
-    match services.get_paste(&value, &slug).await {
+    match services.get_paste(&value, &paste_id).await {
         Ok(Some(_)) => {}
         Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
         Err(e) => return internal(e),
@@ -357,7 +382,7 @@ async fn get_qr(
         .as_str()
         .trim_end_matches('/');
     match qrcode_generator::to_png_to_vec(
-        format!("{origin}/pastes/{slug}"),
+        format!("{origin}/pastes/{paste_id}"),
         qrcode_generator::QrCodeEcc::Low,
         512,
     ) {

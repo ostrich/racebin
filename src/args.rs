@@ -34,17 +34,21 @@ pub struct Args {
     #[clap(long, env = "RACEBIN_PUBLIC_URL")]
     pub public_url: Option<url::Url>,
 
-    #[clap(long, env = "RACEBIN_TITLE")]
-    pub title: Option<String>,
+    #[clap(long = "site-name", env = "RACEBIN_SITE_NAME")]
+    pub site_name: Option<String>,
 
-    #[clap(short, long, env = "RACEBIN_NO_FILE_UPLOAD")]
-    pub no_file_upload: bool,
+    #[clap(long = "disable-attachments", env = "RACEBIN_DISABLE_ATTACHMENTS")]
+    pub attachments_disabled: bool,
 
-    #[clap(long, env = "RACEBIN_MAX_FILE_SIZE_MB", default_value_t = 2048)]
-    pub max_file_size_mb: usize,
+    #[clap(
+        long = "max-attachment-size-mb",
+        env = "RACEBIN_MAX_ATTACHMENT_SIZE_MB",
+        default_value_t = 2048
+    )]
+    pub max_attachment_size_mb: usize,
 
-    #[clap(long, env = "RACEBIN_QR")]
-    pub qr: bool,
+    #[clap(long = "qr-codes", env = "RACEBIN_QR_CODES")]
+    pub qr_codes: bool,
 
     #[clap(long, env = "RACEBIN_INSECURE_COOKIE")]
     pub insecure_cookie: bool,

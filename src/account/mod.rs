@@ -8,9 +8,9 @@ use sqlx::any::AnyRow;
 use sqlx::{FromRow, Row};
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::repository::{DatabaseKind, Repository};
+use crate::time::unix_timestamp;
 
 pub mod api_keys;
 
@@ -26,7 +26,7 @@ pub struct User {
     pub username: String,
     pub role: String,
     pub enabled: bool,
-    pub force_password_change: bool,
+    pub password_change_required: bool,
 }
 
 impl<'r> FromRow<'r, AnyRow> for User {
@@ -36,7 +36,7 @@ impl<'r> FromRow<'r, AnyRow> for User {
             username: row.try_get("username")?,
             role: row.try_get("role")?,
             enabled: row.try_get::<i64, _>("enabled")? != 0,
-            force_password_change: row.try_get::<i64, _>("force_password_change")? != 0,
+            password_change_required: row.try_get::<i64, _>("password_change_required")? != 0,
         })
     }
 }
@@ -54,33 +54,33 @@ pub struct SessionUser {
 }
 
 #[derive(Clone, Debug)]
-pub struct Invite {
+pub struct Invitation {
     pub id: i64,
     pub token_prefix: String,
-    pub expires: i64,
-    pub used: bool,
+    pub expires_at: i64,
+    pub redeemed: bool,
     pub revoked: bool,
 }
 
-impl<'r> FromRow<'r, AnyRow> for Invite {
+impl<'r> FromRow<'r, AnyRow> for Invitation {
     fn from_row(row: &'r AnyRow) -> Result<Self, sqlx::Error> {
         Ok(Self {
             id: row.try_get("id")?,
             token_prefix: row.try_get("token_prefix")?,
-            expires: row.try_get("expires")?,
-            used: row.try_get::<i64, _>("used")? != 0,
+            expires_at: row.try_get("expires_at")?,
+            redeemed: row.try_get::<i64, _>("redeemed")? != 0,
             revoked: row.try_get::<i64, _>("revoked")? != 0,
         })
     }
 }
 
-impl Invite {
+impl Invitation {
     pub fn status(&self) -> &'static str {
-        if self.used {
-            "Used"
+        if self.redeemed {
+            "Redeemed"
         } else if self.revoked {
             "Revoked"
-        } else if self.expires <= now() {
+        } else if self.expires_at <= unix_timestamp() {
             "Expired"
         } else {
             "Active"
@@ -88,15 +88,8 @@ impl Invite {
     }
 
     pub fn is_active(&self) -> bool {
-        !self.used && !self.revoked && self.expires > now()
+        !self.redeemed && !self.revoked && self.expires_at > unix_timestamp()
     }
-}
-
-pub(crate) fn now() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|value| value.as_secs() as i64)
-        .unwrap_or(0)
 }
 
 fn hash(value: &str) -> String {
@@ -147,12 +140,12 @@ pub async fn verify_user(
         username: String,
         role: String,
         enabled: i64,
-        force_password_change: i64,
+        password_change_required: i64,
         password_hash: String,
     }
     let row = sqlx::query_as::<_, UserPassword>(
-        "SELECT id,username,role,enabled,force_password_change,password_hash
-         FROM app_user WHERE username=$1",
+        "SELECT id,username,role,enabled,password_change_required,password_hash
+         FROM users WHERE username=$1",
     )
     .bind(username)
     .fetch_optional(repo.pool())
@@ -173,7 +166,7 @@ pub async fn verify_user(
             username: value.username,
             role: value.role,
             enabled: value.enabled != 0,
-            force_password_change: value.force_password_change != 0,
+            password_change_required: value.password_change_required != 0,
         })
     }))
 }
@@ -185,21 +178,21 @@ pub async fn create_session(
 ) -> Result<(String, String, i64), String> {
     let token = random_token(64);
     let csrf = random_token(48);
-    let created = now();
-    let expires = created + if remember { 30 * 86400 } else { 12 * 3600 };
+    let created_at = unix_timestamp();
+    let expires_at = created_at + if remember { 30 * 86400 } else { 12 * 3600 };
     sqlx::query(
-        "INSERT INTO user_session(user_id,token_hash,csrf_token,created,expires,last_used)
+        "INSERT INTO sessions(user_id,token_hash,csrf_token,created_at,expires_at,last_used_at)
          VALUES($1,$2,$3,$4,$5,$4)",
     )
     .bind(user_id)
     .bind(hash(&token))
     .bind(&csrf)
-    .bind(created)
-    .bind(expires)
+    .bind(created_at)
+    .bind(expires_at)
     .execute(repo.pool())
     .await
     .map_err(|e| e.to_string())?;
-    Ok((token, csrf, expires))
+    Ok((token, csrf, expires_at))
 }
 
 pub async fn session_user(repo: &Repository, token: &str) -> Result<Option<SessionUser>, String> {
@@ -209,25 +202,25 @@ pub async fn session_user(repo: &Repository, token: &str) -> Result<Option<Sessi
         username: String,
         role: String,
         enabled: i64,
-        force_password_change: i64,
+        password_change_required: i64,
         csrf_token: String,
         session_id: i64,
     }
     let row = sqlx::query_as::<_, SessionRow>(
-        "SELECT u.id,u.username,u.role,u.enabled,u.force_password_change,
+        "SELECT u.id,u.username,u.role,u.enabled,u.password_change_required,
                 s.csrf_token,s.id AS session_id
-         FROM user_session s JOIN app_user u ON u.id=s.user_id
-         WHERE s.token_hash=$1 AND s.expires>$2 AND u.enabled=1",
+         FROM sessions s JOIN users u ON u.id=s.user_id
+         WHERE s.token_hash=$1 AND s.expires_at>$2 AND u.enabled=1",
     )
     .bind(hash(token))
-    .bind(now())
+    .bind(unix_timestamp())
     .fetch_optional(repo.pool())
     .await
     .map_err(|e| e.to_string())?;
     if let Some(value) = &row {
-        let current = now();
+        let current = unix_timestamp();
         let _ =
-            sqlx::query("UPDATE user_session SET last_used=$2 WHERE id=$1 AND last_used<$2-300")
+            sqlx::query("UPDATE sessions SET last_used_at=$2 WHERE id=$1 AND last_used_at<$2-300")
                 .bind(value.session_id)
                 .bind(current)
                 .execute(repo.pool())
@@ -239,14 +232,14 @@ pub async fn session_user(repo: &Repository, token: &str) -> Result<Option<Sessi
             username: value.username,
             role: value.role,
             enabled: value.enabled != 0,
-            force_password_change: value.force_password_change != 0,
+            password_change_required: value.password_change_required != 0,
         },
         csrf_token: value.csrf_token,
     }))
 }
 
 pub async fn delete_session(repo: &Repository, token: &str) -> Result<(), String> {
-    sqlx::query("DELETE FROM user_session WHERE token_hash=$1")
+    sqlx::query("DELETE FROM sessions WHERE token_hash=$1")
         .bind(hash(token))
         .execute(repo.pool())
         .await
@@ -256,8 +249,8 @@ pub async fn delete_session(repo: &Repository, token: &str) -> Result<(), String
 
 pub async fn list_users(repo: &Repository) -> Result<Vec<User>, String> {
     sqlx::query_as(
-        "SELECT id,username,role,enabled,force_password_change
-         FROM app_user ORDER BY username",
+        "SELECT id,username,role,enabled,password_change_required
+         FROM users ORDER BY username",
     )
     .fetch_all(repo.pool())
     .await
@@ -273,16 +266,15 @@ pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> Result<()
         ""
     };
     if !enabled {
-        let target: Option<(String, i64)> = sqlx::query_as(&format!(
-            "SELECT role,enabled FROM app_user WHERE id=$1{lock}"
-        ))
-        .bind(id)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
+        let target: Option<(String, i64)> =
+            sqlx::query_as(&format!("SELECT role,enabled FROM users WHERE id=$1{lock}"))
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
         let (role, currently_enabled) = target.ok_or("User not found")?;
         let admins: i64 =
-            sqlx::query_scalar("SELECT count(*) FROM app_user WHERE role='admin' AND enabled=1")
+            sqlx::query_scalar("SELECT count(*) FROM users WHERE role='admin' AND enabled=1")
                 .fetch_one(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
@@ -290,7 +282,7 @@ pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> Result<()
             return Err("The last enabled administrator cannot be disabled".to_string());
         }
     }
-    let result = sqlx::query("UPDATE app_user SET enabled=$2 WHERE id=$1")
+    let result = sqlx::query("UPDATE users SET enabled=$2 WHERE id=$1")
         .bind(id)
         .bind(i64::from(enabled))
         .execute(&mut *tx)
@@ -300,7 +292,7 @@ pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> Result<()
         return Err("User not found".to_string());
     }
     if !enabled {
-        sqlx::query("DELETE FROM user_session WHERE user_id=$1")
+        sqlx::query("DELETE FROM sessions WHERE user_id=$1")
             .bind(id)
             .execute(&mut *tx)
             .await
@@ -314,14 +306,14 @@ pub async fn set_role(repo: &Repository, id: i64, admin: bool) -> Result<(), Str
     let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
     if !admin {
         let target: Option<(String, i64)> =
-            sqlx::query_as("SELECT role,enabled FROM app_user WHERE id=$1")
+            sqlx::query_as("SELECT role,enabled FROM users WHERE id=$1")
                 .bind(id)
                 .fetch_optional(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
         let (role, enabled) = target.ok_or("User not found")?;
         let admins: i64 =
-            sqlx::query_scalar("SELECT count(*) FROM app_user WHERE role='admin' AND enabled=1")
+            sqlx::query_scalar("SELECT count(*) FROM users WHERE role='admin' AND enabled=1")
                 .fetch_one(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
@@ -329,7 +321,7 @@ pub async fn set_role(repo: &Repository, id: i64, admin: bool) -> Result<(), Str
             return Err("The last administrator cannot be demoted".to_string());
         }
     }
-    let result = sqlx::query("UPDATE app_user SET role=$2 WHERE id=$1")
+    let result = sqlx::query("UPDATE users SET role=$2 WHERE id=$1")
         .bind(id)
         .bind(if admin { "admin" } else { "user" })
         .execute(&mut *tx)
@@ -339,11 +331,17 @@ pub async fn set_role(repo: &Repository, id: i64, admin: bool) -> Result<(), Str
         return Err("User not found".to_string());
     }
     if !admin {
-        sqlx::query("UPDATE api_key SET enabled=0 WHERE user_id=$1 AND scopes LIKE '%:admin%'")
-            .bind(id)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
+        sqlx::query(
+            "UPDATE api_keys SET enabled=0 WHERE user_id=$1 AND EXISTS (
+               SELECT 1 FROM api_key_scopes
+               WHERE api_key_id=api_keys.id
+                 AND scope IN ('paste:manage','user:manage','invitation:manage','api_key:manage')
+             )",
+        )
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
     }
     tx.commit().await.map_err(|e| e.to_string())
 }
@@ -356,14 +354,14 @@ pub async fn set_password(
 ) -> Result<(), String> {
     let encoded = password_hash(password)?;
     let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
-    sqlx::query("UPDATE app_user SET password_hash=$2,force_password_change=$3 WHERE id=$1")
+    sqlx::query("UPDATE users SET password_hash=$2,password_change_required=$3 WHERE id=$1")
         .bind(id)
         .bind(encoded)
         .bind(i64::from(force))
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM user_session WHERE user_id=$1")
+    sqlx::query("DELETE FROM sessions WHERE user_id=$1")
         .bind(id)
         .execute(&mut *tx)
         .await
@@ -371,30 +369,35 @@ pub async fn set_password(
     tx.commit().await.map_err(|e| e.to_string())
 }
 
-pub async fn create_invite(repo: &Repository, created_by: i64) -> Result<String, String> {
+pub async fn create_invitation(
+    repo: &Repository,
+    created_by_user_id: i64,
+) -> Result<String, String> {
     let token = random_token(64);
-    sqlx::query("INSERT INTO user_invite(token_hash,created_by,expires) VALUES($1,$2,$3)")
-        .bind(hash(&token))
-        .bind(created_by)
-        .bind(now() + 86400)
-        .execute(repo.pool())
-        .await
-        .map_err(|e| e.to_string())?;
+    sqlx::query(
+        "INSERT INTO invitations(token_hash,created_by_user_id,expires_at) VALUES($1,$2,$3)",
+    )
+    .bind(hash(&token))
+    .bind(created_by_user_id)
+    .bind(unix_timestamp() + 86400)
+    .execute(repo.pool())
+    .await
+    .map_err(|e| e.to_string())?;
     Ok(token)
 }
 
-pub async fn list_invites(repo: &Repository) -> Result<Vec<Invite>, String> {
+pub async fn list_invitations(repo: &Repository) -> Result<Vec<Invitation>, String> {
     sqlx::query_as(
-        "SELECT id,substr(token_hash,1,10) AS token_prefix,expires,used,revoked
-         FROM user_invite ORDER BY id DESC",
+        "SELECT id,substr(token_hash,1,10) AS token_prefix,expires_at,redeemed,revoked
+         FROM invitations ORDER BY id DESC",
     )
     .fetch_all(repo.pool())
     .await
     .map_err(|e| e.to_string())
 }
 
-pub async fn revoke_invite(repo: &Repository, id: i64) -> Result<bool, String> {
-    sqlx::query("UPDATE user_invite SET revoked=1 WHERE id=$1 AND used=0")
+pub async fn revoke_invitation(repo: &Repository, id: i64) -> Result<bool, String> {
+    sqlx::query("UPDATE invitations SET revoked=1 WHERE id=$1 AND redeemed=0")
         .bind(id)
         .execute(repo.pool())
         .await
@@ -402,7 +405,7 @@ pub async fn revoke_invite(repo: &Repository, id: i64) -> Result<bool, String> {
         .map_err(|e| e.to_string())
 }
 
-pub async fn accept_invite(
+pub async fn redeem_invitation(
     repo: &Repository,
     token: &str,
     username: &str,
@@ -417,28 +420,28 @@ pub async fn accept_invite(
     } else {
         ""
     };
-    let invite_id: Option<i64> = sqlx::query_scalar(&format!(
-        "SELECT id FROM user_invite
-         WHERE token_hash=$1 AND expires>$2 AND used=0 AND revoked=0{lock}"
+    let invitation_id: Option<i64> = sqlx::query_scalar(&format!(
+        "SELECT id FROM invitations
+         WHERE token_hash=$1 AND expires_at>$2 AND redeemed=0 AND revoked=0{lock}"
     ))
     .bind(hash(token))
-    .bind(now())
+    .bind(unix_timestamp())
     .fetch_optional(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
-    let invite_id = invite_id.ok_or("Invitation is invalid or expired")?;
+    let invitation_id = invitation_id.ok_or("Invitation is invalid or expired")?;
     let id: i64 = sqlx::query_scalar(
-        "INSERT INTO app_user(username,password_hash,role,force_password_change,created)
+        "INSERT INTO users(username,password_hash,role,password_change_required,created_at)
          VALUES($1,$2,'user',0,$3) RETURNING id",
     )
     .bind(&username)
     .bind(encoded)
-    .bind(now())
+    .bind(unix_timestamp())
     .fetch_one(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
-    sqlx::query("UPDATE user_invite SET used=1 WHERE id=$1")
-        .bind(invite_id)
+    sqlx::query("UPDATE invitations SET redeemed=1 WHERE id=$1")
+        .bind(invitation_id)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -448,14 +451,14 @@ pub async fn accept_invite(
         username,
         role: "user".to_string(),
         enabled: true,
-        force_password_change: false,
+        password_change_required: false,
     })
 }
 
 pub fn login_allowed(username: &str, client: &str) -> bool {
     let key = format!("{}\n{}", username.to_ascii_lowercase(), client);
     let mut failures = LOGIN_FAILURES.lock().unwrap();
-    let cutoff = now() - 900;
+    let cutoff = unix_timestamp() - 900;
     failures.retain(|_, attempts| {
         attempts.retain(|timestamp| *timestamp > cutoff);
         !attempts.is_empty()
@@ -472,7 +475,7 @@ pub fn record_login_failure(username: &str, client: &str) {
         .unwrap()
         .entry(format!("{}\n{}", username.to_ascii_lowercase(), client))
         .or_default()
-        .push(now());
+        .push(unix_timestamp());
 }
 
 pub fn clear_login_failures(username: &str, client: &str) {
@@ -485,20 +488,20 @@ pub fn clear_login_failures(username: &str, client: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::Invite;
+    use super::Invitation;
 
     #[test]
     fn invitation_status_respects_terminal_states_and_expiration() {
-        let invite = |expires, used, revoked| Invite {
+        let invitation = |expires_at, redeemed, revoked| Invitation {
             id: 1,
             token_prefix: "example".to_string(),
-            expires,
-            used,
+            expires_at,
+            redeemed,
             revoked,
         };
-        assert_eq!(invite(i64::MAX, false, false).status(), "Active");
-        assert_eq!(invite(0, false, false).status(), "Expired");
-        assert_eq!(invite(i64::MAX, true, false).status(), "Used");
-        assert_eq!(invite(i64::MAX, false, true).status(), "Revoked");
+        assert_eq!(invitation(i64::MAX, false, false).status(), "Active");
+        assert_eq!(invitation(0, false, false).status(), "Expired");
+        assert_eq!(invitation(i64::MAX, true, false).status(), "Redeemed");
+        assert_eq!(invitation(i64::MAX, false, true).status(), "Revoked");
     }
 }

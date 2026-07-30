@@ -1,16 +1,16 @@
 # Racebin
 
-Racebin is an API-first, self-hosted paste bin, file share, and URL shortener
+Racebin is an API-first, self-hosted paste bin with attachments and URL redirects
 with user accounts, invitation links, scoped API keys, and a Vanilla TypeScript
 single-page application. The supported interface is `/api/v2`; the browser
 application uses that same API.
 
 ## Features
 
-- Public, unlisted, and owner-only pastes
-- Text with light/dark syntax highlighting, URL pastes, titles, expiration, and burn-after-read
+- Public, unlisted, and private pastes
+- Text with light/dark syntax highlighting, redirect pastes, expiration, and optional read limits
 - Searchable language selection, automatic detection, and lazy-loaded uncommon grammars
-- Multiple file uploads, individual downloads, and ZIP archives
+- Multiple attachments, individual downloads, and ZIP archives
 - Session authentication with CSRF protection
 - Invitation-based account creation and administrator controls
 - User-owned API keys with explicit paste and administration scopes
@@ -40,7 +40,7 @@ The account command prompts for a password. Passwords must contain at least 12
 characters.
 
 To use PostgreSQL, set a database URL while keeping `data-dir` for uploaded
-files:
+attachments:
 
 ```bash
 RACEBIN_DATABASE_URL='postgresql://racebin:password@localhost/racebin' \
@@ -59,10 +59,10 @@ All settings have equivalent `RACEBIN_*` environment variables.
 | `--threads` | `2` |
 | `--data-dir` | `racebin_data` |
 | `--database-url` | `sqlite://<data-dir>/database.sqlite` |
-| `--title` | `Racebin` |
-| `--no-file-upload` | disabled |
-| `--max-file-size-mb` | `2048` |
-| `--qr` | disabled |
+| `--site-name` | `Racebin` |
+| `--disable-attachments` | disabled |
+| `--max-attachment-size-mb` | `2048` |
+| `--qr-codes` | disabled |
 | `--public-url` | unset; required for QR output |
 | `--insecure-cookie` | disabled; use only for local HTTP |
 
@@ -76,7 +76,7 @@ Startup selects the database from `--database-url` or
 `RACEBIN_DATABASE_URL` and runs the migrations for that backend. SQLite URLs
 and both `postgres://` and `postgresql://` URLs are supported. The data
 directory continues to hold uploaded attachments when PostgreSQL is used, so
-database backups alone are not sufficient for installations with files.
+database backups alone are not sufficient for installations with attachments.
 
 To move an existing SQLite installation to an empty PostgreSQL database, stop
 Racebin and run:

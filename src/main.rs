@@ -12,6 +12,7 @@ pub mod http;
 mod integration_tests;
 pub mod repository;
 pub mod services;
+pub mod time;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -37,10 +38,16 @@ async fn main() -> std::io::Result<()> {
     if ARGS.threads == 0 {
         return Err(std::io::Error::other("--threads must be at least 1"));
     }
-    if ARGS.max_file_size_mb.checked_mul(1024 * 1024).is_none() {
-        return Err(std::io::Error::other("--max-file-size-mb is too large"));
+    if ARGS
+        .max_attachment_size_mb
+        .checked_mul(1024 * 1024)
+        .is_none()
+    {
+        return Err(std::io::Error::other(
+            "--max-attachment-size-mb is too large",
+        ));
     }
-    if ARGS.qr && ARGS.public_url.is_none() {
+    if ARGS.qr_codes && ARGS.public_url.is_none() {
         return Err(std::io::Error::other(
             "--public-url is required when --qr is enabled",
         ));
@@ -52,7 +59,7 @@ async fn main() -> std::io::Result<()> {
         .map_err(std::io::Error::other)?;
     repository.migrate().await.map_err(std::io::Error::other)?;
     let purged = repository
-        .purge_expired(services::now())
+        .purge_expired(time::unix_timestamp())
         .await
         .map_err(std::io::Error::other)?;
     if purged != 0 {
@@ -63,12 +70,15 @@ async fn main() -> std::io::Result<()> {
         let mut interval = actix_web::rt::time::interval(std::time::Duration::from_secs(3600));
         loop {
             interval.tick().await;
-            if let Err(error) = cleanup_repository.purge_expired(services::now()).await {
-                log::error!("expiration cleanup failed: {error}");
+            if let Err(error) = cleanup_repository
+                .purge_expired(time::unix_timestamp())
+                .await
+            {
+                log::error!("expired-record cleanup failed: {error}");
             }
         }
     });
-    let state = web::Data::new(services::Services::new(repository));
+    let state = web::Data::new(services::PasteService::new(repository));
 
     log::info!("Racebin starting on http://{}:{}", ARGS.bind, ARGS.port);
     HttpServer::new(move || {

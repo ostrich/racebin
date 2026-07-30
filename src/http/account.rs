@@ -6,21 +6,21 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(login)
         .service(logout)
         .service(change_password)
-        .service(accept_invite);
+        .service(redeem_invitation);
 }
 
 #[get("/session")]
-async fn get_session(req: HttpRequest, services: web::Data<Services>) -> HttpResponse {
+async fn get_session(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
     match principal(&services, &req).await {
-        Ok(Principal::User(session)) => HttpResponse::Ok().json(json!({
+        Ok(Principal::Session(session)) => HttpResponse::Ok().json(json!({
             "authenticated": true,
             "user": {
                 "id": session.user.id, "username": session.user.username,
-                "role": session.user.role, "force_password_change": session.user.force_password_change
+                "role": session.user.role, "password_change_required": session.user.password_change_required
             },
             "csrf_token": session.csrf_token
         })),
-        Ok(Principal::Key(key)) => HttpResponse::Ok().json(json!({
+        Ok(Principal::ApiKey(key)) => HttpResponse::Ok().json(json!({
             "authenticated": true, "api_key": {"id": key.id, "name": key.name, "scopes": key.scopes}
         })),
         Ok(Principal::Anonymous) => HttpResponse::Ok().json(json!({"authenticated": false})),
@@ -39,7 +39,7 @@ struct LoginInput {
 #[post("/session")]
 async fn login(
     req: HttpRequest,
-    services: web::Data<Services>,
+    services: web::Data<PasteService>,
     body: web::Json<LoginInput>,
 ) -> HttpResponse {
     let client = req
@@ -53,10 +53,10 @@ async fn login(
             "Too many login attempts",
         );
     }
-    match accounts::verify_user(&services.repo, &body.username, &body.password).await {
+    match accounts::verify_user(&services.storage, &body.username, &body.password).await {
         Ok(Some(user)) => {
             accounts::clear_login_failures(&body.username, &client);
-            match accounts::create_session(&services.repo, user.id, body.remember.unwrap_or(false)).await {
+            match accounts::create_session(&services.storage, user.id, body.remember.unwrap_or(false)).await {
                 Ok((token, csrf, _)) => HttpResponse::Ok()
                     .cookie(cookies::session_cookie(
                         token,
@@ -79,7 +79,7 @@ async fn login(
 }
 
 #[delete("/session")]
-async fn logout(req: HttpRequest, services: web::Data<Services>) -> HttpResponse {
+async fn logout(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
     let value = match principal(&services, &req)
         .await
         .and_then(|p| require_mutation(&services, &req, p))
@@ -87,7 +87,7 @@ async fn logout(req: HttpRequest, services: web::Data<Services>) -> HttpResponse
         Ok(value) => value,
         Err(response) => return response,
     };
-    if !matches!(value, Principal::User(_)) {
+    if !matches!(value, Principal::Session(_)) {
         return error(
             StatusCode::BAD_REQUEST,
             "session_required",
@@ -95,7 +95,7 @@ async fn logout(req: HttpRequest, services: web::Data<Services>) -> HttpResponse
         );
     }
     if let Some(cookie) = req.cookie(accounts::SESSION_COOKIE) {
-        if let Err(e) = accounts::delete_session(&services.repo, cookie.value()).await {
+        if let Err(e) = accounts::delete_session(&services.storage, cookie.value()).await {
             return internal(e);
         }
     }
@@ -122,14 +122,14 @@ struct PasswordInput {
 #[patch("/account/password")]
 async fn change_password(
     req: HttpRequest,
-    services: web::Data<Services>,
+    services: web::Data<PasteService>,
     body: web::Json<PasswordInput>,
 ) -> HttpResponse {
     let value = match principal(&services, &req)
         .await
         .and_then(|p| require_mutation(&services, &req, p))
     {
-        Ok(Principal::User(session)) => session,
+        Ok(Principal::Session(session)) => session,
         Ok(_) => {
             return error(
                 StatusCode::BAD_REQUEST,
@@ -140,18 +140,21 @@ async fn change_password(
         Err(response) => return response,
     };
     let user_id = value.user.id;
-    let result =
-        match accounts::verify_user(&services.repo, &value.user.username, &body.current_password)
-            .await
-        {
-            Ok(Some(_)) => {
-                accounts::set_password(&services.repo, user_id, &body.new_password, false)
-                    .await
-                    .map(|_| true)
-            }
-            Ok(None) => Ok(false),
-            Err(error) => Err(error),
-        };
+    let result = match accounts::verify_user(
+        &services.storage,
+        &value.user.username,
+        &body.current_password,
+    )
+    .await
+    {
+        Ok(Some(_)) => {
+            accounts::set_password(&services.storage, user_id, &body.new_password, false)
+                .await
+                .map(|_| true)
+        }
+        Ok(None) => Ok(false),
+        Err(error) => Err(error),
+    };
     match result {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(
@@ -168,22 +171,22 @@ async fn change_password(
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct InviteInput {
+struct InvitationInput {
     username: String,
     password: String,
 }
 
-#[post("/invites/{token}/accept")]
-async fn accept_invite(
-    services: web::Data<Services>,
+#[post("/invitations/{token}/redeem")]
+async fn redeem_invitation(
+    services: web::Data<PasteService>,
     token: web::Path<String>,
-    body: web::Json<InviteInput>,
+    body: web::Json<InvitationInput>,
 ) -> HttpResponse {
     let token = token.into_inner();
     let username = body.username.clone();
     let password = body.password.clone();
-    match accounts::accept_invite(&services.repo, &token, &username, &password).await {
-        Ok(user) => match accounts::create_session(&services.repo, user.id, false).await {
+    match accounts::redeem_invitation(&services.storage, &token, &username, &password).await {
+        Ok(user) => match accounts::create_session(&services.storage, user.id, false).await {
             Ok((session, csrf, _)) => HttpResponse::Created()
                 .cookie(cookies::session_cookie(session, false))
                 .json(json!({"user": {"id": user.id, "username": user.username, "role": user.role}, "csrf_token": csrf})),

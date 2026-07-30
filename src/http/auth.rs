@@ -1,11 +1,11 @@
 use super::errors::{error, internal};
 use crate::account::{self as accounts, api_keys};
-use crate::services::{Principal, Services};
+use crate::services::{PasteService, Principal};
 use actix_web::http::StatusCode;
 use actix_web::{HttpRequest, HttpResponse};
 
 pub(super) async fn principal(
-    services: &Services,
+    services: &PasteService,
     request: &HttpRequest,
 ) -> Result<Principal, HttpResponse> {
     resolve_principal(services, request)
@@ -22,7 +22,7 @@ pub(super) async fn principal(
 }
 
 async fn resolve_principal(
-    services: &Services,
+    services: &PasteService,
     request: &HttpRequest,
 ) -> Result<Principal, String> {
     if let Some(header) = request.headers().get("Authorization") {
@@ -32,22 +32,22 @@ async fn resolve_principal(
         let value = header
             .strip_prefix("Bearer ")
             .ok_or("Invalid authorization scheme")?;
-        return api_keys::authenticate(&services.repo, value)
+        return api_keys::authenticate(&services.storage, value)
             .await?
-            .map(Principal::Key)
+            .map(Principal::ApiKey)
             .ok_or_else(|| "Invalid bearer token".to_string());
     }
     let session = match request.cookie(accounts::SESSION_COOKIE) {
-        Some(cookie) => accounts::session_user(&services.repo, cookie.value())
+        Some(cookie) => accounts::session_user(&services.storage, cookie.value())
             .await?
-            .map(Principal::User)
+            .map(Principal::Session)
             .unwrap_or(Principal::Anonymous),
         None => Principal::Anonymous,
     };
     if matches!(
         &session,
-        Principal::User(session)
-            if session.user.force_password_change
+        Principal::Session(session)
+            if session.user.password_change_required
                 && !matches!(
                     (request.method().as_str(), request.path()),
                     ("GET", "/api/v2/session")
@@ -74,14 +74,14 @@ pub(super) fn require_auth(principal: Principal) -> Result<Principal, HttpRespon
 }
 
 pub(super) fn require_mutation(
-    _services: &Services,
+    _services: &PasteService,
     request: &HttpRequest,
     principal: Principal,
 ) -> Result<Principal, HttpResponse> {
     let principal = require_auth(principal)?;
     let csrf_valid = match &principal {
-        Principal::Key(_) => true,
-        Principal::User(session) => request
+        Principal::ApiKey(_) => true,
+        Principal::Session(session) => request
             .headers()
             .get("X-CSRF-Token")
             .and_then(|value| value.to_str().ok())

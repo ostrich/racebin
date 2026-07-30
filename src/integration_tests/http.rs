@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod tests {
     use crate::account::{self as accounts, api_keys};
+    use crate::http::attachments::{attachment_path, sanitize_upload_filename};
     use crate::http::configure;
-    use crate::http::files::{attachment_path, sanitize_upload_filename};
     use crate::repository::Repository;
-    use crate::services::{now, PasteInput, Principal, Services};
+    use crate::services::{PasteInput, PasteService, Principal};
     use actix_web::{http::StatusCode, test, web, App};
     use serde_json::{json, Value};
     use std::path::Path;
@@ -12,11 +12,11 @@ mod tests {
     #[actix_web::test]
     async fn attachment_paths_reject_traversal_and_absolute_components() {
         let root = Path::new("/tmp/racebin-test");
-        assert!(attachment_path(root, "safe-slug", "safe-name").is_ok());
+        assert!(attachment_path(root, "safe-id", "safe-name").is_ok());
         assert!(attachment_path(root, "..", "safe-name").is_err());
-        assert!(attachment_path(root, "safe-slug", "../secret").is_err());
-        assert!(attachment_path(root, "safe-slug", "/etc/passwd").is_err());
-        assert!(attachment_path(root, "safe-slug", ".hidden").is_err());
+        assert!(attachment_path(root, "safe-id", "../secret").is_err());
+        assert!(attachment_path(root, "safe-id", "/etc/passwd").is_err());
+        assert!(attachment_path(root, "safe-id", ".hidden").is_err());
     }
 
     #[actix_web::test]
@@ -39,7 +39,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn http_auth_authorization_visibility_and_file_lifecycle() {
+    async fn http_auth_authorization_visibility_and_attachment_lifecycle() {
         let data_dir = std::env::temp_dir().join(format!("racebin-http-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&data_dir).unwrap();
         let url = format!(
@@ -49,20 +49,20 @@ mod tests {
         let repository = Repository::open(&url, &data_dir).await.unwrap();
         repository.migrate().await.unwrap();
         sqlx::query(
-            "INSERT INTO app_user(id,username,password_hash,role,enabled,force_password_change,created)
+            "INSERT INTO users(id,username,password_hash,role,enabled,password_change_required,created_at)
              VALUES(1,'http-user',$1,'user',1,0,$2)",
         )
         .bind(accounts::password_hash("correct horse battery staple").unwrap())
-        .bind(now())
+        .bind(crate::time::unix_timestamp())
         .execute(repository.pool())
         .await
         .unwrap();
         sqlx::query(
-            "INSERT INTO app_user(id,username,password_hash,role,enabled,force_password_change,created)
+            "INSERT INTO users(id,username,password_hash,role,enabled,password_change_required,created_at)
              VALUES(2,'other-user',$1,'user',1,0,$2)",
         )
         .bind(accounts::password_hash("another correct horse battery staple").unwrap())
-        .bind(now())
+        .bind(crate::time::unix_timestamp())
         .execute(repository.pool())
         .await
         .unwrap();
@@ -71,21 +71,21 @@ mod tests {
             username: "http-user".to_string(),
             role: "user".to_string(),
             enabled: true,
-            force_password_change: false,
+            password_change_required: false,
         };
-        let principal = Principal::User(accounts::SessionUser {
+        let principal = Principal::Session(accounts::SessionUser {
             user,
             csrf_token: "direct".to_string(),
         });
-        let services = Services::new(repository.clone());
-        let input = |title: &str, access: &str| PasteInput {
+        let services = PasteService::new(repository.clone());
+        let input = |title: &str, visibility: &str| PasteInput {
             title: Some(title.to_string()),
             content: Some(format!("{title} content")),
-            kind: Some("text".to_string()),
-            syntax: Some("none".to_string()),
-            access: Some(access.to_string()),
-            expiration: None,
-            burn_after_reads: None,
+            content_kind: Some("text".to_string()),
+            language: Some("plaintext".to_string()),
+            visibility: Some(visibility.to_string()),
+            expires_at: None,
+            read_limit: None,
         };
         let public = services
             .create_paste(&principal, &input("public", "public"))
@@ -96,21 +96,21 @@ mod tests {
             .await
             .unwrap();
         let owner = services
-            .create_paste(&principal, &input("owner", "owner"))
+            .create_paste(&principal, &input("private", "private"))
             .await
             .unwrap();
-        let other_principal = Principal::User(accounts::SessionUser {
+        let other_principal = Principal::Session(accounts::SessionUser {
             user: accounts::User {
                 id: 2,
                 username: "other-user".to_string(),
                 role: "user".to_string(),
                 enabled: true,
-                force_password_change: false,
+                password_change_required: false,
             },
             csrf_token: "other".to_string(),
         });
         let other_owner = services
-            .create_paste(&other_principal, &input("other owner", "owner"))
+            .create_paste(&other_principal, &input("other owner", "private"))
             .await
             .unwrap();
 
@@ -121,15 +121,15 @@ mod tests {
         )
         .await;
 
-        for (slug, expected) in [
-            (&public.slug, StatusCode::OK),
-            (&unlisted.slug, StatusCode::OK),
-            (&owner.slug, StatusCode::NOT_FOUND),
+        for (id, expected) in [
+            (&public.id, StatusCode::OK),
+            (&unlisted.id, StatusCode::OK),
+            (&owner.id, StatusCode::NOT_FOUND),
         ] {
             let response = test::call_service(
                 &app,
                 test::TestRequest::get()
-                    .uri(&format!("/api/v2/pastes/{slug}"))
+                    .uri(&format!("/api/v2/pastes/{id}"))
                     .to_request(),
             )
             .await;
@@ -163,19 +163,19 @@ mod tests {
         .await;
         assert_eq!(without_csrf.status(), StatusCode::FORBIDDEN);
 
-        let created = test::call_service(
+        let created_at = test::call_service(
             &app,
             test::TestRequest::post()
                 .uri("/api/v2/pastes")
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
-                .set_json(json!({"title":"files","content":"body","access":"owner"}))
+                .set_json(json!({"title":"files","content":"body","visibility":"private"}))
                 .to_request(),
         )
         .await;
-        assert_eq!(created.status(), StatusCode::CREATED);
-        let created: Value = test::read_body_json(created).await;
-        let slug = created["slug"].as_str().unwrap();
+        assert_eq!(created_at.status(), StatusCode::CREATED);
+        let created_at: Value = test::read_body_json(created_at).await;
+        let id = created_at["id"].as_str().unwrap();
 
         let boundary = "racebin-test-boundary";
         let multipart = format!(
@@ -184,7 +184,7 @@ mod tests {
         let uploaded = test::call_service(
             &app,
             test::TestRequest::post()
-                .uri(&format!("/api/v2/pastes/{slug}/files"))
+                .uri(&format!("/api/v2/pastes/{id}/attachments"))
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
                 .insert_header((
@@ -197,12 +197,12 @@ mod tests {
         .await;
         assert_eq!(uploaded.status(), StatusCode::CREATED);
         let uploaded: Value = test::read_body_json(uploaded).await;
-        let file_id = uploaded["items"][0]["id"].as_i64().unwrap();
+        let attachment_id = uploaded["items"][0]["id"].as_i64().unwrap();
 
         let downloaded = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{slug}/files/{file_id}"))
+                .uri(&format!("/api/v2/pastes/{id}/attachments/{attachment_id}"))
                 .cookie(cookie.clone())
                 .to_request(),
         )
@@ -217,7 +217,7 @@ mod tests {
         let key_read = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{}", owner.slug))
+                .uri(&format!("/api/v2/pastes/{}", owner.id))
                 .insert_header(("Authorization", format!("Bearer {read_token}")))
                 .to_request(),
         )
@@ -237,36 +237,36 @@ mod tests {
         let positive_get_scopes = [
             (
                 "paste:read",
-                format!("/api/v2/pastes/{}", owner.slug),
+                format!("/api/v2/pastes/{}", owner.id),
                 "/api/v2/admin/users",
                 StatusCode::FORBIDDEN,
             ),
             (
                 "paste:list",
                 "/api/v2/pastes?mine=true".to_string(),
-                owner.slug.as_str(),
+                owner.id.as_str(),
                 StatusCode::NOT_FOUND,
             ),
             (
-                "paste:admin",
+                "paste:manage",
                 "/api/v2/admin/pastes".to_string(),
                 "/api/v2/admin/users",
                 StatusCode::FORBIDDEN,
             ),
             (
-                "user:admin",
+                "user:manage",
                 "/api/v2/admin/users".to_string(),
-                "/api/v2/admin/invites",
+                "/api/v2/admin/invitations",
                 StatusCode::FORBIDDEN,
             ),
             (
-                "invite:admin",
-                "/api/v2/admin/invites".to_string(),
+                "invitation:manage",
+                "/api/v2/admin/invitations".to_string(),
                 "/api/v2/admin/api-keys",
                 StatusCode::FORBIDDEN,
             ),
             (
-                "key:admin",
+                "api_key:manage",
                 "/api/v2/admin/api-keys".to_string(),
                 "/api/v2/admin/users",
                 StatusCode::FORBIDDEN,
@@ -305,7 +305,7 @@ mod tests {
             "/api/v2/pastes?mine=true",
             "/api/v2/admin/pastes",
             "/api/v2/admin/users",
-            "/api/v2/admin/invites",
+            "/api/v2/admin/invitations",
             "/api/v2/admin/api-keys",
         ];
         for uri in forbidden_gets {
@@ -327,7 +327,7 @@ mod tests {
         let write_allowed = test::call_service(
             &app,
             test::TestRequest::patch()
-                .uri(&format!("/api/v2/pastes/{}", owner.slug))
+                .uri(&format!("/api/v2/pastes/{}", owner.id))
                 .insert_header(("Authorization", format!("Bearer {write_token}")))
                 .set_json(json!({"title":"written by key"}))
                 .to_request(),
@@ -339,7 +339,7 @@ mod tests {
             test::TestRequest::post()
                 .uri("/api/v2/pastes")
                 .insert_header(("Authorization", format!("Bearer {write_token}")))
-                .set_json(json!({"title":"key-created","content":"body"}))
+                .set_json(json!({"title":"key-created_at","content":"body"}))
                 .to_request(),
         )
         .await;
@@ -347,7 +347,7 @@ mod tests {
         let cross_owner_write = test::call_service(
             &app,
             test::TestRequest::patch()
-                .uri(&format!("/api/v2/pastes/{}", other_owner.slug))
+                .uri(&format!("/api/v2/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {write_token}")))
                 .set_json(json!({"title":"not allowed"}))
                 .to_request(),
@@ -357,7 +357,7 @@ mod tests {
         let write_cannot_read = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{}", owner.slug))
+                .uri(&format!("/api/v2/pastes/{}", owner.id))
                 .insert_header(("Authorization", format!("Bearer {write_token}")))
                 .to_request(),
         )
@@ -365,13 +365,13 @@ mod tests {
         assert_eq!(write_cannot_read.status(), StatusCode::NOT_FOUND);
 
         let disposable = services
-            .create_paste(&principal, &input("delete target", "owner"))
+            .create_paste(&principal, &input("delete target", "private"))
             .await
             .unwrap();
         let read_cannot_delete = test::call_service(
             &app,
             test::TestRequest::delete()
-                .uri(&format!("/api/v2/pastes/{}", disposable.slug))
+                .uri(&format!("/api/v2/pastes/{}", disposable.id))
                 .insert_header(("Authorization", format!("Bearer {read_token}")))
                 .to_request(),
         )
@@ -388,7 +388,7 @@ mod tests {
         let delete_allowed = test::call_service(
             &app,
             test::TestRequest::delete()
-                .uri(&format!("/api/v2/pastes/{}", disposable.slug))
+                .uri(&format!("/api/v2/pastes/{}", disposable.id))
                 .insert_header(("Authorization", format!("Bearer {delete_token}")))
                 .to_request(),
         )
@@ -397,7 +397,7 @@ mod tests {
         let delete_other_denied = test::call_service(
             &app,
             test::TestRequest::delete()
-                .uri(&format!("/api/v2/pastes/{}", other_owner.slug))
+                .uri(&format!("/api/v2/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {delete_token}")))
                 .to_request(),
         )
@@ -408,14 +408,14 @@ mod tests {
             &repository,
             Some(1),
             "paste admin",
-            &["paste:admin".to_string()],
+            &["paste:manage".to_string()],
         )
         .await
         .unwrap();
         let cross_owner_read = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{}", other_owner.slug))
+                .uri(&format!("/api/v2/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {read_token}")))
                 .to_request(),
         )
@@ -424,7 +424,7 @@ mod tests {
         let admin_cross_owner_read = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{}", other_owner.slug))
+                .uri(&format!("/api/v2/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {paste_admin_token}")))
                 .to_request(),
         )
@@ -433,7 +433,7 @@ mod tests {
         let admin_cross_owner_write = test::call_service(
             &app,
             test::TestRequest::patch()
-                .uri(&format!("/api/v2/pastes/{}", other_owner.slug))
+                .uri(&format!("/api/v2/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {paste_admin_token}")))
                 .set_json(json!({"title":"administered"}))
                 .to_request(),
@@ -445,7 +445,7 @@ mod tests {
             &repository,
             Some(1),
             "delegator",
-            &["key:admin".to_string(), "paste:read".to_string()],
+            &["api_key:manage".to_string(), "paste:read".to_string()],
         )
         .await
         .unwrap();
@@ -475,7 +475,7 @@ mod tests {
                 .uri("/api/v2/account/api-keys")
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
-                .set_json(json!({"name":"admin attempt","scopes":["user:admin"]}))
+                .set_json(json!({"name":"admin attempt","scopes":["user:manage"]}))
                 .to_request(),
         )
         .await;
@@ -495,7 +495,7 @@ mod tests {
         let disabled_response = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{}", owner.slug))
+                .uri(&format!("/api/v2/pastes/{}", owner.id))
                 .insert_header(("Authorization", format!("Bearer {disabled_token}")))
                 .to_request(),
         )
@@ -509,20 +509,20 @@ mod tests {
         )
         .await
         .unwrap();
-        sqlx::query("UPDATE app_user SET enabled=0 WHERE id=2")
+        sqlx::query("UPDATE users SET enabled=0 WHERE id=2")
             .execute(repository.pool())
             .await
             .unwrap();
         let disabled_owner_response = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{}", other_owner.slug))
+                .uri(&format!("/api/v2/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {owner_disabled_token}")))
                 .to_request(),
         )
         .await;
         assert_eq!(disabled_owner_response.status(), StatusCode::UNAUTHORIZED);
-        sqlx::query("UPDATE app_user SET enabled=1 WHERE id=2")
+        sqlx::query("UPDATE users SET enabled=1 WHERE id=2")
             .execute(repository.pool())
             .await
             .unwrap();
@@ -539,7 +539,7 @@ mod tests {
             &repository,
             Some(1),
             "key boundary",
-            &["key:admin".to_string()],
+            &["api_key:manage".to_string()],
         )
         .await
         .unwrap();
@@ -564,7 +564,7 @@ mod tests {
         let admin_cross_owner_delete = test::call_service(
             &app,
             test::TestRequest::delete()
-                .uri(&format!("/api/v2/pastes/{}", other_owner.slug))
+                .uri(&format!("/api/v2/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {paste_admin_token}")))
                 .to_request(),
         )
@@ -574,7 +574,7 @@ mod tests {
         let deleted = test::call_service(
             &app,
             test::TestRequest::delete()
-                .uri(&format!("/api/v2/pastes/{slug}/files/{file_id}"))
+                .uri(&format!("/api/v2/pastes/{id}/attachments/{attachment_id}"))
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
                 .to_request(),
@@ -584,7 +584,7 @@ mod tests {
         let missing = test::call_service(
             &app,
             test::TestRequest::get()
-                .uri(&format!("/api/v2/pastes/{slug}/files/{file_id}"))
+                .uri(&format!("/api/v2/pastes/{id}/attachments/{attachment_id}"))
                 .cookie(cookie.clone())
                 .to_request(),
         )

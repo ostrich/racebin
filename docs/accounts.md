@@ -5,7 +5,7 @@ stored as Argon2id hashes. Browser sessions expire after 12 hours, or after 30
 days when "Remember me" is selected. Disabling an account or changing its
 password revokes its sessions.
 
-Administrators create 24-hour invitations from `/admin`. Invite recipients
+Administrators create 24-hour invitations from `/admin`. Invitation recipients
 choose their own username and password. Users manage their password and API
 keys at `/account`.
 

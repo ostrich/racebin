@@ -49,7 +49,7 @@ complete attachment directory. Include the WAL and shared-memory files if the
 database is copied while it is open.
 
 For PostgreSQL, take a consistent PostgreSQL backup and back up `data-dir`.
-Coordinate the two backups when uploaded files must be restored to the exact
+Coordinate the two backups when attachments must be restored to the exact
 same point in time.
 
 ## Copy SQLite To PostgreSQL
@@ -69,7 +69,7 @@ The destination must contain no Racebin application rows. The command:
 2. Reads a consistent source snapshot.
 3. Verifies that every attachment referenced by metadata exists in
    `data-dir`.
-4. Copies users, sessions, invitations, API keys, pastes, and file metadata
+4. Copies users, sessions, invitations, API keys, pastes, and attachment metadata
    while preserving IDs.
 5. Resets every PostgreSQL identity sequence.
 6. Verifies table counts before committing the destination transaction.

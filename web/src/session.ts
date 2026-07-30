@@ -1,18 +1,18 @@
-import { api } from "./api";
+import { requestApi } from "./api";
 import { state } from "./state";
 import type { Config, Session } from "./types";
 
 export async function loadSession(): Promise<void> {
   const [session, config] = await Promise.all([
-    api<Session>("/session").catch(
+    requestApi<Session>("/session").catch(
       (): Session => ({ authenticated: false })
     ),
-    api<Config>("/config")
+    requestApi<Config>("/config")
   ]);
   state.session = session;
   state.config = config;
   if (
-    session.user?.force_password_change &&
+    session.user?.password_change_required &&
     location.pathname !== "/account/password"
   ) {
     history.replaceState({}, "", "/account/password");

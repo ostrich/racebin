@@ -1,6 +1,6 @@
 use crate::account::{self as accounts, api_keys};
 use crate::repository::{copy_database, DatabaseKind, Repository};
-use crate::services::{now, PasteInput, PasteQuery, Principal, Services};
+use crate::services::{PasteInput, PasteQuery, PasteService, Principal};
 use std::path::{Path, PathBuf};
 
 mod backend;
@@ -29,21 +29,21 @@ async fn sqlite_repository(label: &str) -> (Repository, PathBuf) {
 
 async fn insert_user(repo: &Repository, id: i64, username: &str, role: &str) {
     sqlx::query(
-        "INSERT INTO app_user(id,username,password_hash,role,enabled,force_password_change,created)
+        "INSERT INTO users(id,username,password_hash,role,enabled,password_change_required,created_at)
          VALUES($1,$2,$3,$4,1,0,$5)",
     )
     .bind(id)
     .bind(username)
     .bind(accounts::password_hash("correct horse battery staple").unwrap())
     .bind(role)
-    .bind(now())
+    .bind(crate::time::unix_timestamp())
     .execute(repo.pool())
     .await
     .unwrap();
     if repo.kind() == DatabaseKind::Postgres {
         sqlx::query(
-            "SELECT setval(pg_get_serial_sequence('app_user','id'),
-                           (SELECT max(id) FROM app_user),TRUE)",
+            "SELECT setval(pg_get_serial_sequence('users','id'),
+                           (SELECT max(id) FROM users),TRUE)",
         )
         .execute(repo.pool())
         .await
@@ -52,26 +52,26 @@ async fn insert_user(repo: &Repository, id: i64, username: &str, role: &str) {
 }
 
 fn principal(id: i64, username: &str, role: &str) -> Principal {
-    Principal::User(accounts::SessionUser {
+    Principal::Session(accounts::SessionUser {
         user: accounts::User {
             id,
             username: username.to_string(),
             role: role.to_string(),
             enabled: true,
-            force_password_change: false,
+            password_change_required: false,
         },
         csrf_token: "csrf".to_string(),
     })
 }
 
-fn paste_input(title: &str, access: &str) -> PasteInput {
+fn paste_input(title: &str, visibility: &str) -> PasteInput {
     PasteInput {
         title: Some(title.to_string()),
         content: Some(format!("content for {title}")),
-        kind: Some("text".to_string()),
-        syntax: Some("none".to_string()),
-        access: Some(access.to_string()),
-        expiration: None,
-        burn_after_reads: None,
+        content_kind: Some("text".to_string()),
+        language: Some("plaintext".to_string()),
+        visibility: Some(visibility.to_string()),
+        expires_at: None,
+        read_limit: None,
     }
 }

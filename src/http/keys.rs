@@ -9,7 +9,7 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
 }
 
 #[get("/account/api-keys")]
-async fn list_keys(req: HttpRequest, services: web::Data<Services>) -> HttpResponse {
+async fn list_keys(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
     let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(v) => v,
         Err(r) => return r,
@@ -17,14 +17,14 @@ async fn list_keys(req: HttpRequest, services: web::Data<Services>) -> HttpRespo
     let Some(user_id) = value.user_id() else {
         return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
     };
-    if matches!(&value, Principal::Key(key) if !key.has_scope("key:admin")) {
+    if matches!(&value, Principal::ApiKey(key) if !key.has_scope("api_key:manage")) {
         return error(
             StatusCode::FORBIDDEN,
             "forbidden",
-            "Missing key:admin permission",
+            "Missing api_key:manage permission",
         );
     }
-    match api_keys::list_for_user(&services.repo, user_id).await {
+    match api_keys::list_for_user(&services.storage, user_id).await {
         Ok(v) => HttpResponse::Ok().json(v),
         Err(e) => internal(e),
     }
@@ -40,7 +40,7 @@ struct KeyInput {
 #[post("/account/api-keys")]
 async fn create_key(
     req: HttpRequest,
-    services: web::Data<Services>,
+    services: web::Data<PasteService>,
     body: web::Json<KeyInput>,
 ) -> HttpResponse {
     let value = match principal(&services, &req)
@@ -53,29 +53,30 @@ async fn create_key(
     let Some(user_id) = value.user_id() else {
         return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
     };
-    if matches!(&value, Principal::Key(key) if !key.has_scope("key:admin")) {
+    if matches!(&value, Principal::ApiKey(key) if !key.has_scope("api_key:manage")) {
         return error(
             StatusCode::FORBIDDEN,
             "forbidden",
-            "Missing key:admin permission",
+            "Missing api_key:manage permission",
         );
     }
-    if let Principal::Key(key) = &value {
-        if !key.has_scope("key:admin") || body.scopes.iter().any(|scope| !key.has_scope(scope)) {
+    if let Principal::ApiKey(key) = &value {
+        if !key.has_scope("api_key:manage") || body.scopes.iter().any(|scope| !key.has_scope(scope))
+        {
             return error(
                 StatusCode::FORBIDDEN,
                 "forbidden",
                 "A key can only grant scopes it holds",
             );
         }
-    } else if !value.is_admin() && body.scopes.iter().any(|scope| scope.ends_with(":admin")) {
+    } else if !value.is_admin() && body.scopes.iter().any(|scope| scope.ends_with(":manage")) {
         return error(
             StatusCode::FORBIDDEN,
             "forbidden",
             "Only administrators can grant administrative scopes",
         );
     }
-    match api_keys::create(&services.repo, Some(user_id), &body.name, &body.scopes).await {
+    match api_keys::create(&services.storage, Some(user_id), &body.name, &body.scopes).await {
         Ok((key, token)) => HttpResponse::Created().json(json!({"key": key, "token": token})),
         Err(e) => error(StatusCode::BAD_REQUEST, "invalid_api_key", e),
     }
@@ -84,7 +85,7 @@ async fn create_key(
 #[patch("/account/api-keys/{id}")]
 async fn update_key(
     req: HttpRequest,
-    services: web::Data<Services>,
+    services: web::Data<PasteService>,
     id: web::Path<i64>,
     body: web::Json<EnabledInput>,
 ) -> HttpResponse {
@@ -98,14 +99,14 @@ async fn update_key(
     let Some(user_id) = value.user_id() else {
         return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
     };
-    if matches!(&value, Principal::Key(key) if !key.has_scope("key:admin")) {
+    if matches!(&value, Principal::ApiKey(key) if !key.has_scope("api_key:manage")) {
         return error(
             StatusCode::FORBIDDEN,
             "forbidden",
-            "Missing key:admin permission",
+            "Missing api_key:manage permission",
         );
     }
-    match api_keys::set_enabled_for_user(&services.repo, *id, user_id, body.enabled).await {
+    match api_keys::set_enabled_for_user(&services.storage, *id, user_id, body.enabled).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "API key not found"),
         Err(e) => internal(e),
@@ -115,7 +116,7 @@ async fn update_key(
 #[delete("/account/api-keys/{id}")]
 async fn delete_key(
     req: HttpRequest,
-    services: web::Data<Services>,
+    services: web::Data<PasteService>,
     id: web::Path<i64>,
 ) -> HttpResponse {
     let value = match principal(&services, &req)
@@ -128,14 +129,14 @@ async fn delete_key(
     let Some(user_id) = value.user_id() else {
         return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
     };
-    if matches!(&value, Principal::Key(key) if !key.has_scope("key:admin")) {
+    if matches!(&value, Principal::ApiKey(key) if !key.has_scope("api_key:manage")) {
         return error(
             StatusCode::FORBIDDEN,
             "forbidden",
-            "Missing key:admin permission",
+            "Missing api_key:manage permission",
         );
     }
-    match api_keys::delete_for_user(&services.repo, *id, user_id).await {
+    match api_keys::delete_for_user(&services.storage, *id, user_id).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "API key not found"),
         Err(e) => internal(e),
