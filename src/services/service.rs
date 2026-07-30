@@ -80,8 +80,8 @@ impl PasteService {
              COALESCE(length(CAST(document_json AS BLOB)),0)"
         };
         let total_size = format!(
-            "({text_size} + COALESCE((SELECT sum(size_bytes) FROM attachments size_files \
-             WHERE size_files.paste_id=pastes.id),0))"
+            "CAST(({text_size} + COALESCE((SELECT sum(size_bytes) FROM attachments size_files \
+             WHERE size_files.paste_id=pastes.id),0)) AS BIGINT)"
         );
         let order = match query.sort.as_deref().unwrap_or("created") {
             "title" => "lower(title)",
