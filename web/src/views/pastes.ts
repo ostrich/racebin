@@ -28,13 +28,19 @@ export async function home(): Promise<void> {
     <section><div class="section-heading"><h2>Recently shared</h2><a href="/explore" data-link>View all</a></div>${pasteRows(page.items)}</section>`);
 }
 
-export function pasteRows(items: Paste[], manage = false): string {
+type PasteRowsOptions = {
+  manage?: boolean;
+  ownerNames?: Map<number, string>;
+};
+
+export function pasteRows(items: Paste[], options: PasteRowsOptions = {}): string {
+  const { manage = false, ownerNames } = options;
   if (!items.length) return `<div class="empty compact"><p>No pastes found.</p></div>`;
   return `<div class="paste-list">${items.map(paste => `
     <article class="paste-row">
       <div class="paste-main"><a class="paste-title" href="/pastes/${escapeHtml(paste.id)}" data-link>${escapeHtml(pasteDisplayTitle(paste))}</a>
       <p>${escapeHtml(paste.content.slice(0, 160).replace(/\s+/g, " "))}</p></div>
-      <div class="paste-meta"><span>${escapeHtml(pasteFormatLabel(paste))}</span><span>${escapeHtml(paste.visibility)}</span><time>${formatDate(paste.created_at)}</time></div>
+      <div class="paste-meta">${ownerNames ? `<span>Owner: ${paste.owner_id === null ? "No owner" : escapeHtml(ownerNames.get(paste.owner_id) ?? `User #${paste.owner_id}`)}</span>` : ""}<span>${escapeHtml(pasteFormatLabel(paste))}</span><span>${escapeHtml(paste.visibility)}</span><time>${formatDate(paste.created_at)}</time></div>
       <div class="row-actions">
         ${iconButton("copy", "Copy link")}
         ${manage ? `<a class="icon-button" title="Edit" aria-label="Edit" href="/pastes/${escapeHtml(paste.id)}/edit" data-link><i data-icon="edit-3"></i></a>${iconButton("trash-2", "Delete")}` : ""}
@@ -69,7 +75,7 @@ export async function pasteList(mine: boolean): Promise<void> {
     <form class="filters" id="paste-filters"><label><span>Search</span><input name="search" value="${escapeHtml(params.get("search") ?? "")}" placeholder="Title, content, or ID"></label>
     <label><span>Visibility</span><select name="visibility"><option value="">All visibility</option>${["public","unlisted","private"].map(value => `<option ${params.get("visibility") === value ? "selected" : ""}>${value}</option>`).join("")}</select></label>
     <button class="button" type="submit"><i data-icon="search"></i> Filter</button></form>
-    <p class="result-count">${page.total_items} paste${page.total_items === 1 ? "" : "s"}</p>${pasteRows(page.items, mine)}${pagination(page)}</section>`);
+    <p class="result-count">${page.total_items} paste${page.total_items === 1 ? "" : "s"}</p>${pasteRows(page.items, { manage: mine })}${pagination(page)}</section>`);
 }
 
 export async function pasteView(pasteId: string): Promise<void> {
