@@ -168,12 +168,14 @@ function pasteFormState(
   form: HTMLFormElement,
   getRichDocument: () => RichTextDocument | undefined
 ): string {
-  const fields = [...new FormData(form).entries()].map(([name, value]) => [
-    name,
-    value instanceof File
-      ? { name: value.name, size: value.size, last_modified: value.lastModified }
-      : value
-  ]);
+  const fields = [...new FormData(form).entries()]
+    .filter(([, value]) => !(value instanceof File && !value.name && value.size === 0))
+    .map(([name, value]) => [
+      name,
+      value instanceof File
+        ? { name: value.name, size: value.size, last_modified: value.lastModified }
+        : value
+    ]);
   const kind = form.elements.namedItem("content_kind") as HTMLSelectElement | null;
   return JSON.stringify({
     fields,
