@@ -13,7 +13,7 @@ application uses that same API.
 - Session authentication with CSRF protection
 - Invitation-based account creation and administrator controls
 - User-owned API keys with explicit paste and administration scopes
-- SQLite as the single authoritative store
+- SQLite or PostgreSQL as the authoritative store
 - Embedded responsive TypeScript application with no separate web server
 
 Encryption, readonly/editable modes, the JSON database, server-rendered forms,
@@ -48,6 +48,7 @@ All settings have equivalent `RACEBIN_*` environment variables.
 | `--port` | `7042` |
 | `--threads` | `2` |
 | `--data-dir` | `racebin_data` |
+| `--database-url` | `sqlite://<data-dir>/database.sqlite` |
 | `--title` | `Racebin` |
 | `--no-file-upload` | disabled |
 | `--max-file-size-mb` | `2048` |
@@ -60,14 +61,34 @@ the API.
 
 ## Migration
 
-Startup performs a transactionally guarded schema migration. Public records
-remain public; legacy private records become unlisted when they have no owner
-and owner-only otherwise. Existing IDs, titles, content, files, owners, and
-read statistics are retained.
+Startup selects the database from `--database-url` or
+`RACEBIN_DATABASE_URL` and runs the migrations for that backend. SQLite URLs
+and both `postgres://` and `postgresql://` URLs are supported. The data
+directory continues to hold uploaded attachments when PostgreSQL is used.
+
+SQLite startup also performs a transactionally guarded legacy migration.
+Public records remain public; legacy private records become unlisted when they
+have no owner and owner-only otherwise. Existing IDs, titles, content, files,
+owners, and read statistics are retained.
 
 The migration aborts before changing the database when it encounters encrypted
 or readonly records. Back up `database.sqlite` and the attachment directory
 before upgrading.
+
+To move an existing SQLite installation to an empty PostgreSQL database, stop
+Racebin and run:
+
+```bash
+racebin database copy \
+  --from 'sqlite:///var/lib/racebin/database.sqlite' \
+  --to 'postgresql://racebin:password@localhost/racebin' \
+  --data-dir /var/lib/racebin
+```
+
+The command migrates the destination schema, verifies that it contains no
+application data, copies all records while preserving IDs and credentials,
+checks attachment references and row counts, resets PostgreSQL identity
+sequences, and commits the destination transaction only after verification.
 
 Racebin's original work is available under the [MIT License](LICENSE).
 MicroBin-derived portions remain subject to the preserved

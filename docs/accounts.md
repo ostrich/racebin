@@ -21,5 +21,8 @@ racebin account enable USERNAME --data-dir /var/lib/racebin
 racebin account role USERNAME user --data-dir /var/lib/racebin
 ```
 
+For PostgreSQL, pass `--database-url postgresql://...` to account commands or
+set `RACEBIN_DATABASE_URL`. `--data-dir` still selects attachment storage.
+
 `create` and `password` prompt without echo. For automation, pass
 `--password-file PATH`; the file is read once and is not retained by Racebin.

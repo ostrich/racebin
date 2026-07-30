@@ -1,8 +1,8 @@
 use crate::repository::Repository;
 use crate::util::{accounts, api_keys};
 use actix_web::HttpRequest;
-use rusqlite::{params, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
+use sqlx::{Any, Executor, FromRow};
 use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
@@ -37,7 +37,7 @@ impl Principal {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, FromRow)]
 pub struct Paste {
     pub id: i64,
     pub slug: String,
@@ -52,10 +52,11 @@ pub struct Paste {
     pub last_read: Option<i64>,
     pub read_count: i64,
     pub burn_after_reads: i64,
+    #[sqlx(skip)]
     pub files: Vec<PasteFile>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, FromRow)]
 pub struct PasteFile {
     pub id: i64,
     pub position: i64,
@@ -102,7 +103,7 @@ impl Services {
         Self { repo }
     }
 
-    pub fn principal(&self, req: &HttpRequest) -> Result<Principal, String> {
+    pub async fn principal(&self, req: &HttpRequest) -> Result<Principal, String> {
         if let Some(header) = req.headers().get("Authorization") {
             let header = header
                 .to_str()
@@ -110,11 +111,12 @@ impl Services {
             let value = header
                 .strip_prefix("Bearer ")
                 .ok_or("Invalid authorization scheme")?;
-            return api_keys::authenticate(value)?
+            return api_keys::authenticate(&self.repo, value)
+                .await?
                 .map(Principal::Key)
                 .ok_or_else(|| "Invalid bearer token".to_string());
         }
-        match accounts::current(req) {
+        match accounts::current(&self.repo, req).await {
             Some(session)
                 if session.user.force_password_change
                     && !matches!(
@@ -143,7 +145,7 @@ impl Services {
         }
     }
 
-    pub fn list_pastes(
+    pub async fn list_pastes(
         &self,
         principal: &Principal,
         query: &PasteQuery,
@@ -151,7 +153,7 @@ impl Services {
     ) -> Result<Page<Paste>, String> {
         let page = query.page.unwrap_or(1).max(1);
         let page_size = query.page_size.unwrap_or(30).clamp(1, 100);
-        let offset = u64::from(page - 1).saturating_mul(u64::from(page_size));
+        let offset = i64::from(page - 1).saturating_mul(i64::from(page_size));
         let user_id = principal.user_id();
         let search = format!("%{}%", query.search.as_deref().unwrap_or(""));
         let access = query.access.as_deref();
@@ -160,47 +162,39 @@ impl Services {
         } else {
             query.owner_user_id
         };
-        let conn = self.repo.conn()?;
-        let visibility = if admin {
-            "(:user_id IS NULL OR :user_id IS NOT NULL)"
-        } else {
-            "((:user_id IS NULL AND access='public') OR
-              (:user_id IS NOT NULL AND (access='public' OR owner_user_id=:user_id)))"
-        };
-        let filter = format!(
-            "{visibility} AND (:access IS NULL OR access=:access)
-             AND (:owner IS NULL OR owner_user_id=:owner)
-             AND (expiration IS NULL OR expiration>:now)
-             AND (title LIKE :search OR content LIKE :search OR slug LIKE :search)"
-        );
-        let total = conn
-            .query_row(
-                &format!("SELECT count(*) FROM pasta WHERE {filter}"),
-                rusqlite::named_params! {
-                    ":user_id": user_id, ":access": access, ":owner": owner,
-                    ":search": search, ":now": now()
-                },
-                |row| row.get(0),
-            )
+        let filter = "(($1=1) OR (($2 IS NULL AND access='public') OR
+              ($2 IS NOT NULL AND (access='public' OR owner_user_id=$2))))
+             AND ($3 IS NULL OR access=$3)
+             AND ($4 IS NULL OR owner_user_id=$4)
+             AND (expiration IS NULL OR expiration>$5)
+             AND (lower(title) LIKE lower($6) OR lower(content) LIKE lower($6)
+                  OR lower(slug) LIKE lower($6))";
+        let total: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM pasta WHERE {filter}"))
+            .bind(i64::from(admin))
+            .bind(user_id)
+            .bind(access)
+            .bind(owner)
+            .bind(now())
+            .bind(&search)
+            .fetch_one(self.repo.pool())
+            .await
             .map_err(|e| e.to_string())?;
-        let mut stmt = conn
-            .prepare(&format!(
-                "SELECT id,slug,owner_user_id,title,substr(content,1,500),kind,syntax,access,created,
-                        expiration,last_read,read_count,burn_after_reads
-                 FROM pasta WHERE {filter} ORDER BY created DESC LIMIT :limit OFFSET :offset"
-            ))
-            .map_err(|e| e.to_string())?;
-        let items = stmt
-            .query_map(
-                rusqlite::named_params! {
-                    ":user_id": user_id, ":access": access, ":owner": owner, ":search": search,
-                    ":limit": page_size, ":offset": offset, ":now": now()
-                },
-                paste_row,
-            )
-            .map_err(|e| e.to_string())?
-            .collect::<rusqlite::Result<Vec<_>>>()
-            .map_err(|e| e.to_string())?;
+        let items = sqlx::query_as::<_, Paste>(&format!(
+            "SELECT id,slug,owner_user_id,title,substr(content,1,500) AS content,
+                    kind,syntax,access,created,expiration,last_read,read_count,burn_after_reads
+             FROM pasta WHERE {filter} ORDER BY created DESC LIMIT $7 OFFSET $8"
+        ))
+        .bind(i64::from(admin))
+        .bind(user_id)
+        .bind(access)
+        .bind(owner)
+        .bind(now())
+        .bind(search)
+        .bind(i64::from(page_size))
+        .bind(offset)
+        .fetch_all(self.repo.pool())
+        .await
+        .map_err(|e| e.to_string())?;
         Ok(Page {
             items,
             page,
@@ -209,62 +203,77 @@ impl Services {
         })
     }
 
-    pub fn get_paste(&self, principal: &Principal, slug: &str) -> Result<Option<Paste>, String> {
+    pub async fn get_paste(
+        &self,
+        principal: &Principal,
+        slug: &str,
+    ) -> Result<Option<Paste>, String> {
         Ok(self
-            .find_paste(slug)?
+            .find_paste(slug)
+            .await?
             .filter(|paste| can_read(principal, paste)))
     }
 
-    fn find_paste(&self, slug: &str) -> Result<Option<Paste>, String> {
-        let conn = self.repo.conn()?;
-        let mut paste = conn
-            .query_row(
-                "SELECT id,slug,owner_user_id,title,content,kind,syntax,access,created,
-                        expiration,last_read,read_count,burn_after_reads
-                 FROM pasta WHERE slug=?1 AND (expiration IS NULL OR expiration>?2)",
-                params![slug, now()],
-                paste_row,
-            )
-            .optional()
-            .map_err(|e| e.to_string())?;
+    async fn find_paste(&self, slug: &str) -> Result<Option<Paste>, String> {
+        let mut paste = sqlx::query_as::<_, Paste>(
+            "SELECT id,slug,owner_user_id,title,content,kind,syntax,access,created,
+                    expiration,last_read,read_count,burn_after_reads
+             FROM pasta WHERE slug=$1 AND (expiration IS NULL OR expiration>$2)",
+        )
+        .bind(slug)
+        .bind(now())
+        .fetch_optional(self.repo.pool())
+        .await
+        .map_err(|e| e.to_string())?;
         if let Some(value) = &mut paste {
-            value.files = self.files(value.id)?;
+            value.files = self.files(value.id).await?;
         }
         Ok(paste)
     }
 
-    pub fn read_paste(&self, principal: &Principal, slug: &str) -> Result<Option<Paste>, String> {
-        let mut conn = self.repo.conn()?;
-        let tx = conn
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(|e| e.to_string())?;
-        let mut paste = tx
-            .query_row(
-                "SELECT id,slug,owner_user_id,title,content,kind,syntax,access,created,
-                        expiration,last_read,read_count,burn_after_reads
-                 FROM pasta WHERE slug=?1 AND (expiration IS NULL OR expiration>?2)",
-                params![slug, now()],
-                paste_row,
-            )
-            .optional()
-            .map_err(|e| e.to_string())?;
+    pub async fn read_paste(
+        &self,
+        principal: &Principal,
+        slug: &str,
+    ) -> Result<Option<Paste>, String> {
+        let mut tx = self.repo.pool().begin().await.map_err(|e| e.to_string())?;
+        let lock = if self.repo.kind() == crate::repository::DatabaseKind::Postgres {
+            " FOR UPDATE"
+        } else {
+            ""
+        };
+        let mut paste = sqlx::query_as::<_, Paste>(&format!(
+            "SELECT id,slug,owner_user_id,title,content,kind,syntax,access,created,
+                    expiration,last_read,read_count,burn_after_reads
+             FROM pasta WHERE slug=$1 AND (expiration IS NULL OR expiration>$2){lock}"
+        ))
+        .bind(slug)
+        .bind(now())
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
         let Some(mut paste) = paste.take().filter(|paste| can_read(principal, paste)) else {
             return Ok(None);
         };
         let next_reads = paste.read_count + 1;
         let burned = paste.burn_after_reads > 0 && next_reads >= paste.burn_after_reads;
-        paste.files = files_from(&tx, paste.id)?;
+        paste.files = files_from(&mut *tx, paste.id).await?;
         if burned {
-            tx.execute("DELETE FROM pasta WHERE id=?1", params![paste.id])
+            sqlx::query("DELETE FROM pasta WHERE id=$1")
+                .bind(paste.id)
+                .execute(&mut *tx)
+                .await
                 .map_err(|e| e.to_string())?;
         } else {
-            tx.execute(
-                "UPDATE pasta SET read_count=?2,last_read=?3 WHERE id=?1",
-                params![paste.id, next_reads, now()],
-            )
-            .map_err(|e| e.to_string())?;
+            sqlx::query("UPDATE pasta SET read_count=$2,last_read=$3 WHERE id=$1")
+                .bind(paste.id)
+                .bind(next_reads)
+                .bind(now())
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
         }
-        tx.commit().map_err(|e| e.to_string())?;
+        tx.commit().await.map_err(|e| e.to_string())?;
         if burned {
             let _ =
                 std::fs::remove_dir_all(self.repo.data_dir.join("attachments").join(&paste.slug));
@@ -273,13 +282,21 @@ impl Services {
         Ok(Some(paste))
     }
 
-    pub fn ensure_can_update(&self, principal: &Principal, slug: &str) -> Result<Paste, String> {
-        let paste = self.find_paste(slug)?.ok_or("Paste not found")?;
+    pub async fn ensure_can_update(
+        &self,
+        principal: &Principal,
+        slug: &str,
+    ) -> Result<Paste, String> {
+        let paste = self.find_paste(slug).await?.ok_or("Paste not found")?;
         authorize_owner(principal, &paste, "paste:write")?;
         Ok(paste)
     }
 
-    pub fn create_paste(&self, principal: &Principal, input: &PasteInput) -> Result<Paste, String> {
+    pub async fn create_paste(
+        &self,
+        principal: &Principal,
+        input: &PasteInput,
+    ) -> Result<Paste, String> {
         let owner = principal.user_id().ok_or("Authentication required")?;
         if !principal.can("paste:write") && !matches!(principal, Principal::User(_)) {
             return Err("Missing paste:write scope".into());
@@ -287,37 +304,37 @@ impl Services {
         validate_input(input, true)?;
         let now = now();
         let slug = Uuid::new_v4().simple().to_string()[..24].to_string();
-        let conn = self.repo.conn()?;
-        conn.execute(
+        sqlx::query(
             "INSERT INTO pasta(slug,owner_user_id,title,content,kind,syntax,access,created,
                                expiration,last_read,read_count,burn_after_reads)
-             VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?8,0,?10)",
-            params![
-                slug,
-                owner,
-                input.title.as_deref().unwrap_or("").trim(),
-                input.content.as_deref().unwrap_or(""),
-                input.kind.as_deref().unwrap_or("text"),
-                input.syntax.as_deref().unwrap_or("none"),
-                input.access.as_deref().unwrap_or("unlisted"),
-                now,
-                input.expiration.flatten(),
-                input.burn_after_reads.unwrap_or(0)
-            ],
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$8,0,$10)",
         )
+        .bind(&slug)
+        .bind(owner)
+        .bind(input.title.as_deref().unwrap_or("").trim())
+        .bind(input.content.as_deref().unwrap_or(""))
+        .bind(input.kind.as_deref().unwrap_or("text"))
+        .bind(input.syntax.as_deref().unwrap_or("none"))
+        .bind(input.access.as_deref().unwrap_or("unlisted"))
+        .bind(now)
+        .bind(input.expiration.flatten())
+        .bind(input.burn_after_reads.unwrap_or(0))
+        .execute(self.repo.pool())
+        .await
         .map_err(|e| e.to_string())?;
-        self.get_paste(principal, &slug)?
+        self.get_paste(principal, &slug)
+            .await?
             .ok_or("Paste creation failed".into())
     }
 
-    pub fn update_paste(
+    pub async fn update_paste(
         &self,
         principal: &Principal,
         slug: &str,
         input: &PasteInput,
     ) -> Result<Option<Paste>, String> {
         validate_input(input, false)?;
-        let current = match self.find_paste(slug)? {
+        let current = match self.find_paste(slug).await? {
             Some(value) => value,
             None => return Ok(None),
         };
@@ -326,31 +343,29 @@ impl Services {
             input.kind.as_deref().unwrap_or(&current.kind),
             input.content.as_deref().unwrap_or(&current.content),
         )?;
-        let conn = self.repo.conn()?;
-        conn.execute(
-            "UPDATE pasta SET title=coalesce(?2,title),content=coalesce(?3,content),
-             kind=coalesce(?4,kind),syntax=coalesce(?5,syntax),access=coalesce(?6,access),
-             expiration=CASE WHEN ?7 THEN ?8 ELSE expiration END,
-             burn_after_reads=coalesce(?9,burn_after_reads)
-             WHERE slug=?1",
-            params![
-                slug,
-                input.title.as_deref().map(str::trim),
-                input.content,
-                input.kind,
-                input.syntax,
-                input.access,
-                input.expiration.is_some(),
-                input.expiration.flatten(),
-                input.burn_after_reads
-            ],
+        sqlx::query(
+            "UPDATE pasta SET title=coalesce($2,title),content=coalesce($3,content),
+             kind=coalesce($4,kind),syntax=coalesce($5,syntax),access=coalesce($6,access),
+             expiration=CASE WHEN $7=1 THEN $8 ELSE expiration END,
+             burn_after_reads=coalesce($9,burn_after_reads) WHERE slug=$1",
         )
+        .bind(slug)
+        .bind(input.title.as_deref().map(str::trim))
+        .bind(input.content.as_deref())
+        .bind(input.kind.as_deref())
+        .bind(input.syntax.as_deref())
+        .bind(input.access.as_deref())
+        .bind(i64::from(input.expiration.is_some()))
+        .bind(input.expiration.flatten())
+        .bind(input.burn_after_reads)
+        .execute(self.repo.pool())
+        .await
         .map_err(|e| e.to_string())?;
-        self.find_paste(slug)
+        self.find_paste(slug).await
     }
 
-    pub fn delete_paste(&self, principal: &Principal, slug: &str) -> Result<bool, String> {
-        let current = match self.find_paste(slug)? {
+    pub async fn delete_paste(&self, principal: &Principal, slug: &str) -> Result<bool, String> {
+        let current = match self.find_paste(slug).await? {
             Some(value) => value,
             None => return Ok(false),
         };
@@ -365,12 +380,12 @@ impl Services {
         if had_directory {
             std::fs::rename(&directory, &staged).map_err(|e| e.to_string())?;
         }
-        match self
-            .repo
-            .conn()?
-            .execute("DELETE FROM pasta WHERE slug=?1", params![slug])
+        match sqlx::query("DELETE FROM pasta WHERE slug=$1")
+            .bind(slug)
+            .execute(self.repo.pool())
+            .await
         {
-            Ok(1) => {
+            Ok(result) if result.rows_affected() == 1 => {
                 if had_directory {
                     let _ = std::fs::remove_dir_all(staged);
                 }
@@ -391,13 +406,13 @@ impl Services {
         }
     }
 
-    pub fn add_files(
+    pub async fn add_files(
         &self,
         principal: &Principal,
         slug: &str,
         inputs: &[(String, String, i64)],
     ) -> Result<Vec<PasteFile>, String> {
-        let paste = self.find_paste(slug)?.ok_or("Paste not found")?;
+        let paste = self.find_paste(slug).await?.ok_or("Paste not found")?;
         authorize_owner(principal, &paste, "paste:write")?;
         let mut names = paste
             .files
@@ -409,15 +424,14 @@ impl Services {
                 return Err(format!("{name} already exists"));
             }
         }
-        let mut conn = self.repo.conn()?;
-        let tx = conn.transaction().map_err(|e| e.to_string())?;
-        let starting_position: i64 = tx
-            .query_row(
-                "SELECT coalesce(max(position)+1,0) FROM pasta_file WHERE pasta_id=?1",
-                params![paste.id],
-                |row| row.get(0),
-            )
-            .map_err(|e| e.to_string())?;
+        let mut tx = self.repo.pool().begin().await.map_err(|e| e.to_string())?;
+        let starting_position: i64 = sqlx::query_scalar(
+            "SELECT coalesce(max(position)+1,0) FROM pasta_file WHERE pasta_id=$1",
+        )
+        .bind(paste.id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
         let mut has_primary = paste.files.iter().any(|file| file.role == "primary");
         let mut files = Vec::with_capacity(inputs.len());
         for (offset, (name, storage_name, size)) in inputs.iter().enumerate() {
@@ -428,14 +442,21 @@ impl Services {
                 has_primary = true;
                 "primary"
             };
-            tx.execute(
+            let id: i64 = sqlx::query_scalar(
                 "INSERT INTO pasta_file(pasta_id,position,role,name,storage_name,size)
-                 VALUES(?1,?2,?3,?4,?5,?6)",
-                params![paste.id, position, role, name, storage_name, size],
+                 VALUES($1,$2,$3,$4,$5,$6) RETURNING id",
             )
+            .bind(paste.id)
+            .bind(position)
+            .bind(role)
+            .bind(name)
+            .bind(storage_name)
+            .bind(size)
+            .fetch_one(&mut *tx)
+            .await
             .map_err(|e| e.to_string())?;
             files.push(PasteFile {
-                id: tx.last_insert_rowid(),
+                id,
                 position,
                 role: role.to_string(),
                 name: name.clone(),
@@ -443,17 +464,17 @@ impl Services {
                 size: *size,
             });
         }
-        tx.commit().map_err(|e| e.to_string())?;
+        tx.commit().await.map_err(|e| e.to_string())?;
         Ok(files)
     }
 
-    pub fn delete_file(
+    pub async fn delete_file(
         &self,
         principal: &Principal,
         slug: &str,
         file_id: i64,
     ) -> Result<bool, String> {
-        let paste = self.find_paste(slug)?.ok_or("Paste not found")?;
+        let paste = self.find_paste(slug).await?.ok_or("Paste not found")?;
         authorize_owner(principal, &paste, "paste:write")?;
         let file = paste.files.into_iter().find(|file| file.id == file_id);
         let Some(file) = file else {
@@ -478,10 +499,11 @@ impl Services {
         if existed {
             std::fs::rename(&path, &staged).map_err(|e| e.to_string())?;
         }
-        let result = self
-            .repo
-            .conn()?
-            .execute("DELETE FROM pasta_file WHERE id=?1", params![file_id])
+        let result = sqlx::query("DELETE FROM pasta_file WHERE id=$1")
+            .bind(file_id)
+            .execute(self.repo.pool())
+            .await
+            .map(|result| result.rows_affected())
             .map_err(|e| e.to_string());
         match result {
             Ok(1) => {
@@ -505,34 +527,23 @@ impl Services {
         }
     }
 
-    fn files(&self, paste_id: i64) -> Result<Vec<PasteFile>, String> {
-        let conn = self.repo.conn()?;
-        files_from(&conn, paste_id)
+    async fn files(&self, paste_id: i64) -> Result<Vec<PasteFile>, String> {
+        files_from(self.repo.pool(), paste_id).await
     }
 }
 
-fn files_from(conn: &rusqlite::Connection, paste_id: i64) -> Result<Vec<PasteFile>, String> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT id,position,role,name,storage_name,size FROM pasta_file
-             WHERE pasta_id=?1 ORDER BY position",
-        )
-        .map_err(|e| e.to_string())?;
-    let files = stmt
-        .query_map(params![paste_id], |row| {
-            Ok(PasteFile {
-                id: row.get(0)?,
-                position: row.get(1)?,
-                role: row.get(2)?,
-                name: row.get(3)?,
-                storage_name: row.get(4)?,
-                size: row.get(5)?,
-            })
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(|e| e.to_string())?;
-    Ok(files)
+async fn files_from<'e, E>(executor: E, paste_id: i64) -> Result<Vec<PasteFile>, String>
+where
+    E: Executor<'e, Database = Any>,
+{
+    sqlx::query_as::<_, PasteFile>(
+        "SELECT id,position,role,name,storage_name,size FROM pasta_file
+         WHERE pasta_id=$1 ORDER BY position",
+    )
+    .bind(paste_id)
+    .fetch_all(executor)
+    .await
+    .map_err(|e| e.to_string())
 }
 
 fn can_read(principal: &Principal, paste: &Paste) -> bool {
@@ -547,25 +558,6 @@ fn can_read(principal: &Principal, paste: &Paste) -> bool {
             }
             Principal::Anonymous => false,
         }
-}
-
-fn paste_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Paste> {
-    Ok(Paste {
-        id: row.get(0)?,
-        slug: row.get(1)?,
-        owner_user_id: row.get(2)?,
-        title: row.get(3)?,
-        content: row.get(4)?,
-        kind: row.get(5)?,
-        syntax: row.get(6)?,
-        access: row.get(7)?,
-        created: row.get(8)?,
-        expiration: row.get(9)?,
-        last_read: row.get(10)?,
-        read_count: row.get(11)?,
-        burn_after_reads: row.get(12)?,
-        files: Vec::new(),
-    })
 }
 
 fn authorize_owner(principal: &Principal, paste: &Paste, scope: &str) -> Result<(), String> {
@@ -637,7 +629,6 @@ mod tests {
     use crate::repository::Repository;
     use crate::util::accounts::{SessionUser, User};
     use crate::util::api_keys::ApiKey;
-    use rusqlite::params;
 
     #[test]
     fn url_pastes_accept_only_http_destinations() {
@@ -688,27 +679,31 @@ mod tests {
         assert!(can_read(&key("paste:admin"), &paste));
     }
 
-    #[test]
-    fn burn_after_read_is_committed_with_the_consuming_read() {
+    #[actix_web::test]
+    async fn burn_after_read_is_committed_with_the_consuming_read() {
         let path = std::env::temp_dir().join(format!("racebin-burn-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&path).unwrap();
-        let repository = Repository::open(&path).unwrap();
-        repository.migrate().unwrap();
-        let conn = repository.conn().unwrap();
-        conn.execute(
+        let url = format!(
+            "sqlite://{}?mode=rwc",
+            path.join("database.sqlite").display()
+        );
+        let repository = Repository::open(&url, &path).await.unwrap();
+        repository.migrate().await.unwrap();
+        sqlx::query(
             "INSERT INTO app_user(id,username,password_hash,role,created)
              VALUES(7,'owner','unused','user',0)",
-            [],
         )
+        .execute(repository.pool())
+        .await
         .unwrap();
-        conn.execute(
+        sqlx::query(
             "INSERT INTO pasta(id,slug,owner_user_id,title,content,kind,syntax,access,
              created,read_count,burn_after_reads)
              VALUES(1,'burn',7,'','secret','text','none','owner',0,0,1)",
-            [],
         )
+        .execute(repository.pool())
+        .await
         .unwrap();
-        drop(conn);
         let principal = Principal::User(SessionUser {
             user: User {
                 id: 7,
@@ -720,16 +715,16 @@ mod tests {
             csrf_token: "csrf".to_string(),
         });
         let services = Services::new(repository.clone());
-        let consumed = services.read_paste(&principal, "burn").unwrap().unwrap();
-        assert_eq!(consumed.content, "secret");
-        let remaining: i64 = repository
-            .conn()
+        let consumed = services
+            .read_paste(&principal, "burn")
+            .await
             .unwrap()
-            .query_row(
-                "SELECT count(*) FROM pasta WHERE slug=?1",
-                params!["burn"],
-                |row| row.get(0),
-            )
+            .unwrap();
+        assert_eq!(consumed.content, "secret");
+        let remaining: i64 = sqlx::query_scalar("SELECT count(*) FROM pasta WHERE slug=$1")
+            .bind("burn")
+            .fetch_one(repository.pool())
+            .await
             .unwrap();
         assert_eq!(remaining, 0);
         let _ = std::fs::remove_dir_all(path);

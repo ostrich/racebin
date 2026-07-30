@@ -1,10 +1,11 @@
 use rand::{distributions::Alphanumeric, Rng};
-use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use sqlx::any::AnyRow;
+use sqlx::{FromRow, Row};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::args::ARGS;
+use crate::repository::Repository;
 
 pub const VALID_SCOPES: &[&str] = &[
     "paste:read",
@@ -29,6 +30,21 @@ pub struct ApiKey {
     pub enabled: bool,
 }
 
+impl<'r> FromRow<'r, AnyRow> for ApiKey {
+    fn from_row(row: &'r AnyRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: row.try_get("id")?,
+            user_id: row.try_get("user_id")?,
+            name: row.try_get("name")?,
+            prefix: row.try_get("prefix")?,
+            scopes: row.try_get("scopes")?,
+            created: row.try_get("created")?,
+            last_used: row.try_get("last_used")?,
+            enabled: row.try_get::<i64, _>("enabled")? != 0,
+        })
+    }
+}
+
 impl ApiKey {
     pub fn has_scope(&self, scope: &str) -> bool {
         self.scopes.split(',').any(|item| item == scope)
@@ -44,30 +60,6 @@ fn now() -> i64 {
 
 fn token_hash(token: &str) -> String {
     format!("{:x}", Sha256::digest(token.as_bytes()))
-}
-
-fn connection() -> rusqlite::Result<Connection> {
-    let conn = Connection::open(format!("{}/database.sqlite", ARGS.data_dir))?;
-    conn.execute_batch(
-        "
-        PRAGMA foreign_keys = ON;
-        PRAGMA journal_mode = WAL;
-        PRAGMA busy_timeout = 5000;
-        CREATE TABLE IF NOT EXISTS api_key (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER REFERENCES app_user(id),
-            name TEXT NOT NULL,
-            prefix TEXT NOT NULL UNIQUE,
-            token_hash TEXT NOT NULL UNIQUE,
-            scopes TEXT NOT NULL,
-            created INTEGER NOT NULL,
-            last_used INTEGER,
-            enabled INTEGER NOT NULL DEFAULT 1
-        );
-        ",
-    )?;
-    let _ = conn.execute("ALTER TABLE api_key ADD COLUMN user_id INTEGER", []);
-    Ok(conn)
 }
 
 pub fn normalize_scopes(scopes: &[String]) -> Result<String, &'static str> {
@@ -88,7 +80,8 @@ pub fn normalize_scopes(scopes: &[String]) -> Result<String, &'static str> {
     Ok(normalized.join(","))
 }
 
-pub fn create(
+pub async fn create(
+    repo: &Repository,
     user_id: Option<i64>,
     name: &str,
     scopes: &[String],
@@ -108,157 +101,128 @@ pub fn create(
         .take(10)
         .map(char::from)
         .collect();
-    let token = format!("mbk_{}_{}", prefix, secret);
+    let token = format!("mbk_{prefix}_{secret}");
     let created = now();
-    let conn = connection().map_err(|error| error.to_string())?;
-    conn.execute(
-        "INSERT INTO api_key (user_id, name, prefix, token_hash, scopes, created)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![user_id, name, prefix, token_hash(&token), scopes, created],
+    let id: i64 = sqlx::query_scalar(
+        "INSERT INTO api_key(user_id,name,prefix,token_hash,scopes,created)
+         VALUES($1,$2,$3,$4,$5,$6) RETURNING id",
     )
-    .map_err(|error| error.to_string())?;
-    let key = ApiKey {
-        id: conn.last_insert_rowid(),
-        user_id,
-        name: name.to_string(),
-        prefix,
-        scopes,
-        created,
-        last_used: None,
-        enabled: true,
-    };
-    Ok((key, token))
+    .bind(user_id)
+    .bind(name)
+    .bind(&prefix)
+    .bind(token_hash(&token))
+    .bind(&scopes)
+    .bind(created)
+    .fetch_one(repo.pool())
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok((
+        ApiKey {
+            id,
+            user_id,
+            name: name.to_string(),
+            prefix,
+            scopes,
+            created,
+            last_used: None,
+            enabled: true,
+        },
+        token,
+    ))
 }
 
-pub fn authenticate(token: &str) -> Result<Option<ApiKey>, String> {
+pub async fn authenticate(repo: &Repository, token: &str) -> Result<Option<ApiKey>, String> {
     if !token.starts_with("mbk_") {
         return Ok(None);
     }
-    let conn = connection().map_err(|error| error.to_string())?;
-    let hash = token_hash(token);
-    let key = conn
-        .query_row(
-            "SELECT k.id, k.user_id, k.name, k.prefix, k.scopes, k.created, k.last_used, k.enabled
-             FROM api_key k LEFT JOIN app_user u ON u.id = k.user_id
-             WHERE k.token_hash = ?1 AND k.enabled = 1
-               AND (k.user_id IS NULL OR u.enabled = 1)",
-            params![hash],
-            |row| {
-                Ok(ApiKey {
-                    id: row.get(0)?,
-                    user_id: row.get(1)?,
-                    name: row.get(2)?,
-                    prefix: row.get(3)?,
-                    scopes: row.get(4)?,
-                    created: row.get(5)?,
-                    last_used: row.get(6)?,
-                    enabled: row.get(7)?,
-                })
-            },
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
+    let key = sqlx::query_as::<_, ApiKey>(
+        "SELECT k.id,k.user_id,k.name,k.prefix,k.scopes,k.created,k.last_used,k.enabled
+         FROM api_key k LEFT JOIN app_user u ON u.id=k.user_id
+         WHERE k.token_hash=$1 AND k.enabled=1
+           AND (k.user_id IS NULL OR u.enabled=1)",
+    )
+    .bind(token_hash(token))
+    .fetch_optional(repo.pool())
+    .await
+    .map_err(|e| e.to_string())?;
     if let Some(key) = &key {
-        conn.execute(
-            "UPDATE api_key SET last_used = ?2 WHERE id = ?1
-             AND (last_used IS NULL OR last_used < ?2 - 300)",
-            params![key.id, now()],
+        sqlx::query(
+            "UPDATE api_key SET last_used=$2 WHERE id=$1
+             AND (last_used IS NULL OR last_used<$2-300)",
         )
-        .map_err(|error| error.to_string())?;
+        .bind(key.id)
+        .bind(now())
+        .execute(repo.pool())
+        .await
+        .map_err(|e| e.to_string())?;
     }
     Ok(key)
 }
 
-pub fn list() -> Result<Vec<ApiKey>, String> {
-    let conn = connection().map_err(|error| error.to_string())?;
-    let mut statement = conn
-        .prepare(
-            "SELECT id, user_id, name, prefix, scopes, created, last_used, enabled
-             FROM api_key ORDER BY created DESC",
-        )
-        .map_err(|error| error.to_string())?;
-    let rows = statement
-        .query_map([], |row| {
-            Ok(ApiKey {
-                id: row.get(0)?,
-                user_id: row.get(1)?,
-                name: row.get(2)?,
-                prefix: row.get(3)?,
-                scopes: row.get(4)?,
-                created: row.get(5)?,
-                last_used: row.get(6)?,
-                enabled: row.get(7)?,
-            })
-        })
-        .map_err(|error| error.to_string())?;
-    rows.collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(|error| error.to_string())
-}
-
-pub fn list_for_user(user_id: i64) -> Result<Vec<ApiKey>, String> {
-    let conn = connection().map_err(|error| error.to_string())?;
-    let mut statement = conn
-        .prepare(
-            "SELECT id, user_id, name, prefix, scopes, created, last_used, enabled
-             FROM api_key WHERE user_id=?1 ORDER BY created DESC",
-        )
-        .map_err(|error| error.to_string())?;
-    let keys = statement
-        .query_map(params![user_id], |row| {
-            Ok(ApiKey {
-                id: row.get(0)?,
-                user_id: row.get(1)?,
-                name: row.get(2)?,
-                prefix: row.get(3)?,
-                scopes: row.get(4)?,
-                created: row.get(5)?,
-                last_used: row.get(6)?,
-                enabled: row.get(7)?,
-            })
-        })
-        .map_err(|error| error.to_string())?
-        .collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(|error| error.to_string())?;
-    Ok(keys)
-}
-
-pub fn set_enabled_for_user(id: i64, user_id: i64, enabled: bool) -> Result<bool, String> {
-    connection()
-        .map_err(|error| error.to_string())?
-        .execute(
-            "UPDATE api_key SET enabled = ?3 WHERE id = ?1 AND user_id = ?2",
-            params![id, user_id, enabled as i32],
-        )
-        .map(|changed| changed == 1)
-        .map_err(|error| error.to_string())
-}
-
-pub fn delete_for_user(id: i64, user_id: i64) -> Result<bool, String> {
-    connection()
-        .map_err(|error| error.to_string())?
-        .execute(
-            "DELETE FROM api_key WHERE id = ?1 AND user_id = ?2",
-            params![id, user_id],
-        )
-        .map(|changed| changed == 1)
-        .map_err(|error| error.to_string())
-}
-
-pub fn set_enabled(id: i64, enabled: bool) -> Result<bool, String> {
-    let conn = connection().map_err(|error| error.to_string())?;
-    conn.execute(
-        "UPDATE api_key SET enabled = ?2 WHERE id = ?1",
-        params![id, enabled as i32],
+pub async fn list(repo: &Repository) -> Result<Vec<ApiKey>, String> {
+    sqlx::query_as(
+        "SELECT id,user_id,name,prefix,scopes,created,last_used,enabled
+         FROM api_key ORDER BY created DESC",
     )
-    .map(|changed| changed == 1)
-    .map_err(|error| error.to_string())
+    .fetch_all(repo.pool())
+    .await
+    .map_err(|e| e.to_string())
 }
 
-pub fn delete(id: i64) -> Result<bool, String> {
-    let conn = connection().map_err(|error| error.to_string())?;
-    conn.execute("DELETE FROM api_key WHERE id = ?1", params![id])
-        .map(|changed| changed == 1)
-        .map_err(|error| error.to_string())
+pub async fn list_for_user(repo: &Repository, user_id: i64) -> Result<Vec<ApiKey>, String> {
+    sqlx::query_as(
+        "SELECT id,user_id,name,prefix,scopes,created,last_used,enabled
+         FROM api_key WHERE user_id=$1 ORDER BY created DESC",
+    )
+    .bind(user_id)
+    .fetch_all(repo.pool())
+    .await
+    .map_err(|e| e.to_string())
+}
+
+pub async fn set_enabled_for_user(
+    repo: &Repository,
+    id: i64,
+    user_id: i64,
+    enabled: bool,
+) -> Result<bool, String> {
+    sqlx::query("UPDATE api_key SET enabled=$3 WHERE id=$1 AND user_id=$2")
+        .bind(id)
+        .bind(user_id)
+        .bind(i64::from(enabled))
+        .execute(repo.pool())
+        .await
+        .map(|result| result.rows_affected() == 1)
+        .map_err(|e| e.to_string())
+}
+
+pub async fn delete_for_user(repo: &Repository, id: i64, user_id: i64) -> Result<bool, String> {
+    sqlx::query("DELETE FROM api_key WHERE id=$1 AND user_id=$2")
+        .bind(id)
+        .bind(user_id)
+        .execute(repo.pool())
+        .await
+        .map(|result| result.rows_affected() == 1)
+        .map_err(|e| e.to_string())
+}
+
+pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> Result<bool, String> {
+    sqlx::query("UPDATE api_key SET enabled=$2 WHERE id=$1")
+        .bind(id)
+        .bind(i64::from(enabled))
+        .execute(repo.pool())
+        .await
+        .map(|result| result.rows_affected() == 1)
+        .map_err(|e| e.to_string())
+}
+
+pub async fn delete(repo: &Repository, id: i64) -> Result<bool, String> {
+    sqlx::query("DELETE FROM api_key WHERE id=$1")
+        .bind(id)
+        .execute(repo.pool())
+        .await
+        .map(|result| result.rows_affected() == 1)
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

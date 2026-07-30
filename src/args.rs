@@ -19,6 +19,9 @@ pub struct Args {
     #[clap(long, env = "RACEBIN_DATA_DIR", default_value = "racebin_data")]
     pub data_dir: String,
 
+    #[clap(long, env = "RACEBIN_DATABASE_URL")]
+    pub database_url: Option<String>,
+
     #[clap(long, env = "RACEBIN_PUBLIC_URL")]
     pub public_url: Option<url::Url>,
 
@@ -36,4 +39,17 @@ pub struct Args {
 
     #[clap(long, env = "RACEBIN_INSECURE_COOKIE")]
     pub insecure_cookie: bool,
+}
+
+impl Args {
+    pub fn effective_database_url(&self) -> String {
+        self.database_url.clone().unwrap_or_else(|| {
+            format!(
+                "sqlite://{}?mode=rwc",
+                std::path::Path::new(&self.data_dir)
+                    .join("database.sqlite")
+                    .to_string_lossy()
+            )
+        })
+    }
 }

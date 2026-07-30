@@ -5,14 +5,16 @@ use argon2::password_hash::{
 use argon2::Argon2;
 use once_cell::sync::Lazy;
 use rand::{distributions::Alphanumeric, Rng};
-use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use sha2::{Digest, Sha256};
+use sqlx::any::AnyRow;
+use sqlx::{FromRow, Row};
 use std::collections::HashMap;
 use std::fs;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::args::ARGS;
+use crate::repository::{DatabaseKind, Repository};
 
 pub const SESSION_COOKIE: &str = "racebin_session";
 static LOGIN_FAILURES: Lazy<Mutex<HashMap<String, Vec<i64>>>> =
@@ -27,6 +29,18 @@ pub struct User {
     pub role: String,
     pub enabled: bool,
     pub force_password_change: bool,
+}
+
+impl<'r> FromRow<'r, AnyRow> for User {
+    fn from_row(row: &'r AnyRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: row.try_get("id")?,
+            username: row.try_get("username")?,
+            role: row.try_get("role")?,
+            enabled: row.try_get::<i64, _>("enabled")? != 0,
+            force_password_change: row.try_get::<i64, _>("force_password_change")? != 0,
+        })
+    }
 }
 
 impl User {
@@ -48,6 +62,18 @@ pub struct Invite {
     pub expires: i64,
     pub used: bool,
     pub revoked: bool,
+}
+
+impl<'r> FromRow<'r, AnyRow> for Invite {
+    fn from_row(row: &'r AnyRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: row.try_get("id")?,
+            token_prefix: row.try_get("token_prefix")?,
+            expires: row.try_get("expires")?,
+            used: row.try_get::<i64, _>("used")? != 0,
+            revoked: row.try_get::<i64, _>("revoked")? != 0,
+        })
+    }
 }
 
 impl Invite {
@@ -87,50 +113,6 @@ fn random_token(length: usize) -> String {
         .collect()
 }
 
-pub fn connection_at(data_dir: &str) -> Result<Connection, String> {
-    let conn = Connection::open(format!("{data_dir}/database.sqlite"))
-        .map_err(|error| error.to_string())?;
-    conn.execute_batch(
-        "
-        PRAGMA foreign_keys = ON;
-        PRAGMA journal_mode = WAL;
-        PRAGMA busy_timeout = 5000;
-        CREATE TABLE IF NOT EXISTS app_user (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL,
-            role TEXT NOT NULL CHECK(role IN ('user', 'admin')),
-            enabled INTEGER NOT NULL DEFAULT 1,
-            force_password_change INTEGER NOT NULL DEFAULT 0,
-            created INTEGER NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS user_session (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
-            token_hash TEXT NOT NULL UNIQUE,
-            csrf_token TEXT NOT NULL,
-            created INTEGER NOT NULL,
-            expires INTEGER NOT NULL,
-            last_used INTEGER NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS user_invite (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            token_hash TEXT NOT NULL UNIQUE,
-            created_by INTEGER NOT NULL REFERENCES app_user(id),
-            expires INTEGER NOT NULL,
-            used INTEGER NOT NULL DEFAULT 0,
-            revoked INTEGER NOT NULL DEFAULT 0
-        );
-        ",
-    )
-    .map_err(|error| error.to_string())?;
-    Ok(conn)
-}
-
-pub fn connection() -> Result<Connection, String> {
-    connection_at(&ARGS.data_dir)
-}
-
 pub fn password_hash(password: &str) -> Result<String, String> {
     if password.chars().count() < 12 {
         return Err("Password must contain at least 12 characters".to_string());
@@ -156,313 +138,324 @@ fn validate_username(username: &str) -> Result<&str, String> {
     Ok(username)
 }
 
-pub fn verify_user(username: &str, password: &str) -> Result<Option<User>, String> {
-    let conn = connection()?;
-    let row: Option<(User, String)> = conn
-        .query_row(
-            "SELECT id, username, role, enabled, force_password_change, password_hash
-             FROM app_user WHERE username = ?1",
-            params![username],
-            |row| {
-                Ok((
-                    User {
-                        id: row.get(0)?,
-                        username: row.get(1)?,
-                        role: row.get(2)?,
-                        enabled: row.get(3)?,
-                        force_password_change: row.get(4)?,
-                    },
-                    row.get(5)?,
-                ))
-            },
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
-    let Some((user, stored_hash)) = row else {
-        if let Ok(parsed) = PasswordHash::new(&DUMMY_PASSWORD_HASH) {
-            let _ = Argon2::default().verify_password(password.as_bytes(), &parsed);
-        }
-        return Ok(None);
-    };
-    if !user.enabled {
-        return Ok(None);
+pub async fn verify_user(
+    repo: &Repository,
+    username: &str,
+    password: &str,
+) -> Result<Option<User>, String> {
+    #[derive(FromRow)]
+    struct UserPassword {
+        id: i64,
+        username: String,
+        role: String,
+        enabled: i64,
+        force_password_change: i64,
+        password_hash: String,
     }
-    let valid = PasswordHash::new(&stored_hash).ok().is_some_and(|parsed| {
+    let row = sqlx::query_as::<_, UserPassword>(
+        "SELECT id,username,role,enabled,force_password_change,password_hash
+         FROM app_user WHERE username=$1",
+    )
+    .bind(username)
+    .fetch_optional(repo.pool())
+    .await
+    .map_err(|e| e.to_string())?;
+    let encoded = row
+        .as_ref()
+        .map(|value| value.password_hash.as_str())
+        .unwrap_or(DUMMY_PASSWORD_HASH.as_str());
+    let valid = PasswordHash::new(encoded).ok().is_some_and(|parsed| {
         Argon2::default()
             .verify_password(password.as_bytes(), &parsed)
             .is_ok()
     });
-    Ok(valid.then_some(user))
+    Ok(row.and_then(|value| {
+        (valid && value.enabled != 0).then_some(User {
+            id: value.id,
+            username: value.username,
+            role: value.role,
+            enabled: value.enabled != 0,
+            force_password_change: value.force_password_change != 0,
+        })
+    }))
 }
 
-pub fn create_session(user_id: i64, remember: bool) -> Result<(String, String, i64), String> {
+pub async fn create_session(
+    repo: &Repository,
+    user_id: i64,
+    remember: bool,
+) -> Result<(String, String, i64), String> {
     let token = random_token(64);
     let csrf = random_token(48);
     let created = now();
-    let expires = created + if remember { 30 * 86400 } else { 86400 };
-    let conn = connection()?;
-    conn.execute(
-        "INSERT INTO user_session (user_id, token_hash, csrf_token, created, expires, last_used)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?4)",
-        params![user_id, hash(&token), csrf, created, expires],
+    let expires = created + if remember { 30 * 86400 } else { 12 * 3600 };
+    sqlx::query(
+        "INSERT INTO user_session(user_id,token_hash,csrf_token,created,expires,last_used)
+         VALUES($1,$2,$3,$4,$5,$4)",
     )
-    .map_err(|error| error.to_string())?;
+    .bind(user_id)
+    .bind(hash(&token))
+    .bind(&csrf)
+    .bind(created)
+    .bind(expires)
+    .execute(repo.pool())
+    .await
+    .map_err(|e| e.to_string())?;
     Ok((token, csrf, expires))
 }
 
-pub fn session_user(token: &str) -> Result<Option<SessionUser>, String> {
-    let conn = connection()?;
-    let session = conn
-        .query_row(
-            "SELECT u.id, u.username, u.role, u.enabled, u.force_password_change, s.csrf_token, s.id
-             FROM user_session s JOIN app_user u ON u.id = s.user_id
-             WHERE s.token_hash = ?1 AND s.expires > ?2 AND u.enabled = 1",
-            params![hash(token), now()],
-            |row| {
-                Ok((
-                    SessionUser {
-                        user: User {
-                            id: row.get(0)?,
-                            username: row.get(1)?,
-                            role: row.get(2)?,
-                            enabled: row.get(3)?,
-                            force_password_change: row.get(4)?,
-                        },
-                        csrf_token: row.get(5)?,
-                    },
-                    row.get::<_, i64>(6)?,
-                ))
-            },
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
-    if let Some((_, id)) = &session {
-        let _ = conn.execute(
-            "UPDATE user_session SET last_used = ?2 WHERE id = ?1 AND last_used < ?2 - 300",
-            params![id, now()],
-        );
+pub async fn session_user(repo: &Repository, token: &str) -> Result<Option<SessionUser>, String> {
+    #[derive(FromRow)]
+    struct SessionRow {
+        id: i64,
+        username: String,
+        role: String,
+        enabled: i64,
+        force_password_change: i64,
+        csrf_token: String,
+        session_id: i64,
     }
-    Ok(session.map(|(session, _)| session))
+    let row = sqlx::query_as::<_, SessionRow>(
+        "SELECT u.id,u.username,u.role,u.enabled,u.force_password_change,
+                s.csrf_token,s.id AS session_id
+         FROM user_session s JOIN app_user u ON u.id=s.user_id
+         WHERE s.token_hash=$1 AND s.expires>$2 AND u.enabled=1",
+    )
+    .bind(hash(token))
+    .bind(now())
+    .fetch_optional(repo.pool())
+    .await
+    .map_err(|e| e.to_string())?;
+    if let Some(value) = &row {
+        let current = now();
+        let _ =
+            sqlx::query("UPDATE user_session SET last_used=$2 WHERE id=$1 AND last_used<$2-300")
+                .bind(value.session_id)
+                .bind(current)
+                .execute(repo.pool())
+                .await;
+    }
+    Ok(row.map(|value| SessionUser {
+        user: User {
+            id: value.id,
+            username: value.username,
+            role: value.role,
+            enabled: value.enabled != 0,
+            force_password_change: value.force_password_change != 0,
+        },
+        csrf_token: value.csrf_token,
+    }))
 }
 
-pub fn delete_session(token: &str) -> Result<(), String> {
-    connection()?
-        .execute(
-            "DELETE FROM user_session WHERE token_hash = ?1",
-            params![hash(token)],
-        )
+pub async fn delete_session(repo: &Repository, token: &str) -> Result<(), String> {
+    sqlx::query("DELETE FROM user_session WHERE token_hash=$1")
+        .bind(hash(token))
+        .execute(repo.pool())
+        .await
         .map(|_| ())
-        .map_err(|error| error.to_string())
+        .map_err(|e| e.to_string())
 }
 
-pub fn list_users() -> Result<Vec<User>, String> {
-    let conn = connection()?;
-    let mut statement = conn
-        .prepare("SELECT id, username, role, enabled, force_password_change FROM app_user ORDER BY username")
-        .map_err(|error| error.to_string())?;
-    let users = statement
-        .query_map([], |row| {
-            Ok(User {
-                id: row.get(0)?,
-                username: row.get(1)?,
-                role: row.get(2)?,
-                enabled: row.get(3)?,
-                force_password_change: row.get(4)?,
-            })
-        })
-        .map_err(|error| error.to_string())?
-        .collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(|error| error.to_string())?;
-    Ok(users)
+pub async fn list_users(repo: &Repository) -> Result<Vec<User>, String> {
+    sqlx::query_as(
+        "SELECT id,username,role,enabled,force_password_change
+         FROM app_user ORDER BY username",
+    )
+    .fetch_all(repo.pool())
+    .await
+    .map_err(|e| e.to_string())
 }
 
-pub fn set_enabled(id: i64, enabled: bool) -> Result<(), String> {
-    let mut conn = connection()?;
-    let tx = conn
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(|error| error.to_string())?;
+pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> Result<(), String> {
+    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
+    let lock = if repo.kind() == DatabaseKind::Postgres {
+        " FOR UPDATE"
+    } else {
+        ""
+    };
     if !enabled {
-        let target_is_admin: bool = tx
-            .query_row(
-                "SELECT role = 'admin' AND enabled = 1 FROM app_user WHERE id = ?1",
-                params![id],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| "User not found".to_string())?;
-        let enabled_admins: i64 = tx
-            .query_row(
-                "SELECT count(*) FROM app_user WHERE role = 'admin' AND enabled = 1",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        if target_is_admin && enabled_admins <= 1 {
+        let target: Option<(String, i64)> = sqlx::query_as(&format!(
+            "SELECT role,enabled FROM app_user WHERE id=$1{lock}"
+        ))
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+        let (role, currently_enabled) = target.ok_or("User not found")?;
+        let admins: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM app_user WHERE role='admin' AND enabled=1")
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+        if role == "admin" && currently_enabled != 0 && admins <= 1 {
             return Err("The last enabled administrator cannot be disabled".to_string());
         }
     }
-    let changed = tx
-        .execute(
-            "UPDATE app_user SET enabled = ?2 WHERE id = ?1",
-            params![id, enabled as i32],
-        )
-        .map_err(|error| error.to_string())?;
-    if changed == 0 {
+    let result = sqlx::query("UPDATE app_user SET enabled=$2 WHERE id=$1")
+        .bind(id)
+        .bind(i64::from(enabled))
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    if result.rows_affected() == 0 {
         return Err("User not found".to_string());
     }
     if !enabled {
-        tx.execute("DELETE FROM user_session WHERE user_id = ?1", params![id])
-            .map_err(|error| error.to_string())?;
+        sqlx::query("DELETE FROM user_session WHERE user_id=$1")
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
     }
-    tx.commit().map_err(|error| error.to_string())
+    tx.commit().await.map_err(|e| e.to_string())
 }
 
-pub fn set_role(id: i64, admin: bool) -> Result<(), String> {
-    let mut conn = connection()?;
-    let tx = conn
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(|error| error.to_string())?;
+pub async fn set_role(repo: &Repository, id: i64, admin: bool) -> Result<(), String> {
+    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
     if !admin {
-        let target_is_admin: bool = tx
-            .query_row(
-                "SELECT role = 'admin' AND enabled = 1 FROM app_user WHERE id = ?1",
-                params![id],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| "User not found".to_string())?;
-        let admins: i64 = tx
-            .query_row(
-                "SELECT count(*) FROM app_user WHERE role = 'admin' AND enabled = 1",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        if target_is_admin && admins <= 1 {
+        let target: Option<(String, i64)> =
+            sqlx::query_as("SELECT role,enabled FROM app_user WHERE id=$1")
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+        let (role, enabled) = target.ok_or("User not found")?;
+        let admins: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM app_user WHERE role='admin' AND enabled=1")
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+        if role == "admin" && enabled != 0 && admins <= 1 {
             return Err("The last administrator cannot be demoted".to_string());
         }
     }
-    let changed = tx
-        .execute(
-            "UPDATE app_user SET role = ?2 WHERE id = ?1",
-            params![id, if admin { "admin" } else { "user" }],
-        )
-        .map_err(|error| error.to_string())?;
-    if changed == 0 {
+    let result = sqlx::query("UPDATE app_user SET role=$2 WHERE id=$1")
+        .bind(id)
+        .bind(if admin { "admin" } else { "user" })
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    if result.rows_affected() == 0 {
         return Err("User not found".to_string());
     }
     if !admin {
-        tx.execute(
-            "UPDATE api_key SET enabled=0 WHERE user_id=?1 AND scopes LIKE '%:admin%'",
-            params![id],
-        )
-        .map_err(|error| error.to_string())?;
+        sqlx::query("UPDATE api_key SET enabled=0 WHERE user_id=$1 AND scopes LIKE '%:admin%'")
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
     }
-    tx.commit().map_err(|error| error.to_string())
+    tx.commit().await.map_err(|e| e.to_string())
 }
 
-pub fn set_password(id: i64, password: &str, force: bool) -> Result<(), String> {
-    let conn = connection()?;
-    conn.execute(
-        "UPDATE app_user SET password_hash = ?2, force_password_change = ?3 WHERE id = ?1",
-        params![id, password_hash(password)?, force as i32],
-    )
-    .map_err(|error| error.to_string())?;
-    conn.execute("DELETE FROM user_session WHERE user_id = ?1", params![id])
-        .map_err(|error| error.to_string())?;
-    Ok(())
+pub async fn set_password(
+    repo: &Repository,
+    id: i64,
+    password: &str,
+    force: bool,
+) -> Result<(), String> {
+    let encoded = password_hash(password)?;
+    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
+    sqlx::query("UPDATE app_user SET password_hash=$2,force_password_change=$3 WHERE id=$1")
+        .bind(id)
+        .bind(encoded)
+        .bind(i64::from(force))
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM user_session WHERE user_id=$1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|e| e.to_string())
 }
 
-pub fn create_invite(created_by: i64) -> Result<String, String> {
+pub async fn create_invite(repo: &Repository, created_by: i64) -> Result<String, String> {
     let token = random_token(64);
-    connection()?
-        .execute(
-            "INSERT INTO user_invite (token_hash, created_by, expires) VALUES (?1, ?2, ?3)",
-            params![hash(&token), created_by, now() + 86400],
-        )
-        .map_err(|error| error.to_string())?;
+    sqlx::query("INSERT INTO user_invite(token_hash,created_by,expires) VALUES($1,$2,$3)")
+        .bind(hash(&token))
+        .bind(created_by)
+        .bind(now() + 86400)
+        .execute(repo.pool())
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(token)
 }
 
-pub fn list_invites() -> Result<Vec<Invite>, String> {
-    let conn = connection()?;
-    let mut statement = conn
-        .prepare(
-            "SELECT id, substr(token_hash, 1, 10), expires, used, revoked
-             FROM user_invite ORDER BY id DESC",
-        )
-        .map_err(|error| error.to_string())?;
-    let invites = statement
-        .query_map([], |row| {
-            Ok(Invite {
-                id: row.get(0)?,
-                token_prefix: row.get(1)?,
-                expires: row.get(2)?,
-                used: row.get(3)?,
-                revoked: row.get(4)?,
-            })
-        })
-        .map_err(|error| error.to_string())?
-        .collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(|error| error.to_string())?;
-    Ok(invites)
+pub async fn list_invites(repo: &Repository) -> Result<Vec<Invite>, String> {
+    sqlx::query_as(
+        "SELECT id,substr(token_hash,1,10) AS token_prefix,expires,used,revoked
+         FROM user_invite ORDER BY id DESC",
+    )
+    .fetch_all(repo.pool())
+    .await
+    .map_err(|e| e.to_string())
 }
 
-pub fn revoke_invite(id: i64) -> Result<bool, String> {
-    connection()?
-        .execute(
-            "UPDATE user_invite SET revoked = 1 WHERE id = ?1 AND used = 0",
-            params![id],
-        )
-        .map(|changed| changed == 1)
-        .map_err(|error| error.to_string())
+pub async fn revoke_invite(repo: &Repository, id: i64) -> Result<bool, String> {
+    sqlx::query("UPDATE user_invite SET revoked=1 WHERE id=$1 AND used=0")
+        .bind(id)
+        .execute(repo.pool())
+        .await
+        .map(|result| result.rows_affected() == 1)
+        .map_err(|e| e.to_string())
 }
 
-pub fn accept_invite(token: &str, username: &str, password: &str) -> Result<User, String> {
-    let mut conn = connection()?;
-    let transaction = conn.transaction().map_err(|error| error.to_string())?;
-    let id: Option<i64> = transaction
-        .query_row(
-            "SELECT id FROM user_invite WHERE token_hash = ?1 AND expires > ?2 AND used = 0 AND revoked = 0",
-            params![hash(token), now()],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
-    let Some(invite_id) = id else {
-        return Err("Invitation is invalid or expired".to_string());
+pub async fn accept_invite(
+    repo: &Repository,
+    token: &str,
+    username: &str,
+    password: &str,
+) -> Result<User, String> {
+    let username = validate_username(username)?.to_string();
+    let encoded = password_hash(password)?;
+    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
+    let lock = if repo.kind() == DatabaseKind::Postgres {
+        " FOR UPDATE"
+    } else {
+        ""
     };
-    let username = validate_username(username)?;
-    let password_hash = password_hash(password)?;
-    transaction
-        .execute(
-            "INSERT INTO app_user (username, password_hash, role, force_password_change, created)
-             VALUES (?1, ?2, 'user', 0, ?3)",
-            params![username, password_hash, now()],
-        )
-        .map_err(|error| error.to_string())?;
-    let user = User {
-        id: transaction.last_insert_rowid(),
-        username: username.to_string(),
+    let invite_id: Option<i64> = sqlx::query_scalar(&format!(
+        "SELECT id FROM user_invite
+         WHERE token_hash=$1 AND expires>$2 AND used=0 AND revoked=0{lock}"
+    ))
+    .bind(hash(token))
+    .bind(now())
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let invite_id = invite_id.ok_or("Invitation is invalid or expired")?;
+    let id: i64 = sqlx::query_scalar(
+        "INSERT INTO app_user(username,password_hash,role,force_password_change,created)
+         VALUES($1,$2,'user',0,$3) RETURNING id",
+    )
+    .bind(&username)
+    .bind(encoded)
+    .bind(now())
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    sqlx::query("UPDATE user_invite SET used=1 WHERE id=$1")
+        .bind(invite_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(User {
+        id,
+        username,
         role: "user".to_string(),
         enabled: true,
         force_password_change: false,
-    };
-    transaction
-        .execute(
-            "UPDATE user_invite SET used = 1 WHERE id = ?1",
-            params![invite_id],
-        )
-        .map_err(|error| error.to_string())?;
-    transaction.commit().map_err(|error| error.to_string())?;
-    Ok(user)
+    })
 }
 
-pub fn current(req: &actix_web::HttpRequest) -> Option<SessionUser> {
-    req.cookie(SESSION_COOKIE)
-        .and_then(|cookie| session_user(cookie.value()).ok().flatten())
+pub async fn current(repo: &Repository, req: &actix_web::HttpRequest) -> Option<SessionUser> {
+    let token = req
+        .cookie(SESSION_COOKIE)
+        .map(|cookie| cookie.value().to_string())?;
+    session_user(repo, &token).await.ok().flatten()
 }
 
 pub fn login_allowed(username: &str, client: &str) -> bool {
@@ -476,23 +469,24 @@ pub fn login_allowed(username: &str, client: &str) -> bool {
     if failures.len() > 10_000 {
         failures.clear();
     }
-    let attempts = failures.entry(key).or_default();
-    attempts.len() < 5
+    failures.entry(key).or_default().len() < 5
 }
 
 pub fn record_login_failure(username: &str, client: &str) {
-    let key = format!("{}\n{}", username.to_ascii_lowercase(), client);
     LOGIN_FAILURES
         .lock()
         .unwrap()
-        .entry(key)
+        .entry(format!("{}\n{}", username.to_ascii_lowercase(), client))
         .or_default()
         .push(now());
 }
 
 pub fn clear_login_failures(username: &str, client: &str) {
-    let key = format!("{}\n{}", username.to_ascii_lowercase(), client);
-    LOGIN_FAILURES.lock().unwrap().remove(&key);
+    LOGIN_FAILURES.lock().unwrap().remove(&format!(
+        "{}\n{}",
+        username.to_ascii_lowercase(),
+        client
+    ));
 }
 
 pub fn session_cookie(token: String, remember: bool) -> Cookie<'static> {
@@ -514,7 +508,7 @@ fn cli_password(arguments: &[String]) -> Result<String, String> {
     {
         let path = arguments
             .get(index + 1)
-            .ok_or_else(|| "--password-file requires a path".to_string())?;
+            .ok_or("--password-file requires a path")?;
         return fs::read_to_string(path)
             .map(|password| password.trim_end_matches(['\r', '\n']).to_string())
             .map_err(|error| error.to_string());
@@ -522,176 +516,109 @@ fn cli_password(arguments: &[String]) -> Result<String, String> {
     rpassword::prompt_password("Password: ").map_err(|error| error.to_string())
 }
 
-fn cli_data_dir(arguments: &[String]) -> Result<String, String> {
-    if let Some(index) = arguments.iter().position(|value| value == "--data-dir") {
-        return arguments
-            .get(index + 1)
-            .cloned()
-            .ok_or_else(|| "--data-dir requires a path".to_string());
-    }
-    Ok(std::env::var("RACEBIN_DATA_DIR").unwrap_or_else(|_| "racebin_data".to_string()))
+fn cli_option(arguments: &[String], name: &str) -> Option<String> {
+    arguments
+        .iter()
+        .position(|value| value == name)
+        .and_then(|index| arguments.get(index + 1))
+        .cloned()
 }
 
-pub fn run_cli_if_requested() -> Result<bool, String> {
+pub async fn run_cli_if_requested() -> Result<bool, String> {
     let arguments: Vec<String> = std::env::args().collect();
     if arguments.get(1).map(String::as_str) != Some("account") {
         return Ok(false);
     }
+    let data_dir = cli_option(&arguments, "--data-dir")
+        .or_else(|| std::env::var("RACEBIN_DATA_DIR").ok())
+        .unwrap_or_else(|| "racebin_data".to_string());
+    fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    let database_url = cli_option(&arguments, "--database-url")
+        .or_else(|| std::env::var("RACEBIN_DATABASE_URL").ok())
+        .unwrap_or_else(|| format!("sqlite://{data_dir}/database.sqlite?mode=rwc"));
+    let repo = Repository::open(&database_url, &data_dir).await?;
+    repo.migrate().await?;
     let command = arguments.get(2).map(String::as_str).unwrap_or("help");
-    let data_dir = cli_data_dir(&arguments)?;
-    fs::create_dir_all(&data_dir).map_err(|error| error.to_string())?;
-    let conn = connection_at(&data_dir)?;
     match command {
         "create" => {
-            let username = arguments.get(3).ok_or_else(|| {
-                "usage: racebin account create USERNAME [--admin] [--password-file PATH] [--data-dir PATH]".to_string()
-            })?;
-            let username = validate_username(username)?;
-            let password = cli_password(&arguments)?;
+            let username = validate_username(arguments.get(3).ok_or(
+                "usage: racebin account create USERNAME [--admin] [--password-file PATH]",
+            )?)?;
             let role = if arguments.iter().any(|value| value == "--admin") {
                 "admin"
             } else {
                 "user"
             };
-            conn.execute(
-                "INSERT INTO app_user (username, password_hash, role, enabled, force_password_change, created)
-                 VALUES (?1, ?2, ?3, 1, 0, ?4)",
-                params![username, password_hash(&password)?, role, now()],
+            sqlx::query(
+                "INSERT INTO app_user(username,password_hash,role,enabled,force_password_change,created)
+                 VALUES($1,$2,$3,1,0,$4)",
             )
-            .map_err(|error| error.to_string())?;
+            .bind(username)
+            .bind(password_hash(&cli_password(&arguments)?)?)
+            .bind(role)
+            .bind(now())
+            .execute(repo.pool())
+            .await
+            .map_err(|e| e.to_string())?;
             println!("created {role} account {username}");
         }
         "list" => {
-            let mut statement = conn
-                .prepare("SELECT username, role, enabled FROM app_user ORDER BY username")
-                .map_err(|error| error.to_string())?;
-            let rows = statement
-                .query_map([], |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, bool>(2)?,
-                    ))
-                })
-                .map_err(|error| error.to_string())?;
-            for row in rows {
-                let (username, role, enabled) = row.map_err(|error| error.to_string())?;
+            for user in list_users(&repo).await? {
                 println!(
-                    "{username}\t{role}\t{}",
-                    if enabled { "enabled" } else { "disabled" }
+                    "{}\t{}\t{}",
+                    user.username,
+                    user.role,
+                    if user.enabled { "enabled" } else { "disabled" }
                 );
             }
         }
         "password" => {
-            let username = arguments.get(3).ok_or_else(|| {
-                "usage: racebin account password USERNAME [--password-file PATH] [--data-dir PATH]".to_string()
-            })?;
-            let password = cli_password(&arguments)?;
-            let changed = conn
-                .execute(
-                    "UPDATE app_user SET password_hash = ?2, force_password_change = 0 WHERE username = ?1",
-                    params![username, password_hash(&password)?],
-                )
-                .map_err(|error| error.to_string())?;
-            if changed == 0 {
-                return Err(format!("account not found: {username}"));
-            }
-            conn.execute(
-                "DELETE FROM user_session WHERE user_id = (SELECT id FROM app_user WHERE username = ?1)",
-                params![username],
-            )
-            .map_err(|error| error.to_string())?;
+            let username = arguments
+                .get(3)
+                .ok_or("usage: racebin account password USERNAME [--password-file PATH]")?;
+            let id: Option<i64> = sqlx::query_scalar("SELECT id FROM app_user WHERE username=$1")
+                .bind(username)
+                .fetch_optional(repo.pool())
+                .await
+                .map_err(|e| e.to_string())?;
+            let id = id.ok_or_else(|| format!("account not found: {username}"))?;
+            set_password(&repo, id, &cli_password(&arguments)?, false).await?;
             println!("password updated for {username}; existing sessions revoked");
         }
         "enable" | "disable" => {
-            let username = arguments.get(3).ok_or_else(|| {
-                format!("usage: racebin account {command} USERNAME [--data-dir PATH]")
-            })?;
-            let enabled = command == "enable";
-            if !enabled {
-                let would_remove_last: bool = conn
-                    .query_row(
-                        "SELECT role='admin' AND enabled=1
-                         AND (SELECT count(*) FROM app_user WHERE role='admin' AND enabled=1)<=1
-                         FROM app_user WHERE username=?1",
-                        params![username],
-                        |row| row.get(0),
-                    )
-                    .optional()
-                    .map_err(|error| error.to_string())?
-                    .unwrap_or(false);
-                if would_remove_last {
-                    return Err("The last enabled administrator cannot be disabled".to_string());
-                }
-            }
-            let changed = conn
-                .execute(
-                    "UPDATE app_user SET enabled = ?2 WHERE username = ?1",
-                    params![username, enabled as i32],
-                )
-                .map_err(|error| error.to_string())?;
-            if changed == 0 {
-                return Err(format!("account not found: {username}"));
-            }
-            if !enabled {
-                conn.execute(
-                    "DELETE FROM user_session WHERE user_id = (SELECT id FROM app_user WHERE username = ?1)",
-                    params![username],
-                )
-                .map_err(|error| error.to_string())?;
-            }
+            let username = arguments
+                .get(3)
+                .ok_or_else(|| format!("usage: racebin account {command} USERNAME"))?;
+            let id: Option<i64> = sqlx::query_scalar("SELECT id FROM app_user WHERE username=$1")
+                .bind(username)
+                .fetch_optional(repo.pool())
+                .await
+                .map_err(|e| e.to_string())?;
+            let id = id.ok_or_else(|| format!("account not found: {username}"))?;
+            set_enabled(&repo, id, command == "enable").await?;
             println!("{command}d account {username}");
         }
         "role" => {
-            let username = arguments.get(3).ok_or_else(|| {
-                "usage: racebin account role USERNAME user|admin [--data-dir PATH]".to_string()
-            })?;
+            let username = arguments
+                .get(3)
+                .ok_or("usage: racebin account role USERNAME user|admin")?;
             let role = arguments.get(4).map(String::as_str).unwrap_or("");
             if !matches!(role, "user" | "admin") {
                 return Err("role must be user or admin".to_string());
             }
-            if role == "user" {
-                let would_remove_last: bool = conn
-                    .query_row(
-                        "SELECT role='admin' AND enabled=1
-                         AND (SELECT count(*) FROM app_user WHERE role='admin' AND enabled=1)<=1
-                         FROM app_user WHERE username=?1",
-                        params![username],
-                        |row| row.get(0),
-                    )
-                    .optional()
-                    .map_err(|error| error.to_string())?
-                    .unwrap_or(false);
-                if would_remove_last {
-                    return Err("The last enabled administrator cannot be demoted".to_string());
-                }
-            }
-            let changed = conn
-                .execute(
-                    "UPDATE app_user SET role = ?2 WHERE username = ?1",
-                    params![username, role],
-                )
-                .map_err(|error| error.to_string())?;
-            if changed == 0 {
-                return Err(format!("account not found: {username}"));
-            }
-            if role == "user" {
-                conn.execute(
-                    "UPDATE api_key SET enabled=0
-                     WHERE user_id=(SELECT id FROM app_user WHERE username=?1)
-                     AND scopes LIKE '%:admin%'",
-                    params![username],
-                )
-                .map_err(|error| error.to_string())?;
-            }
+            let id: Option<i64> = sqlx::query_scalar("SELECT id FROM app_user WHERE username=$1")
+                .bind(username)
+                .fetch_optional(repo.pool())
+                .await
+                .map_err(|e| e.to_string())?;
+            let id = id.ok_or_else(|| format!("account not found: {username}"))?;
+            set_role(&repo, id, role == "admin").await?;
             println!("set {username} role to {role}");
         }
-        _ => {
-            println!(
-                "usage: racebin account <create|list|password|enable|disable|role> [arguments]\n\
-                 use --data-dir PATH to select the database"
-            );
-        }
+        _ => println!(
+            "usage: racebin account <create|list|password|enable|disable|role> [arguments]\n\
+             use --database-url URL to select the database"
+        ),
     }
     Ok(true)
 }
@@ -700,18 +627,15 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
 mod tests {
     use super::Invite;
 
-    fn invite(expires: i64, used: bool, revoked: bool) -> Invite {
-        Invite {
+    #[test]
+    fn invitation_status_respects_terminal_states_and_expiration() {
+        let invite = |expires, used, revoked| Invite {
             id: 1,
             token_prefix: "example".to_string(),
             expires,
             used,
             revoked,
-        }
-    }
-
-    #[test]
-    fn invitation_status_respects_terminal_states_and_expiration() {
+        };
         assert_eq!(invite(i64::MAX, false, false).status(), "Active");
         assert_eq!(invite(0, false, false).status(), "Expired");
         assert_eq!(invite(i64::MAX, true, false).status(), "Used");

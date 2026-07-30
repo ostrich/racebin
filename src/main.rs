@@ -19,7 +19,15 @@ pub mod util {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    match util::accounts::run_cli_if_requested() {
+    match repository::run_cli_if_requested().await {
+        Ok(true) => return Ok(()),
+        Ok(false) => {}
+        Err(error) => {
+            eprintln!("database command failed: {error}");
+            return Err(std::io::Error::other(error));
+        }
+    }
+    match util::accounts::run_cli_if_requested().await {
         Ok(true) => return Ok(()),
         Ok(false) => {}
         Err(error) => {
@@ -53,16 +61,21 @@ async fn main() -> std::io::Result<()> {
         ));
     }
     std::fs::create_dir_all(&ARGS.data_dir)?;
-    let repository = repository::Repository::open(&ARGS.data_dir).map_err(std::io::Error::other)?;
-    repository.migrate().map_err(std::io::Error::other)?;
+    let database_url = ARGS.effective_database_url();
+    let repository = repository::Repository::open(&database_url, &ARGS.data_dir)
+        .await
+        .map_err(std::io::Error::other)?;
+    repository.migrate().await.map_err(std::io::Error::other)?;
     let repaired = repository
         .repair_attachment_layout()
+        .await
         .map_err(std::io::Error::other)?;
     if repaired != 0 {
         log::info!("imported {repaired} legacy attachments");
     }
     let purged = repository
         .purge_expired(services::now())
+        .await
         .map_err(std::io::Error::other)?;
     if purged != 0 {
         log::info!("removed {purged} expired pastes");
@@ -72,7 +85,7 @@ async fn main() -> std::io::Result<()> {
         let mut interval = actix_web::rt::time::interval(std::time::Duration::from_secs(3600));
         loop {
             interval.tick().await;
-            if let Err(error) = cleanup_repository.purge_expired(services::now()) {
+            if let Err(error) = cleanup_repository.purge_expired(services::now()).await {
                 log::error!("expiration cleanup failed: {error}");
             }
         }

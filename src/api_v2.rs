@@ -96,8 +96,8 @@ fn attachment_path(data_dir: &Path, slug: &str, name: &str) -> Result<PathBuf, S
     Ok(data_dir.join("attachments").join(slug).join(name))
 }
 
-fn principal(services: &Services, req: &HttpRequest) -> Result<Principal, HttpResponse> {
-    services.principal(req).map_err(|message| {
+async fn principal(services: &Services, req: &HttpRequest) -> Result<Principal, HttpResponse> {
+    services.principal(req).await.map_err(|message| {
         if message == "Password change required" {
             error(StatusCode::FORBIDDEN, "password_change_required", message)
         } else if message.contains("authorization") || message.contains("bearer") {
@@ -294,7 +294,7 @@ async fn get_config() -> impl Responder {
 
 #[get("/session")]
 async fn get_session(req: HttpRequest, services: web::Data<Services>) -> HttpResponse {
-    match principal(&services, &req) {
+    match principal(&services, &req).await {
         Ok(Principal::User(session)) => HttpResponse::Ok().json(json!({
             "authenticated": true,
             "user": {
@@ -320,7 +320,11 @@ struct LoginInput {
 }
 
 #[post("/session")]
-async fn login(req: HttpRequest, body: web::Json<LoginInput>) -> HttpResponse {
+async fn login(
+    req: HttpRequest,
+    services: web::Data<Services>,
+    body: web::Json<LoginInput>,
+) -> HttpResponse {
     let client = req
         .peer_addr()
         .map(|address| address.ip().to_string())
@@ -332,13 +336,10 @@ async fn login(req: HttpRequest, body: web::Json<LoginInput>) -> HttpResponse {
             "Too many login attempts",
         );
     }
-    let username = body.username.clone();
-    let password = body.password.clone();
-    let verified = web::block(move || accounts::verify_user(&username, &password)).await;
-    match verified {
-        Ok(Ok(Some(user))) => {
+    match accounts::verify_user(&services.repo, &body.username, &body.password).await {
+        Ok(Some(user)) => {
             accounts::clear_login_failures(&body.username, &client);
-            match accounts::create_session(user.id, body.remember.unwrap_or(false)) {
+            match accounts::create_session(&services.repo, user.id, body.remember.unwrap_or(false)).await {
                 Ok((token, csrf, _)) => HttpResponse::Ok()
                     .cookie(accounts::session_cookie(
                         token,
@@ -348,7 +349,7 @@ async fn login(req: HttpRequest, body: web::Json<LoginInput>) -> HttpResponse {
                 Err(e) => internal(e),
             }
         }
-        Ok(Ok(None)) => {
+        Ok(None) => {
             accounts::record_login_failure(&body.username, &client);
             error(
                 StatusCode::UNAUTHORIZED,
@@ -356,14 +357,15 @@ async fn login(req: HttpRequest, body: web::Json<LoginInput>) -> HttpResponse {
                 "Invalid username or password",
             )
         }
-        Ok(Err(e)) => internal(e),
-        Err(e) => internal(e.to_string()),
+        Err(e) => internal(e),
     }
 }
 
 #[delete("/session")]
 async fn logout(req: HttpRequest, services: web::Data<Services>) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(|p| require_mutation(&services, &req, p))
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
     {
         Ok(value) => value,
         Err(response) => return response,
@@ -376,7 +378,7 @@ async fn logout(req: HttpRequest, services: web::Data<Services>) -> HttpResponse
         );
     }
     if let Some(cookie) = req.cookie(accounts::SESSION_COOKIE) {
-        if let Err(e) = accounts::delete_session(cookie.value()) {
+        if let Err(e) = accounts::delete_session(&services.repo, cookie.value()).await {
             return internal(e);
         }
     }
@@ -406,7 +408,9 @@ async fn change_password(
     services: web::Data<Services>,
     body: web::Json<PasswordInput>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(|p| require_mutation(&services, &req, p))
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
     {
         Ok(Principal::User(session)) => session,
         Ok(_) => {
@@ -418,30 +422,30 @@ async fn change_password(
         }
         Err(response) => return response,
     };
-    let username = value.user.username;
-    let current_password = body.current_password.clone();
-    let new_password = body.new_password.clone();
     let user_id = value.user.id;
-    let result = web::block(move || {
-        if accounts::verify_user(&username, &current_password)?.is_none() {
-            return Ok::<_, String>(false);
-        }
-        accounts::set_password(user_id, &new_password, false)?;
-        Ok(true)
-    })
-    .await;
+    let result =
+        match accounts::verify_user(&services.repo, &value.user.username, &body.current_password)
+            .await
+        {
+            Ok(Some(_)) => {
+                accounts::set_password(&services.repo, user_id, &body.new_password, false)
+                    .await
+                    .map(|_| true)
+            }
+            Ok(None) => Ok(false),
+            Err(error) => Err(error),
+        };
     match result {
-        Ok(Ok(true)) => HttpResponse::NoContent().finish(),
-        Ok(Ok(false)) => error(
+        Ok(true) => HttpResponse::NoContent().finish(),
+        Ok(false) => error(
             StatusCode::UNAUTHORIZED,
             "invalid_credentials",
             "Current password is incorrect",
         ),
-        Ok(Err(e)) if e.starts_with("Password must") => {
+        Err(e) if e.starts_with("Password must") => {
             error(StatusCode::BAD_REQUEST, "invalid_password", e)
         }
-        Ok(Err(e)) => internal(e),
-        Err(e) => internal(e.to_string()),
+        Err(e) => internal(e),
     }
 }
 
@@ -453,19 +457,22 @@ struct InviteInput {
 }
 
 #[post("/invites/{token}/accept")]
-async fn accept_invite(token: web::Path<String>, body: web::Json<InviteInput>) -> HttpResponse {
+async fn accept_invite(
+    services: web::Data<Services>,
+    token: web::Path<String>,
+    body: web::Json<InviteInput>,
+) -> HttpResponse {
     let token = token.into_inner();
     let username = body.username.clone();
     let password = body.password.clone();
-    match web::block(move || accounts::accept_invite(&token, &username, &password)).await {
-        Ok(Ok(user)) => match accounts::create_session(user.id, false) {
+    match accounts::accept_invite(&services.repo, &token, &username, &password).await {
+        Ok(user) => match accounts::create_session(&services.repo, user.id, false).await {
             Ok((session, csrf, _)) => HttpResponse::Created()
                 .cookie(accounts::session_cookie(session, false))
                 .json(json!({"user": {"id": user.id, "username": user.username, "role": user.role}, "csrf_token": csrf})),
             Err(e) => internal(e),
         },
-        Ok(Err(e)) => error(StatusCode::BAD_REQUEST, "invalid_invitation", e),
-        Err(e) => internal(e.to_string()),
+        Err(e) => error(StatusCode::BAD_REQUEST, "invalid_invitation", e),
     }
 }
 
@@ -475,7 +482,7 @@ async fn list_pastes(
     services: web::Data<Services>,
     query: web::Query<PasteQuery>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req) {
+    let value = match principal(&services, &req).await {
         Ok(v) => v,
         Err(r) => return r,
     };
@@ -505,7 +512,7 @@ async fn list_pastes(
             "Missing paste:list permission",
         );
     }
-    match services.list_pastes(&value, &query, false) {
+    match services.list_pastes(&value, &query, false).await {
         Ok(page) => HttpResponse::Ok().json(page),
         Err(e) => internal(e),
     }
@@ -517,12 +524,14 @@ async fn create_paste(
     services: web::Data<Services>,
     body: web::Json<PasteInput>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(|p| require_mutation(&services, &req, p))
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
     {
         Ok(v) => v,
         Err(r) => return r,
     };
-    match services.create_paste(&value, &body) {
+    match services.create_paste(&value, &body).await {
         Ok(paste) => HttpResponse::Created().json(paste),
         Err(e) => paste_error(e),
     }
@@ -534,11 +543,11 @@ async fn get_paste(
     services: web::Data<Services>,
     slug: web::Path<String>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req) {
+    let value = match principal(&services, &req).await {
         Ok(v) => v,
         Err(r) => return r,
     };
-    match services.get_paste(&value, &slug) {
+    match services.get_paste(&value, &slug).await {
         Ok(Some(paste)) => HttpResponse::Ok().json(paste),
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
         Err(e) => internal(e),
@@ -551,11 +560,11 @@ async fn consume_paste(
     services: web::Data<Services>,
     slug: web::Path<String>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req) {
+    let value = match principal(&services, &req).await {
         Ok(value) => value,
         Err(response) => return response,
     };
-    match services.read_paste(&value, &slug) {
+    match services.read_paste(&value, &slug).await {
         Ok(Some(paste)) => HttpResponse::Ok().json(paste),
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
         Err(e) => internal(e),
@@ -569,12 +578,14 @@ async fn update_paste(
     slug: web::Path<String>,
     body: web::Json<PasteInput>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(|p| require_mutation(&services, &req, p))
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
     {
         Ok(v) => v,
         Err(r) => return r,
     };
-    match services.update_paste(&value, &slug, &body) {
+    match services.update_paste(&value, &slug, &body).await {
         Ok(Some(_)) if matches!(&value, Principal::Key(key) if !key.has_scope("paste:read") && !key.has_scope("paste:admin")) => {
             HttpResponse::NoContent().finish()
         }
@@ -590,12 +601,14 @@ async fn delete_paste(
     services: web::Data<Services>,
     slug: web::Path<String>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(|p| require_mutation(&services, &req, p))
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
     {
         Ok(v) => v,
         Err(r) => return r,
     };
-    match services.delete_paste(&value, &slug) {
+    match services.delete_paste(&value, &slug).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
         Err(e) if e == "You do not own this paste" || e.starts_with("Missing ") => {
@@ -611,11 +624,11 @@ async fn raw_paste(
     services: web::Data<Services>,
     slug: web::Path<String>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req) {
+    let value = match principal(&services, &req).await {
         Ok(v) => v,
         Err(r) => return r,
     };
-    match services.read_paste(&value, &slug) {
+    match services.read_paste(&value, &slug).await {
         Ok(Some(paste)) => HttpResponse::Ok()
             .insert_header((header::CONTENT_TYPE, "text/plain; charset=utf-8"))
             .body(paste.content),
@@ -638,12 +651,14 @@ async fn upload_files(
             "File uploads are disabled",
         );
     }
-    let value = match principal(&services, &req).and_then(|p| require_mutation(&services, &req, p))
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
     {
         Ok(value) => value,
         Err(response) => return response,
     };
-    let paste = match services.ensure_can_update(&value, &slug) {
+    let paste = match services.ensure_can_update(&value, &slug).await {
         Ok(paste) => paste,
         Err(e) => return error(StatusCode::NOT_FOUND, "not_found", e),
     };
@@ -752,7 +767,7 @@ async fn upload_files(
         .iter()
         .map(|(_, _, name, storage_name, size)| (name.clone(), storage_name.clone(), *size))
         .collect::<Vec<_>>();
-    let created = match services.add_files(&value, &slug, &inputs) {
+    let created = match services.add_files(&value, &slug, &inputs).await {
         Ok(files) => files,
         Err(e) => {
             for path in promoted {
@@ -778,12 +793,12 @@ async fn get_file(
     services: web::Data<Services>,
     path: web::Path<(String, i64)>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req) {
+    let value = match principal(&services, &req).await {
         Ok(value) => value,
         Err(response) => return response,
     };
     let (slug, file_id) = path.into_inner();
-    let paste = match services.get_paste(&value, &slug) {
+    let paste = match services.get_paste(&value, &slug).await {
         Ok(Some(paste)) => paste,
         Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
         Err(e) => return internal(e),
@@ -818,13 +833,15 @@ async fn delete_file(
     services: web::Data<Services>,
     path: web::Path<(String, i64)>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(|p| require_mutation(&services, &req, p))
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
     {
         Ok(value) => value,
         Err(response) => return response,
     };
     let (slug, file_id) = path.into_inner();
-    match services.delete_file(&value, &slug, file_id) {
+    match services.delete_file(&value, &slug, file_id).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "File not found"),
         Err(e) if e == "You do not own this paste" || e.starts_with("Missing ") => {
@@ -840,11 +857,11 @@ async fn get_archive(
     services: web::Data<Services>,
     slug: web::Path<String>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req) {
+    let value = match principal(&services, &req).await {
         Ok(value) => value,
         Err(response) => return response,
     };
-    let paste = match services.get_paste(&value, &slug) {
+    let paste = match services.get_paste(&value, &slug).await {
         Ok(Some(paste)) => paste,
         Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
         Err(e) => return internal(e),
@@ -909,11 +926,11 @@ async fn get_qr(
     if !ARGS.qr {
         return error(StatusCode::NOT_FOUND, "not_found", "QR codes are disabled");
     }
-    let value = match principal(&services, &req) {
+    let value = match principal(&services, &req).await {
         Ok(value) => value,
         Err(response) => return response,
     };
-    match services.get_paste(&value, &slug) {
+    match services.get_paste(&value, &slug).await {
         Ok(Some(_)) => {}
         Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
         Err(e) => return internal(e),
@@ -938,7 +955,7 @@ async fn get_qr(
 
 #[get("/account/api-keys")]
 async fn list_keys(req: HttpRequest, services: web::Data<Services>) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(require_auth) {
+    let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(v) => v,
         Err(r) => return r,
     };
@@ -952,7 +969,7 @@ async fn list_keys(req: HttpRequest, services: web::Data<Services>) -> HttpRespo
             "Missing key:admin permission",
         );
     }
-    match api_keys::list_for_user(user_id) {
+    match api_keys::list_for_user(&services.repo, user_id).await {
         Ok(v) => HttpResponse::Ok().json(v),
         Err(e) => internal(e),
     }
@@ -971,7 +988,9 @@ async fn create_key(
     services: web::Data<Services>,
     body: web::Json<KeyInput>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(|p| require_mutation(&services, &req, p))
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
     {
         Ok(v) => v,
         Err(r) => return r,
@@ -1001,7 +1020,7 @@ async fn create_key(
             "Only administrators can grant administrative scopes",
         );
     }
-    match api_keys::create(Some(user_id), &body.name, &body.scopes) {
+    match api_keys::create(&services.repo, Some(user_id), &body.name, &body.scopes).await {
         Ok((key, token)) => HttpResponse::Created().json(json!({"key": key, "token": token})),
         Err(e) => error(StatusCode::BAD_REQUEST, "invalid_api_key", e),
     }
@@ -1020,7 +1039,9 @@ async fn update_key(
     id: web::Path<i64>,
     body: web::Json<EnabledInput>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(|p| require_mutation(&services, &req, p))
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
     {
         Ok(v) => v,
         Err(r) => return r,
@@ -1035,7 +1056,7 @@ async fn update_key(
             "Missing key:admin permission",
         );
     }
-    match api_keys::set_enabled_for_user(*id, user_id, body.enabled) {
+    match api_keys::set_enabled_for_user(&services.repo, *id, user_id, body.enabled).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "API key not found"),
         Err(e) => internal(e),
@@ -1048,7 +1069,9 @@ async fn delete_key(
     services: web::Data<Services>,
     id: web::Path<i64>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(|p| require_mutation(&services, &req, p))
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
     {
         Ok(v) => v,
         Err(r) => return r,
@@ -1063,7 +1086,7 @@ async fn delete_key(
             "Missing key:admin permission",
         );
     }
-    match api_keys::delete_for_user(*id, user_id) {
+    match api_keys::delete_for_user(&services.repo, *id, user_id).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "API key not found"),
         Err(e) => internal(e),
@@ -1072,14 +1095,14 @@ async fn delete_key(
 
 #[get("/admin/users")]
 async fn admin_users(req: HttpRequest, services: web::Data<Services>) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(require_auth) {
+    let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(v) => v,
         Err(r) => return r,
     };
     if let Err(r) = require_admin(&value, "user:admin") {
         return r;
     }
-    match accounts::list_users() {
+    match accounts::list_users(&services.repo).await {
         Ok(users) => HttpResponse::Ok().json(users.into_iter().map(|u| json!({"id":u.id,"username":u.username,"role":u.role,"enabled":u.enabled,"force_password_change":u.force_password_change})).collect::<Vec<_>>()),
         Err(e) => internal(e),
     }
@@ -1091,14 +1114,14 @@ async fn admin_pastes(
     services: web::Data<Services>,
     query: web::Query<PasteQuery>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(require_auth) {
+    let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(value) => value,
         Err(response) => return response,
     };
     if let Err(response) = require_admin(&value, "paste:admin") {
         return response;
     }
-    match services.list_pastes(&value, &query, true) {
+    match services.list_pastes(&value, &query, true).await {
         Ok(page) => HttpResponse::Ok().json(page),
         Err(e) => internal(e),
     }
@@ -1118,7 +1141,9 @@ async fn admin_update_user(
     id: web::Path<i64>,
     body: web::Json<UserUpdate>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(|p| require_mutation(&services, &req, p))
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
     {
         Ok(v) => v,
         Err(r) => return r,
@@ -1126,9 +1151,9 @@ async fn admin_update_user(
     if let Err(r) = require_admin(&value, "user:admin") {
         return r;
     }
-    let result = (|| {
+    let result = async {
         if let Some(enabled) = body.enabled {
-            accounts::set_enabled(*id, enabled)?;
+            accounts::set_enabled(&services.repo, *id, enabled).await?;
         }
         if let Some(role) = &body.role {
             let admin = match role.as_str() {
@@ -1136,10 +1161,11 @@ async fn admin_update_user(
                 "user" => false,
                 _ => return Err("Role must be user or admin".to_string()),
             };
-            accounts::set_role(*id, admin)?;
+            accounts::set_role(&services.repo, *id, admin).await?;
         }
         Ok::<_, String>(())
-    })();
+    }
+    .await;
     match result {
         Ok(()) => HttpResponse::NoContent().finish(),
         Err(e) => error(StatusCode::BAD_REQUEST, "invalid_user", e),
@@ -1148,14 +1174,14 @@ async fn admin_update_user(
 
 #[get("/admin/invites")]
 async fn admin_invites(req: HttpRequest, services: web::Data<Services>) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(require_auth) {
+    let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(v) => v,
         Err(r) => return r,
     };
     if let Err(r) = require_admin(&value, "invite:admin") {
         return r;
     }
-    match accounts::list_invites() {
+    match accounts::list_invites(&services.repo).await {
         Ok(items) => HttpResponse::Ok().json(items.into_iter().map(|i| json!({"id":i.id,"token_prefix":i.token_prefix,"expires":i.expires,"status":i.status()})).collect::<Vec<_>>()),
         Err(e) => internal(e),
     }
@@ -1163,7 +1189,9 @@ async fn admin_invites(req: HttpRequest, services: web::Data<Services>) -> HttpR
 
 #[post("/admin/invites")]
 async fn admin_create_invite(req: HttpRequest, services: web::Data<Services>) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(|p| require_mutation(&services, &req, p))
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
     {
         Ok(v) => v,
         Err(r) => return r,
@@ -1174,7 +1202,7 @@ async fn admin_create_invite(req: HttpRequest, services: web::Data<Services>) ->
     let Some(user_id) = value.user_id() else {
         return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
     };
-    match accounts::create_invite(user_id) {
+    match accounts::create_invite(&services.repo, user_id).await {
         Ok(token) => {
             HttpResponse::Created().json(json!({"token":token,"url":format!("/invite/{token}")}))
         }
@@ -1188,7 +1216,9 @@ async fn admin_revoke_invite(
     services: web::Data<Services>,
     id: web::Path<i64>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(|p| require_mutation(&services, &req, p))
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
     {
         Ok(v) => v,
         Err(r) => return r,
@@ -1196,7 +1226,7 @@ async fn admin_revoke_invite(
     if let Err(r) = require_admin(&value, "invite:admin") {
         return r;
     }
-    match accounts::revoke_invite(*id) {
+    match accounts::revoke_invite(&services.repo, *id).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "Invitation not found"),
         Err(e) => internal(e),
@@ -1205,14 +1235,14 @@ async fn admin_revoke_invite(
 
 #[get("/admin/api-keys")]
 async fn admin_keys(req: HttpRequest, services: web::Data<Services>) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(require_auth) {
+    let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(v) => v,
         Err(r) => return r,
     };
     if let Err(r) = require_admin(&value, "key:admin") {
         return r;
     }
-    match api_keys::list() {
+    match api_keys::list(&services.repo).await {
         Ok(v) => HttpResponse::Ok().json(v),
         Err(e) => internal(e),
     }
@@ -1225,7 +1255,9 @@ async fn admin_update_key(
     id: web::Path<i64>,
     body: web::Json<EnabledInput>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(|p| require_mutation(&services, &req, p))
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
     {
         Ok(v) => v,
         Err(r) => return r,
@@ -1233,7 +1265,7 @@ async fn admin_update_key(
     if let Err(r) = require_admin(&value, "key:admin") {
         return r;
     }
-    match api_keys::set_enabled(*id, body.enabled) {
+    match api_keys::set_enabled(&services.repo, *id, body.enabled).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "API key not found"),
         Err(e) => internal(e),
@@ -1246,7 +1278,9 @@ async fn admin_delete_key(
     services: web::Data<Services>,
     id: web::Path<i64>,
 ) -> HttpResponse {
-    let value = match principal(&services, &req).and_then(|p| require_mutation(&services, &req, p))
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
     {
         Ok(v) => v,
         Err(r) => return r,
@@ -1254,7 +1288,7 @@ async fn admin_delete_key(
     if let Err(r) = require_admin(&value, "key:admin") {
         return r;
     }
-    match api_keys::delete(*id) {
+    match api_keys::delete(&services.repo, *id).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "API key not found"),
         Err(e) => internal(e),
