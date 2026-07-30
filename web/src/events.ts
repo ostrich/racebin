@@ -19,6 +19,13 @@ document.addEventListener("click", async event => {
       const slug = target.closest<HTMLElement>(".paste-row")?.querySelector<HTMLInputElement>('input[type="hidden"]')?.value;
       if (slug) { await navigator.clipboard.writeText(`${location.origin}/pastes/${slug}`); notice("Link copied."); }
     }
+    if (action === "copy-content") {
+      const content = document.querySelector<HTMLElement>("#paste-code")?.textContent;
+      if (content !== undefined) {
+        await navigator.clipboard.writeText(content);
+        notice("Paste copied.");
+      }
+    }
     if (action === "trash-2") {
       const row = target.closest<HTMLElement>(".paste-row");
       const slug = row?.querySelector<HTMLInputElement>('input[type="hidden"]')?.value;

@@ -8,7 +8,7 @@
 .file-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
 @media(max-width:760px){.form-grid,.filters.admin-filters{grid-template-columns:1fr}}
 
-.editor label small{color:var(--muted);font-size:11px}
+.editor label small{color:var(--muted);font-size:11px;font-weight:400;margin-left:5px}
 .code-editor{position:relative;min-height:410px;border:1px solid #bfc6ce;border-radius:5px;overflow:hidden;background:#fff}
 .code-editor pre,.code-editor textarea{width:100%;min-height:410px;margin:0;padding:10px 11px;border:0;border-radius:0;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:inherit;line-height:1.55;tab-size:4;white-space:pre;overflow:auto}
 .code-editor pre{position:absolute;inset:0;pointer-events:none}
