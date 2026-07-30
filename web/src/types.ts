@@ -16,7 +16,7 @@ export type Paste = {
   title: string;
   content: string;
   document: RichTextDocument | null;
-  content_kind: "text" | "rich_text" | "redirect";
+  content_kind: "text" | "rich_text";
   language: string;
   visibility: "public" | "unlisted" | "private";
   created_at: number;

@@ -51,7 +51,7 @@ curl https://example.com/api/v1/pastes \
   }'
 ```
 
-`content_kind` is `text`, `rich_text`, or `redirect`. `visibility` is `public`, `unlisted`,
+`content_kind` is `text` or `rich_text`. `visibility` is `public`, `unlisted`,
 or `private`. Timestamp fields are Unix seconds. A null `expires_at` never
 expires, and a null `read_limit` permits unlimited reads.
 
@@ -72,7 +72,7 @@ curl -X POST https://example.com/api/v1/pastes/convert \
 ```
 
 The reverse conversion accepts the rich-text `document` and returns normalized
-plaintext. Conversion intentionally excludes redirects.
+plaintext.
 
 List and filter:
 

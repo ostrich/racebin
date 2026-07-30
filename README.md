@@ -3,7 +3,7 @@
 **Simple sharing for code, notes, and files.**
 
 Racebin is a self-hosted place to create and share syntax-highlighted code,
-rich-text documents, attachments, and short links. Keep a paste private, share
+rich-text documents, and attachments. Keep a paste private, share
 it with an unlisted URL, or publish it for anyone to discover. Everything you
 create stays manageable from your account.
 
@@ -17,7 +17,6 @@ create stays manageable from your account.
   attachments as a ZIP archive.
 - Choose public, unlisted, or private visibility.
 - Set an expiration time or limit how many times a paste can be read.
-- Create short-link redirects.
 - Search, edit, and manage your pastes from one account.
 
 ## Built for self-hosting

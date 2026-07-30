@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use super::model::{Attachment, Page, Paste, PasteInput, PasteQuery};
 use super::rich_text::validate_document;
-use super::validation::{authorize_owner, can_read, validate_input, validate_url};
+use super::validation::{authorize_owner, can_read, validate_input};
 use crate::time::unix_timestamp;
 
 #[derive(Clone)]
@@ -296,7 +296,7 @@ impl PasteService {
         if !principal.can("paste:write") && !matches!(principal, Principal::Session(_)) {
             return Err("Missing paste:write scope".into());
         }
-        validate_input(input, true)?;
+        validate_input(input)?;
         let content_kind = input.content_kind.as_deref().unwrap_or("text");
         let (content, document_json) = normalized_content(
             content_kind,
@@ -339,7 +339,7 @@ impl PasteService {
         id: &str,
         input: &PasteInput,
     ) -> Result<Option<Paste>, String> {
-        validate_input(input, false)?;
+        validate_input(input)?;
         let current = match self.find_paste(id).await? {
             Some(value) => value,
             None => return Ok(None),
@@ -362,7 +362,6 @@ impl PasteService {
         } else {
             "plaintext"
         };
-        validate_url(content_kind, &content)?;
         sqlx::query(
             "UPDATE pastes SET title=coalesce($2,title),content=$3,document_json=$4,
              content_kind=$5,language=$6,visibility=coalesce($7,visibility),
@@ -610,15 +609,7 @@ mod tests {
     use crate::account::api_keys::ApiKey;
     use crate::account::{SessionUser, User};
     use crate::repository::Repository;
-    use crate::services::validation::{can_read, validate_url};
-
-    #[test]
-    fn redirect_pastes_accept_only_http_destinations() {
-        assert!(validate_url("redirect", "https://example.com/path").is_ok());
-        assert!(validate_url("redirect", "javascript:alert(1)").is_err());
-        assert!(validate_url("redirect", "not a url").is_err());
-        assert!(validate_url("text", "not a url").is_ok());
-    }
+    use crate::services::validation::can_read;
 
     fn owner_paste() -> Paste {
         Paste {

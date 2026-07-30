@@ -15,7 +15,6 @@ export function pasteDisplayTitle(paste: Paste): string {
 
 export function pasteFormatLabel(paste: Paste): string {
   if (paste.content_kind === "rich_text") return "Rich text";
-  if (paste.content_kind === "redirect") return "Redirect";
   return paste.language;
 }
 

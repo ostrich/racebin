@@ -6,6 +6,15 @@ pub(super) async fn backend_contract(repo: Repository) {
     let services = PasteService::new(repo.clone());
     let owner = principal(2, "paste-owner", "user");
     let anonymous = Principal::Anonymous;
+    let unsupported_kind = PasteInput {
+        content_kind: Some("redirect".into()),
+        ..paste_input("unsupported", "public")
+    };
+    assert!(services
+        .create_paste(&owner, &unsupported_kind)
+        .await
+        .unwrap_err()
+        .contains("Content kind"));
 
     let verified = accounts::verify_user(&repo, "paste-owner", "correct horse battery staple")
         .await

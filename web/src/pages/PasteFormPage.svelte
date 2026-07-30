@@ -13,7 +13,7 @@
   import { appState } from "../state";
   import type { Paste, RichTextDocument } from "../types";
 
-  type ContentKind = "text" | "rich_text" | "redirect";
+  type ContentKind = "text" | "rich_text";
   type Conversion = { content: string; document: RichTextDocument | null };
 
   let { pasteId }: { pasteId?: string } = $props();
@@ -116,11 +116,6 @@
         const converted = await convert("text", "rich_text");
         if (converted.content && !(await conversionDialog.ask(target, converted.content))) return;
         document = converted.document ?? { type: "doc", content: [{ type: "paragraph" }] };
-      } else {
-        drafts.set(source, content);
-        const targetContent = drafts.get(target) ?? content;
-        if (targetContent && !(await conversionDialog.ask(target, targetContent))) return;
-        content = targetContent;
       }
       contentKind = target;
     } catch (reason) {
@@ -220,7 +215,7 @@
       {/if}
       <div class="form-grid">
         <label><span>Type</span><select value={contentKind} disabled={switching} onchange={changeKind}>
-          <option value="text">Text</option><option value="rich_text">Rich text</option><option value="redirect">Redirect</option>
+          <option value="text">Text</option><option value="rich_text">Rich text</option>
         </select></label>
         <LanguagePicker bind:value={language} disabled={contentKind !== "text"}/>
         <label><span>Visibility</span><select bind:value={visibility}>

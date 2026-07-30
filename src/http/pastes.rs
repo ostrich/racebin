@@ -127,9 +127,9 @@ pub(super) fn validate_paste_query(query: &PasteQuery) -> Result<(), &'static st
     if query
         .content_kind
         .as_deref()
-        .is_some_and(|value| !matches!(value, "text" | "rich_text" | "redirect"))
+        .is_some_and(|value| !matches!(value, "text" | "rich_text"))
     {
-        return Err("Format must be text, rich_text, or redirect");
+        return Err("Format must be text or rich_text");
     }
     if query
         .expiration

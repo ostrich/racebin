@@ -20,10 +20,7 @@
 
   onMount(() => {
     void requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}/consume`)
-      .then(result => {
-        paste = result;
-        if (result.content_kind === "redirect") location.replace(result.content);
-      })
+      .then(result => { paste = result; })
       .catch(reason => {
         error = reason instanceof Error ? reason.message : "Unable to load paste";
       });
@@ -37,10 +34,7 @@
 </script>
 
 {#if paste}
-  {#if paste.content_kind === "redirect"}
-    <section class="empty"><p class="eyebrow">Short link</p><h1>{pasteDisplayTitle(paste)}</h1><p>Redirecting…</p></section>
-  {:else}
-    <article class="paste-view">
+  <article class="paste-view">
       <div class="page-heading">
         <div><p class="eyebrow">{paste.visibility} · {pasteFormatLabel(paste)}</p><h1>{pasteDisplayTitle(paste)}</h1></div>
         <div class="actions">
@@ -70,8 +64,7 @@
         <span>Expires {formatDate(paste.expires_at)}</span>
         <span>{paste.read_count} reads</span>
       </footer>
-    </article>
-  {/if}
+  </article>
 {:else if error}
   <section class="empty"><h1>Unable to load this paste</h1><p>{error}</p><Link class="button" href="/">Return home</Link></section>
 {:else}

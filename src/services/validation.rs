@@ -27,7 +27,7 @@ pub(super) fn authorize_owner(
     }
 }
 
-pub(super) fn validate_input(input: &PasteInput, creating: bool) -> Result<(), String> {
+pub(super) fn validate_input(input: &PasteInput) -> Result<(), String> {
     if input
         .title
         .as_deref()
@@ -38,9 +38,9 @@ pub(super) fn validate_input(input: &PasteInput, creating: bool) -> Result<(), S
     if input
         .content_kind
         .as_deref()
-        .is_some_and(|value| !matches!(value, "text" | "rich_text" | "redirect"))
+        .is_some_and(|value| !matches!(value, "text" | "rich_text"))
     {
-        return Err("Content kind must be text, rich_text, or redirect".into());
+        return Err("Content kind must be text or rich_text".into());
     }
     if input
         .visibility
@@ -54,23 +54,6 @@ pub(super) fn validate_input(input: &PasteInput, creating: bool) -> Result<(), S
         .is_some_and(|value| value.is_some_and(|limit| limit <= 0))
     {
         return Err("Read limit must be positive or null".into());
-    }
-    if creating {
-        validate_url(
-            input.content_kind.as_deref().unwrap_or("text"),
-            input.content.as_deref().unwrap_or(""),
-        )?;
-    }
-    Ok(())
-}
-
-pub(super) fn validate_url(content_kind: &str, content: &str) -> Result<(), String> {
-    if content_kind != "redirect" {
-        return Ok(());
-    }
-    let parsed = url::Url::parse(content).map_err(|_| "URL content is invalid")?;
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return Err("Redirect pastes support only http and https".into());
     }
     Ok(())
 }
