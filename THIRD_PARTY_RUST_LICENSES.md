@@ -167,7 +167,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [qrcodegen](https://github.com/nayuki/QR-Code-generator) | 1.8.0 | MIT |
 | [quote](https://github.com/dtolnay/quote) | 1.0.45 | MIT OR Apache-2.0 |
 | [r-efi](https://github.com/r-efi/r-efi) | 6.0.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later |
-| [racebin](https://github.com/ostrich/racebin) | 4.0.0 | MIT |
+| [racebin](https://github.com/ostrich/racebin) | 0.1.0 | MIT |
 | [rand](https://github.com/rust-random/rand) | 0.8.5 | MIT OR Apache-2.0 |
 | [rand_chacha](https://github.com/rust-random/rand) | 0.3.1 | MIT OR Apache-2.0 |
 | [rand_core](https://github.com/rust-random/rand) | 0.6.4 | MIT OR Apache-2.0 |
