@@ -4,7 +4,7 @@ use sqlx::{Any, Executor};
 use std::collections::HashSet;
 use uuid::Uuid;
 
-use super::model::{Attachment, Page, Paste, PasteInput, PasteQuery};
+use super::model::{Attachment, Folder, FolderOverview, Page, Paste, PasteInput, PasteQuery};
 use super::rich_text::validate_document;
 use super::validation::{authorize_owner, can_read, validate_input};
 use crate::time::unix_timestamp;
@@ -72,6 +72,14 @@ impl PasteService {
         } else {
             query.owner_id
         };
+        if let Some(folder_id) = query.folder_id {
+            let owner = user_id.ok_or("Folder filters require an owner")?;
+            if self.folder_by_id(owner, folder_id).await?.is_none() {
+                return Err("Folder not found".into());
+            }
+        }
+        let folder_id = query.folder_id;
+        let unfiled = query.unfiled.map(i64::from);
         let text_size = if self.storage.kind() == crate::repository::DatabaseKind::Postgres {
             "CAST(octet_length(content) AS BIGINT) + \
              COALESCE(CAST(octet_length(document_json) AS BIGINT),0)"
@@ -125,7 +133,9 @@ impl PasteService {
              AND ($15 IS NULL OR ($15=0 AND read_limit IS NULL)
                                OR ($15=1 AND read_limit IS NOT NULL))
              AND ($16 IS NULL OR {total_size}>=$16)
-             AND ($17 IS NULL OR {total_size}<=$17)"
+             AND ($17 IS NULL OR {total_size}<=$17)
+             AND ($18 IS NULL OR folder_id=$18)
+             AND ($19 IS NULL OR ($19=1 AND folder_id IS NULL))"
         );
         let total: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM pastes WHERE {filter}"))
             .bind(i64::from(admin))
@@ -145,16 +155,18 @@ impl PasteService {
             .bind(limited)
             .bind(query.min_size_bytes)
             .bind(query.max_size_bytes)
+            .bind(folder_id)
+            .bind(unfiled)
             .fetch_one(self.storage.pool())
             .await
             .map_err(|e| e.to_string())?;
         let items = sqlx::query_as::<_, Paste>(&format!(
-            "SELECT id,owner_id,title,substr(content,1,500) AS content,NULL AS document_json,
+            "SELECT id,owner_id,folder_id,title,substr(content,1,500) AS content,NULL AS document_json,
                     content_kind,language,visibility,created_at,expires_at,last_read_at,read_count,read_limit,
                     (SELECT count(*) FROM attachments summary_files
                      WHERE summary_files.paste_id=pastes.id) AS attachment_count,
                     {total_size} AS size_bytes
-             FROM pastes WHERE {filter} ORDER BY {order} {direction},id ASC LIMIT $18 OFFSET $19"
+             FROM pastes WHERE {filter} ORDER BY {order} {direction},id ASC LIMIT $20 OFFSET $21"
         ))
         .bind(i64::from(admin))
         .bind(user_id)
@@ -173,13 +185,18 @@ impl PasteService {
         .bind(limited)
         .bind(query.min_size_bytes)
         .bind(query.max_size_bytes)
+        .bind(folder_id)
+        .bind(unfiled)
         .bind(i64::from(page_size))
         .bind(offset)
         .fetch_all(self.storage.pool())
         .await
         .map_err(|e| e.to_string())?;
         Ok(Page {
-            items,
+            items: items
+                .into_iter()
+                .map(|paste| redact_folder(principal, paste, admin))
+                .collect(),
             page,
             page_size,
             total_items: total,
@@ -194,12 +211,13 @@ impl PasteService {
         Ok(self
             .find_paste(id)
             .await?
-            .filter(|paste| can_read(principal, paste)))
+            .filter(|paste| can_read(principal, paste))
+            .map(|paste| redact_folder(principal, paste, false)))
     }
 
     async fn find_paste(&self, id: &str) -> Result<Option<Paste>, String> {
         let mut paste = sqlx::query_as::<_, Paste>(
-            "SELECT id,owner_id,title,content,document_json,content_kind,language,visibility,created_at,
+            "SELECT id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,created_at,
                     expires_at,last_read_at,read_count,read_limit
              FROM pastes WHERE id=$1 AND (expires_at IS NULL OR expires_at>$2)",
         )
@@ -234,7 +252,7 @@ impl PasteService {
             ""
         };
         let mut paste = sqlx::query_as::<_, Paste>(&format!(
-            "SELECT id,owner_id,title,content,document_json,content_kind,language,visibility,created_at,
+            "SELECT id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,created_at,
                     expires_at,last_read_at,read_count,read_limit
              FROM pastes WHERE id=$1 AND (expires_at IS NULL OR expires_at>$2){lock}"
         ))
@@ -274,7 +292,7 @@ impl PasteService {
                 std::fs::remove_dir_all(self.storage.data_dir.join("attachments").join(&paste.id));
         }
         paste.read_count = next_reads;
-        Ok(Some(paste))
+        Ok(Some(redact_folder(principal, paste, false)))
     }
 
     pub async fn ensure_can_update(
@@ -305,13 +323,16 @@ impl PasteService {
         )?;
         let now = unix_timestamp();
         let id = Uuid::new_v4().simple().to_string()[..24].to_string();
+        let folder_id = input.folder_id.flatten();
+        self.validate_folder_owner(owner, folder_id).await?;
         sqlx::query(
-            "INSERT INTO pastes(id,owner_id,title,content,document_json,content_kind,language,visibility,
+            "INSERT INTO pastes(id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,
                                created_at,expires_at,last_read_at,read_count,read_limit)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$9,0,$11)",
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$10,0,$12)",
         )
         .bind(&id)
         .bind(owner)
+        .bind(folder_id)
         .bind(input.title.as_deref().unwrap_or("").trim())
         .bind(content)
         .bind(document_json)
@@ -345,6 +366,16 @@ impl PasteService {
             None => return Ok(None),
         };
         authorize_owner(principal, &current, "paste:write")?;
+        let folder_id = if let Some(folder) = input.folder_id {
+            if current.owner_id != principal.user_id() {
+                return Err("Folder organization is private to the paste owner".into());
+            }
+            self.validate_folder_owner(current.owner_id.unwrap_or_default(), folder)
+                .await?;
+            folder
+        } else {
+            current.folder_id
+        };
         let content_kind = input
             .content_kind
             .as_deref()
@@ -366,7 +397,8 @@ impl PasteService {
             "UPDATE pastes SET title=coalesce($2,title),content=$3,document_json=$4,
              content_kind=$5,language=$6,visibility=coalesce($7,visibility),
              expires_at=CASE WHEN $8=1 THEN $9 ELSE expires_at END,
-             read_limit=CASE WHEN $10=1 THEN $11 ELSE read_limit END WHERE id=$1",
+             read_limit=CASE WHEN $10=1 THEN $11 ELSE read_limit END,
+             folder_id=$12 WHERE id=$1",
         )
         .bind(id)
         .bind(input.title.as_deref().map(str::trim))
@@ -379,10 +411,160 @@ impl PasteService {
         .bind(input.expires_at.flatten())
         .bind(i64::from(input.read_limit.is_some()))
         .bind(input.read_limit.flatten())
+        .bind(folder_id)
         .execute(self.storage.pool())
         .await
         .map_err(|e| e.to_string())?;
-        self.find_paste(id).await
+        Ok(self
+            .find_paste(id)
+            .await?
+            .map(|paste| redact_folder(principal, paste, false)))
+    }
+
+    pub async fn list_folders(&self, principal: &Principal) -> Result<FolderOverview, String> {
+        let owner = folder_principal(principal, "paste:list")?;
+        let items = sqlx::query_as(
+            "SELECT f.id,f.owner_id,f.name,f.created_at,
+                    (SELECT count(*) FROM pastes p WHERE p.folder_id=f.id) AS paste_count
+             FROM folders f WHERE f.owner_id=$1 ORDER BY f.name_key,f.id",
+        )
+        .bind(owner)
+        .fetch_all(self.storage.pool())
+        .await
+        .map_err(|error| error.to_string())?;
+        let (total_count, unfiled_count): (i64, i64) = sqlx::query_as(
+            "SELECT count(*),coalesce(sum(CASE WHEN folder_id IS NULL THEN 1 ELSE 0 END),0)
+             FROM pastes WHERE owner_id=$1",
+        )
+        .bind(owner)
+        .fetch_one(self.storage.pool())
+        .await
+        .map_err(|error| error.to_string())?;
+        Ok(FolderOverview {
+            items,
+            total_count,
+            unfiled_count,
+        })
+    }
+
+    pub async fn create_folder(&self, principal: &Principal, name: &str) -> Result<Folder, String> {
+        let owner = folder_principal(principal, "paste:write")?;
+        let name = validate_folder_name(name)?;
+        let name_key = folder_name_key(name);
+        let id: i64 = sqlx::query_scalar(
+            "INSERT INTO folders(owner_id,name,name_key,created_at) VALUES($1,$2,$3,$4) RETURNING id",
+        )
+        .bind(owner)
+        .bind(name)
+        .bind(name_key)
+        .bind(unix_timestamp())
+        .fetch_one(self.storage.pool())
+        .await
+        .map_err(|error| folder_database_error(error.to_string()))?;
+        self.folder_by_id(owner, id)
+            .await?
+            .ok_or("Folder creation failed".into())
+    }
+
+    pub async fn rename_folder(
+        &self,
+        principal: &Principal,
+        id: i64,
+        name: &str,
+    ) -> Result<Option<Folder>, String> {
+        let owner = folder_principal(principal, "paste:write")?;
+        let name = validate_folder_name(name)?;
+        let changed =
+            sqlx::query("UPDATE folders SET name=$3,name_key=$4 WHERE id=$1 AND owner_id=$2")
+                .bind(id)
+                .bind(owner)
+                .bind(name)
+                .bind(folder_name_key(name))
+                .execute(self.storage.pool())
+                .await
+                .map_err(|error| folder_database_error(error.to_string()))?
+                .rows_affected();
+        if changed == 0 {
+            Ok(None)
+        } else {
+            self.folder_by_id(owner, id).await
+        }
+    }
+
+    pub async fn delete_folder(&self, principal: &Principal, id: i64) -> Result<bool, String> {
+        let owner = folder_principal(principal, "paste:write")?;
+        sqlx::query("DELETE FROM folders WHERE id=$1 AND owner_id=$2")
+            .bind(id)
+            .bind(owner)
+            .execute(self.storage.pool())
+            .await
+            .map(|result| result.rows_affected() == 1)
+            .map_err(|error| error.to_string())
+    }
+
+    pub async fn move_pastes(
+        &self,
+        principal: &Principal,
+        paste_ids: &[String],
+        folder_id: Option<i64>,
+    ) -> Result<(), String> {
+        let owner = folder_principal(principal, "paste:write")?;
+        if paste_ids.is_empty() || paste_ids.len() > 100 {
+            return Err("Select between 1 and 100 pastes".into());
+        }
+        let unique = paste_ids.iter().collect::<HashSet<_>>();
+        if unique.len() != paste_ids.len() {
+            return Err("Paste IDs must be unique".into());
+        }
+        self.validate_folder_owner(owner, folder_id).await?;
+        let _guard = self.storage.lock_writes().await;
+        let mut tx = self
+            .storage
+            .pool()
+            .begin()
+            .await
+            .map_err(|e| e.to_string())?;
+        for id in paste_ids {
+            let changed = sqlx::query("UPDATE pastes SET folder_id=$3 WHERE id=$1 AND owner_id=$2")
+                .bind(id)
+                .bind(owner)
+                .bind(folder_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?
+                .rows_affected();
+            if changed != 1 {
+                return Err("One or more pastes were not found".into());
+            }
+        }
+        tx.commit().await.map_err(|e| e.to_string())
+    }
+
+    async fn validate_folder_owner(
+        &self,
+        owner: i64,
+        folder_id: Option<i64>,
+    ) -> Result<(), String> {
+        let Some(id) = folder_id else {
+            return Ok(());
+        };
+        if self.folder_by_id(owner, id).await?.is_none() {
+            return Err("Folder not found".into());
+        }
+        Ok(())
+    }
+
+    async fn folder_by_id(&self, owner: i64, id: i64) -> Result<Option<Folder>, String> {
+        sqlx::query_as(
+            "SELECT f.id,f.owner_id,f.name,f.created_at,
+                    (SELECT count(*) FROM pastes p WHERE p.folder_id=f.id) AS paste_count
+             FROM folders f WHERE f.id=$1 AND f.owner_id=$2",
+        )
+        .bind(id)
+        .bind(owner)
+        .fetch_optional(self.storage.pool())
+        .await
+        .map_err(|error| error.to_string())
     }
 
     pub async fn delete_paste(&self, principal: &Principal, id: &str) -> Result<bool, String> {
@@ -553,6 +735,49 @@ impl PasteService {
     }
 }
 
+fn folder_principal(principal: &Principal, scope: &str) -> Result<i64, String> {
+    let owner = principal
+        .user_id()
+        .ok_or("Folders require a user-owned credential")?;
+    if matches!(principal, Principal::ApiKey(_)) && !principal.can(scope) {
+        return Err(format!("Missing {scope} scope"));
+    }
+    Ok(owner)
+}
+
+fn validate_folder_name(name: &str) -> Result<&str, String> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 100 || name.chars().any(char::is_control) {
+        return Err("Folder name must contain 1 to 100 printable characters".into());
+    }
+    if matches!(
+        name.to_ascii_lowercase().as_str(),
+        "all pastes" | "uncategorized"
+    ) {
+        return Err("Folder name is reserved".into());
+    }
+    Ok(name)
+}
+
+fn folder_database_error(error: String) -> String {
+    if error.to_ascii_lowercase().contains("unique") {
+        "A folder with that name already exists".into()
+    } else {
+        error
+    }
+}
+
+fn folder_name_key(name: &str) -> String {
+    name.to_lowercase()
+}
+
+fn redact_folder(principal: &Principal, mut paste: Paste, administrative: bool) -> Paste {
+    if administrative || principal.user_id() != paste.owner_id {
+        paste.folder_id = None;
+    }
+    paste
+}
+
 fn normalized_content(
     content_kind: &str,
     content: &str,
@@ -615,6 +840,7 @@ mod tests {
         Paste {
             id: "example".to_string(),
             owner_id: Some(7),
+            folder_id: None,
             title: String::new(),
             content: "secret".to_string(),
             document: None,

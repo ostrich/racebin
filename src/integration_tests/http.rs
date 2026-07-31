@@ -87,6 +87,7 @@ mod tests {
             visibility: Some(visibility.to_string()),
             expires_at: None,
             read_limit: None,
+            folder_id: None,
         };
         let public = services
             .create_paste(&principal, &input("public", "public"))
@@ -191,6 +192,50 @@ mod tests {
         .await;
         assert_eq!(unsafe_document.status(), StatusCode::BAD_REQUEST);
 
+        let created_folder = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/folders")
+                .cookie(cookie.clone())
+                .insert_header(("X-CSRF-Token", csrf.as_str()))
+                .set_json(json!({"name":"Scripts"}))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(created_folder.status(), StatusCode::CREATED);
+        let created_folder: Value = test::read_body_json(created_folder).await;
+        let folder_id = created_folder["id"].as_i64().unwrap();
+        let moved = test::call_service(
+            &app,
+            test::TestRequest::patch()
+                .uri("/api/v1/pastes/folder")
+                .cookie(cookie.clone())
+                .insert_header(("X-CSRF-Token", csrf.as_str()))
+                .set_json(json!({"paste_ids":[public.id],"folder_id":folder_id}))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(moved.status(), StatusCode::NO_CONTENT);
+        let owner_view = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/v1/pastes/{}", public.id))
+                .cookie(cookie.clone())
+                .to_request(),
+        )
+        .await;
+        let owner_view: Value = test::read_body_json(owner_view).await;
+        assert_eq!(owner_view["folder_id"], folder_id);
+        let public_view = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/v1/pastes/{}", public.id))
+                .to_request(),
+        )
+        .await;
+        let public_view: Value = test::read_body_json(public_view).await;
+        assert!(public_view["folder_id"].is_null());
+
         let without_csrf = test::call_service(
             &app,
             test::TestRequest::post()
@@ -272,6 +317,15 @@ mod tests {
         )
         .await;
         assert_eq!(key_write.status(), StatusCode::FORBIDDEN);
+        let key_folders = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/v1/folders")
+                .insert_header(("Authorization", format!("Bearer {read_token}")))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(key_folders.status(), StatusCode::FORBIDDEN);
 
         let positive_get_scopes = [
             (
@@ -383,6 +437,25 @@ mod tests {
         )
         .await;
         assert_eq!(write_create_allowed.status(), StatusCode::CREATED);
+        let write_folder_allowed = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/folders")
+                .insert_header(("Authorization", format!("Bearer {write_token}")))
+                .set_json(json!({"name":"API folder"}))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(write_folder_allowed.status(), StatusCode::CREATED);
+        let write_folder_list_denied = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/v1/folders")
+                .insert_header(("Authorization", format!("Bearer {write_token}")))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(write_folder_list_denied.status(), StatusCode::FORBIDDEN);
         let cross_owner_write = test::call_service(
             &app,
             test::TestRequest::patch()

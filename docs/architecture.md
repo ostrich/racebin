@@ -159,6 +159,7 @@ The main relational entities are:
 | `api_keys` | Hashed bearer credentials, optionally owned by a user |
 | `api_key_scopes` | Many-to-one scope assignments deleted with their API key |
 | `pastes` | Text or rich-text content, owner, visibility, expiration, and read-limit state |
+| `folders` | Private, flat organizational containers owned by users |
 | `attachments` | Ordered attachment metadata owned by a paste |
 
 Rich text is stored as a validated JSON document alongside a plain-text
@@ -172,6 +173,10 @@ Foreign keys implement ownership cleanup where possible. A deleted user
 leaves their pastes intact with a null owner, while their sessions and
 user-owned API keys are removed. Deleting a paste removes its attachment
 metadata.
+
+Each owned paste may reference one folder. Folder identity is private to its
+owner and does not affect paste visibility or URLs. Deleting a folder clears
+the assignment rather than deleting its pastes.
 
 ## Database abstraction
 
@@ -394,4 +399,3 @@ Use the existing boundaries when extending Racebin:
   navigation, editing, or file interaction.
 - Rebuild `web/dist` before compiling a production binary after frontend
   changes.
-

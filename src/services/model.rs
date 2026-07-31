@@ -7,6 +7,7 @@ use sqlx::{FromRow, Row};
 pub struct Paste {
     pub id: String,
     pub owner_id: Option<i64>,
+    pub folder_id: Option<i64>,
     pub title: String,
     pub content: String,
     pub document: Option<Value>,
@@ -29,6 +30,7 @@ impl<'r> FromRow<'r, AnyRow> for Paste {
         Ok(Self {
             id: row.try_get("id")?,
             owner_id: row.try_get("owner_id")?,
+            folder_id: row.try_get("folder_id").unwrap_or(None),
             title: row.try_get("title")?,
             content: row.try_get("content")?,
             document: document_json
@@ -72,6 +74,7 @@ pub struct PasteInput {
     pub visibility: Option<String>,
     pub expires_at: Option<Option<i64>>,
     pub read_limit: Option<Option<i64>>,
+    pub folder_id: Option<Option<i64>>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -82,6 +85,8 @@ pub struct PasteQuery {
     pub search: Option<String>,
     pub visibility: Option<String>,
     pub owner_id: Option<i64>,
+    pub folder_id: Option<i64>,
+    pub unfiled: Option<bool>,
     pub mine: Option<bool>,
     pub content_kind: Option<String>,
     pub language: Option<String>,
@@ -96,6 +101,23 @@ pub struct PasteQuery {
     pub read_limit: Option<String>,
     pub sort: Option<String>,
     pub direction: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, FromRow)]
+pub struct Folder {
+    pub id: i64,
+    #[serde(skip)]
+    pub owner_id: i64,
+    pub name: String,
+    pub created_at: i64,
+    pub paste_count: i64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct FolderOverview {
+    pub items: Vec<Folder>,
+    pub total_count: i64,
+    pub unfiled_count: i64,
 }
 
 #[derive(Debug, Serialize)]

@@ -65,6 +65,8 @@
   async function submit(event: SubmitEvent): Promise<void> {
     const data = new FormData(event.currentTarget as HTMLFormElement);
     const next = new URLSearchParams();
+    if (params.get("folder_id")) next.set("folder_id", params.get("folder_id")!);
+    if (params.get("unfiled")) next.set("unfiled", params.get("unfiled")!);
     data.forEach((value, key) => {
       if (!value || value instanceof File) return;
       if (key === "created_after" || key === "created_before") {

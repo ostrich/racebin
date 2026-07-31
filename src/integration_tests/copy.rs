@@ -7,9 +7,13 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     let source = Repository::open(&source_url, &source_dir).await.unwrap();
     source.migrate().await.unwrap();
     insert_user(&source, 42, "copied-user", "admin").await;
+    sqlx::query("INSERT INTO folders(id,owner_id,name,name_key,created_at) VALUES(80,42,'Copied folder','copied folder',1)")
+        .execute(source.pool())
+        .await
+        .unwrap();
     sqlx::query(
-        "INSERT INTO pastes(id,owner_id,title,content,content_kind,language,visibility,created_at,read_count,read_limit)
-         VALUES('copied-paste',42,'copied','body','text','plaintext','private',1,0,NULL)",
+        "INSERT INTO pastes(id,owner_id,folder_id,title,content,content_kind,language,visibility,created_at,read_count,read_limit)
+         VALUES('copied-paste',42,80,'copied','body','text','plaintext','private',1,0,NULL)",
     )
     .execute(source.pool())
     .await
@@ -70,6 +74,7 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
         .unwrap();
     assert_eq!(copied, (42, "copied-user".to_string()));
     for table in [
+        "folders",
         "sessions",
         "invitations",
         "api_keys",
@@ -95,6 +100,12 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
             .await
             .unwrap();
     assert_eq!(invitation_redeemer, Some(42));
+    let copied_folder: Option<i64> =
+        sqlx::query_scalar("SELECT folder_id FROM pastes WHERE id='copied-paste'")
+            .fetch_one(destination.pool())
+            .await
+            .unwrap();
+    assert_eq!(copied_folder, Some(80));
     let next_user: i64 = sqlx::query_scalar(
         "INSERT INTO users(username,password_hash,role,created_at)
          VALUES('after-copy','hash','user',1) RETURNING id",
@@ -103,6 +114,13 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     .await
     .unwrap();
     assert!(next_user > 42);
+    let next_folder: i64 = sqlx::query_scalar(
+        "INSERT INTO folders(owner_id,name,name_key,created_at) VALUES(42,'After copy','after copy',1) RETURNING id",
+    )
+    .fetch_one(destination.pool())
+    .await
+    .unwrap();
+    assert!(next_folder > 80);
     let next_paste: String = sqlx::query_scalar(
         "INSERT INTO pastes(id,title,content,content_kind,language,visibility,created_at,read_count,read_limit)
          VALUES('after-copy','','','text','plaintext','public',1,0,NULL) RETURNING id",
@@ -149,7 +167,7 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
         .unwrap_err();
     assert!(error.contains("not empty"));
     sqlx::query(
-        "TRUNCATE attachments,pastes,api_key_scopes,api_keys,sessions,invitations,users
+        "TRUNCATE attachments,pastes,folders,api_key_scopes,api_keys,sessions,invitations,users
          RESTART IDENTITY CASCADE",
     )
     .execute(destination.pool())

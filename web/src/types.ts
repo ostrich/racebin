@@ -13,6 +13,7 @@ export type RichTextDocument = Record<string, unknown>;
 export type Paste = {
   id: string;
   owner_id: number | null;
+  folder_id: number | null;
   title: string;
   content: string;
   document: RichTextDocument | null;
@@ -27,6 +28,19 @@ export type Paste = {
   attachment_count: number;
   size_bytes: number;
   attachments: Attachment[];
+};
+
+export type Folder = {
+  id: number;
+  name: string;
+  created_at: number;
+  paste_count: number;
+};
+
+export type FolderOverview = {
+  items: Folder[];
+  total_count: number;
+  unfiled_count: number;
 };
 
 export type Page<T> = {

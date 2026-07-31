@@ -18,6 +18,7 @@ create stays manageable from your account.
 - Choose public, unlisted, or private visibility.
 - Set an expiration time or limit how many times a paste can be read.
 - Search, edit, and manage your pastes from one account.
+- Organize saved pastes in private folders and move them in bulk.
 
 ## Built for self-hosting
 

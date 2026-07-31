@@ -18,6 +18,7 @@ pub async fn copy_database(
     let occupied: i64 = sqlx::query_scalar(
         "SELECT
           (SELECT count(*) FROM users) +
+          (SELECT count(*) FROM folders) +
           (SELECT count(*) FROM sessions) +
           (SELECT count(*) FROM invitations) +
           (SELECT count(*) FROM api_keys) +
@@ -39,6 +40,11 @@ pub async fn copy_database(
     .fetch_all(&mut *source_tx)
     .await
     .map_err(|e| e.to_string())?;
+    let folders =
+        sqlx::query("SELECT id,owner_id,name,name_key,created_at FROM folders ORDER BY id")
+            .fetch_all(&mut *source_tx)
+            .await
+            .map_err(|e| e.to_string())?;
     let sessions = sqlx::query(
         "SELECT id,user_id,token_hash,csrf_token,created_at,expires_at,last_used_at FROM sessions",
     )
@@ -64,7 +70,7 @@ pub async fn copy_database(
             .await
             .map_err(|error| error.to_string())?;
     let pastes = sqlx::query(
-        "SELECT id,owner_id,title,content,document_json,content_kind,language,visibility,created_at,expires_at,
+        "SELECT id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,created_at,expires_at,
                 last_read_at,read_count,read_limit FROM pastes",
     )
     .fetch_all(&mut *source_tx)
@@ -102,6 +108,7 @@ pub async fn copy_database(
 
     let counts = [
         users.len(),
+        folders.len(),
         sessions.len(),
         invitations.len(),
         api_keys.len(),
@@ -125,6 +132,31 @@ pub async fn copy_database(
                 .map_err(|e| e.to_string())?,
         )
         .bind(row.try_get::<i64, _>("created_at").map_err(|e| e.to_string())?)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+    for row in folders {
+        sqlx::query(
+            "INSERT INTO folders(id,owner_id,name,name_key,created_at) VALUES($1,$2,$3,$4,$5)",
+        )
+        .bind(row.try_get::<i64, _>("id").map_err(|e| e.to_string())?)
+        .bind(
+            row.try_get::<i64, _>("owner_id")
+                .map_err(|e| e.to_string())?,
+        )
+        .bind(
+            row.try_get::<String, _>("name")
+                .map_err(|e| e.to_string())?,
+        )
+        .bind(
+            row.try_get::<String, _>("name_key")
+                .map_err(|e| e.to_string())?,
+        )
+        .bind(
+            row.try_get::<i64, _>("created_at")
+                .map_err(|e| e.to_string())?,
+        )
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -231,9 +263,9 @@ pub async fn copy_database(
     }
     for row in pastes {
         sqlx::query(
-            "INSERT INTO pastes(id,owner_id,title,content,document_json,content_kind,language,visibility,
+            "INSERT INTO pastes(id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,
                                created_at,expires_at,last_read_at,read_count,read_limit)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
         )
         .bind(
             row.try_get::<String, _>("id")
@@ -241,6 +273,10 @@ pub async fn copy_database(
         )
         .bind(
             row.try_get::<Option<i64>, _>("owner_id")
+                .map_err(|e| e.to_string())?,
+        )
+        .bind(
+            row.try_get::<Option<i64>, _>("folder_id")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
@@ -324,6 +360,7 @@ pub async fn copy_database(
     if destination.kind == DatabaseKind::Postgres {
         for table in [
             "users",
+            "folders",
             "sessions",
             "invitations",
             "api_keys",
@@ -341,12 +378,13 @@ pub async fn copy_database(
     }
     for (table, expected) in [
         ("users", counts[0]),
-        ("sessions", counts[1]),
-        ("invitations", counts[2]),
-        ("api_keys", counts[3]),
-        ("api_key_scopes", counts[4]),
-        ("pastes", counts[5]),
-        ("attachments", counts[6]),
+        ("folders", counts[1]),
+        ("sessions", counts[2]),
+        ("invitations", counts[3]),
+        ("api_keys", counts[4]),
+        ("api_key_scopes", counts[5]),
+        ("pastes", counts[6]),
+        ("attachments", counts[7]),
     ] {
         let actual: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM {table}"))
             .fetch_one(&mut *tx)

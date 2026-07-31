@@ -25,6 +25,7 @@ pub(crate) mod attachments;
 mod auth;
 mod cookies;
 mod errors;
+mod folders;
 mod keys;
 mod meta;
 mod pastes;
@@ -67,6 +68,7 @@ pub fn configure(config: &mut web::ServiceConfig) {
             web::scope("/api/v1")
                 .configure(meta::configure)
                 .configure(account::configure)
+                .configure(folders::configure)
                 .configure(pastes::configure)
                 .configure(attachments::configure)
                 .configure(keys::configure)

@@ -74,5 +74,6 @@ fn paste_input(title: &str, visibility: &str) -> PasteInput {
         visibility: Some(visibility.to_string()),
         expires_at: None,
         read_limit: None,
+        folder_id: None,
     }
 }

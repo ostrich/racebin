@@ -112,11 +112,21 @@ async fn list_pastes(
     }
     match services.list_pastes(&value, &query, false).await {
         Ok(page) => HttpResponse::Ok().json(page),
-        Err(e) => internal(e),
+        Err(message) => paste_error(message),
     }
 }
 
 pub(super) fn validate_paste_query(query: &PasteQuery) -> Result<(), &'static str> {
+    if query.folder_id.is_some() && query.unfiled.unwrap_or(false) {
+        return Err("folder_id and unfiled cannot be combined");
+    }
+    if (query.folder_id.is_some() || query.unfiled.unwrap_or(false)) && !query.mine.unwrap_or(false)
+    {
+        return Err("Folder filters require mine=true");
+    }
+    if query.folder_id.is_some_and(|value| value < 1) {
+        return Err("Folder ID must be positive");
+    }
     if query
         .visibility
         .as_deref()

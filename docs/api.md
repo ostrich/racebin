@@ -32,6 +32,10 @@ An API key with `api_key:manage` can grant only scopes it already holds.
 Browser administrators may grant any scope. Ordinary users may grant the four
 non-management paste scopes.
 
+Private folders use the existing paste scopes: `paste:list` lists the key
+owner's folders, while `paste:write` creates, renames, deletes, and assigns
+them. Folder metadata is never returned for another user's paste.
+
 ## Pastes
 
 Create a paste:
@@ -46,6 +50,7 @@ curl https://example.com/api/v1/pastes \
     "content_kind": "text",
     "language": "javascript",
     "visibility": "unlisted",
+    "folder_id": null,
     "expires_at": null,
     "read_limit": null
   }'
@@ -93,6 +98,11 @@ searches also match owner usernames; all searches match attachment filenames.
 List items include `attachment_count` and `size_bytes` without loading the
 complete attachment records.
 
+For an owner list (`mine=true`), `folder_id=ID` selects one folder and
+`unfiled=true` selects Uncategorized. These filters are mutually exclusive.
+Owner-visible pastes include a nullable `folder_id`; other responses redact
+it.
+
 Lists return:
 
 ```json
@@ -117,6 +127,24 @@ read. Upload attachments with multipart POST to
 `/pastes/{paste_id}/attachments`. Download or delete an attachment at
 `/pastes/{paste_id}/attachments/{attachment_id}`. ZIP and QR output are at
 `/pastes/{paste_id}/archive` and `/pastes/{paste_id}/qr`.
+
+## Folders
+
+Folders are private, flat, and owned by the same user as their pastes:
+
+- `GET|POST /folders`
+- `PATCH|DELETE /folders/{folder_id}`
+- `PATCH /pastes/folder`
+
+Folder listing returns `items`, `total_count`, and `unfiled_count`. Each folder
+includes its ID, name, creation time, and paste count. Deleting a folder moves
+its pastes to Uncategorized. Bulk movement accepts:
+
+```json
+{"paste_ids":["PASTE_ID"],"folder_id":12}
+```
+
+Use a null `folder_id` to move pastes to Uncategorized.
 
 ## Accounts And Administration
 

@@ -10,12 +10,18 @@
     items,
     manage = false,
     ownerNames,
-    filterable = false
+    filterable = false,
+    selectable = false,
+    selected = $bindable(new Set<string>()),
+    folderNames
   }: {
     items: Paste[];
     manage?: boolean;
     ownerNames?: Map<number, string>;
     filterable?: boolean;
+    selectable?: boolean;
+    selected?: Set<string>;
+    folderNames?: Map<number, string>;
   } = $props();
 
   let visible = $state<Paste[]>([]);
@@ -43,6 +49,12 @@
       showNotice(error instanceof Error ? error.message : "Request failed", "error");
     }
   }
+
+  function selectPaste(id: string, checked: boolean): void {
+    const next = new Set(selected);
+    if (checked) next.add(id); else next.delete(id);
+    selected = next;
+  }
 </script>
 
 {#if visible.length === 0}
@@ -52,14 +64,22 @@
     {#each visible as paste (paste.id)}
       <article class="paste-row">
         <div class="paste-main">
-          <Link class="paste-title" href={`/pastes/${paste.id}`}>{pasteDisplayTitle(paste)}</Link>
-          <p>{paste.content.slice(0, 160).replace(/\s+/g, " ")}</p>
+          {#if selectable}<input type="checkbox" aria-label={`Select ${pasteDisplayTitle(paste)}`}
+            checked={selected.has(paste.id)}
+            onchange={(event) => selectPaste(paste.id, event.currentTarget.checked)}/>{/if}
+          <div class="paste-main-content">
+            <Link class="paste-title" href={`/pastes/${paste.id}`}>{pasteDisplayTitle(paste)}</Link>
+            <p>{paste.content.slice(0, 160).replace(/\s+/g, " ")}</p>
+          </div>
         </div>
         <div class="paste-meta">
           {#if ownerNames}
             <span>Owner: {paste.owner_id === null ? "No owner" : ownerNames.get(paste.owner_id) ?? `User #${paste.owner_id}`}</span>
           {/if}
           {#if filterable}
+            {#if paste.folder_id && folderNames}
+              <Link href={filterUrl("folder_id", String(paste.folder_id))}>{folderNames.get(paste.folder_id) ?? "Folder"}</Link>
+            {/if}
             <Link href={filterUrl(
               paste.content_kind === "text" ? "language" : "content_kind",
               paste.content_kind === "text" ? paste.language : paste.content_kind

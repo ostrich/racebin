@@ -37,7 +37,7 @@ async fn postgres_backend_contract_concurrency_and_copy() {
     drop(repo);
 
     sqlx::query(
-        "TRUNCATE attachments,pastes,api_key_scopes,api_keys,sessions,invitations,users
+        "TRUNCATE attachments,pastes,folders,api_key_scopes,api_keys,sessions,invitations,users
          RESTART IDENTITY CASCADE",
     )
     .execute(Repository::open(&url, &scratch).await.unwrap().pool())

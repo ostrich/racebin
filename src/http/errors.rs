@@ -39,7 +39,10 @@ pub(super) fn internal(message: impl Into<String>) -> HttpResponse {
 }
 
 pub(super) fn paste_error(message: String) -> HttpResponse {
-    if message.starts_with("Missing ") || message == "You do not own this paste" {
+    if message.starts_with("Missing ")
+        || message == "You do not own this paste"
+        || message.starts_with("Folders require")
+    {
         error(StatusCode::FORBIDDEN, "forbidden", message)
     } else if [
         "Content is required",
@@ -52,6 +55,13 @@ pub(super) fn paste_error(message: String) -> HttpResponse {
         "Only rich-text",
         "Unsupported rich-text",
         "Every rich-text",
+        "Folder not found",
+        "Folder ",
+        "Folder name",
+        "A folder",
+        "Paste IDs",
+        "Select between",
+        "One or more pastes",
     ]
     .iter()
     .any(|prefix| message.starts_with(prefix))

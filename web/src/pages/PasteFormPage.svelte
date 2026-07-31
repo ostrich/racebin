@@ -11,7 +11,7 @@
   import { showNotice } from "../notices";
   import { deferRouteReady, guardUnsavedChanges, navigate } from "../router";
   import { appState } from "../state";
-  import type { Paste, RichTextDocument } from "../types";
+  import type { Folder, FolderOverview, Paste, RichTextDocument } from "../types";
 
   type ContentKind = "text" | "rich_text";
   type Conversion = { content: string; document: RichTextDocument | null };
@@ -26,6 +26,8 @@
   let content = $state("");
   let document = $state<RichTextDocument>({ type: "doc", content: [{ type: "paragraph" }] });
   let contentKind = $state<ContentKind>("text");
+  let folderId = $state("");
+  let folders = $state<Folder[]>([]);
   let language = $state("auto");
   let visibility = $state("unlisted");
   let expiresAt = $state("");
@@ -37,11 +39,12 @@
   let initialized = $state(false);
   const initialLoadReady = deferRouteReady();
   const drafts = new Map<ContentKind, string>();
+  let canOrganize = $derived(!paste || paste.owner_id === $appState.session.user?.id);
 
   function snapshot(): string {
     return JSON.stringify({
       title, content, document: contentKind === "rich_text" ? document : null,
-      contentKind, language: contentKind === "text" ? language : null,
+      contentKind, folderId, language: contentKind === "text" ? language : null,
       visibility, expiresAt, readLimit, attachmentSelection
     });
   }
@@ -58,6 +61,9 @@
     content = source?.content ?? "";
     document = source?.document ?? { type: "doc", content: [{ type: "paragraph" }] };
     contentKind = source?.content_kind ?? "text";
+    folderId = source?.folder_id ? String(source.folder_id) : (
+      source ? "" : new URLSearchParams(location.search).get("folder_id") ?? ""
+    );
     language = normalizeLanguage(source?.language ?? "auto") ?? "auto";
     visibility = source?.visibility ?? "unlisted";
     expiresAt = source?.expires_at
@@ -73,6 +79,9 @@
   }
 
   onMount(() => {
+    void requestApi<FolderOverview>("/folders")
+      .then(result => { folders = result.items; })
+      .catch(reason => showNotice(reason instanceof Error ? reason.message : "Unable to load folders", "error"));
     loading = Boolean(pasteId);
     if (!pasteId) {
       initialize();
@@ -152,7 +161,8 @@
         language: canonicalLanguage,
         visibility,
         expires_at: expiresAt ? Math.floor(new Date(expiresAt).getTime() / 1000) : null,
-        read_limit: readLimit ? Number(readLimit) : null
+        read_limit: readLimit ? Number(readLimit) : null,
+        ...(canOrganize ? { folder_id: folderId ? Number(folderId) : null } : {})
       };
       created = pasteId
         ? await requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}`, {
@@ -229,6 +239,12 @@
           <option value="text">Text</option><option value="rich_text">Rich text</option>
         </select></label>
         <LanguagePicker bind:value={language} disabled={contentKind !== "text"}/>
+        {#if canOrganize}
+          <label><span>Folder</span><select bind:value={folderId}>
+            <option value="">Uncategorized</option>
+            {#each folders as folder}<option value={String(folder.id)}>{folder.name}</option>{/each}
+          </select></label>
+        {/if}
         <label><span>Visibility</span><select bind:value={visibility}>
           <option value="public">public</option><option value="unlisted">unlisted</option><option value="private">private</option>
         </select></label>

@@ -16,6 +16,7 @@ const user = {
 const paste = {
   id: "sample-paste",
   owner_id: 1,
+  folder_id: null,
   title: "JavaScript example",
   content: "const answer = 42;\nconsole.log(answer);",
   document: null,
@@ -30,6 +31,11 @@ const paste = {
   attachment_count: 1,
   size_bytes: 1064,
   attachments: [{ id: 7, filename: "example.txt", size_bytes: 1024 }]
+};
+const folderOverview = {
+  items: [{ id: 5, name: "Scripts", created_at: 1_700_000_000, paste_count: 1 }],
+  total_count: 1,
+  unfiled_count: 0
 };
 
 async function json(route: Route, value: unknown, status = 200): Promise<void> {
@@ -50,6 +56,7 @@ async function mockApi(
   } = {}
 ): Promise<void> {
   const viewPaste = options.viewPaste ?? paste;
+  let folders = structuredClone(folderOverview);
   await page.route("**/api/v1/**", async route => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/v1/session") {
@@ -58,6 +65,28 @@ async function mockApi(
         : { authenticated: false });
     }
     if (url.pathname === "/api/v1/config") return json(route, config);
+    if (url.pathname === "/api/v1/folders") {
+      if (route.request().method() === "POST") {
+        const body = route.request().postDataJSON() as { name: string };
+        const folder = { id: 6, name: body.name, created_at: 1_700_000_001, paste_count: 0 };
+        folders.items.push(folder);
+        return json(route, folder, 201);
+      }
+      return json(route, folders);
+    }
+    if (url.pathname === "/api/v1/folders/5") {
+      if (route.request().method() === "PATCH") {
+        const body = route.request().postDataJSON() as { name: string };
+        folders.items = folders.items.map(folder =>
+          folder.id === 5 ? { ...folder, name: body.name } : folder);
+        return json(route, folders.items[0]);
+      }
+      if (route.request().method() === "DELETE") {
+        folders.items = folders.items.filter(folder => folder.id !== 5);
+        return route.fulfill({ status: 204 });
+      }
+    }
+    if (url.pathname === "/api/v1/pastes/folder") return route.fulfill({ status: 204 });
     if (url.pathname.endsWith("/consume")) return json(route, viewPaste);
     if (url.pathname === "/api/v1/pastes/sample-paste") return json(route, viewPaste);
     if (url.pathname === "/api/v1/pastes/convert") {
@@ -313,6 +342,54 @@ test("paste filters remain URL-addressable", async ({ page }) => {
   await page.getByRole("button", { name: "Apply" }).click();
   await expect(page).toHaveURL(/search=javascript/);
   await expect(page.getByRole("link", { name: /Search: javascript/ })).toBeVisible();
+});
+
+test("folders filter the workspace and carry into new pastes", async ({ page }) => {
+  await mockApi(page, true, { items: [{ ...paste, folder_id: 5 }] });
+  await page.goto("/pastes?folder_id=5");
+  await expect(page.getByRole("heading", { name: "Scripts" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Paste folders" })
+    .getByRole("link", { name: /Scripts/ })).toHaveClass(/current/);
+  const selectedPaste = page.getByRole("checkbox", { name: /Select JavaScript example/ });
+  await selectedPaste.check();
+  const moveRequest = page.waitForRequest(request =>
+    request.url().endsWith("/api/v1/pastes/folder") && request.method() === "PATCH"
+  );
+  await page.getByRole("button", { name: "Move 1" }).click();
+  expect((await moveRequest).postDataJSON()).toEqual({
+    paste_ids: ["sample-paste"],
+    folder_id: null
+  });
+
+  await page.goto("/pastes?folder_id=5");
+  await page.getByRole("link", { name: "New paste" }).click();
+  await expect(page.getByLabel("Folder")).toHaveValue("5");
+});
+
+test("folders can be created, renamed, and deleted from the workspace", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes?folder_id=5");
+
+  page.once("dialog", dialog => dialog.accept("Notes"));
+  const createRequest = page.waitForRequest(request =>
+    request.url().endsWith("/api/v1/folders") && request.method() === "POST");
+  await page.getByRole("button", { name: "New" }).click();
+  expect((await createRequest).postDataJSON()).toEqual({ name: "Notes" });
+  await expect(page).toHaveURL(/folder_id=6/);
+
+  await page.goto("/pastes?folder_id=5");
+  page.once("dialog", dialog => dialog.accept("Utilities"));
+  const renameRequest = page.waitForRequest(request =>
+    request.url().endsWith("/api/v1/folders/5") && request.method() === "PATCH");
+  await page.getByTitle("Rename Scripts").click();
+  expect((await renameRequest).postDataJSON()).toEqual({ name: "Utilities" });
+  await expect(page.getByRole("link", { name: /Utilities/ })).toBeVisible();
+
+  page.once("dialog", dialog => dialog.accept());
+  const deleteRequest = page.waitForRequest(request =>
+    request.url().endsWith("/api/v1/folders/5") && request.method() === "DELETE");
+  await page.getByTitle("Delete Utilities").click();
+  await deleteRequest;
 });
 
 test("account and admin ownership data render as structured controls", async ({ page }) => {

@@ -33,11 +33,20 @@ async fn get_openapi() -> impl Responder {
           "delete":{"summary":"Delete an API key"}
         },
         "/invitations/{token}/redeem":{"post":{"summary":"Redeem an invitation"}},
+        "/folders":{
+          "get":{"summary":"List current user's folders"},
+          "post":{"summary":"Create a folder"}
+        },
+        "/folders/{folder_id}":{
+          "patch":{"summary":"Rename a folder"},
+          "delete":{"summary":"Delete a folder and unfile its pastes"}
+        },
         "/pastes":{
           "get":{"summary":"List visible pastes"},
           "post":{"summary":"Create a paste"}
         },
         "/pastes/convert":{"post":{"summary":"Convert text and rich-text content"}},
+        "/pastes/folder":{"patch":{"summary":"Move owned pastes to a folder"}},
         "/pastes/{paste_id}":{
           "get":{"summary":"Get paste metadata and content without consuming a read"},
           "patch":{"summary":"Update a paste"},

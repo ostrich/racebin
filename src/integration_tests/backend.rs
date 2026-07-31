@@ -107,6 +107,52 @@ pub(super) async fn backend_contract(repo: Repository) {
         .create_paste(&owner, &paste_input("owner secret", "private"))
         .await
         .unwrap();
+    let folder = services.create_folder(&owner, "Scripts").await.unwrap();
+    assert!(services.create_folder(&owner, "scripts").await.is_err());
+    services
+        .move_pastes(
+            &owner,
+            std::slice::from_ref(&private_paste.id),
+            Some(folder.id),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        services
+            .get_paste(&owner, &private_paste.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .folder_id,
+        Some(folder.id)
+    );
+    assert_eq!(
+        services.list_folders(&owner).await.unwrap().items[0].paste_count,
+        1
+    );
+    let folder_page = services
+        .list_pastes(
+            &owner,
+            &PasteQuery {
+                mine: Some(true),
+                folder_id: Some(folder.id),
+                ..PasteQuery::default()
+            },
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(folder_page.items.len(), 1);
+    assert!(services.delete_folder(&owner, folder.id).await.unwrap());
+    assert_eq!(
+        services
+            .get_paste(&owner, &private_paste.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .folder_id,
+        None
+    );
     assert!(services
         .get_paste(&anonymous, &public.id)
         .await
@@ -132,6 +178,7 @@ pub(super) async fn backend_contract(repo: Repository) {
         visibility: None,
         expires_at: None,
         read_limit: None,
+        folder_id: None,
     };
     assert_eq!(
         services
@@ -177,6 +224,7 @@ pub(super) async fn backend_contract(repo: Repository) {
         visibility: Some("public".into()),
         expires_at: None,
         read_limit: None,
+        folder_id: None,
     };
     let rich = services.create_paste(&owner, &rich_input).await.unwrap();
     assert_eq!(rich.document, Some(script_document));
