@@ -25,7 +25,11 @@
   } = $props();
 
   let visible = $state<Paste[]>([]);
-  $effect(() => { visible = items; });
+  let rangeAnchor = $state<number | null>(null);
+  $effect(() => {
+    visible = items;
+    rangeAnchor = null;
+  });
 
   function filterUrl(key: string, value: string): string {
     const params = new URLSearchParams(location.search);
@@ -50,9 +54,21 @@
     }
   }
 
-  function selectPaste(id: string, checked: boolean): void {
+  function selectPaste(index: number, checked: boolean, extendRange: boolean): void {
     const next = new Set(selected);
-    if (checked) next.add(id); else next.delete(id);
+    if (extendRange && rangeAnchor !== null) {
+      const start = Math.min(rangeAnchor, index);
+      const end = Math.max(rangeAnchor, index);
+      for (const paste of visible.slice(start, end + 1)) {
+        if (checked) next.add(paste.id); else next.delete(paste.id);
+      }
+    } else {
+      const id = visible[index]?.id;
+      if (id) {
+        if (checked) next.add(id); else next.delete(id);
+      }
+    }
+    if (!extendRange || rangeAnchor === null) rangeAnchor = index;
     selected = next;
   }
 </script>
@@ -60,13 +76,19 @@
 {#if visible.length === 0}
   <div class="empty compact"><p>No pastes found.</p></div>
 {:else}
+  {#if selectable}
+    <span class="visually-hidden" id="paste-range-selection-help">
+      Hold Shift while selecting to select a range.
+    </span>
+  {/if}
   <div class="paste-list">
-    {#each visible as paste (paste.id)}
+    {#each visible as paste, index (paste.id)}
       <article class="paste-row">
         <div class="paste-main">
           {#if selectable}<input type="checkbox" aria-label={`Select ${pasteDisplayTitle(paste)}`}
+            aria-describedby="paste-range-selection-help" title="Shift-click to select a range"
             checked={selected.has(paste.id)}
-            onchange={(event) => selectPaste(paste.id, event.currentTarget.checked)}/>{/if}
+            onclick={(event) => selectPaste(index, event.currentTarget.checked, event.shiftKey)}/>{/if}
           <div class="paste-main-content">
             <Link class="paste-title" href={`/pastes/${paste.id}`}>{pasteDisplayTitle(paste)}</Link>
             <p>{paste.content.slice(0, 160).replace(/\s+/g, " ")}</p>

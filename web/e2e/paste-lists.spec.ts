@@ -119,6 +119,95 @@ test("sort menu supports keyboard selection and dismissal", async ({ page }) => 
   await expect(page.getByRole("menu")).toHaveCount(0);
 });
 
+test("paste checkboxes support range selection and indeterminate select-all", async ({ page }) => {
+  const items = Array.from({ length: 6 }, (_, index) => ({
+    ...paste,
+    id: `range-paste-${index}`,
+    title: `Range paste ${index + 1}`
+  }));
+  await mockApi(page, true, { items });
+  await page.goto("/pastes");
+
+  const first = page.getByRole("checkbox", { name: "Select Range paste 1" });
+  const fourth = page.getByRole("checkbox", { name: "Select Range paste 4" });
+  const selectAll = page.getByRole("checkbox", { name: "Select all on page" });
+  await first.check();
+  expect(await selectAll.evaluate(input => (input as HTMLInputElement).indeterminate)).toBe(true);
+  await fourth.click({ modifiers: ["Shift"] });
+  for (let index = 1; index <= 4; index += 1) {
+    await expect(page.getByRole("checkbox", { name: `Select Range paste ${index}` })).toBeChecked();
+  }
+  await expect(page.getByText("4 selected", { exact: true })).toBeVisible();
+
+  await fourth.click({ modifiers: ["Shift"] });
+  for (let index = 1; index <= 4; index += 1) {
+    await expect(page.getByRole("checkbox", { name: `Select Range paste ${index}` })).not.toBeChecked();
+  }
+  expect(await selectAll.evaluate(input => (input as HTMLInputElement).indeterminate)).toBe(false);
+
+  await selectAll.check();
+  await expect(selectAll).toBeChecked();
+  await expect(page.getByText("6 selected", { exact: true })).toBeVisible();
+  await selectAll.uncheck();
+  await expect(page.getByText("0 selected", { exact: true })).toBeVisible();
+
+  await first.check();
+  await fourth.click({ modifiers: ["Shift"] });
+  const moveRequest = page.waitForRequest(request =>
+    request.url().endsWith("/api/v1/pastes/folder") && request.method() === "PATCH");
+  await page.getByRole("button", { name: "Move 4" }).click();
+  expect((await moveRequest).postDataJSON()).toEqual({
+    paste_ids: ["range-paste-0", "range-paste-1", "range-paste-2", "range-paste-3"],
+    folder_id: null
+  });
+});
+
+test("bulk controls retain their geometry as selection changes", async ({ page }) => {
+  const items = Array.from({ length: 12 }, (_, index) => ({
+    ...paste,
+    id: `geometry-paste-${index}`,
+    title: `Geometry paste ${index + 1}`
+  }));
+  await mockApi(page, true, { items });
+  await page.goto("/pastes");
+
+  const geometry = () => page.locator(".paste-selection-bar").evaluate(element => {
+    const bounds = (selector: string) => {
+      const rect = element.querySelector(selector)!.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, width: rect.width };
+    };
+    return {
+      count: bounds(".result-count"),
+      destination: bounds("select"),
+      move: bounds(".move-selected-button")
+    };
+  });
+  const empty = await geometry();
+  await page.getByRole("checkbox", { name: "Select Geometry paste 1", exact: true }).check();
+  const one = await geometry();
+  await page.getByRole("checkbox", { name: "Select all on page" }).check();
+  const all = await geometry();
+  expect(one).toEqual(empty);
+  expect(all).toEqual(empty);
+  expect(Math.abs(empty.count.top - empty.move.top)).toBeLessThanOrEqual(12);
+});
+
+test("selection and its range anchor reset with list navigation", async ({ page }) => {
+  const items = Array.from({ length: 4 }, (_, index) => ({
+    ...paste,
+    id: `reset-paste-${index}`,
+    title: `Reset paste ${index + 1}`
+  }));
+  await mockApi(page, true, { items });
+  await page.goto("/pastes");
+  await page.getByRole("checkbox", { name: "Select Reset paste 1" }).check();
+  await page.getByRole("button", { name: "Sort: Newest" }).click();
+  await page.getByRole("menuitemradio", { name: "Oldest" }).click();
+  await expect(page.getByText("0 selected", { exact: true })).toBeVisible();
+  await page.getByRole("checkbox", { name: "Select Reset paste 3" }).click({ modifiers: ["Shift"] });
+  await expect(page.getByText("1 selected", { exact: true })).toBeVisible();
+});
+
 test("query navigation retains list pages until their replacement is ready", async ({ page }) => {
   const filteredPaste = { ...paste, id: "filtered-paste", title: "Filtered result" };
   await mockApi(page, true, {

@@ -48,6 +48,7 @@
   let loading = $state(false);
   let reloadToken = $state(0);
   let selected = $state(new Set<string>());
+  let selectAllCheckbox = $state<HTMLInputElement>();
   let moveFolder = $state("");
   let currentFolderId = $derived(appliedQuery.get("folder_id") ? Number(appliedQuery.get("folder_id")) : null);
   let unfiled = $derived(appliedQuery.get("unfiled") === "true");
@@ -56,6 +57,11 @@
     : currentFolderId ? folderNames.get(currentFolderId) ?? "Folder" : "My pastes");
   let loadGeneration = 0;
   let initialRouteReady: (() => void) | null = deferRouteReady();
+
+  $effect(() => {
+    if (!selectAllCheckbox || !page) return;
+    selectAllCheckbox.indeterminate = selected.size > 0 && selected.size < page.items.length;
+  });
 
   $effect(() => {
     reloadToken;
@@ -163,19 +169,27 @@
   </div>
   <PasteFilters params={appliedQuery} mode={mine ? "mine" : "explore"}/>
   {#if page}
-    <p class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</p>
     {#if mine && page.items.length}
-      <div class="paste-bulk-actions">
-        <label><input type="checkbox" checked={selected.size === page.items.length}
-          onchange={(event) => { selected = event.currentTarget.checked
-            ? new Set(page?.items.map(item => item.id)) : new Set(); }}/> Select all on page</label>
-        <select bind:value={moveFolder} aria-label="Move selected to folder">
-          <option value="">Uncategorized</option>
-          {#each folders?.items ?? [] as folder}<option value={folder.id}>{folder.name}</option>{/each}
-        </select>
-        <button class="button" type="button" disabled={!selected.size}
-          onclick={() => void moveSelected()}>Move {selected.size || ""}</button>
+      <div class="paste-selection-bar">
+        <div class="paste-selection-summary">
+          <span class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</span>
+          <label><input bind:this={selectAllCheckbox} type="checkbox"
+            checked={selected.size === page.items.length}
+            onchange={(event) => { selected = event.currentTarget.checked
+              ? new Set(page?.items.map(item => item.id)) : new Set(); }}/> Select all on page</label>
+          <span class="selected-count" aria-live="polite">{selected.size} selected</span>
+        </div>
+        <div class="paste-bulk-actions">
+          <select bind:value={moveFolder} aria-label="Move selected to folder">
+            <option value="">Uncategorized</option>
+            {#each folders?.items ?? [] as folder}<option value={folder.id}>{folder.name}</option>{/each}
+          </select>
+          <button class="button move-selected-button" type="button" disabled={!selected.size}
+            onclick={() => void moveSelected()}>Move {selected.size || ""}</button>
+        </div>
       </div>
+    {:else}
+      <p class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</p>
     {/if}
     <PasteRows items={page.items} manage={mine} filterable selectable={mine}
       bind:selected {folderNames}/>
