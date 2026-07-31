@@ -226,16 +226,16 @@
 }
 
 /* Paste list hierarchy */
-.paste-selection-bar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:10px 0}
-.paste-selection-summary,.paste-bulk-actions{display:flex;align-items:center;gap:10px}
-.paste-selection-summary label{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;white-space:nowrap}
-.selected-count{width:10ch;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.paste-selection-bar{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin:10px 0}
+.paste-selection-controls{display:grid;justify-items:end;gap:6px}
+.select-all-pastes{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;white-space:nowrap}
 .paste-selection-bar .paste-bulk-actions{display:grid;grid-template-columns:190px 88px;margin:0}
 .paste-selection-bar .paste-bulk-actions select{width:100%}
 .move-selected-button{width:88px;padding-inline:8px;font-variant-numeric:tabular-nums;white-space:nowrap}
 @media(max-width:760px){
   .paste-selection-bar{align-items:stretch;flex-direction:column;gap:10px}
-  .paste-selection-summary{justify-content:space-between}
+  .paste-selection-controls{justify-items:stretch}
+  .select-all-pastes{justify-self:end}
   .paste-selection-bar .paste-bulk-actions{grid-template-columns:minmax(0,1fr) 88px}
 }
 .paste-list>.paste-row{display:block;padding:17px 4px}

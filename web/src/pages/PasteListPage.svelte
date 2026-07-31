@@ -171,21 +171,20 @@
   {#if page}
     {#if mine && page.items.length}
       <div class="paste-selection-bar">
-        <div class="paste-selection-summary">
-          <span class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</span>
-          <label><input bind:this={selectAllCheckbox} type="checkbox"
+        <span class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</span>
+        <div class="paste-selection-controls">
+          <div class="paste-bulk-actions">
+            <select bind:value={moveFolder} aria-label="Move selected to folder">
+              <option value="">Uncategorized</option>
+              {#each folders?.items ?? [] as folder}<option value={folder.id}>{folder.name}</option>{/each}
+            </select>
+            <button class="button move-selected-button" type="button" disabled={!selected.size}
+              onclick={() => void moveSelected()}>Move {selected.size || ""}</button>
+          </div>
+          <label class="select-all-pastes"><input bind:this={selectAllCheckbox} type="checkbox"
             checked={selected.size === page.items.length}
             onchange={(event) => { selected = event.currentTarget.checked
               ? new Set(page?.items.map(item => item.id)) : new Set(); }}/> Select all on page</label>
-          <span class="selected-count" aria-live="polite">{selected.size} selected</span>
-        </div>
-        <div class="paste-bulk-actions">
-          <select bind:value={moveFolder} aria-label="Move selected to folder">
-            <option value="">Uncategorized</option>
-            {#each folders?.items ?? [] as folder}<option value={folder.id}>{folder.name}</option>{/each}
-          </select>
-          <button class="button move-selected-button" type="button" disabled={!selected.size}
-            onclick={() => void moveSelected()}>Move {selected.size || ""}</button>
         </div>
       </div>
     {:else}

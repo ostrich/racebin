@@ -137,7 +137,7 @@ test("paste checkboxes support range selection and indeterminate select-all", as
   for (let index = 1; index <= 4; index += 1) {
     await expect(page.getByRole("checkbox", { name: `Select Range paste ${index}` })).toBeChecked();
   }
-  await expect(page.getByText("4 selected", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Move 4" })).toBeEnabled();
 
   await fourth.click({ modifiers: ["Shift"] });
   for (let index = 1; index <= 4; index += 1) {
@@ -147,9 +147,9 @@ test("paste checkboxes support range selection and indeterminate select-all", as
 
   await selectAll.check();
   await expect(selectAll).toBeChecked();
-  await expect(page.getByText("6 selected", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Move 6" })).toBeEnabled();
   await selectAll.uncheck();
-  await expect(page.getByText("0 selected", { exact: true })).toBeVisible();
+  await expect(page.locator(".move-selected-button")).toBeDisabled();
 
   await first.check();
   await fourth.click({ modifiers: ["Shift"] });
@@ -174,12 +174,13 @@ test("bulk controls retain their geometry as selection changes", async ({ page }
   const geometry = () => page.locator(".paste-selection-bar").evaluate(element => {
     const bounds = (selector: string) => {
       const rect = element.querySelector(selector)!.getBoundingClientRect();
-      return { left: rect.left, right: rect.right, top: rect.top, width: rect.width };
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width };
     };
     return {
       count: bounds(".result-count"),
       destination: bounds("select"),
-      move: bounds(".move-selected-button")
+      move: bounds(".move-selected-button"),
+      selectAll: bounds(".select-all-pastes")
     };
   });
   const empty = await geometry();
@@ -190,6 +191,7 @@ test("bulk controls retain their geometry as selection changes", async ({ page }
   expect(one).toEqual(empty);
   expect(all).toEqual(empty);
   expect(Math.abs(empty.count.top - empty.move.top)).toBeLessThanOrEqual(12);
+  expect(empty.selectAll.top).toBeGreaterThanOrEqual(empty.move.bottom);
 });
 
 test("selection and its range anchor reset with list navigation", async ({ page }) => {
@@ -203,9 +205,9 @@ test("selection and its range anchor reset with list navigation", async ({ page 
   await page.getByRole("checkbox", { name: "Select Reset paste 1" }).check();
   await page.getByRole("button", { name: "Sort: Newest" }).click();
   await page.getByRole("menuitemradio", { name: "Oldest" }).click();
-  await expect(page.getByText("0 selected", { exact: true })).toBeVisible();
+  await expect(page.locator(".move-selected-button")).toBeDisabled();
   await page.getByRole("checkbox", { name: "Select Reset paste 3" }).click({ modifiers: ["Shift"] });
-  await expect(page.getByText("1 selected", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Move 1" })).toBeEnabled();
 });
 
 test("query navigation retains list pages until their replacement is ready", async ({ page }) => {
