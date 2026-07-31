@@ -40,7 +40,7 @@ test("workspace boundaries align and the folder sidebar collapses persistently",
         right(".paste-workspace-main"),
         right(".page-heading"),
         right(".paste-filter-form"),
-        right(".paste-filter-primary"),
+        right(".paste-filter-toolbar"),
         right(".paste-bulk-actions"),
         right(".paste-list")
       ],
@@ -84,7 +84,7 @@ test("folders can be created, renamed, and deleted from the workspace menu", asy
   page.once("dialog", dialog => dialog.accept("Notes"));
   const createRequest = page.waitForRequest(request =>
     request.url().endsWith("/api/v1/folders") && request.method() === "POST");
-  await page.getByRole("button", { name: "New" }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
   expect((await createRequest).postDataJSON()).toEqual({ name: "Notes" });
   await expect(page).toHaveURL(/folder_id=6/);
 
@@ -126,9 +126,9 @@ test("mobile folder and filter controls do not overflow", async ({ page }) => {
   const layout = await page.evaluate(() => ({
     documentWidth: document.documentElement.scrollWidth,
     viewportWidth: document.documentElement.clientWidth,
-    filterColumns: getComputedStyle(document.querySelector(".paste-filter-primary")!)
+    searchColumns: getComputedStyle(document.querySelector(".paste-search")!)
       .gridTemplateColumns.split(" ").length
   }));
   expect(layout.documentWidth).toBe(layout.viewportWidth);
-  expect(layout.filterColumns).toBe(1);
+  expect(layout.searchColumns).toBe(1);
 });

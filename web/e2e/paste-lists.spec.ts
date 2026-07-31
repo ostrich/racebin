@@ -48,9 +48,75 @@ test("paste filters remain URL-addressable", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes");
   await page.getByLabel("Search").fill("javascript");
-  await page.getByRole("button", { name: "Apply" }).click();
+  await page.getByRole("button", { name: "Search" }).click();
   await expect(page).toHaveURL(/search=javascript/);
-  await expect(page.getByRole("link", { name: /Search: javascript/ })).toBeVisible();
+  await expect(page.getByLabel("Search")).toHaveValue("javascript");
+});
+
+test("paste list controls separate search, filters, and sorting", async ({ page }) => {
+  await mockApi(page, true);
+
+  for (const path of ["/pastes", "/explore", "/admin/pastes"]) {
+    await page.goto(path);
+    await expect(page.getByLabel("Search")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Filters/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sort: Newest" })).toBeVisible();
+    await expect(page.getByLabel("Format")).toHaveCount(0);
+
+    await page.getByRole("button", { name: /^Filters/ }).click();
+    await expect(page.getByLabel("Format")).toBeVisible();
+    if (path === "/explore") await expect(page.getByLabel("Visibility")).toHaveCount(0);
+    else await expect(page.getByLabel("Visibility")).toBeVisible();
+    if (path === "/admin/pastes") await expect(page.getByLabel("Owner ID")).toBeVisible();
+    else await expect(page.getByLabel("Owner ID")).toHaveCount(0);
+  }
+});
+
+test("search, filters, and sort preserve unrelated list state", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes?folder_id=5&sort=size&direction=desc&page=3");
+
+  await page.getByLabel("Search").fill("example");
+  await page.getByRole("button", { name: "Search" }).click();
+  await expect(page).toHaveURL(/folder_id=5/);
+  await expect(page).toHaveURL(/search=example/);
+  await expect(page).toHaveURL(/sort=size/);
+  await expect(page).not.toHaveURL(/page=3/);
+
+  await page.getByRole("button", { name: /^Filters/ }).click();
+  await page.getByLabel("Format").selectOption("text");
+  await page.getByRole("button", { name: "Apply filters" }).click();
+  await expect(page).toHaveURL(/content_kind=text/);
+  await expect(page).toHaveURL(/search=example/);
+  await expect(page).toHaveURL(/sort=size/);
+  await expect(page.getByRole("button", { name: /Filters 1/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Format: Text/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "Sort: Largest" }).click();
+  await page.getByRole("menuitemradio", { name: "Oldest" }).click();
+  await expect(page).toHaveURL(/sort=created/);
+  await expect(page).toHaveURL(/direction=asc/);
+  await expect(page).toHaveURL(/content_kind=text/);
+  await expect(page).toHaveURL(/folder_id=5/);
+
+  await page.getByRole("link", { name: "Clear filters" }).click();
+  await expect(page).not.toHaveURL(/content_kind/);
+  await expect(page).toHaveURL(/search=example/);
+  await expect(page).toHaveURL(/sort=created/);
+  await expect(page).toHaveURL(/folder_id=5/);
+});
+
+test("sort menu supports keyboard selection and dismissal", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes");
+  const sort = page.getByRole("button", { name: "Sort: Newest" });
+  await sort.click();
+  await expect(page.getByRole("menuitemradio", { name: "Newest" })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("menuitemradio", { name: "Oldest" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(sort).toBeFocused();
+  await expect(page.getByRole("menu")).toHaveCount(0);
 });
 
 test("query navigation retains list pages until their replacement is ready", async ({ page }) => {
@@ -69,7 +135,7 @@ test("query navigation retains list pages until their replacement is ready", asy
     Object.assign(window, { __retainedList: document.querySelector(".paste-workspace") });
   });
   await page.getByLabel("Search").fill("filtered");
-  await page.getByRole("button", { name: "Apply" }).click();
+  await page.getByRole("button", { name: "Search" }).click();
   await page.waitForTimeout(50);
   await expect(page.getByRole("complementary", { name: "Paste folders" })).toBeVisible();
   await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
@@ -84,7 +150,7 @@ test("query navigation retains list pages until their replacement is ready", asy
     Object.assign(window, { __retainedAdmin: document.querySelector("main > section") });
   });
   await page.getByLabel("Search").fill("filtered");
-  await page.getByRole("button", { name: "Apply" }).click();
+  await page.getByRole("button", { name: "Search" }).click();
   await page.waitForTimeout(50);
   await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
   expect(await page.evaluate(() =>

@@ -26,6 +26,14 @@
     <path d="M12 5v14M5 12h14"/>
   {:else if name === "search"}
     <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+  {:else if name === "list-filter"}
+    <path d="M3 6h18M7 12h10M10 18h4"/>
+  {:else if name === "arrow-up-down"}
+    <path d="m21 16-4 4-4-4M17 20V4M3 8l4-4 4 4M7 4v16"/>
+  {:else if name === "chevron-down"}
+    <path d="m6 9 6 6 6-6"/>
+  {:else if name === "check"}
+    <path d="m20 6-11 11-5-5"/>
   {:else if name === "trash-2"}
     <path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6"/>
   {:else if name === "user-round"}

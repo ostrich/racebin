@@ -14,13 +14,23 @@
 .paste-meta a{padding:3px 6px;border-radius:3px;background:#e9edef;color:inherit;text-decoration:none}
 .paste-meta a:hover{text-decoration:underline}
 .paste-filter-form{display:grid;gap:14px;padding:18px 0;border-block:1px solid var(--line)}
-.paste-filter-primary{display:grid;grid-template-columns:minmax(220px,1fr) 150px 150px 180px auto;gap:12px;align-items:end}
+.paste-filter-toolbar{display:flex;align-items:end;gap:10px;min-width:0}
+.paste-search{display:grid;grid-template-columns:minmax(180px,1fr) auto;align-items:end;gap:10px;min-width:0;flex:1}
 .paste-filter-form label{display:grid;gap:7px;min-width:0}
 .paste-filter-form label>span{color:var(--form-label);font-size:12px;font-weight:700}
 .paste-filter-form input,.paste-filter-form select{width:100%;min-width:0;min-height:40px;padding:10px 11px;border:1px solid #bfc6ce;border-radius:5px;background:#fff;color:#20242a}
-.advanced-filters{border-top:1px solid var(--line);padding-top:12px}
-.advanced-filters summary{width:max-content;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer}
-.advanced-filter-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:14px}
+.filter-toggle,.sort-button{white-space:nowrap}
+.filter-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--accent);color:#fff;font-size:11px;font-variant-numeric:tabular-nums}
+.sort-control{position:relative}
+.sort-button svg:last-child{width:14px;height:14px}
+.sort-menu{position:absolute;z-index:10;top:calc(100% + 5px);right:0;display:grid;min-width:190px;padding:5px;border:1px solid var(--line);border-radius:6px;background:#fff;box-shadow:0 10px 28px rgba(20,30,40,.18)}
+.sort-menu button{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;padding:8px 10px;border:0;border-radius:4px;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.sort-menu button:hover,.sort-menu button:focus{background:#e9edef;outline:none}
+.sort-menu button[aria-checked="true"]{color:var(--accent);font-weight:700}
+.sort-menu svg{width:16px;height:16px}
+.filter-panel{display:grid;gap:14px;padding-top:14px;border-top:1px solid var(--line)}
+.advanced-filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.filter-actions{display:flex;align-items:center;gap:9px}
 .active-filters{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
 .filter-chip{padding:5px 8px;border-radius:14px;background:#e9edef;color:#36414c;text-decoration:none;font-size:12px}
 .filter-chip span{margin-left:3px;font-weight:800}.clear-filters{margin-left:4px;color:var(--accent);font-size:12px;font-weight:700}
@@ -32,16 +42,22 @@
 .admin-paste-owner small{color:var(--muted)}
 .admin-paste-row .paste-meta{flex-wrap:wrap}.admin-paste-row time{color:var(--muted);font-size:12px}
 @media(max-width:900px){
-  .paste-filter-primary{grid-template-columns:repeat(2,minmax(0,1fr))}
   .advanced-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
   .admin-paste-head{display:none}.admin-paste-row{grid-template-columns:minmax(0,1fr) auto}.admin-paste-owner,.admin-paste-row .paste-meta,.admin-paste-row time{grid-column:1}.admin-paste-row .row-actions{grid-column:2;grid-row:1/5}
 }
 @media(max-width:620px){
-  .paste-filter-primary,.advanced-filter-grid{grid-template-columns:1fr}
+  .paste-filter-toolbar{align-items:stretch;flex-wrap:wrap}
+  .paste-search{flex-basis:100%}
+  .filter-toggle{flex:1}
+  .sort-control{flex:1}
+  .sort-button{width:100%}
+  .advanced-filter-grid{grid-template-columns:1fr}
 }
 @media(prefers-color-scheme:dark){
   .paste-meta a,.filter-chip{background:#2b353b;color:#e8edf0}
   .paste-filter-form input,.paste-filter-form select{background:#192126;color:#e8edf0;border-color:#343d43}
+  .sort-menu{background:#192126}
+  .sort-menu button:hover,.sort-menu button:focus{background:#2b353b}
 }
 
 .editor label small,.language-field small{color:var(--muted);font-size:11px;font-weight:400;margin-left:5px}
@@ -242,12 +258,6 @@
 .folder-nav-row .folder-menu button.danger{color:var(--danger)}
 
 /* Use the content column, rather than the viewport, for filter breakpoints. */
-.paste-filter-primary{width:100%;grid-template-columns:minmax(180px,1fr) repeat(3,minmax(105px,130px)) auto}
-@container (max-width:720px){
-  .paste-filter-primary{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .paste-filter-primary>label:first-child{grid-column:1/-1}
-  .paste-filter-primary>.button{justify-self:start}
-}
 @container (max-width:900px){
   .advanced-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
@@ -255,8 +265,14 @@
   .advanced-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @container (max-width:480px){
-  .paste-filter-primary,.advanced-filter-grid{grid-template-columns:1fr}
-  .paste-filter-primary>label:first-child{grid-column:auto}
+  .paste-filter-toolbar{align-items:stretch;flex-wrap:wrap}
+  .paste-search{flex-basis:100%;grid-template-columns:1fr}
+  .paste-search .button{justify-self:start}
+  .filter-toggle{flex:1}
+  .sort-control{flex:1}
+  .sort-button{width:100%}
+  .sort-button span{overflow:hidden;text-overflow:ellipsis}
+  .advanced-filter-grid{grid-template-columns:1fr}
 }
 
 @media(min-width:761px){
