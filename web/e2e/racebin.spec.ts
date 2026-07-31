@@ -360,6 +360,24 @@ test("empty rich-text conversion skips preview and disables language", async ({ 
   expect(richTextControlsTop).toBe(textControlsTop);
 });
 
+test("paste form labels share the same dark-mode color", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  const colors = await page.locator(".form-grid").evaluate(form => {
+    const color = (element: Element | null) => getComputedStyle(element!).color;
+    return {
+      type: color(form.querySelector("label > span")),
+      language: color(form.querySelector(".language-field > label")),
+      folder: color([...form.querySelectorAll("label > span")]
+        .find(label => label.textContent === "Folder") ?? null),
+      visibility: color([...form.querySelectorAll("label > span")]
+        .find(label => label.textContent === "Visibility") ?? null)
+    };
+  });
+  expect(new Set(Object.values(colors)).size).toBe(1);
+});
+
 test("rich-text formatting uses a single-row icon toolbar and confirms clearing", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
