@@ -30,5 +30,31 @@
     <path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6"/>
   {:else if name === "user-round"}
     <circle cx="12" cy="8" r="5"/><path d="M4 21a8 8 0 0 1 16 0"/>
+  {:else if name === "link"}
+    <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2a5 5 0 0 0 7.1 7.1l1.1-1.1"/>
+  {:else if name === "list"}
+    <path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>
+  {:else if name === "list-ordered"}
+    <path d="M10 6h11M10 12h11M10 18h11"/><path d="M4 6h1V3M4 10h2l-2 3h2M4 17h2v4H4"/>
+  {:else if name === "quote"}
+    <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.75-2-2-2H4c-1.25 0-2 .75-2 2v6c0 1.25.75 2 2 2h2c0 3-1 4-3 5M14 21c3 0 7-1 7-8V5c0-1.25-.75-2-2-2h-4c-1.25 0-2 .75-2 2v6c0 1.25.75 2 2 2h2c0 3-1 4-3 5"/>
+  {:else if name === "code"}
+    <path d="m8 9-3 3 3 3M16 9l3 3-3 3M14 5l-4 14"/>
+  {:else if name === "square-code"}
+    <rect width="18" height="18" x="3" y="3" rx="2"/><path d="m10 9-3 3 3 3M14 9l3 3-3 3"/>
+  {:else if name === "minus"}
+    <path d="M5 12h14"/>
+  {:else if name === "align-left"}
+    <path d="M15 6H3M21 12H3M15 18H3"/>
+  {:else if name === "align-center"}
+    <path d="M17 6H7M21 12H3M17 18H7"/>
+  {:else if name === "align-right"}
+    <path d="M21 6H9M21 12H3M21 18H9"/>
+  {:else if name === "eraser"}
+    <path d="m7 21-4-4a2 2 0 0 1 0-3L14 3a2 2 0 0 1 3 0l4 4a2 2 0 0 1 0 3L10 21M5 12l7 7M7 21h14"/>
+  {:else if name === "undo-2"}
+    <path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
+  {:else if name === "redo-2"}
+    <path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>
   {/if}
 </svg>

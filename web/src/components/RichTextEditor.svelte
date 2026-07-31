@@ -3,6 +3,7 @@
   import { Editor } from "@tiptap/core";
   import TextAlign from "@tiptap/extension-text-align";
   import StarterKit from "@tiptap/starter-kit";
+  import Icon from "./Icon.svelte";
   import type { RichTextDocument } from "../types";
 
   let {
@@ -15,13 +16,34 @@
   let element: HTMLDivElement;
   let editor: Editor;
 
-  const commands: Array<[string, string]> = [
-    ["bold", "Bold"], ["italic", "Italic"], ["underline", "Underline"], ["strike", "Strike"],
-    ["link", "Link"], ["bullet-list", "Bulleted list"], ["ordered-list", "Numbered list"],
-    ["blockquote", "Quote"], ["code", "Inline code"], ["code-block", "Code block"],
-    ["horizontal-rule", "Separator"], ["align-left", "Align left"], ["align-center", "Align center"],
-    ["align-right", "Align right"], ["clear-formatting", "Clear formatting"],
-    ["undo", "Undo"], ["redo", "Redo"]
+  const commands: Array<{
+    command: string;
+    label: string;
+    icon?: string;
+    symbol?: string;
+    symbolClass?: string;
+  }> = [
+    { command: "paragraph", label: "Paragraph", symbol: "¶", symbolClass: "paragraph" },
+    { command: "heading-1", label: "Heading 1", symbol: "H1" },
+    { command: "heading-2", label: "Heading 2", symbol: "H2" },
+    { command: "heading-3", label: "Heading 3", symbol: "H3" },
+    { command: "bold", label: "Bold", symbol: "B", symbolClass: "bold" },
+    { command: "italic", label: "Italic", symbol: "I", symbolClass: "italic" },
+    { command: "underline", label: "Underline", symbol: "U", symbolClass: "underline" },
+    { command: "strike", label: "Strikethrough", symbol: "S", symbolClass: "strike" },
+    { command: "link", label: "Link", icon: "link" },
+    { command: "bullet-list", label: "Bulleted list", icon: "list" },
+    { command: "ordered-list", label: "Numbered list", icon: "list-ordered" },
+    { command: "blockquote", label: "Block quote", icon: "quote" },
+    { command: "code", label: "Inline code", icon: "code" },
+    { command: "code-block", label: "Code block", icon: "square-code" },
+    { command: "horizontal-rule", label: "Horizontal rule", icon: "minus" },
+    { command: "align-left", label: "Align left", icon: "align-left" },
+    { command: "align-center", label: "Align center", icon: "align-center" },
+    { command: "align-right", label: "Align right", icon: "align-right" },
+    { command: "clear-formatting", label: "Clear all formatting", icon: "eraser" },
+    { command: "undo", label: "Undo", icon: "undo-2" },
+    { command: "redo", label: "Redo", icon: "redo-2" }
   ];
 
   function run(command: string): void {
@@ -46,7 +68,11 @@
       case "align-right": chain.setTextAlign("right").run(); break;
       case "undo": chain.undo().run(); break;
       case "redo": chain.redo().run(); break;
-      case "clear-formatting": chain.unsetAllMarks().clearNodes().run(); break;
+      case "clear-formatting":
+        if (confirm("Clear all formatting from this rich-text paste?")) {
+          chain.selectAll().unsetAllMarks().clearNodes().run();
+        }
+        break;
       case "link": {
         const current = editor.getAttributes("link").href as string | undefined;
         const href = prompt("Link URL", current ?? "https://");
@@ -93,12 +119,20 @@
 </script>
 
 <div class="rich-text-toolbar" role="toolbar" aria-label="Rich-text formatting">
-  <select aria-label="Block type" onchange={(event) => run(event.currentTarget.value)}>
-    <option value="paragraph">Paragraph</option><option value="heading-1">Heading 1</option>
-    <option value="heading-2">Heading 2</option><option value="heading-3">Heading 3</option>
-  </select>
-  {#each commands as [command, label]}
-    <button type="button" title={label} aria-label={label} onclick={() => run(command)}>{label}</button>
+  {#each commands as item}
+    <button type="button" title={item.label} aria-label={item.label}
+      onclick={() => run(item.command)}>
+      {#if item.icon}
+        <Icon name={item.icon}/>
+      {:else}
+        <span class:paragraph={item.symbolClass === "paragraph"}
+          class:bold={item.symbolClass === "bold"}
+          class:italic={item.symbolClass === "italic"}
+          class:underline={item.symbolClass === "underline"}
+          class:strike={item.symbolClass === "strike"}
+          aria-hidden="true">{item.symbol}</span>
+      {/if}
+    </button>
   {/each}
 </div>
 <div bind:this={element} class="rich-text-editor"></div>

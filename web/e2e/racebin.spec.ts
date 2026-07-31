@@ -340,6 +340,28 @@ test("empty rich-text conversion skips preview and disables language", async ({ 
   expect(richTextControlsTop).toBe(textControlsTop);
 });
 
+test("rich-text formatting uses a single-row icon toolbar and confirms clearing", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.locator(".form-grid select").first().selectOption("rich_text");
+  const toolbar = page.getByRole("toolbar", { name: "Rich-text formatting" });
+  await expect(toolbar.getByRole("button")).toHaveCount(21);
+  await expect(toolbar.getByRole("button", { name: "Paragraph" })).toHaveText("¶");
+  await expect(toolbar.getByRole("button", { name: "Heading 1" })).toHaveText("H1");
+  await expect(toolbar.getByRole("button", { name: "Bulleted list" }).locator("svg")).toBeVisible();
+  const rows = await toolbar.getByRole("button").evaluateAll(buttons =>
+    new Set(buttons.map(button => Math.round(button.getBoundingClientRect().top))).size
+  );
+  expect(rows).toBe(1);
+
+  await page.getByLabel("Rich-text paste content").fill("Formatted text");
+  page.once("dialog", dialog => {
+    expect(dialog.message()).toBe("Clear all formatting from this rich-text paste?");
+    void dialog.dismiss();
+  });
+  await toolbar.getByRole("button", { name: "Clear all formatting" }).click();
+});
+
 test("rich-text conversion populates the plain-text editor", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
