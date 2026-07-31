@@ -453,6 +453,33 @@ test("the newest query response wins when list requests overlap", async ({ page 
   await expect(page.getByRole("link", { name: "Slow result" })).toHaveCount(0);
 });
 
+test("list geometry remains stable when the document starts or stops overflowing", async ({ page }) => {
+  const manyPastes = Array.from({ length: 40 }, (_, index) => ({
+    ...paste,
+    id: `overflow-paste-${index}`,
+    title: `Overflow paste ${index}`
+  }));
+  await mockApi(page, true, {
+    pastePage: url => url.searchParams.get("folder_id") === "5"
+      ? { items: manyPastes }
+      : { items: [] }
+  });
+  await page.goto("/pastes");
+  const before = await page.locator(".paste-workspace-main").evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    return { left: bounds.left, right: bounds.right };
+  });
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).scrollbarGutter))
+    .toContain("stable");
+  await page.getByRole("link", { name: /Scripts/ }).click();
+  await expect(page.getByRole("link", { name: "Overflow paste 39" })).toBeVisible();
+  const after = await page.locator(".paste-workspace-main").evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    return { left: bounds.left, right: bounds.right };
+  });
+  expect(after).toEqual(before);
+});
+
 test("folders filter the workspace and carry into new pastes", async ({ page }) => {
   await mockApi(page, true, { items: [{ ...paste, folder_id: 5 }] });
   await page.goto("/pastes?folder_id=5");
