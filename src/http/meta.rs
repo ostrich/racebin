@@ -84,6 +84,7 @@ async fn get_openapi() -> impl Responder {
 async fn get_config() -> impl Responder {
     HttpResponse::Ok().json(json!({
         "site_name": ARGS.site_name.as_deref().unwrap_or("Racebin"),
+        "plain_home_enabled": ARGS.plain_home,
         "max_attachment_size_bytes": ARGS.max_attachment_size_mb * 1024 * 1024,
         "attachments_enabled": !ARGS.attachments_disabled,
         "qr_codes_enabled": ARGS.qr_codes,

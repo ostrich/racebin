@@ -11,6 +11,7 @@ export const appState = writable<AppState>({
   session: { authenticated: false },
   config: {
     site_name: "Racebin",
+    plain_home_enabled: false,
     max_attachment_size_bytes: 0,
     attachments_enabled: true,
     qr_codes_enabled: false

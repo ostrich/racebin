@@ -2,6 +2,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 
 const config = {
   site_name: "Racebin",
+  plain_home_enabled: false,
   max_attachment_size_bytes: 20 * 1024 * 1024,
   attachments_enabled: true,
   qr_codes_enabled: false
@@ -56,20 +57,25 @@ async function mockApi(
     items?: Array<typeof paste>;
     delay?: number;
     viewPaste?: typeof paste;
+    plainHome?: boolean;
     pastePage?: (url: URL) => { items: Array<typeof paste>; delay?: number };
     adminPastePage?: (url: URL) => { items: Array<typeof paste>; delay?: number };
   } = {}
 ): Promise<void> {
   const viewPaste = options.viewPaste ?? paste;
+  let signedIn = authenticated;
   let folders = structuredClone(folderOverview);
   await page.route("**/api/v1/**", async route => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/v1/session") {
-      return json(route, authenticated
+      if (route.request().method() === "POST") signedIn = true;
+      return json(route, signedIn
         ? { authenticated: true, user, csrf_token: "csrf" }
         : { authenticated: false });
     }
-    if (url.pathname === "/api/v1/config") return json(route, config);
+    if (url.pathname === "/api/v1/config") {
+      return json(route, { ...config, plain_home_enabled: options.plainHome ?? false });
+    }
     if (url.pathname === "/api/v1/folders") {
       if (route.request().method() === "POST") {
         const body = route.request().postDataJSON() as { name: string };
@@ -161,6 +167,41 @@ test("renders the public homepage and paste viewer", async ({ page }) => {
   await expect(page.locator("code.hljs")).toContainText("const answer");
   await expect(page.getByRole("link", { name: /example.txt/ })).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "Wrap" })).toHaveCount(0);
+});
+
+test("plain home presents only login while public routes remain available", async ({ page }) => {
+  let homepagePasteRequests = 0;
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/v1/pastes" && page.url().endsWith("/")) homepagePasteRequests += 1;
+  });
+  await mockApi(page, false, { plainHome: true });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Log in" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Racebin" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Explore" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Log in" })).toHaveCount(0);
+  await expect(page.getByText("Recently shared")).toHaveCount(0);
+  expect(homepagePasteRequests).toBe(0);
+
+  await page.goto("/explore");
+  await expect(page.getByRole("heading", { name: "Explore" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
+  await page.getByRole("link", { name: "JavaScript example" }).click();
+  await expect(page).toHaveURL(/\/pastes\/sample-paste$/);
+});
+
+test("plain-home login and authenticated homepage retain normal behavior", async ({ page }) => {
+  await mockApi(page, false, { plainHome: true });
+  await page.goto("/");
+  await page.getByLabel("Username").fill("test-admin");
+  await page.getByLabel("Password").fill("password");
+  await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page).toHaveURL(/\/pastes$/);
+  await expect(page.getByRole("heading", { name: "My pastes" })).toBeVisible();
+  await page.getByRole("link", { name: "Racebin" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { name: "New paste" })).toBeVisible();
 });
 
 test("wide paste offers synchronized sticky scrolling and aligned wrapped lines", async ({ page }) => {

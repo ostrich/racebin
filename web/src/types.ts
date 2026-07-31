@@ -63,6 +63,7 @@ export type ApiKey = {
 
 export type Config = {
   site_name: string;
+  plain_home_enabled: boolean;
   max_attachment_size_bytes: number;
   attachments_enabled: boolean;
   qr_codes_enabled: boolean;

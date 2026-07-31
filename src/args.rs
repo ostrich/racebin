@@ -37,6 +37,9 @@ pub struct Args {
     #[clap(long = "site-name", env = "RACEBIN_SITE_NAME")]
     pub site_name: Option<String>,
 
+    #[clap(long = "plain-home", env = "RACEBIN_PLAIN_HOME")]
+    pub plain_home: bool,
+
     #[clap(long = "disable-attachments", env = "RACEBIN_DISABLE_ATTACHMENTS")]
     pub attachments_disabled: bool,
 
@@ -64,5 +67,17 @@ impl Args {
                     .to_string_lossy()
             )
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Args;
+    use clap::Parser;
+
+    #[test]
+    fn plain_home_is_opt_in() {
+        assert!(!Args::parse_from(["racebin"]).plain_home);
+        assert!(Args::parse_from(["racebin", "--plain-home"]).plain_home);
     }
 }

@@ -61,6 +61,13 @@
   let routeKey = $derived($locationState.path);
   let authenticated = $derived(Boolean($appState.session.user));
   let administrator = $derived($appState.session.user?.role === "admin");
+  let plainAnonymousHome = $derived(
+    $appState.ready
+      && $appState.config.plain_home_enabled
+      && !authenticated
+      && $locationState.route.name === "home"
+  );
+  let minimalShell = $derived(!$appState.ready || plainAnonymousHome);
   $effect(() => {
     if (!$appState.ready) return;
     const route = $locationState.route;
@@ -76,7 +83,7 @@
 </script>
 
 <ConfirmDialog bind:this={discardDialog}/>
-<Shell>
+<Shell minimal={minimalShell}>
   {#if startupError}
     <section class="empty"><h1>Unable to load Racebin</h1><p>{startupError}</p></section>
   {:else if !$appState.ready}
@@ -85,7 +92,13 @@
     {#key routeKey}
       {@const route = $locationState.route}
       {#if route.name === "home"}
-        {#if authenticated}<PasteFormPage/>{:else}<HomePage/>{/if}
+        {#if authenticated}
+          <PasteFormPage/>
+        {:else if $appState.config.plain_home_enabled}
+          <LoginPage/>
+        {:else}
+          <HomePage/>
+        {/if}
       {:else if route.name === "explore"}
         <PasteListPage mine={false} query={$locationState.query}/>
       {:else if route.name === "login"}
