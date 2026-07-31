@@ -56,6 +56,8 @@ async function mockApi(
     items?: Array<typeof paste>;
     delay?: number;
     viewPaste?: typeof paste;
+    pastePage?: (url: URL) => { items: Array<typeof paste>; delay?: number };
+    adminPastePage?: (url: URL) => { items: Array<typeof paste>; delay?: number };
   } = {}
 ): Promise<void> {
   const viewPaste = options.viewPaste ?? paste;
@@ -109,6 +111,19 @@ async function mockApi(
       }]);
     }
     if (url.pathname === "/api/v1/admin/users") return json(route, [user]);
+    if (url.pathname === "/api/v1/admin/pastes") {
+      const response = options.adminPastePage?.(url) ?? {
+        items: options.items ?? [paste],
+        delay: options.delay
+      };
+      if (response.delay) await new Promise(resolve => setTimeout(resolve, response.delay));
+      return json(route, {
+        items: response.items,
+        page: Number(url.searchParams.get("page") ?? 1),
+        page_size: 100,
+        total_items: response.items.length
+      });
+    }
     if (url.pathname === "/api/v1/admin/invitations") return json(route, [{
       id: 3, token_prefix: "invite", expires_at: 1_800_000_000,
       status: "Redeemed", redeemed_by_username: "reader"
@@ -120,9 +135,17 @@ async function mockApi(
     }]);
     if (url.pathname === "/api/v1/pastes") {
       if (route.request().method() === "POST") return json(route, paste, 201);
-      if (options.delay) await new Promise(resolve => setTimeout(resolve, options.delay));
-      const items = options.items ?? [paste];
-      return json(route, { items, page: 1, page_size: 50, total_items: items.length });
+      const response = options.pastePage?.(url) ?? {
+        items: options.items ?? [paste],
+        delay: options.delay
+      };
+      if (response.delay) await new Promise(resolve => setTimeout(resolve, response.delay));
+      return json(route, {
+        items: response.items,
+        page: Number(url.searchParams.get("page") ?? 1),
+        page_size: 50,
+        total_items: response.items.length
+      });
     }
     return json(route, {});
   });
@@ -345,6 +368,67 @@ test("paste filters remain URL-addressable", async ({ page }) => {
   await page.getByRole("button", { name: "Apply" }).click();
   await expect(page).toHaveURL(/search=javascript/);
   await expect(page.getByRole("link", { name: /Search: javascript/ })).toBeVisible();
+});
+
+test("query navigation retains list pages until their replacement is ready", async ({ page }) => {
+  const filteredPaste = { ...paste, id: "filtered-paste", title: "Filtered result" };
+  await mockApi(page, true, {
+    pastePage: url => url.searchParams.has("search")
+      ? { items: [filteredPaste], delay: 150 }
+      : { items: [paste] },
+    adminPastePage: url => url.searchParams.has("search")
+      ? { items: [filteredPaste], delay: 150 }
+      : { items: [paste] }
+  });
+
+  await page.goto("/pastes");
+  await page.evaluate(() => {
+    Object.assign(window, { __retainedList: document.querySelector(".paste-workspace") });
+  });
+  await page.getByLabel("Search").fill("filtered");
+  await page.getByRole("button", { name: "Apply" }).click();
+  await page.waitForTimeout(50);
+  await expect(page.getByRole("complementary", { name: "Paste folders" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
+  expect(await page.evaluate(() =>
+    (window as Window & { __retainedList: Element }).__retainedList
+      === document.querySelector(".paste-workspace")
+  )).toBe(true);
+  await expect(page.getByRole("link", { name: "Filtered result" })).toBeVisible();
+
+  await page.goto("/admin/pastes");
+  await page.evaluate(() => {
+    Object.assign(window, { __retainedAdmin: document.querySelector("main > section") });
+  });
+  await page.getByLabel("Search").fill("filtered");
+  await page.getByRole("button", { name: "Apply" }).click();
+  await page.waitForTimeout(50);
+  await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
+  expect(await page.evaluate(() =>
+    (window as Window & { __retainedAdmin: Element }).__retainedAdmin
+      === document.querySelector("main > section")
+  )).toBe(true);
+  await expect(page.getByRole("link", { name: "Filtered result" })).toBeVisible();
+});
+
+test("the newest query response wins when list requests overlap", async ({ page }) => {
+  const slowPaste = { ...paste, id: "slow-paste", title: "Slow result" };
+  const fastPaste = { ...paste, id: "fast-paste", title: "Fast result" };
+  await mockApi(page, true, {
+    pastePage: url => {
+      if (url.searchParams.get("folder_id") === "5") return { items: [slowPaste], delay: 250 };
+      if (url.searchParams.get("unfiled") === "true") return { items: [fastPaste], delay: 25 };
+      return { items: [paste] };
+    }
+  });
+  await page.goto("/pastes");
+  await page.getByRole("link", { name: /Scripts/ }).click();
+  await page.waitForTimeout(20);
+  await page.getByRole("link", { name: /Uncategorized/ }).click();
+  await expect(page.getByRole("link", { name: "Fast result" })).toBeVisible();
+  await page.waitForTimeout(300);
+  await expect(page.getByRole("link", { name: "Fast result" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Slow result" })).toHaveCount(0);
 });
 
 test("folders filter the workspace and carry into new pastes", async ({ page }) => {

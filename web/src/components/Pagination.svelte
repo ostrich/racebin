@@ -2,13 +2,13 @@
   import type { Page } from "../types";
   import Link from "./Link.svelte";
 
-  let { page }: { page: Page<unknown> } = $props();
+  let { page, params }: { page: Page<unknown>; params?: URLSearchParams } = $props();
   let pages = $derived(Math.max(1, Math.ceil(page.total_items / page.page_size)));
 
   function pageUrl(number: number): string {
-    const params = new URLSearchParams(location.search);
-    params.set("page", String(number));
-    return `${location.pathname}?${params}`;
+    const next = new URLSearchParams(params ?? location.search);
+    next.set("page", String(number));
+    return `${location.pathname}?${next}`;
   }
 </script>
 

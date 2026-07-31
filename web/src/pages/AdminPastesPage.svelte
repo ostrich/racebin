@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { requestApi } from "../api";
   import Icon from "../components/Icon.svelte";
   import Link from "../components/Link.svelte";
@@ -13,24 +12,43 @@
   let { query }: { query: URLSearchParams } = $props();
   let page = $state<Page<Paste> | null>(null);
   let users = $state<User[]>([]);
+  let appliedQuery = $state(new URLSearchParams());
+  let loading = $state(false);
+  let error = $state("");
   let ownerNames = $derived(new Map(users.map(user => [user.id, user.username])));
-  const initialLoadReady = deferRouteReady();
+  let loadGeneration = 0;
+  let initialRouteReady: (() => void) | null = deferRouteReady();
 
-  onMount(() => {
-    const params = new URLSearchParams(query);
+  $effect(() => {
+    const requestedQuery = new URLSearchParams(query);
+    const generation = ++loadGeneration;
+    const routeReady = initialRouteReady ?? deferRouteReady();
+    initialRouteReady = null;
+    loading = true;
+    const params = new URLSearchParams(requestedQuery);
     params.set("page_size", "100");
     void Promise.all([
       requestApi<Page<Paste>>(`/admin/pastes?${params}`),
       requestApi<User[]>("/admin/users")
     ]).then(([result, loadedUsers]) => {
+      if (generation !== loadGeneration) return;
       page = result;
       users = loadedUsers;
-    }).catch(error => showNotice(error instanceof Error ? error.message : "Unable to load pastes", "error"))
-      .finally(initialLoadReady);
+      appliedQuery = requestedQuery;
+      error = "";
+    }).catch(reason => {
+      if (generation !== loadGeneration) return;
+      const message = reason instanceof Error ? reason.message : "Unable to load pastes";
+      if (!page) error = message;
+      showNotice(message, "error");
+    }).finally(() => {
+      if (generation === loadGeneration) loading = false;
+      routeReady();
+    });
   });
 
   function filterUrl(key: string, value: string): string {
-    const params = new URLSearchParams(query);
+    const params = new URLSearchParams(appliedQuery);
     params.set(key, value);
     params.delete("page");
     return `/admin/pastes?${params}`;
@@ -52,9 +70,9 @@
   }
 </script>
 
-<section>
+<section aria-busy={loading}>
   <div class="page-heading"><div><p class="eyebrow">Administration</p><h1>All pastes</h1></div><Link class="button" href="/admin">Admin home</Link></div>
-  <PasteFilters params={query} mode="admin" {ownerNames}/>
+  <PasteFilters params={appliedQuery} mode="admin" {ownerNames}/>
   {#if page}
     <p class="result-count">{page.total_items} pastes</p>
     <div class="admin-paste-head" aria-hidden="true"><span>Paste</span><span>Owner</span><span>Metadata</span><span>Created</span><span>Actions</span></div>
@@ -82,6 +100,7 @@
         </article>
       {:else}<div class="empty compact"><p>No pastes found.</p></div>{/each}
     </div>
-    <Pagination {page}/>
+    <Pagination {page} params={appliedQuery}/>
+  {:else if error}<div class="empty compact"><p>{error}</p></div>
   {:else}<p class="muted">Loading pastes…</p>{/if}
 </section>

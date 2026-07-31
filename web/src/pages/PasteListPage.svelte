@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { requestApi } from "../api";
   import Icon from "../components/Icon.svelte";
   import FolderNav from "../components/FolderNav.svelte";
@@ -8,7 +7,7 @@
   import PasteFilters from "../components/PasteFilters.svelte";
   import PasteRows from "../components/PasteRows.svelte";
   import { showNotice } from "../notices";
-  import { deferRouteReady } from "../router";
+  import { deferRouteReady, navigate } from "../router";
   import type { FolderOverview, Page, Paste } from "../types";
   import { uiPreferences } from "../uiPreferences";
 
@@ -16,17 +15,27 @@
   let page = $state<Page<Paste> | null>(null);
   let error = $state("");
   let folders = $state<FolderOverview | null>(null);
+  let appliedQuery = $state(new URLSearchParams());
+  let loading = $state(false);
+  let reloadToken = $state(0);
   let selected = $state(new Set<string>());
   let moveFolder = $state("");
-  let currentFolderId = $derived(query.get("folder_id") ? Number(query.get("folder_id")) : null);
-  let unfiled = $derived(query.get("unfiled") === "true");
+  let currentFolderId = $derived(appliedQuery.get("folder_id") ? Number(appliedQuery.get("folder_id")) : null);
+  let unfiled = $derived(appliedQuery.get("unfiled") === "true");
   let folderNames = $derived(new Map((folders?.items ?? []).map(folder => [folder.id, folder.name])));
   let currentFolderName = $derived(unfiled ? "Uncategorized"
     : currentFolderId ? folderNames.get(currentFolderId) ?? "Folder" : "My pastes");
-  const initialLoadReady = deferRouteReady();
+  let loadGeneration = 0;
+  let initialRouteReady: (() => void) | null = deferRouteReady();
 
-  onMount(() => {
-    const params = new URLSearchParams(query);
+  $effect(() => {
+    reloadToken;
+    const requestedQuery = new URLSearchParams(query);
+    const generation = ++loadGeneration;
+    const routeReady = initialRouteReady ?? deferRouteReady();
+    initialRouteReady = null;
+    loading = true;
+    const params = new URLSearchParams(requestedQuery);
     params.set("page_size", "50");
     if (mine) params.set("mine", "true");
     else params.set("visibility", "public");
@@ -34,12 +43,24 @@
       requestApi<Page<Paste>>(`/pastes?${params}`),
       mine ? requestApi<FolderOverview>("/folders") : Promise.resolve(null)
     ])
-      .then(([result, loadedFolders]) => { page = result; folders = loadedFolders; })
-      .catch(reason => {
-        error = reason instanceof Error ? reason.message : "Unable to load pastes";
-        showNotice(error, "error");
+      .then(([result, loadedFolders]) => {
+        if (generation !== loadGeneration) return;
+        page = result;
+        folders = loadedFolders;
+        appliedQuery = requestedQuery;
+        selected = new Set();
+        error = "";
       })
-      .finally(initialLoadReady);
+      .catch(reason => {
+        if (generation !== loadGeneration) return;
+        const message = reason instanceof Error ? reason.message : "Unable to load pastes";
+        if (!page) error = message;
+        showNotice(message, "error");
+      })
+      .finally(() => {
+        if (generation === loadGeneration) loading = false;
+        routeReady();
+      });
   });
 
   async function createFolder(): Promise<void> {
@@ -49,7 +70,7 @@
       const folder = await requestApi<{id:number}>("/folders", {
         method: "POST", body: JSON.stringify({ name })
       });
-      location.href = `/pastes?folder_id=${folder.id}`;
+      await navigate(`/pastes?folder_id=${folder.id}`);
     } catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to create folder", "error"); }
   }
 
@@ -67,7 +88,8 @@
     if (!confirm(`Delete “${name}”? Its pastes will move to Uncategorized.`)) return;
     try {
       await requestApi(`/folders/${id}`, { method: "DELETE" });
-      location.href = currentFolderId === id ? "/pastes?unfiled=true" : location.href;
+      if (currentFolderId === id) await navigate("/pastes?unfiled=true");
+      else reloadToken += 1;
     } catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to delete folder", "error"); }
   }
 
@@ -82,14 +104,14 @@
         })
       });
       selected = new Set();
-      location.reload();
+      reloadToken += 1;
     } catch (reason) {
       showNotice(reason instanceof Error ? reason.message : "Unable to move pastes", "error");
     }
   }
 </script>
 
-<section class:paste-workspace={mine}
+<section class:paste-workspace={mine} aria-busy={loading}
   class:folder-sidebar-collapsed={mine && $uiPreferences.folderSidebarCollapsed}>
   {#if mine && folders}
     <FolderNav overview={folders} {currentFolderId} {unfiled}
@@ -100,7 +122,7 @@
     <div><p class="eyebrow">{mine ? "Workspace" : "Public"}</p><h1>{mine ? currentFolderName : "Explore"}</h1></div>
     {#if mine}<Link class="button primary" href={`/pastes/new${currentFolderId ? `?folder_id=${currentFolderId}` : ""}`}><Icon name="plus"/> New paste</Link>{/if}
   </div>
-  <PasteFilters params={query} mode={mine ? "mine" : "explore"}/>
+  <PasteFilters params={appliedQuery} mode={mine ? "mine" : "explore"}/>
   {#if page}
     <p class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</p>
     {#if mine && page.items.length}
@@ -118,7 +140,7 @@
     {/if}
     <PasteRows items={page.items} manage={mine} filterable selectable={mine}
       bind:selected {folderNames}/>
-    <Pagination {page}/>
+    <Pagination {page} params={appliedQuery}/>
   {:else if error}
     <div class="empty compact"><p>{error}</p></div>
   {:else}

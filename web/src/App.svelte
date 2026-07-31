@@ -58,7 +58,7 @@
     };
   });
 
-  let routeKey = $derived(`${$locationState.path}?${$locationState.query}`);
+  let routeKey = $derived($locationState.path);
   let authenticated = $derived(Boolean($appState.session.user));
   let administrator = $derived($appState.session.user?.role === "admin");
   $effect(() => {
