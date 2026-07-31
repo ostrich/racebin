@@ -7,15 +7,44 @@
   import PasteFilters from "../components/PasteFilters.svelte";
   import PasteRows from "../components/PasteRows.svelte";
   import { showNotice } from "../notices";
+  import { cachedQuery, loadQuery } from "../queryCache";
   import { deferRouteReady, navigate } from "../router";
   import type { FolderOverview, Page, Paste } from "../types";
   import { uiPreferences } from "../uiPreferences";
 
   let { mine, query }: { mine: boolean; query: URLSearchParams } = $props();
-  let page = $state<Page<Paste> | null>(null);
+  function requestPaths(requestedQuery: URLSearchParams): { paste: string; folders: string | null } {
+    const params = new URLSearchParams(requestedQuery);
+    params.set("page_size", "50");
+    if (mine) params.set("mine", "true");
+    else params.set("visibility", "public");
+    return { paste: `/pastes?${params}`, folders: mine ? "/folders" : null };
+  }
+
+  function initialState(): {
+    page: Page<Paste> | null;
+    folders: FolderOverview | null;
+    query: URLSearchParams;
+  } {
+    const requestedQuery = new URLSearchParams(query);
+    const paths = requestPaths(requestedQuery);
+    const cachedPage = cachedQuery<Page<Paste>>(paths.paste);
+    const cachedFolders = paths.folders
+      ? cachedQuery<FolderOverview>(paths.folders)
+      : null;
+    const complete = Boolean(cachedPage && (!mine || cachedFolders));
+    return {
+      page: complete ? cachedPage ?? null : null,
+      folders: complete ? cachedFolders ?? null : null,
+      query: complete ? requestedQuery : new URLSearchParams()
+    };
+  }
+
+  const initial = initialState();
+  let page = $state<Page<Paste> | null>(initial.page);
   let error = $state("");
-  let folders = $state<FolderOverview | null>(null);
-  let appliedQuery = $state(new URLSearchParams());
+  let folders = $state<FolderOverview | null>(initial.folders);
+  let appliedQuery = $state(initial.query);
   let loading = $state(false);
   let reloadToken = $state(0);
   let selected = $state(new Set<string>());
@@ -35,13 +64,23 @@
     const routeReady = initialRouteReady ?? deferRouteReady();
     initialRouteReady = null;
     loading = true;
-    const params = new URLSearchParams(requestedQuery);
-    params.set("page_size", "50");
-    if (mine) params.set("mine", "true");
-    else params.set("visibility", "public");
+    const paths = requestPaths(requestedQuery);
+    const cachedPage = cachedQuery<Page<Paste>>(paths.paste);
+    const cachedFolders = paths.folders
+      ? cachedQuery<FolderOverview>(paths.folders)
+      : null;
+    if (cachedPage && (!mine || cachedFolders)) {
+      page = cachedPage;
+      folders = cachedFolders ?? null;
+      appliedQuery = requestedQuery;
+      selected = new Set();
+      error = "";
+    }
     void Promise.all([
-      requestApi<Page<Paste>>(`/pastes?${params}`),
-      mine ? requestApi<FolderOverview>("/folders") : Promise.resolve(null)
+      loadQuery(paths.paste, () => requestApi<Page<Paste>>(paths.paste)),
+      paths.folders
+        ? loadQuery(paths.folders, () => requestApi<FolderOverview>(paths.folders!))
+        : Promise.resolve(null)
     ])
       .then(([result, loadedFolders]) => {
         if (generation !== loadGeneration) return;

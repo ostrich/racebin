@@ -6,13 +6,37 @@
   import PasteFilters from "../components/PasteFilters.svelte";
   import { formatByteSize, formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
   import { showNotice } from "../notices";
+  import { cachedQuery, loadQuery } from "../queryCache";
   import { deferRouteReady } from "../router";
   import type { Page, Paste, User } from "../types";
 
   let { query }: { query: URLSearchParams } = $props();
-  let page = $state<Page<Paste> | null>(null);
-  let users = $state<User[]>([]);
-  let appliedQuery = $state(new URLSearchParams());
+  function pastePath(requestedQuery: URLSearchParams): string {
+    const params = new URLSearchParams(requestedQuery);
+    params.set("page_size", "100");
+    return `/admin/pastes?${params}`;
+  }
+
+  function initialState(): {
+    page: Page<Paste> | null;
+    users: User[];
+    query: URLSearchParams;
+  } {
+    const requestedQuery = new URLSearchParams(query);
+    const cachedPage = cachedQuery<Page<Paste>>(pastePath(requestedQuery));
+    const cachedUsers = cachedQuery<User[]>("/admin/users");
+    const complete = Boolean(cachedPage && cachedUsers);
+    return {
+      page: complete ? cachedPage ?? null : null,
+      users: complete ? cachedUsers ?? [] : [],
+      query: complete ? requestedQuery : new URLSearchParams()
+    };
+  }
+
+  const initial = initialState();
+  let page = $state<Page<Paste> | null>(initial.page);
+  let users = $state<User[]>(initial.users);
+  let appliedQuery = $state(initial.query);
   let loading = $state(false);
   let error = $state("");
   let ownerNames = $derived(new Map(users.map(user => [user.id, user.username])));
@@ -25,11 +49,18 @@
     const routeReady = initialRouteReady ?? deferRouteReady();
     initialRouteReady = null;
     loading = true;
-    const params = new URLSearchParams(requestedQuery);
-    params.set("page_size", "100");
+    const requestedPastePath = pastePath(requestedQuery);
+    const cachedPage = cachedQuery<Page<Paste>>(requestedPastePath);
+    const cachedUsers = cachedQuery<User[]>("/admin/users");
+    if (cachedPage && cachedUsers) {
+      page = cachedPage;
+      users = cachedUsers;
+      appliedQuery = requestedQuery;
+      error = "";
+    }
     void Promise.all([
-      requestApi<Page<Paste>>(`/admin/pastes?${params}`),
-      requestApi<User[]>("/admin/users")
+      loadQuery(requestedPastePath, () => requestApi<Page<Paste>>(requestedPastePath)),
+      loadQuery("/admin/users", () => requestApi<User[]>("/admin/users"))
     ]).then(([result, loadedUsers]) => {
       if (generation !== loadGeneration) return;
       page = result;

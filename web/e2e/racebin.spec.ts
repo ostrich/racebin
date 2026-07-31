@@ -273,6 +273,26 @@ test("back and forward navigation restore list scroll positions after loading", 
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 });
 
+test("returning from a paste renders the cached list while it revalidates", async ({ page }) => {
+  let listRequests = 0;
+  await mockApi(page, true, {
+    pastePage: () => {
+      listRequests += 1;
+      return { items: [paste], delay: listRequests > 1 ? 250 : 0 };
+    }
+  });
+  await page.goto("/pastes");
+  await page.getByRole("link", { name: "JavaScript example" }).click();
+  await expect(page).toHaveURL(/\/pastes\/sample-paste$/);
+  await page.getByRole("link", { name: "My pastes" }).click();
+  await page.waitForTimeout(50);
+  await expect(page).toHaveURL(/\/pastes$/);
+  await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
+  await expect(page.getByText("Loading pastes…")).toHaveCount(0);
+  expect(listRequests).toBe(2);
+  await expect(page.locator(".paste-workspace")).toHaveAttribute("aria-busy", "false");
+});
+
 test("editing triggers the custom discard dialog and detects JavaScript", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
@@ -533,6 +553,8 @@ test("paste rows preserve content width and use selective metadata badges", asyn
 test("workspace boundaries align and the folder sidebar collapses persistently", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes");
+  await expect(page.locator(".paste-list")).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Paste folders" })).toBeVisible();
   const geometry = await page.evaluate(() => {
     const right = (selector: string) =>
       document.querySelector(selector)!.getBoundingClientRect().right;

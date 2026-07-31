@@ -103,6 +103,7 @@
   ): Promise<Conversion> {
     return requestApi<Conversion>("/pastes/convert", {
       method: "POST",
+      invalidateQueries: false,
       body: JSON.stringify({
         source_kind: sourceKind,
         target_kind: targetKind,
