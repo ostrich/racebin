@@ -63,7 +63,7 @@ async fn upload_attachments(
     paste_id: web::Path<String>,
     mut payload: Multipart,
 ) -> HttpResponse {
-    if ARGS.attachments_disabled {
+    if !ARGS.attachments_enabled {
         return error(
             StatusCode::FORBIDDEN,
             "uploads_disabled",

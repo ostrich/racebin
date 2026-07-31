@@ -13,8 +13,9 @@ RACEBIN_DATA_DIR=/var/lib/racebin
 ## Browser application
 # RACEBIN_SITE_NAME=Racebin
 # RACEBIN_PLAIN_HOME=false
+
 ## Attachments and optional output
-# RACEBIN_DISABLE_ATTACHMENTS=false
+# RACEBIN_ATTACHMENTS=true
 # RACEBIN_MAX_ATTACHMENT_SIZE_MB=2048
 # RACEBIN_QR_CODES=false
 # RACEBIN_INSECURE_COOKIE=false

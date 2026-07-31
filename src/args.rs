@@ -40,8 +40,13 @@ pub struct Args {
     #[clap(long = "plain-home", env = "RACEBIN_PLAIN_HOME")]
     pub plain_home: bool,
 
-    #[clap(long = "disable-attachments", env = "RACEBIN_DISABLE_ATTACHMENTS")]
-    pub attachments_disabled: bool,
+    #[clap(
+        long = "attachments",
+        env = "RACEBIN_ATTACHMENTS",
+        default_value = "true",
+        parse(try_from_str)
+    )]
+    pub attachments_enabled: bool,
 
     #[clap(
         long = "max-attachment-size-mb",
@@ -79,5 +84,13 @@ mod tests {
     fn plain_home_is_opt_in() {
         assert!(!Args::parse_from(["racebin"]).plain_home);
         assert!(Args::parse_from(["racebin", "--plain-home"]).plain_home);
+    }
+
+    #[test]
+    fn attachments_use_a_positive_boolean_option() {
+        assert!(Args::parse_from(["racebin"]).attachments_enabled);
+        assert!(Args::parse_from(["racebin", "--attachments", "true"]).attachments_enabled);
+        assert!(!Args::parse_from(["racebin", "--attachments", "false"]).attachments_enabled);
+        assert!(Args::try_parse_from(["racebin", "--disable-attachments"]).is_err());
     }
 }

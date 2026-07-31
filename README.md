@@ -69,7 +69,7 @@ All settings have equivalent `RACEBIN_*` environment variables.
 | `--database-url` | `sqlite://<data-dir>/database.sqlite` |
 | `--site-name` | `Racebin` |
 | `--plain-home` | disabled; show a login-only anonymous homepage when enabled |
-| `--disable-attachments` | disabled |
+| `--attachments` | `true` |
 | `--max-attachment-size-mb` | `2048` |
 | `--qr-codes` | disabled |
 | `--public-url` | unset; required for QR output |
