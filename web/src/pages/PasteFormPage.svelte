@@ -114,8 +114,8 @@
       if (source === "rich_text") {
         const converted = await convert("rich_text", "text");
         if (converted.content && !(await conversionDialog.ask(target, converted.content))) return;
-        drafts.set(source, converted.content);
-        content = drafts.get(target) ?? converted.content;
+        drafts.set(target, converted.content);
+        content = converted.content;
       } else if (target === "rich_text") {
         drafts.set(source, content);
         const converted = await convert("text", "rich_text");

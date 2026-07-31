@@ -285,6 +285,19 @@ test("empty rich-text conversion skips preview and disables language", async ({ 
   expect(richTextControlsTop).toBe(textControlsTop);
 });
 
+test("rich-text conversion populates the plain-text editor", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  const type = page.locator(".form-grid select").first();
+  await type.selectOption("rich_text");
+  await page.getByLabel("Rich-text paste content").fill("Rich content");
+  await type.selectOption("text");
+  await expect(page.getByRole("heading", { name: "Convert to text?" })).toBeVisible();
+  await expect(page.locator(".conversion-dialog pre")).toContainText(paste.content);
+  await page.getByRole("button", { name: "Convert" }).click();
+  await expect(page.locator(".code-editor textarea")).toHaveValue(paste.content);
+});
+
 test("edit page shows current attachments", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/sample-paste/edit");
