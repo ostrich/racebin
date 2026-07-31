@@ -15,10 +15,14 @@
   let paste = $state<Paste | null>(null);
   let error = $state("");
   let wrapLines = $state(false);
+  let horizontalOverflow = $state(false);
   const initialLoadReady = deferRouteReady();
   let own = $derived(Boolean(
     paste && $appState.session.user &&
     ($appState.session.user.id === paste.owner_id || $appState.session.user.role === "admin")
+  ));
+  let showWrapOption = $derived(Boolean(
+    paste?.content_kind === "text" && (horizontalOverflow || wrapLines)
   ));
 
   onMount(() => {
@@ -39,22 +43,24 @@
 
 {#if paste}
   <article class="paste-view">
-      <div class="page-heading">
+      <div class="page-heading" class:has-view-options={showWrapOption}>
         <div><p class="eyebrow">{paste.visibility} · {pasteFormatLabel(paste)}</p><h1>{pasteDisplayTitle(paste)}</h1></div>
         <div class="actions">
           <a class="button" href={`/api/v1/pastes/${encodeURIComponent(paste.id)}/raw`}>Raw</a>
           <button class="button" type="button" onclick={copyContent}><Icon name="copy"/> Copy</button>
-          {#if paste.content_kind === "text"}
-            <label class="paste-wrap-toggle">
-              <input type="checkbox" bind:checked={wrapLines}/>
-              <span>Wrap</span>
-            </label>
-          {/if}
           {#if paste.attachments.length}<a class="button" href={`/api/v1/pastes/${encodeURIComponent(paste.id)}/archive`}>ZIP</a>{/if}
           {#if $appState.config.qr_codes_enabled}<a class="button" href={`/api/v1/pastes/${encodeURIComponent(paste.id)}/qr`}>QR</a>{/if}
           {#if own}<Link class="button primary" href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/> Edit</Link>{/if}
         </div>
       </div>
+      {#if showWrapOption}
+        <div class="paste-view-options">
+          <label class="paste-wrap-toggle">
+            <input type="checkbox" bind:checked={wrapLines}/>
+            <span>Wrap</span>
+          </label>
+        </div>
+      {/if}
       {#if paste.content_kind === "rich_text" && paste.document}
         {#await import("../components/RichTextViewer.svelte") then module}
           {@const RichTextViewer = module.default}
@@ -62,7 +68,8 @@
         {/await}
       {:else}
         <CodeViewer code={paste.content} language={paste.language} wrap={wrapLines}
-          onready={initialLoadReady}/>
+          onready={initialLoadReady}
+          onoverflowchange={(overflowing) => { horizontalOverflow = overflowing; }}/>
       {/if}
       {#if paste.attachments.length}
         <section><h2>Attachments</h2>

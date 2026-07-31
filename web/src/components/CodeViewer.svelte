@@ -6,12 +6,14 @@
     code,
     language,
     wrap = false,
-    onready
+    onready,
+    onoverflowchange
   }: {
     code: string;
     language: string;
     wrap?: boolean;
     onready?: () => void;
+    onoverflowchange?: (overflowing: boolean) => void;
   } = $props();
   let viewport: HTMLDivElement;
   let gutter: HTMLDivElement;
@@ -24,6 +26,7 @@
   let floatingLeft = $state(0);
   let floatingWidth = $state(0);
   let revision = 0;
+  let reportedOverflow: boolean | undefined;
   let count = $derived(code.split("\n").length);
   let lines = $derived(Array.from({ length: count }, (_, index) => index + 1).join("\n"));
   let width = $derived(`${Math.max(4, String(count).length + 2)}ch`);
@@ -39,6 +42,10 @@
     if (!viewport || !floatingScrollbar || !floatingContent) return;
     const bounds = viewport.getBoundingClientRect();
     const overflowing = !wrap && viewport.scrollWidth > viewport.clientWidth + 1;
+    if (!wrap && overflowing !== reportedOverflow) {
+      reportedOverflow = overflowing;
+      onoverflowchange?.(overflowing);
+    }
     floatingVisible = overflowing
       && bounds.top < window.innerHeight
       && bounds.bottom > window.innerHeight;

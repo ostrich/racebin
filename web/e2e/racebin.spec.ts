@@ -105,6 +105,7 @@ test("renders the public homepage and paste viewer", async ({ page }) => {
   await expect(page.locator(".line-numbers")).toHaveText("1\n2");
   await expect(page.locator("code.hljs")).toContainText("const answer");
   await expect(page.getByRole("link", { name: /example.txt/ })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "Wrap" })).toHaveCount(0);
 });
 
 test("wide paste offers synchronized sticky scrolling and aligned wrapped lines", async ({ page }) => {
@@ -134,12 +135,26 @@ test("wide paste offers synchronized sticky scrolling and aligned wrapped lines"
     startsAfterGutter: true,
     alignedWithContent: true
   });
+  const wrapTogglePosition = await page.getByRole("checkbox", { name: "Wrap" }).evaluate(input => {
+    const toggle = input.closest("label")!.getBoundingClientRect();
+    const heading = document.querySelector(".paste-view .page-heading")!.getBoundingClientRect();
+    const viewer = document.querySelector(".paste-code-shell")!.getBoundingClientRect();
+    return toggle.top >= heading.bottom && toggle.bottom <= viewer.top;
+  });
+  expect(wrapTogglePosition).toBe(true);
   await floating.evaluate(element => {
     element.scrollLeft = 240;
     element.dispatchEvent(new Event("scroll"));
   });
   await expect.poll(() => code.evaluate(element => element.scrollLeft)).toBeGreaterThan(200);
 
+  const unwrappedFirstNumber = await page.locator(".line-numbers").evaluate(gutter => {
+    const range = document.createRange();
+    range.setStart(gutter.firstChild!, 0);
+    range.setEnd(gutter.firstChild!, 1);
+    const bounds = range.getBoundingClientRect();
+    return { left: bounds.left + window.scrollX, top: bounds.top + window.scrollY };
+  });
   await page.getByRole("checkbox", { name: "Wrap" }).check();
   await expect(page.locator(".paste-floating-scrollbar")).not.toHaveClass(/visible/);
   await expect.poll(() => code.evaluate(
@@ -147,13 +162,28 @@ test("wide paste offers synchronized sticky scrolling and aligned wrapped lines"
   )).toBe(true);
   const lineLayout = await page.locator(".line-numbers.wrapped").evaluate(gutter => {
     const numbers = [...gutter.querySelectorAll<HTMLElement>("span")];
+    const content = document.querySelector<HTMLElement>(".paste-code .content")!;
+    const firstNumberRange = document.createRange();
+    firstNumberRange.selectNodeContents(numbers[0]);
+    const firstNumberBounds = firstNumberRange.getBoundingClientRect();
     return {
       count: numbers.length,
-      firstGap: numbers[1].offsetTop - numbers[0].offsetTop
+      firstGap: numbers[1].offsetTop - numbers[0].offsetTop,
+      firstNumber: {
+        left: firstNumberBounds.left + window.scrollX,
+        top: firstNumberBounds.top + window.scrollY
+      },
+      firstLineAligned: Math.abs(
+        numbers[0].getBoundingClientRect().top -
+        (content.getBoundingClientRect().top + Number.parseFloat(getComputedStyle(content).paddingTop))
+      ) < 1
     };
   });
   expect(lineLayout.count).toBe(60);
   expect(lineLayout.firstGap).toBeGreaterThan(22);
+  expect(lineLayout.firstLineAligned).toBe(true);
+  expect(Math.abs(lineLayout.firstNumber.left - unwrappedFirstNumber.left)).toBeLessThan(1);
+  expect(Math.abs(lineLayout.firstNumber.top - unwrappedFirstNumber.top)).toBeLessThan(1);
 });
 
 test("untouched paste form navigates without a discard prompt", async ({ page }) => {
