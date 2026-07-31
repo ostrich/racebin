@@ -16,6 +16,12 @@
     <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>
   {:else if name === "log-out"}
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+  {:else if name === "more-horizontal"}
+    <circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>
+  {:else if name === "panel-left-close"}
+    <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18M16 15l-3-3 3-3"/>
+  {:else if name === "panel-left-open"}
+    <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18M14 9l3 3-3 3"/>
   {:else if name === "plus"}
     <path d="M12 5v14M5 12h14"/>
   {:else if name === "search"}

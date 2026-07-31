@@ -70,44 +70,49 @@
           <div class="paste-main-content">
             <Link class="paste-title" href={`/pastes/${paste.id}`}>{pasteDisplayTitle(paste)}</Link>
             <p>{paste.content.slice(0, 160).replace(/\s+/g, " ")}</p>
+            <div class="paste-row-footer">
+              <div class="paste-meta">
+                {#if ownerNames}
+                  <span class="meta-detail">Owner: {paste.owner_id === null ? "No owner" : ownerNames.get(paste.owner_id) ?? `User #${paste.owner_id}`}</span>
+                {/if}
+                {#if filterable}
+                  <Link class="meta-badge" href={filterUrl(
+                    paste.content_kind === "text" ? "language" : "content_kind",
+                    paste.content_kind === "text" ? paste.language : paste.content_kind
+                  )}>{pasteFormatLabel(paste)}</Link>
+                  <Link class="meta-badge" href={filterUrl("visibility", paste.visibility)}>{paste.visibility}</Link>
+                  {#if paste.folder_id && folderNames}
+                    <Link class="meta-detail" href={filterUrl("folder_id", String(paste.folder_id))}>
+                      Folder: {folderNames.get(paste.folder_id) ?? "Unknown"}
+                    </Link>
+                  {/if}
+                  {#if paste.attachment_count}
+                    <Link class="meta-detail" href={filterUrl("has_attachments", "true")}>
+                      {paste.attachment_count} attachment{paste.attachment_count === 1 ? "" : "s"}
+                    </Link>
+                  {/if}
+                {:else}
+                  <span class="meta-badge">{pasteFormatLabel(paste)}</span>
+                  <span class="meta-badge">{paste.visibility}</span>
+                  {#if paste.attachment_count}
+                    <span class="meta-detail">{paste.attachment_count} attachment{paste.attachment_count === 1 ? "" : "s"}</span>
+                  {/if}
+                {/if}
+                <span class="meta-detail">{formatByteSize(paste.size_bytes)}</span>
+                <time class="meta-detail" datetime={new Date(paste.created_at * 1000).toISOString()}>{formatDate(paste.created_at)}</time>
+              </div>
+              <div class="row-actions">
+                <button class="icon-button" type="button" title="Copy link" aria-label="Copy link"
+                  onclick={() => copyLink(paste)}><Icon name="copy"/></button>
+                {#if manage}
+                  <Link class="icon-button" title="Edit" aria-label="Edit"
+                    href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/></Link>
+                  <button class="icon-button" type="button" title="Delete" aria-label="Delete"
+                    onclick={() => remove(paste)}><Icon name="trash-2"/></button>
+                {/if}
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="paste-meta">
-          {#if ownerNames}
-            <span>Owner: {paste.owner_id === null ? "No owner" : ownerNames.get(paste.owner_id) ?? `User #${paste.owner_id}`}</span>
-          {/if}
-          {#if filterable}
-            {#if paste.folder_id && folderNames}
-              <Link href={filterUrl("folder_id", String(paste.folder_id))}>{folderNames.get(paste.folder_id) ?? "Folder"}</Link>
-            {/if}
-            <Link href={filterUrl(
-              paste.content_kind === "text" ? "language" : "content_kind",
-              paste.content_kind === "text" ? paste.language : paste.content_kind
-            )}>{pasteFormatLabel(paste)}</Link>
-            <Link href={filterUrl("visibility", paste.visibility)}>{paste.visibility}</Link>
-            {#if paste.attachment_count}
-              <Link href={filterUrl("has_attachments", "true")}>
-                {paste.attachment_count} attachment{paste.attachment_count === 1 ? "" : "s"}
-              </Link>
-            {/if}
-          {:else}
-            <span>{pasteFormatLabel(paste)}</span><span>{paste.visibility}</span>
-            {#if paste.attachment_count}
-              <span>{paste.attachment_count} attachment{paste.attachment_count === 1 ? "" : "s"}</span>
-            {/if}
-          {/if}
-          <span>{formatByteSize(paste.size_bytes)}</span>
-          <time datetime={new Date(paste.created_at * 1000).toISOString()}>{formatDate(paste.created_at)}</time>
-        </div>
-        <div class="row-actions">
-          <button class="icon-button" type="button" title="Copy link" aria-label="Copy link"
-            onclick={() => copyLink(paste)}><Icon name="copy"/></button>
-          {#if manage}
-            <Link class="icon-button" title="Edit" aria-label="Edit"
-              href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/></Link>
-            <button class="icon-button" type="button" title="Delete" aria-label="Delete"
-              onclick={() => remove(paste)}><Icon name="trash-2"/></button>
-          {/if}
         </div>
       </article>
     {/each}

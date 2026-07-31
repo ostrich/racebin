@@ -199,3 +199,74 @@
   .folder-nav,.paste-bulk-actions select,.folder-mobile-select select{background:#192126;color:#e8edf0}
   .folder-nav nav a.current{background:#263b39;color:#dcebea}
 }
+
+/* Paste list hierarchy */
+.paste-list>.paste-row{display:block;padding:17px 4px}
+.paste-list .paste-main{min-width:0}
+.paste-list .paste-main-content{min-width:0}
+.paste-list .paste-main-content>p{margin:5px 0 0}
+.paste-row-footer{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-top:10px;min-width:0}
+.paste-row-footer .paste-meta{display:flex;flex:1 1 auto;flex-wrap:wrap;align-items:center;gap:6px 9px;min-width:0}
+.paste-meta .meta-badge{display:inline-flex;align-items:center;border-radius:3px;background:#e9edef;padding:3px 6px;color:inherit;text-decoration:none;white-space:nowrap}
+.paste-meta .meta-detail{display:inline-flex;align-items:center;background:transparent;padding:0;color:var(--muted);text-decoration:none;white-space:nowrap}
+.paste-meta .meta-detail::before{content:"·";margin-right:9px;color:#9aa2ab}
+.paste-meta a.meta-detail:hover{text-decoration:underline}
+.paste-row-footer .row-actions{display:flex;flex:0 0 auto;gap:5px}
+
+/* Folder navigation */
+.paste-workspace{transition:grid-template-columns .16s ease,gap .16s ease}
+.paste-workspace-main{container-type:inline-size}
+.folder-nav-heading{gap:8px}
+.folder-nav-heading-actions{display:flex;align-items:center;gap:4px}
+.folder-nav .folder-collapse-button{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:4px}
+.folder-nav .folder-collapse-button:hover,.folder-nav .folder-menu-button:hover{background:#e9edef}
+.folder-nav .folder-collapse-button svg,.folder-nav .folder-menu-button svg{width:17px;height:17px}
+.folder-nav nav{overflow:visible}
+.folder-nav-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 28px;align-items:center}
+.folder-nav-row>a{display:flex;min-width:0;justify-content:space-between;gap:8px}
+.folder-nav-row>a span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.folder-nav-row>a small{flex:0 0 auto;min-width:2ch;text-align:right;font-variant-numeric:tabular-nums}
+.folder-menu-space{display:block;width:28px;height:28px}
+.folder-nav-row .folder-menu-button{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:4px;opacity:1;color:var(--muted)}
+.folder-menu{position:absolute;z-index:8;top:calc(100% + 3px);right:0;display:grid;min-width:112px;padding:4px;border:1px solid var(--line);border-radius:5px;background:#fff;box-shadow:0 8px 24px #141e2824}
+.folder-nav-row .folder-menu button{width:100%;padding:7px 9px;border-radius:3px;opacity:1;color:inherit;text-align:left}
+.folder-nav-row .folder-menu button:hover{background:#e9edef}
+.folder-nav-row .folder-menu button.danger{color:var(--danger)}
+
+/* Use the content column, rather than the viewport, for filter breakpoints. */
+.paste-filter-primary{width:100%;grid-template-columns:minmax(180px,1fr) repeat(3,minmax(105px,130px)) auto}
+@container (max-width:720px){
+  .paste-filter-primary{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .paste-filter-primary>label:first-child{grid-column:1/-1}
+  .paste-filter-primary>.button{justify-self:start}
+}
+@container (max-width:900px){
+  .advanced-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@container (max-width:600px){
+  .advanced-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@container (max-width:480px){
+  .paste-filter-primary,.advanced-filter-grid{grid-template-columns:1fr}
+  .paste-filter-primary>label:first-child{grid-column:auto}
+}
+
+@media(min-width:761px){
+  .paste-workspace.folder-sidebar-collapsed{grid-template-columns:48px minmax(0,1fr);gap:20px}
+  .folder-nav.collapsed{padding:9px}
+  .folder-nav.collapsed .folder-nav-heading{justify-content:center;margin:0}
+  .folder-nav.collapsed .folder-nav-heading>strong,
+  .folder-nav.collapsed .folder-new-button,
+  .folder-nav.collapsed nav{display:none}
+}
+@media(max-width:760px){
+  .paste-row-footer{align-items:flex-start;flex-direction:column;gap:10px}
+  .paste-row-footer .row-actions{align-self:flex-end;grid-area:auto}
+  .folder-nav.collapsed{padding:14px}
+}
+@media(prefers-color-scheme:dark){
+  .paste-meta .meta-badge{background:#2b353b}
+  .folder-nav .folder-collapse-button:hover,.folder-nav .folder-menu-button:hover,
+  .folder-nav-row .folder-menu button:hover{background:#2b353b}
+  .folder-menu{background:#192126;box-shadow:0 8px 24px #0006}
+}

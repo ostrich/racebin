@@ -68,10 +68,10 @@
             {:else}<Link href={filterUrl("owner_id", String(paste.owner_id))}><strong>{ownerNames.get(paste.owner_id) ?? `User #${paste.owner_id}`}</strong><small>User #{paste.owner_id}</small></Link>{/if}
           </div>
           <div class="paste-meta">
-            <Link href={filterUrl(paste.content_kind === "text" ? "language" : "content_kind", paste.content_kind === "text" ? paste.language : paste.content_kind)}>{pasteFormatLabel(paste)}</Link>
-            <Link href={filterUrl("visibility", paste.visibility)}>{paste.visibility}</Link>
-            {#if paste.attachment_count}<Link href={filterUrl("has_attachments", "true")}>{paste.attachment_count} attachment{paste.attachment_count === 1 ? "" : "s"}</Link>{/if}
-            <span>{formatByteSize(paste.size_bytes)}</span>
+            <Link class="meta-badge" href={filterUrl(paste.content_kind === "text" ? "language" : "content_kind", paste.content_kind === "text" ? paste.language : paste.content_kind)}>{pasteFormatLabel(paste)}</Link>
+            <Link class="meta-badge" href={filterUrl("visibility", paste.visibility)}>{paste.visibility}</Link>
+            {#if paste.attachment_count}<Link class="meta-detail" href={filterUrl("has_attachments", "true")}>{paste.attachment_count} attachment{paste.attachment_count === 1 ? "" : "s"}</Link>{/if}
+            <span class="meta-detail">{formatByteSize(paste.size_bytes)}</span>
           </div>
           <time datetime={new Date(paste.created_at * 1000).toISOString()}>{formatDate(paste.created_at)}</time>
           <div class="row-actions">
