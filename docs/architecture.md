@@ -262,6 +262,26 @@ grammars, are loaded as separate JavaScript chunks. There is still one
 application deployment: chunking reduces initial browser work rather than
 creating separately deployed frontend services.
 
+### Styling system
+
+Frontend styling is layered deliberately:
+
+1. `web/src/styles/tokens.css` defines semantic colors, spacing, control
+   geometry, radii, page dimensions, sticky offsets, and stacking levels.
+2. `web/src/styles/base.css` supplies the reset, typography, document frame,
+   and accessibility utilities.
+3. `web/src/styles/primitives.css` defines reusable layout and interaction
+   primitives such as stacks, clusters, headings, and buttons.
+4. `web/src/style.css` contains application-component styles that have not
+   moved into a component's scoped `<style>` block.
+
+New UI should use semantic tokens and existing primitives before adding a
+component-specific rule. Components own their internal layout; pages own only
+the arrangement between components. Fixed dimensions and sticky offsets must
+come from tokens when they participate in shared alignment. This keeps layout
+behavior consistent and prevents page-specific overrides from becoming a
+second design system.
+
 ## Frontend build and embedding
 
 The production build has two stages:
