@@ -5,6 +5,14 @@ test.beforeEach(async ({ page }) => {
   await mockApi(page, true);
 });
 
+test("the bundled interface font is available", async ({ page }) => {
+  await page.goto("/");
+  const faces = await page.evaluate(async () =>
+    (await document.fonts.load('16px "Racebin Inter"')).length
+  );
+  expect(faces).toBeGreaterThan(0);
+});
+
 test("primary pages do not overflow at supported widths", async ({ page }) => {
   for (const viewport of [
     { width: 1440, height: 900 },
@@ -17,6 +25,9 @@ test("primary pages do not overflow at supported widths", async ({ page }) => {
       "/pastes/new",
       "/account",
       "/admin/pastes",
+      "/admin/users",
+      "/admin/users/1",
+      "/help",
     ]) {
       await page.goto(path);
       await expect
@@ -25,7 +36,7 @@ test("primary pages do not overflow at supported widths", async ({ page }) => {
             () =>
               document.documentElement.scrollWidth <=
               document.documentElement.clientWidth,
-          ),
+          ), { message: `${path} should fit at ${viewport.width}px` }
         )
         .toBe(true);
     }

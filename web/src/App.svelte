@@ -3,11 +3,14 @@
   import AccountPage from "./pages/AccountPage.svelte";
   import AdminPage from "./pages/AdminPage.svelte";
   import AdminPastesPage from "./pages/AdminPastesPage.svelte";
-  import GuidePage from "./pages/GuidePage.svelte";
+  import AdminUserPage from "./pages/AdminUserPage.svelte";
+  import AdminUsersPage from "./pages/AdminUsersPage.svelte";
+  import HelpPage from "./pages/HelpPage.svelte";
   import HomePage from "./pages/HomePage.svelte";
   import InvitationPage from "./pages/InvitationPage.svelte";
   import LoginPage from "./pages/LoginPage.svelte";
   import PasswordPage from "./pages/PasswordPage.svelte";
+  import PasswordResetPage from "./pages/PasswordResetPage.svelte";
   import PasteFormPage from "./pages/PasteFormPage.svelte";
   import PasteListPage from "./pages/PasteListPage.svelte";
   import PasteViewPage from "./pages/PasteViewPage.svelte";
@@ -72,11 +75,11 @@
     if (!$appState.ready) return;
     const route = $locationState.route;
     const protectedRoute = [
-      "new-paste", "my-pastes", "edit-paste", "account", "password"
+      "new-paste", "my-pastes", "edit-paste", "account", "password", "help"
     ].includes(route.name);
     if (!authenticated && protectedRoute) void navigate("/login", { replace: true });
     else if (authenticated && route.name === "login") void navigate("/pastes", { replace: true });
-    else if (!administrator && (route.name === "admin" || route.name === "admin-pastes")) {
+    else if (!administrator && ["admin", "admin-pastes", "admin-users", "admin-user"].includes(route.name)) {
       void navigate("/", { replace: true });
     }
   });
@@ -119,8 +122,14 @@
         {#if administrator}<AdminPage/>{:else}<section class="empty"><h1>Access denied</h1><Link class="button" href="/">Return home</Link></section>{/if}
       {:else if route.name === "admin-pastes"}
         {#if administrator}<AdminPastesPage query={$locationState.query}/>{:else}<section class="empty"><h1>Access denied</h1><Link class="button" href="/">Return home</Link></section>{/if}
-      {:else if route.name === "guide"}
-        <GuidePage/>
+      {:else if route.name === "admin-users"}
+        {#if administrator}<AdminUsersPage/>{:else}<section class="empty"><h1>Access denied</h1><Link class="button" href="/">Return home</Link></section>{/if}
+      {:else if route.name === "admin-user"}
+        {#if administrator}<AdminUserPage userId={route.userId}/>{:else}<section class="empty"><h1>Access denied</h1><Link class="button" href="/">Return home</Link></section>{/if}
+      {:else if route.name === "help"}
+        {#if authenticated}<HelpPage/>{:else}<LoginPage/>{/if}
+      {:else if route.name === "password-reset"}
+        <PasswordResetPage token={route.token}/>
       {:else if route.name === "invitation"}
         <InvitationPage token={route.token}/>
       {:else}

@@ -39,8 +39,15 @@ fn spa_route(path: &str) -> bool {
                 | "/account/password"
                 | "/admin"
                 | "/admin/pastes"
-                | "/guide"
+                | "/admin/users"
+                | "/help"
         )
+        || path.strip_prefix("/admin/users/").is_some_and(|value| {
+            !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit())
+        })
+        || path
+            .strip_prefix("/password-reset/")
+            .is_some_and(|value| !value.is_empty() && !value.contains('/'))
         || path
             .strip_prefix("/invitations/")
             .is_some_and(|value| !value.is_empty() && !value.contains('/'))
@@ -60,6 +67,9 @@ mod tests {
         assert!(spa_route("/pastes/example"));
         assert!(spa_route("/pastes/example/edit"));
         assert!(spa_route("/invitations/token"));
+        assert!(spa_route("/help"));
+        assert!(spa_route("/admin/users/42"));
+        assert!(spa_route("/password-reset/token"));
         assert!(!spa_route("/api/v1/pastes"));
         assert!(!spa_route("/pastes/example/unknown"));
         assert!(!spa_route("/invitations/token/nested"));
@@ -69,6 +79,8 @@ mod tests {
     fn every_built_frontend_asset_is_embedded() {
         assert!(EMBEDDED_ASSET_PATHS.contains(&"app.js"));
         assert!(EMBEDDED_ASSET_PATHS.contains(&"app.css"));
+        assert!(EMBEDDED_ASSET_PATHS.contains(&"InterVariable.woff2"));
+        assert!(EMBEDDED_ASSET_PATHS.contains(&"InterVariable-Italic.woff2"));
         assert!(
             EMBEDDED_ASSET_PATHS
                 .iter()

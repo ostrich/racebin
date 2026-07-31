@@ -150,13 +150,25 @@ Use a null `folder_id` to move pastes to Uncategorized.
 
 - `GET|POST|DELETE /session`
 - `PATCH /account/password`
+- `POST /password-resets/{token}`
 - `GET|POST /account/api-keys`
 - `PATCH|DELETE /account/api-keys/{id}`
 - `POST /invitations/{token}/redeem`
 - `GET /admin/pastes`
-- `GET /admin/users`, `PATCH /admin/users/{id}`
+- `GET /admin/users`, `GET|PATCH /admin/users/{id}`
+- `POST /admin/users/{id}/password-reset`
+- `DELETE /admin/users/{id}/sessions`, `DELETE /admin/users/{id}/api-keys`
 - `GET|POST /admin/invitations`, `DELETE /admin/invitations/{id}`
 - `GET /admin/api-keys`, `PATCH|DELETE /admin/api-keys/{id}`
+
+Listed invitations include a root-relative `url` only while the invitation is
+active and its token is recoverable. The browser resolves that path against
+its origin before copying it. Redeemed, revoked, expired, and pre-migration
+invitations return `null`.
+
+Creating a password reset returns a root-relative, one-time `url`. It expires
+after one hour. The reset endpoint accepts `{"new_password":"..."}` and
+revokes the user's browser sessions after the password is replaced.
 
 The machine-readable route list is `/api/v1/openapi.json`.
 

@@ -3,7 +3,11 @@ use super::*;
 pub(super) fn configure(config: &mut web::ServiceConfig) {
     config
         .service(admin_users)
+        .service(admin_user)
         .service(admin_update_user)
+        .service(admin_create_password_reset)
+        .service(admin_revoke_user_sessions)
+        .service(admin_revoke_user_keys)
         .service(admin_pastes)
         .service(admin_invitations)
         .service(admin_create_invitation)
@@ -22,9 +26,29 @@ async fn admin_users(req: HttpRequest, services: web::Data<PasteService>) -> Htt
     if let Err(r) = require_admin(&value, "user:manage") {
         return r;
     }
-    match accounts::list_users(&services.storage).await {
-        Ok(users) => HttpResponse::Ok().json(users.into_iter().map(|u| json!({"id":u.id,"username":u.username,"role":u.role,"enabled":u.enabled,"password_change_required":u.password_change_required})).collect::<Vec<_>>()),
+    match accounts::list_admin_users(&services.storage).await {
+        Ok(users) => HttpResponse::Ok().json(users),
         Err(e) => internal(e),
+    }
+}
+
+#[get("/admin/users/{id}")]
+async fn admin_user(
+    req: HttpRequest,
+    services: web::Data<PasteService>,
+    id: web::Path<i64>,
+) -> HttpResponse {
+    let value = match principal(&services, &req).await.and_then(require_auth) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    if let Err(response) = require_admin(&value, "user:manage") {
+        return response;
+    }
+    match accounts::admin_user(&services.storage, *id).await {
+        Ok(Some(user)) => HttpResponse::Ok().json(user),
+        Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "User not found"),
+        Err(message) => internal(message),
     }
 }
 
@@ -95,6 +119,82 @@ async fn admin_update_user(
     }
 }
 
+#[post("/admin/users/{id}/password-reset")]
+async fn admin_create_password_reset(
+    req: HttpRequest,
+    services: web::Data<PasteService>,
+    id: web::Path<i64>,
+) -> HttpResponse {
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|principal| require_mutation(&services, &req, principal))
+    {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    if let Err(response) = require_admin(&value, "user:manage") {
+        return response;
+    }
+    let Some(created_by_user_id) = value.user_id() else {
+        return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
+    };
+    match accounts::create_password_reset(&services.storage, *id, created_by_user_id).await {
+        Ok(token) => {
+            HttpResponse::Created().json(json!({"url":format!("/password-reset/{token}")}))
+        }
+        Err(message) => error(StatusCode::BAD_REQUEST, "invalid_user", message),
+    }
+}
+
+#[delete("/admin/users/{id}/sessions")]
+async fn admin_revoke_user_sessions(
+    req: HttpRequest,
+    services: web::Data<PasteService>,
+    id: web::Path<i64>,
+) -> HttpResponse {
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|principal| require_mutation(&services, &req, principal))
+    {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    if let Err(response) = require_admin(&value, "user:manage") {
+        return response;
+    }
+    match accounts::revoke_sessions(&services.storage, *id).await {
+        Ok(true) => HttpResponse::NoContent().finish(),
+        Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "User not found"),
+        Err(message) => internal(message),
+    }
+}
+
+#[delete("/admin/users/{id}/api-keys")]
+async fn admin_revoke_user_keys(
+    req: HttpRequest,
+    services: web::Data<PasteService>,
+    id: web::Path<i64>,
+) -> HttpResponse {
+    let value = match principal(&services, &req)
+        .await
+        .and_then(|principal| require_mutation(&services, &req, principal))
+    {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    if let Err(response) = require_admin(&value, "api_key:manage") {
+        return response;
+    }
+    match accounts::admin_user(&services.storage, *id).await {
+        Ok(Some(_)) => match api_keys::delete_all_for_user(&services.storage, *id).await {
+            Ok(_) => HttpResponse::NoContent().finish(),
+            Err(message) => internal(message),
+        },
+        Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "User not found"),
+        Err(message) => internal(message),
+    }
+}
+
 #[get("/admin/invitations")]
 async fn admin_invitations(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
     let value = match principal(&services, &req).await.and_then(require_auth) {
@@ -109,11 +209,20 @@ async fn admin_invitations(req: HttpRequest, services: web::Data<PasteService>) 
             items
                 .into_iter()
                 .map(|i| {
+                    let status = i.status();
+                    let url = if i.is_active() {
+                        i.token
+                            .as_ref()
+                            .map(|token| format!("/invitations/{token}"))
+                    } else {
+                        None
+                    };
                     json!({
                         "id":i.id,
                         "token_prefix":i.token_prefix,
                         "expires_at":i.expires_at,
-                        "status":i.status(),
+                        "status":status,
+                        "url":url,
                         "redeemed_by_username":i.redeemed_by_username
                     })
                 })

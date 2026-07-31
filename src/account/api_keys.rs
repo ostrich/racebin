@@ -266,6 +266,15 @@ pub async fn delete(repo: &Repository, id: i64) -> Result<bool, String> {
         .map_err(|error| error.to_string())
 }
 
+pub async fn delete_all_for_user(repo: &Repository, user_id: i64) -> Result<u64, String> {
+    sqlx::query("DELETE FROM api_keys WHERE user_id=$1")
+        .bind(user_id)
+        .execute(repo.pool())
+        .await
+        .map(|result| result.rows_affected())
+        .map_err(|error| error.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::normalize_scopes;

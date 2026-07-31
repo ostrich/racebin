@@ -107,6 +107,11 @@ impl Repository {
             .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
+        sqlx::query("DELETE FROM password_reset_tokens WHERE expires_at<=$1")
+            .bind(now)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
         sqlx::query("DELETE FROM invitations WHERE expires_at<=$1-2592000")
             .bind(now)
             .execute(&mut *tx)

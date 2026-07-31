@@ -6,6 +6,7 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(login)
         .service(logout)
         .service(change_password)
+        .service(reset_password)
         .service(redeem_invitation);
 }
 
@@ -174,6 +175,27 @@ async fn change_password(
 struct InvitationInput {
     username: String,
     password: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PasswordResetInput {
+    new_password: String,
+}
+
+#[post("/password-resets/{token}")]
+async fn reset_password(
+    services: web::Data<PasteService>,
+    token: web::Path<String>,
+    body: web::Json<PasswordResetInput>,
+) -> HttpResponse {
+    match accounts::reset_password(&services.storage, &token, &body.new_password).await {
+        Ok(()) => HttpResponse::NoContent().finish(),
+        Err(message) if message.starts_with("Password must") => {
+            error(StatusCode::BAD_REQUEST, "invalid_password", message)
+        }
+        Err(message) => error(StatusCode::BAD_REQUEST, "invalid_password_reset", message),
+    }
 }
 
 #[post("/invitations/{token}/redeem")]

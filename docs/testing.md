@@ -60,7 +60,7 @@ dropping and recreating the `public` schema. Never use a development,
 staging, or production database.
 
 The backend contract covers paste and folder behavior, accounts, sessions,
-invitations, API keys, foreign-key cascades, expiration cleanup, and concurrency
+invitations, password recovery, API keys, foreign-key cascades, expiration cleanup, and concurrency
 invariants. Copy tests cover empty-destination enforcement, attachment
 validation, transactional rollback, complete table transfer, and identity
 sequence continuation. HTTP tests cover session and CSRF behavior, every API

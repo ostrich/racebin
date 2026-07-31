@@ -20,6 +20,7 @@ pub async fn copy_database(
           (SELECT count(*) FROM users) +
           (SELECT count(*) FROM folders) +
           (SELECT count(*) FROM sessions) +
+          (SELECT count(*) FROM password_reset_tokens) +
           (SELECT count(*) FROM invitations) +
           (SELECT count(*) FROM api_keys) +
           (SELECT count(*) FROM api_key_scopes) +
@@ -35,7 +36,7 @@ pub async fn copy_database(
 
     let mut source_tx = source.pool.begin().await.map_err(|e| e.to_string())?;
     let users = sqlx::query(
-        "SELECT id,username,password_hash,role,enabled,password_change_required,created_at FROM users",
+        "SELECT id,username,password_hash,role,enabled,password_change_required,created_at,last_login_at FROM users",
     )
     .fetch_all(&mut *source_tx)
     .await
@@ -51,8 +52,14 @@ pub async fn copy_database(
     .fetch_all(&mut *source_tx)
     .await
     .map_err(|e| e.to_string())?;
+    let password_resets = sqlx::query(
+        "SELECT user_id,token_hash,created_by_user_id,created_at,expires_at FROM password_reset_tokens",
+    )
+    .fetch_all(&mut *source_tx)
+    .await
+    .map_err(|e| e.to_string())?;
     let invitations = sqlx::query(
-        "SELECT id,token_hash,created_by_user_id,expires_at,redeemed,redeemed_by_user_id,revoked
+        "SELECT id,token_hash,token,created_by_user_id,expires_at,redeemed,redeemed_by_user_id,revoked
          FROM invitations",
     )
     .fetch_all(&mut *source_tx)
@@ -110,6 +117,7 @@ pub async fn copy_database(
         users.len(),
         folders.len(),
         sessions.len(),
+        password_resets.len(),
         invitations.len(),
         api_keys.len(),
         api_key_scopes.len(),
@@ -119,8 +127,8 @@ pub async fn copy_database(
     let mut tx = destination.pool.begin().await.map_err(|e| e.to_string())?;
     for row in users {
         sqlx::query(
-            "INSERT INTO users(id,username,password_hash,role,enabled,password_change_required,created_at)
-             VALUES($1,$2,$3,$4,$5,$6,$7)",
+            "INSERT INTO users(id,username,password_hash,role,enabled,password_change_required,created_at,last_login_at)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
         )
         .bind(row.try_get::<i64, _>("id").map_err(|e| e.to_string())?)
         .bind(row.try_get::<String, _>("username").map_err(|e| e.to_string())?)
@@ -132,6 +140,10 @@ pub async fn copy_database(
                 .map_err(|e| e.to_string())?,
         )
         .bind(row.try_get::<i64, _>("created_at").map_err(|e| e.to_string())?)
+        .bind(
+            row.try_get::<Option<i64>, _>("last_login_at")
+                .map_err(|e| e.to_string())?,
+        )
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -195,15 +207,31 @@ pub async fn copy_database(
         .await
         .map_err(|e| e.to_string())?;
     }
+    for row in password_resets {
+        sqlx::query(
+            "INSERT INTO password_reset_tokens(user_id,token_hash,created_by_user_id,created_at,expires_at)
+             VALUES($1,$2,$3,$4,$5)",
+        )
+        .bind(row.try_get::<i64, _>("user_id").map_err(|e| e.to_string())?)
+        .bind(row.try_get::<String, _>("token_hash").map_err(|e| e.to_string())?)
+        .bind(row.try_get::<i64, _>("created_by_user_id").map_err(|e| e.to_string())?)
+        .bind(row.try_get::<i64, _>("created_at").map_err(|e| e.to_string())?)
+        .bind(row.try_get::<i64, _>("expires_at").map_err(|e| e.to_string())?)
+        .execute(&mut *tx).await.map_err(|e| e.to_string())?;
+    }
     for row in invitations {
         sqlx::query(
             "INSERT INTO invitations(
-                id,token_hash,created_by_user_id,expires_at,redeemed,redeemed_by_user_id,revoked
-             ) VALUES($1,$2,$3,$4,$5,$6,$7)",
+                id,token_hash,token,created_by_user_id,expires_at,redeemed,redeemed_by_user_id,revoked
+             ) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
         )
         .bind(row.try_get::<i64, _>("id").map_err(|e| e.to_string())?)
         .bind(
             row.try_get::<String, _>("token_hash")
+                .map_err(|e| e.to_string())?,
+        )
+        .bind(
+            row.try_get::<Option<String>, _>("token")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
@@ -380,11 +408,12 @@ pub async fn copy_database(
         ("users", counts[0]),
         ("folders", counts[1]),
         ("sessions", counts[2]),
-        ("invitations", counts[3]),
-        ("api_keys", counts[4]),
-        ("api_key_scopes", counts[5]),
-        ("pastes", counts[6]),
-        ("attachments", counts[7]),
+        ("password_reset_tokens", counts[3]),
+        ("invitations", counts[4]),
+        ("api_keys", counts[5]),
+        ("api_key_scopes", counts[6]),
+        ("pastes", counts[7]),
+        ("attachments", counts[8]),
     ] {
         let actual: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM {table}"))
             .fetch_one(&mut *tx)

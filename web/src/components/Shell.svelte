@@ -32,6 +32,7 @@
       {#if $appState.session.user}
         <Link href="/pastes">My pastes</Link>
         <Link href="/pastes/new"><Icon name="plus"/> New</Link>
+        <Link href="/help">Help</Link>
       {/if}
       {#if $appState.session.user?.role === "admin"}
         <Link href="/admin">Admin</Link>

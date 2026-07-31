@@ -13,7 +13,10 @@ export type Route =
   | { name: "password" }
   | { name: "admin" }
   | { name: "admin-pastes" }
-  | { name: "guide" }
+  | { name: "admin-users" }
+  | { name: "admin-user"; userId: number }
+  | { name: "help" }
+  | { name: "password-reset"; token: string }
   | { name: "invitation"; token: string }
   | { name: "not-found" };
 
@@ -54,7 +57,12 @@ export function parseRoute(path: string): Route {
   if (path === "/account/password") return { name: "password" };
   if (path === "/admin") return { name: "admin" };
   if (path === "/admin/pastes") return { name: "admin-pastes" };
-  if (path === "/guide") return { name: "guide" };
+  if (path === "/admin/users") return { name: "admin-users" };
+  if (path === "/help") return { name: "help" };
+  const adminUser = path.match(/^\/admin\/users\/(\d+)$/);
+  if (adminUser?.[1]) return { name: "admin-user", userId: Number(adminUser[1]) };
+  const reset = path.match(/^\/password-reset\/([^/]+)$/);
+  if (reset?.[1]) return { name: "password-reset", token: reset[1] };
   const invitation = path.match(/^\/invitations\/([^/]+)$/);
   if (invitation?.[1]) return { name: "invitation", token: invitation[1] };
   const edit = path.match(/^\/pastes\/([^/]+)\/edit$/);

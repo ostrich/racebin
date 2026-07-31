@@ -18,4 +18,12 @@ describe("parseRoute", () => {
     expect(parseRoute("/pastes/example/extra")).toEqual({ name: "not-found" });
     expect(parseRoute("/invitations/token/extra")).toEqual({ name: "not-found" });
   });
+
+  it("parses help, recovery, and user administration paths", () => {
+    expect(parseRoute("/help")).toEqual({ name: "help" });
+    expect(parseRoute("/admin/users")).toEqual({ name: "admin-users" });
+    expect(parseRoute("/admin/users/42")).toEqual({ name: "admin-user", userId: 42 });
+    expect(parseRoute("/password-reset/example")).toEqual({ name: "password-reset", token: "example" });
+    expect(parseRoute("/admin/users/not-a-number")).toEqual({ name: "not-found" });
+  });
 });

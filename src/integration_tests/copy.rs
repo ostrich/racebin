@@ -7,6 +7,10 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     let source = Repository::open(&source_url, &source_dir).await.unwrap();
     source.migrate().await.unwrap();
     insert_user(&source, 42, "copied-user", "admin").await;
+    sqlx::query("UPDATE users SET last_login_at=1234 WHERE id=42")
+        .execute(source.pool())
+        .await
+        .unwrap();
     sqlx::query("INSERT INTO folders(id,owner_id,name,name_key,created_at) VALUES(80,42,'Copied folder','copied folder',1)")
         .execute(source.pool())
         .await
@@ -14,6 +18,13 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     sqlx::query(
         "INSERT INTO pastes(id,owner_id,folder_id,title,content,content_kind,language,visibility,created_at,read_count,read_limit)
          VALUES('copied-paste',42,80,'copied','body','text','plaintext','private',1,0,NULL)",
+    )
+    .execute(source.pool())
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO password_reset_tokens(user_id,token_hash,created_by_user_id,created_at,expires_at)
+         VALUES(42,'reset-hash',42,1,9999999999)",
     )
     .execute(source.pool())
     .await
@@ -35,8 +46,8 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     .unwrap();
     sqlx::query(
         "INSERT INTO invitations(
-            id,token_hash,created_by_user_id,expires_at,redeemed,redeemed_by_user_id,revoked
-         ) VALUES(61,'invitation-hash',42,9999999999,1,42,0)",
+            id,token_hash,token,created_by_user_id,expires_at,redeemed,redeemed_by_user_id,revoked
+         ) VALUES(61,'invitation-hash','copy-token',42,9999999999,1,42,0)",
     )
     .execute(source.pool())
     .await
@@ -73,9 +84,15 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
         .await
         .unwrap();
     assert_eq!(copied, (42, "copied-user".to_string()));
+    let last_login: Option<i64> = sqlx::query_scalar("SELECT last_login_at FROM users WHERE id=42")
+        .fetch_one(destination.pool())
+        .await
+        .unwrap();
+    assert_eq!(last_login, Some(1234));
     for table in [
         "folders",
         "sessions",
+        "password_reset_tokens",
         "invitations",
         "api_keys",
         "api_key_scopes",
@@ -100,6 +117,12 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
             .await
             .unwrap();
     assert_eq!(invitation_redeemer, Some(42));
+    let invitation_token: Option<String> =
+        sqlx::query_scalar("SELECT token FROM invitations WHERE id=61")
+            .fetch_one(destination.pool())
+            .await
+            .unwrap();
+    assert_eq!(invitation_token.as_deref(), Some("copy-token"));
     let copied_folder: Option<i64> =
         sqlx::query_scalar("SELECT folder_id FROM pastes WHERE id='copied-paste'")
             .fetch_one(destination.pool())
@@ -167,7 +190,7 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
         .unwrap_err();
     assert!(error.contains("not empty"));
     sqlx::query(
-        "TRUNCATE attachments,pastes,folders,api_key_scopes,api_keys,sessions,invitations,users
+        "TRUNCATE attachments,pastes,folders,api_key_scopes,api_keys,password_reset_tokens,sessions,invitations,users
          RESTART IDENTITY CASCADE",
     )
     .execute(destination.pool())

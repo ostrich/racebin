@@ -130,9 +130,10 @@ Racebin supports two authentication mechanisms:
   and bearer-authenticated requests do not use browser CSRF protection.
 
 Passwords are hashed with Argon2id. Session, invitation, and API-key secrets
-are random values; only hashes are stored in the database. Token prefixes are
-retained where an operator needs to identify a credential without recovering
-its secret.
+are random values, and their hashes are used for authentication. Session and
+API-key plaintext secrets are never retained. Active invitations additionally
+retain their token so an administrator can copy the URL again; the token is
+cleared when the invitation is redeemed or revoked.
 
 Authorization is enforced by both the HTTP and domain layers:
 
@@ -153,8 +154,9 @@ The main relational entities are:
 
 | Entity | Purpose and relationships |
 | --- | --- |
-| `users` | Account identity, password hash, role, enabled state, and forced-password-change state |
+| `users` | Account identity, password hash, role, enabled state, forced-password-change state, and last login |
 | `sessions` | Expiring browser credentials owned by users; deleted with their user |
+| `password_reset_tokens` | One-time, one-hour password recovery hashes created by administrators |
 | `invitations` | Expiring, revocable account invitations with creator and redeemer attribution |
 | `api_keys` | Hashed bearer credentials, optionally owned by a user |
 | `api_key_scopes` | Many-to-one scope assignments deleted with their API key |
@@ -253,6 +255,7 @@ Notable browser-side technologies are:
 
 - **Tiptap/ProseMirror** for structured rich-text editing;
 - **Highlight.js** for syntax highlighting and language detection;
+- **Inter 4.1** as a bundled variable font for consistent layout across hosts;
 - **Vite** for bundling and code splitting;
 - **Vitest** with jsdom for unit and component tests; and
 - **Playwright** for browser-level workflows.
@@ -367,8 +370,8 @@ Tests are organized around architectural boundaries:
 
 - repository unit tests cover storage helpers and query behavior;
 - a shared backend contract runs against SQLite and PostgreSQL;
-- concurrency tests exercise read limits, invitations, administrator
-  invariants, and attachment ordering;
+- concurrency tests exercise read limits, invitations, one-time password
+  resets, administrator invariants, and attachment ordering;
 - migration tests verify startup and schema behavior;
 - copy tests cover complete transfers, validation, rollback, and PostgreSQL
   sequence continuation;

@@ -44,6 +44,15 @@ pub(super) async fn concurrency_contract(repo: Repository) {
     );
     assert_eq!([left, right].into_iter().filter(Result::is_ok).count(), 1);
 
+    let reset = accounts::create_password_reset(&repo, 11, 10)
+        .await
+        .unwrap();
+    let (left, right) = futures::join!(
+        accounts::reset_password(&repo, &reset, "new concurrent password one"),
+        accounts::reset_password(&repo, &reset, "new concurrent password two")
+    );
+    assert_eq!([left, right].into_iter().filter(Result::is_ok).count(), 1);
+
     let (left, right) = futures::join!(
         accounts::set_enabled(&repo, 10, false),
         accounts::set_enabled(&repo, 11, false)

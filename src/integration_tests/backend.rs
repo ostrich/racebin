@@ -28,6 +28,11 @@ pub(super) async fn backend_contract(repo: Repository) {
             .is_none()
     );
     let (session_token, _, _) = accounts::create_session(&repo, 2, false).await.unwrap();
+    let last_login: Option<i64> = sqlx::query_scalar("SELECT last_login_at FROM users WHERE id=2")
+        .fetch_one(repo.pool())
+        .await
+        .unwrap();
+    assert!(last_login.is_some());
     assert_eq!(
         accounts::session_user(&repo, &session_token)
             .await
@@ -39,6 +44,12 @@ pub(super) async fn backend_contract(repo: Repository) {
     );
 
     let invitation = accounts::create_invitation(&repo, 1).await.unwrap();
+    assert_eq!(
+        accounts::list_invitations(&repo).await.unwrap()[0]
+            .token
+            .as_deref(),
+        Some(invitation.as_str())
+    );
     let invited = accounts::redeem_invitation(
         &repo,
         &invitation,
@@ -52,6 +63,7 @@ pub(super) async fn backend_contract(repo: Repository) {
         invitations[0].redeemed_by_username.as_deref(),
         Some("invited-user")
     );
+    assert!(invitations[0].token.is_none());
     assert_eq!(invited.username, "invited-user");
 
     let scopes = vec!["paste:read".to_string(), "paste:list".to_string()];
@@ -384,6 +396,13 @@ pub(super) async fn backend_contract(repo: Repository) {
     .execute(repo.pool())
     .await
     .unwrap();
+    sqlx::query(
+        "INSERT INTO password_reset_tokens(user_id,token_hash,created_by_user_id,created_at,expires_at)
+         VALUES(2,'expired-reset',1,1,1)",
+    )
+    .execute(repo.pool())
+    .await
+    .unwrap();
     assert!(
         repo.purge_expired(crate::time::unix_timestamp())
             .await
@@ -393,12 +412,54 @@ pub(super) async fn backend_contract(repo: Repository) {
     assert!(!expiration_dir.exists());
     let expired_records: i64 = sqlx::query_scalar(
         "SELECT (SELECT count(*) FROM sessions WHERE token_hash='expired-session') +
-                (SELECT count(*) FROM invitations WHERE token_hash='expired-invitation')",
+                (SELECT count(*) FROM invitations WHERE token_hash='expired-invitation') +
+                (SELECT count(*) FROM password_reset_tokens WHERE token_hash='expired-reset')",
     )
     .fetch_one(repo.pool())
     .await
     .unwrap();
     assert_eq!(expired_records, 0);
+
+    let reset_key_scopes = vec!["paste:read".to_string()];
+    let (_, reset_key_token) =
+        api_keys::create(&repo, Some(2), "survives password reset", &reset_key_scopes)
+            .await
+            .unwrap();
+    let old_reset = accounts::create_password_reset(&repo, 2, 1).await.unwrap();
+    let reset = accounts::create_password_reset(&repo, 2, 1).await.unwrap();
+    assert!(
+        accounts::reset_password(&repo, &old_reset, "replacement password phrase")
+            .await
+            .is_err()
+    );
+    accounts::reset_password(&repo, &reset, "replacement password phrase")
+        .await
+        .unwrap();
+    assert!(accounts::session_user(&repo, &session_token)
+        .await
+        .unwrap()
+        .is_none());
+    assert!(
+        accounts::verify_user(&repo, "paste-owner", "replacement password phrase")
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert!(api_keys::authenticate(&repo, &reset_key_token)
+        .await
+        .unwrap()
+        .is_some());
+    assert!(
+        accounts::reset_password(&repo, &reset, "another replacement phrase")
+            .await
+            .is_err()
+    );
+
+    let managed = accounts::admin_user(&repo, 2).await.unwrap().unwrap();
+    assert_eq!(managed.username, "paste-owner");
+    assert!(managed.paste_count > 0);
+    assert!(managed.api_key_count > 0);
+    assert!(accounts::list_admin_users(&repo).await.unwrap().len() >= 2);
 
     accounts::delete_session(&repo, &session_token)
         .await

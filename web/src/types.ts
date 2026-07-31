@@ -6,6 +6,17 @@ export type User = {
   password_change_required: boolean;
 };
 
+export type AdminUser = User & {
+  enabled: boolean;
+  created_at: number;
+  last_login_at: number | null;
+  paste_count: number;
+  storage_bytes: number;
+  active_session_count: number;
+  api_key_count: number;
+  active_api_key_count: number;
+};
+
 export type Session = { authenticated: boolean; user?: User; csrf_token?: string };
 export type Attachment = { id: number; filename: string; size_bytes: number };
 export type RichTextDocument = Record<string, unknown>;

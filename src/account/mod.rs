@@ -3,6 +3,7 @@ use argon2::password_hash::{
 };
 use argon2::Argon2;
 use rand::{distributions::Alphanumeric, Rng};
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use sqlx::any::AnyRow;
 use sqlx::{FromRow, Row};
@@ -27,6 +28,41 @@ pub struct User {
     pub role: String,
     pub enabled: bool,
     pub password_change_required: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct AdminUser {
+    pub id: i64,
+    pub username: String,
+    pub role: String,
+    pub enabled: bool,
+    pub password_change_required: bool,
+    pub created_at: i64,
+    pub last_login_at: Option<i64>,
+    pub paste_count: i64,
+    pub storage_bytes: i64,
+    pub active_session_count: i64,
+    pub api_key_count: i64,
+    pub active_api_key_count: i64,
+}
+
+impl<'r> FromRow<'r, AnyRow> for AdminUser {
+    fn from_row(row: &'r AnyRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: row.try_get("id")?,
+            username: row.try_get("username")?,
+            role: row.try_get("role")?,
+            enabled: row.try_get::<i64, _>("enabled")? != 0,
+            password_change_required: row.try_get::<i64, _>("password_change_required")? != 0,
+            created_at: row.try_get("created_at")?,
+            last_login_at: row.try_get("last_login_at")?,
+            paste_count: row.try_get("paste_count")?,
+            storage_bytes: row.try_get("storage_bytes")?,
+            active_session_count: row.try_get("active_session_count")?,
+            api_key_count: row.try_get("api_key_count")?,
+            active_api_key_count: row.try_get("active_api_key_count")?,
+        })
+    }
 }
 
 impl<'r> FromRow<'r, AnyRow> for User {
@@ -57,6 +93,7 @@ pub struct SessionUser {
 pub struct Invitation {
     pub id: i64,
     pub token_prefix: String,
+    pub token: Option<String>,
     pub expires_at: i64,
     pub redeemed: bool,
     pub redeemed_by_username: Option<String>,
@@ -68,6 +105,7 @@ impl<'r> FromRow<'r, AnyRow> for Invitation {
         Ok(Self {
             id: row.try_get("id")?,
             token_prefix: row.try_get("token_prefix")?,
+            token: row.try_get("token")?,
             expires_at: row.try_get("expires_at")?,
             redeemed: row.try_get::<i64, _>("redeemed")? != 0,
             redeemed_by_username: row.try_get("redeemed_by_username")?,
@@ -194,6 +232,12 @@ pub async fn create_session(
     .execute(repo.pool())
     .await
     .map_err(|e| e.to_string())?;
+    sqlx::query("UPDATE users SET last_login_at=$2 WHERE id=$1")
+        .bind(user_id)
+        .bind(created_at)
+        .execute(repo.pool())
+        .await
+        .map_err(|e| e.to_string())?;
     Ok((token, csrf, expires_at))
 }
 
@@ -259,6 +303,43 @@ pub async fn list_users(repo: &Repository) -> Result<Vec<User>, String> {
     .map_err(|e| e.to_string())
 }
 
+fn admin_user_query(repo: &Repository) -> String {
+    let text_size = if repo.kind() == DatabaseKind::Postgres {
+        "CAST(octet_length(p.content) AS BIGINT) + COALESCE(CAST(octet_length(p.document_json) AS BIGINT),0)"
+    } else {
+        "length(CAST(p.content AS BLOB)) + COALESCE(length(CAST(p.document_json AS BLOB)),0)"
+    };
+    format!(
+        "SELECT u.id,u.username,u.role,u.enabled,u.password_change_required,u.created_at,u.last_login_at,
+          CAST((SELECT count(*) FROM pastes p WHERE p.owner_id=u.id) AS BIGINT) AS paste_count,
+          CAST(COALESCE((SELECT sum({text_size} + COALESCE((SELECT sum(a.size_bytes) FROM attachments a WHERE a.paste_id=p.id),0)) FROM pastes p WHERE p.owner_id=u.id),0) AS BIGINT) AS storage_bytes,
+          CAST((SELECT count(*) FROM sessions s WHERE s.user_id=u.id AND s.expires_at>$1) AS BIGINT) AS active_session_count,
+          CAST((SELECT count(*) FROM api_keys k WHERE k.user_id=u.id) AS BIGINT) AS api_key_count,
+          CAST((SELECT count(*) FROM api_keys k WHERE k.user_id=u.id AND k.enabled=1 AND u.enabled=1) AS BIGINT) AS active_api_key_count
+         FROM users u"
+    )
+}
+
+pub async fn list_admin_users(repo: &Repository) -> Result<Vec<AdminUser>, String> {
+    sqlx::query_as(&format!(
+        "{} ORDER BY lower(u.username)",
+        admin_user_query(repo)
+    ))
+    .bind(unix_timestamp())
+    .fetch_all(repo.pool())
+    .await
+    .map_err(|e| e.to_string())
+}
+
+pub async fn admin_user(repo: &Repository, id: i64) -> Result<Option<AdminUser>, String> {
+    sqlx::query_as(&format!("{} WHERE u.id=$2", admin_user_query(repo)))
+        .bind(unix_timestamp())
+        .bind(id)
+        .fetch_optional(repo.pool())
+        .await
+        .map_err(|e| e.to_string())
+}
+
 pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> Result<(), String> {
     let _write_guard = repo.lock_writes().await;
     let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
@@ -295,6 +376,11 @@ pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> Result<()
     }
     if !enabled {
         sqlx::query("DELETE FROM sessions WHERE user_id=$1")
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+        sqlx::query("DELETE FROM password_reset_tokens WHERE user_id=$1")
             .bind(id)
             .execute(&mut *tx)
             .await
@@ -368,7 +454,120 @@ pub async fn set_password(
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM password_reset_tokens WHERE user_id=$1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
     tx.commit().await.map_err(|e| e.to_string())
+}
+
+pub async fn create_password_reset(
+    repo: &Repository,
+    user_id: i64,
+    created_by_user_id: i64,
+) -> Result<String, String> {
+    let _write_guard = repo.lock_writes().await;
+    let token = random_token(64);
+    let now = unix_timestamp();
+    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
+    let enabled: Option<i64> = sqlx::query_scalar("SELECT enabled FROM users WHERE id=$1")
+        .bind(user_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    match enabled {
+        None => return Err("User not found".to_string()),
+        Some(0) => return Err("Disabled users cannot reset their password".to_string()),
+        Some(_) => {}
+    }
+    sqlx::query("DELETE FROM password_reset_tokens WHERE user_id=$1")
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query(
+        "INSERT INTO password_reset_tokens(user_id,token_hash,created_by_user_id,created_at,expires_at)
+         VALUES($1,$2,$3,$4,$5)",
+    )
+    .bind(user_id)
+    .bind(hash(&token))
+    .bind(created_by_user_id)
+    .bind(now)
+    .bind(now + 3600)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(token)
+}
+
+pub async fn reset_password(repo: &Repository, token: &str, password: &str) -> Result<(), String> {
+    let token_hash = hash(token);
+    let valid: Option<i64> = sqlx::query_scalar(
+        "SELECT r.user_id FROM password_reset_tokens r JOIN users u ON u.id=r.user_id
+         WHERE r.token_hash=$1 AND r.expires_at>$2 AND u.enabled=1",
+    )
+    .bind(&token_hash)
+    .bind(unix_timestamp())
+    .fetch_optional(repo.pool())
+    .await
+    .map_err(|e| e.to_string())?;
+    if valid.is_none() {
+        return Err("Password reset link is invalid or expired".to_string());
+    }
+    let encoded = password_hash(password)?;
+    let _write_guard = repo.lock_writes().await;
+    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
+    let lock = if repo.kind() == DatabaseKind::Postgres {
+        " FOR UPDATE"
+    } else {
+        ""
+    };
+    let user_id: Option<i64> = sqlx::query_scalar(&format!(
+        "SELECT r.user_id FROM password_reset_tokens r JOIN users u ON u.id=r.user_id
+         WHERE r.token_hash=$1 AND r.expires_at>$2 AND u.enabled=1{lock}"
+    ))
+    .bind(token_hash)
+    .bind(unix_timestamp())
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let user_id = user_id.ok_or("Password reset link is invalid or expired")?;
+    sqlx::query("UPDATE users SET password_hash=$2,password_change_required=0 WHERE id=$1")
+        .bind(user_id)
+        .bind(encoded)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM sessions WHERE user_id=$1")
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM password_reset_tokens WHERE user_id=$1")
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|e| e.to_string())
+}
+
+pub async fn revoke_sessions(repo: &Repository, user_id: i64) -> Result<bool, String> {
+    let exists: Option<i64> = sqlx::query_scalar("SELECT id FROM users WHERE id=$1")
+        .bind(user_id)
+        .fetch_optional(repo.pool())
+        .await
+        .map_err(|e| e.to_string())?;
+    if exists.is_none() {
+        return Ok(false);
+    }
+    sqlx::query("DELETE FROM sessions WHERE user_id=$1")
+        .bind(user_id)
+        .execute(repo.pool())
+        .await
+        .map(|_| true)
+        .map_err(|e| e.to_string())
 }
 
 pub async fn create_invitation(
@@ -377,9 +576,10 @@ pub async fn create_invitation(
 ) -> Result<String, String> {
     let token = random_token(64);
     sqlx::query(
-        "INSERT INTO invitations(token_hash,created_by_user_id,expires_at) VALUES($1,$2,$3)",
+        "INSERT INTO invitations(token_hash,token,created_by_user_id,expires_at) VALUES($1,$2,$3,$4)",
     )
     .bind(hash(&token))
+    .bind(&token)
     .bind(created_by_user_id)
     .bind(unix_timestamp() + 86400)
     .execute(repo.pool())
@@ -390,7 +590,8 @@ pub async fn create_invitation(
 
 pub async fn list_invitations(repo: &Repository) -> Result<Vec<Invitation>, String> {
     sqlx::query_as(
-        "SELECT i.id,substr(i.token_hash,1,10) AS token_prefix,i.expires_at,i.redeemed,
+        "SELECT i.id,COALESCE(substr(i.token,1,10),substr(i.token_hash,1,10)) AS token_prefix,
+                i.token,i.expires_at,i.redeemed,
                 u.username AS redeemed_by_username,i.revoked
          FROM invitations i
          LEFT JOIN users u ON u.id=i.redeemed_by_user_id
@@ -402,7 +603,7 @@ pub async fn list_invitations(repo: &Repository) -> Result<Vec<Invitation>, Stri
 }
 
 pub async fn revoke_invitation(repo: &Repository, id: i64) -> Result<bool, String> {
-    sqlx::query("UPDATE invitations SET revoked=1 WHERE id=$1 AND redeemed=0")
+    sqlx::query("UPDATE invitations SET revoked=1,token=NULL WHERE id=$1 AND redeemed=0")
         .bind(id)
         .execute(repo.pool())
         .await
@@ -445,7 +646,7 @@ pub async fn redeem_invitation(
     .fetch_one(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
-    sqlx::query("UPDATE invitations SET redeemed=1,redeemed_by_user_id=$2 WHERE id=$1")
+    sqlx::query("UPDATE invitations SET redeemed=1,redeemed_by_user_id=$2,token=NULL WHERE id=$1")
         .bind(invitation_id)
         .bind(id)
         .execute(&mut *tx)
@@ -501,6 +702,7 @@ mod tests {
         let invitation = |expires_at, redeemed, revoked| Invitation {
             id: 1,
             token_prefix: "example".to_string(),
+            token: None,
             expires_at,
             redeemed,
             redeemed_by_username: None,

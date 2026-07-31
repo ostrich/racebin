@@ -12,7 +12,14 @@ const user = {
   username: "test-admin",
   role: "admin",
   enabled: true,
-  password_change_required: false
+  password_change_required: false,
+  created_at: 1_690_000_000,
+  last_login_at: 1_700_000_000,
+  paste_count: 3,
+  storage_bytes: 4096,
+  active_session_count: 1,
+  api_key_count: 2,
+  active_api_key_count: 1
 };
 export const paste = {
   id: "sample-paste",
@@ -117,6 +124,17 @@ export async function mockApi(
       }]);
     }
     if (url.pathname === "/api/v1/admin/users") return json(route, [user]);
+    if (url.pathname === "/api/v1/admin/users/1") {
+      if (route.request().method() === "PATCH") return json(route, {});
+      return json(route, user);
+    }
+    if (url.pathname === "/api/v1/admin/users/1/password-reset") {
+      return json(route, { url: "/password-reset/sample-reset-token" }, 201);
+    }
+    if (["/api/v1/admin/users/1/sessions", "/api/v1/admin/users/1/api-keys"].includes(url.pathname)) {
+      return route.fulfill({ status: 204 });
+    }
+    if (url.pathname === "/api/v1/password-resets/sample-reset-token") return route.fulfill({ status: 204 });
     if (url.pathname === "/api/v1/admin/pastes") {
       const response = options.adminPastePage?.(url) ?? {
         items: options.items ?? [paste],
@@ -130,10 +148,21 @@ export async function mockApi(
         total_items: response.items.length
       });
     }
-    if (url.pathname === "/api/v1/admin/invitations") return json(route, [{
-      id: 3, token_prefix: "invite", expires_at: 1_800_000_000,
-      status: "Redeemed", redeemed_by_username: "reader"
-    }]);
+    if (url.pathname === "/api/v1/admin/invitations") {
+      if (route.request().method() === "POST") {
+        return json(route, { token: "new-token", url: "/invitations/new-token" }, 201);
+      }
+      return json(route, [
+        {
+          id: 4, token_prefix: "active", expires_at: 1_800_000_000,
+          status: "Active", url: "/invitations/active-token", redeemed_by_username: null
+        },
+        {
+          id: 3, token_prefix: "invite", expires_at: 1_800_000_000,
+          status: "Redeemed", url: null, redeemed_by_username: "reader"
+        }
+      ]);
+    }
     if (url.pathname === "/api/v1/admin/api-keys") return json(route, [{
       id: 4, user_id: 1, name: "Automation", token_prefix: "abcd",
       scopes: ["paste:read", "paste:write"], enabled: true,

@@ -4,9 +4,56 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: web
+      - name: Build embedded frontend
+        run: npm run build
+        working-directory: web
+      - name: Verify generated frontend is current
+        run: |
+          git diff --exit-code -- web/dist
+          test -z "$(git ls-files --others --exclude-standard web/dist)"
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: web
+      - name: Run frontend tests
+        run: npm test
+        working-directory: web
+      - name: Upload Playwright failure details
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-failure-details
+          path: web/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  rust:
+    name: Rust
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:18
@@ -23,23 +70,20 @@ jobs:
           --health-retries 10
     env:
       RACEBIN_TEST_POSTGRES_URL: postgresql://racebin:racebin@localhost:5432/racebin_test
+      CARGO_INCREMENTAL: 0
+      CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy,rustfmt
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci
-        working-directory: web
-      - run: npx playwright install --with-deps chromium
-        working-directory: web
-      - run: sh scripts/check-naming.sh
-      - run: cargo fmt -- --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test
-      - run: npm test
-        working-directory: web
+      - name: Check naming conventions
+        run: sh scripts/check-naming.sh
+      - name: Check Rust formatting
+        run: cargo fmt -- --check
+      - name: Run Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - name: Run Rust tests
+        run: cargo test --locked --all-features

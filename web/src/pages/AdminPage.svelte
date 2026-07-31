@@ -6,12 +6,13 @@
   import { showNotice } from "../notices";
   import type { ApiKey, User } from "../types";
 
-  type Section = "users" | "invitations" | "keys";
+  type Section = "invitations" | "keys";
   type Invitation = {
     id: number;
     token_prefix: string;
     expires_at: number;
     status: string;
+    url: string | null;
     redeemed_by_username: string | null;
   };
 
@@ -25,8 +26,7 @@
     section = target;
     loading = true;
     try {
-      if (target === "users") users = await requestApi<User[]>("/admin/users");
-      else if (target === "invitations") invitations = await requestApi<Invitation[]>("/admin/invitations");
+      if (target === "invitations") invitations = await requestApi<Invitation[]>("/admin/invitations");
       else {
         [keys, users] = await Promise.all([
           requestApi<ApiKey[]>("/admin/api-keys"),
@@ -40,28 +40,28 @@
     }
   }
 
-  async function patchUser(user: User, patch: { role?: string; enabled?: boolean }): Promise<void> {
-    try {
-      await requestApi(`/admin/users/${user.id}`, {
-        method: "PATCH",
-        body: JSON.stringify(patch)
-      });
-      Object.assign(user, patch);
-      users = [...users];
-    } catch (error) {
-      showNotice(error instanceof Error ? error.message : "Request failed", "error");
-      await load("users");
-    }
-  }
-
   async function createInvitation(): Promise<void> {
     try {
       const invitation = await requestApi<{ url: string }>("/admin/invitations", { method: "POST" });
-      await navigator.clipboard.writeText(invitation.url);
+      await copyInvitationUrl(invitation.url);
       showNotice("Invitation link copied.");
       await load("invitations");
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Request failed", "error");
+    }
+  }
+
+  async function copyInvitationUrl(url: string): Promise<void> {
+    await navigator.clipboard.writeText(new URL(url, location.origin).href);
+  }
+
+  async function copyInvitation(invitation: Invitation): Promise<void> {
+    if (!invitation.url) return;
+    try {
+      await copyInvitationUrl(invitation.url);
+      showNotice("Invitation link copied.");
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "Unable to copy invitation", "error");
     }
   }
 
@@ -108,27 +108,13 @@
   <div class="page-heading"><div><p class="eyebrow">Administration</p><h1>Admin</h1></div></div>
   <div class="admin-links">
     <Link href="/admin/pastes"><Icon name="file-text"/><div><strong>All pastes</strong><span>Search, filter, edit, and remove pastes</span></div></Link>
-    <button type="button" onclick={() => load("users")}><Icon name="user-round"/><div><strong>Users</strong><span>Roles and account access</span></div></button>
+    <Link href="/admin/users"><Icon name="user-round"/><div><strong>Users</strong><span>Accounts, recovery, roles, and access</span></div></Link>
     <button type="button" onclick={() => load("invitations")}><Icon name="plus"/><div><strong>Invitations</strong><span>Create and revoke invitation links</span></div></button>
     <button type="button" onclick={() => load("keys")}><Icon name="key-round"/><div><strong>API keys</strong><span>Review and revoke keys</span></div></button>
   </div>
   {#if section}
     <section class="panel" aria-busy={loading}>
       {#if loading}<p class="muted">Loading…</p>
-      {:else if section === "users"}
-        <h2>Users</h2><div class="table">
-          {#each users as user (user.id)}
-            <div>
-              <strong>{user.username}</strong>
-              <select aria-label={`Role for ${user.username}`} value={user.role}
-                onchange={(event) => patchUser(user, { role: event.currentTarget.value })}>
-                <option value="user">User</option><option value="admin">Admin</option>
-              </select>
-              <label class="check"><input type="checkbox" checked={user.enabled}
-                onchange={(event) => patchUser(user, { enabled: event.currentTarget.checked })}/><span>Enabled</span></label>
-            </div>
-          {/each}
-        </div>
       {:else if section === "invitations"}
         <div class="section-heading"><h2>Invitations</h2><button class="button primary" type="button" onclick={createInvitation}>Create invitation</button></div>
         <div class="table">
@@ -137,7 +123,17 @@
               <span>{invitation.status === "Redeemed" && invitation.redeemed_by_username
                 ? `Redeemed by ${invitation.redeemed_by_username}`
                 : `${invitation.status} · ${formatDate(invitation.expires_at)}`}</span>
-              {#if invitation.status === "Active"}<button class="button" type="button" onclick={() => revoke(invitation)}>Revoke</button>{:else}<span></span>{/if}
+              {#if invitation.status === "Active"}
+                <div class="invitation-actions">
+                  {#if invitation.url}<button class="icon-button" title="Copy invitation link"
+                    aria-label={`Copy invitation ${invitation.token_prefix}`} type="button"
+                    onclick={() => copyInvitation(invitation)}><Icon name="copy"/></button>
+                  {:else}<button class="icon-button" title="URL unavailable; create a new invitation"
+                    aria-label={`Invitation URL unavailable for ${invitation.token_prefix}`}
+                    type="button" disabled><Icon name="copy"/></button>{/if}
+                  <button class="button" type="button" onclick={() => revoke(invitation)}>Revoke</button>
+                </div>
+              {:else}<span></span>{/if}
             </div>
           {/each}
         </div>

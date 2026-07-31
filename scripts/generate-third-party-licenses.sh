@@ -13,6 +13,11 @@ trap 'rm -f "$frontend_notice"' EXIT
     printf '%s\n\n' '# Racebin third-party frontend licenses'
     printf '%s\n\n' \
         'The production browser bundle incorporates the following independently licensed packages.'
+    printf '%s\n\n' '## Inter 4.1'
+    printf '%s\n\n' \
+        'Official variable font files from <https://github.com/rsms/inter/tree/v4.1>.'
+    cat web/src/assets/fonts/LICENSE.txt
+    printf '\n'
     {
         printf '%s\n' web/node_modules/svelte
         (cd web && npm ls --omit=dev --all --parseable) | sed '1d'

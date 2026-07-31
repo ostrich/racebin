@@ -24,6 +24,7 @@ async fn get_openapi() -> impl Responder {
           "delete":{"summary":"Log out"}
         },
         "/account/password":{"patch":{"summary":"Change current user's password"}},
+        "/password-resets/{token}":{"post":{"summary":"Use a one-time password reset link"}},
         "/account/api-keys":{
           "get":{"summary":"List current user's API keys"},
           "post":{"summary":"Create an API key"}
@@ -65,7 +66,13 @@ async fn get_openapi() -> impl Responder {
         "/admin/users":{
           "get":{"summary":"List users"}
         },
-        "/admin/users/{id}":{"patch":{"summary":"Update a user"}},
+        "/admin/users/{id}":{
+          "get":{"summary":"Get a user and account metrics"},
+          "patch":{"summary":"Update a user"}
+        },
+        "/admin/users/{id}/password-reset":{"post":{"summary":"Create a one-time password reset link"}},
+        "/admin/users/{id}/sessions":{"delete":{"summary":"Revoke every session for a user"}},
+        "/admin/users/{id}/api-keys":{"delete":{"summary":"Delete every API key for a user"}},
         "/admin/invitations":{
           "get":{"summary":"List invitations"},
           "post":{"summary":"Create an invitation"}

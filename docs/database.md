@@ -72,7 +72,8 @@ The destination must contain no Racebin application rows. The command:
 2. Reads a consistent source snapshot.
 3. Verifies that every attachment referenced by metadata exists in
    `data-dir`.
-4. Copies users, folders, sessions, invitations, API keys, pastes, and attachment metadata
+4. Copies users, folders, sessions, password resets, invitations, API keys,
+   pastes, and attachment metadata
    while preserving IDs.
 5. Resets every PostgreSQL identity sequence.
 6. Verifies table counts before committing the destination transaction.
