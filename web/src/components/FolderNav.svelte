@@ -79,7 +79,7 @@
 <svelte:window onclick={() => closeMenu()}
   onkeydown={(event) => { if (event.key === "Escape") closeMenu(true); }}/>
 
-<aside class:collapsed class="folder-nav" aria-label="Paste folders">
+<aside class:collapsed class="folder-nav sticky-sidebar" aria-label="Paste folders">
   <div class="folder-nav-heading">
     <strong>Folders</strong>
     <div class="folder-nav-heading-actions">

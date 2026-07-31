@@ -53,7 +53,7 @@
   }
 </script>
 
-<section>
+<section class="stack page-stack">
   {#if error}<section class="empty"><h1>Unable to load user</h1><p>{error}</p><Link class="button" href="/admin/users">Back to users</Link></section>
   {:else if !user}<p class="muted">Loading user…</p>
   {:else}
@@ -65,11 +65,11 @@
       <article class="panel"><span>Last login</span><strong class="metric-date">{user.last_login_at ? formatDate(user.last_login_at) : "Never"}</strong><small>Joined {formatDate(user.created_at)}</small></article>
     </div>
     <div class="admin-user-panels">
-      <section class="panel"><h2>Account access</h2><p class="muted">Change the user's role or prevent the account from signing in.</p>
-        <div class="admin-user-access"><label><span>Role</span><select bind:value={role}><option value="user">User</option><option value="admin">Administrator</option></select></label><button class="button" type="button" disabled={busy || role === user.role} onclick={() => patch({ role })}>Save role</button></div>
+      <section class="panel stack"><h2>Account access</h2><p class="muted">Change the user's role or prevent the account from signing in.</p>
+        <div class="admin-user-access"><label class="field"><span>Role</span><select bind:value={role}><option value="user">User</option><option value="admin">Administrator</option></select></label><button class="button" type="button" disabled={busy || role === user.role} onclick={() => patch({ role })}>Save role</button></div>
         <button class:danger={user.enabled} class="button" type="button" disabled={busy} onclick={toggleEnabled}>{user.enabled ? "Disable account" : "Enable account"}</button>
       </section>
-      <section class="panel"><h2>Security</h2><p class="muted">Recovery links are valid once for one hour. Resetting a password signs out every existing session.</p>
+      <section class="panel stack"><h2>Security</h2><p class="muted">Recovery links are valid once for one hour. Resetting a password signs out every existing session.</p>
         <div class="admin-security-actions"><button class="button" type="button" onclick={resetLink}><Icon name="copy"/> Create and copy reset link</button><button class="button" type="button" onclick={() => revoke("sessions", "Sign out all sessions")}>Sign out everywhere</button><button class="button danger" type="button" onclick={() => revoke("api-keys", "Revoke all API keys")}>Revoke all API keys</button></div>
       </section>
     </div>

@@ -104,7 +104,7 @@
   }
 </script>
 
-<section>
+<section class="stack page-stack">
   <div class="page-heading"><div><p class="eyebrow">Administration</p><h1>Admin</h1></div></div>
   <div class="admin-links">
     <Link href="/admin/pastes"><Icon name="file-text"/><div><strong>All pastes</strong><span>Search, filter, edit, and remove pastes</span></div></Link>

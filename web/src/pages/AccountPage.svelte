@@ -76,7 +76,7 @@
   onMount(() => { void load(); });
 </script>
 
-<section>
+<section class="stack page-stack">
   <div class="page-heading">
     <div><p class="eyebrow">Settings</p><h1>Account</h1></div>
     <Link class="button" href="/account/password">Change password</Link>

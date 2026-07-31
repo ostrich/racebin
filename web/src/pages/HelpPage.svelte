@@ -34,7 +34,7 @@
     <a class="button" href="/api/v1/openapi.json">OpenAPI JSON</a>
   </div>
   <div class="help-layout">
-    <aside class="panel help-index" aria-label="Help topics">
+    <aside class="panel help-index sticky-sidebar" aria-label="Help topics">
       <a href="#api-keys">API keys</a><a href="#examples">Examples</a><a href="#scopes">Scopes</a><a href="#basics">Site basics</a>
     </aside>
     <div class="help-content">

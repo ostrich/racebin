@@ -43,16 +43,16 @@
   }
 </script>
 
-<section>
+<section class="stack page-stack">
   <div class="page-heading">
     <div><p class="eyebrow"><Link href="/admin">Administration</Link></p><h1>Users</h1><p class="muted">Manage account access and recovery.</p></div>
     <button class="button primary" type="button" onclick={createInvitation}><Icon name="plus"/> Create invitation</button>
   </div>
   <div class="panel admin-user-filters">
-    <label class="search-control"><span>Search</span><input type="search" placeholder="Username" bind:value={search}></label>
-    <label><span>Role</span><select bind:value={role}><option value="">Any role</option><option value="user">User</option><option value="admin">Administrator</option></select></label>
-    <label><span>Status</span><select bind:value={status}><option value="">Any status</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></label>
-    <label><span>Sort</span><select bind:value={sort}><option value="username">Username</option><option value="created">Newest</option><option value="login">Last login</option><option value="pastes">Paste count</option><option value="storage">Storage</option></select></label>
+    <label class="field search-control"><span>Search</span><input type="search" placeholder="Username" bind:value={search}></label>
+    <label class="field"><span>Role</span><select bind:value={role}><option value="">Any role</option><option value="user">User</option><option value="admin">Administrator</option></select></label>
+    <label class="field"><span>Status</span><select bind:value={status}><option value="">Any status</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></label>
+    <label class="field"><span>Sort</span><select bind:value={sort}><option value="username">Username</option><option value="created">Newest</option><option value="login">Last login</option><option value="pastes">Paste count</option><option value="storage">Storage</option></select></label>
   </div>
   {#if error}<section class="empty"><h2>Unable to load users</h2><p>{error}</p></section>
   {:else}<div class="panel admin-user-table" role="table" aria-label="Users">
