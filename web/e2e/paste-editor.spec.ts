@@ -54,6 +54,40 @@ test("code editor caret and highlighted text retain the same scroll viewport", a
   });
 });
 
+test("resizing the text editor grows the complete editor and is retained across modes", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  const editor = page.locator(".content-editor");
+  await editor.evaluate(element => { (element as HTMLElement).style.height = "620px"; });
+  await expect.poll(() => page.locator(".content-editor").evaluate(element =>
+    element.getBoundingClientRect().height
+  )).toBe(620);
+  const layers = await page.locator(".code-editor").evaluate(container => ({
+    editor: container.getBoundingClientRect().height,
+    textarea: container.querySelector("textarea")!.getBoundingClientRect().height,
+    overlay: container.querySelector("pre")!.getBoundingClientRect().height,
+    gutter: container.querySelector(".line-numbers")!.getBoundingClientRect().height
+  }));
+  expect(layers.editor).toBe(620);
+  expect(layers.textarea).toBe(618);
+  expect(layers.overlay).toBe(layers.textarea);
+  expect(layers.gutter).toBe(layers.textarea);
+  await expect(page.getByRole("textbox", { name: "Paste content" })).toHaveCSS("resize", "none");
+
+  await page.locator(".form-grid select").first().selectOption("rich_text");
+  await expect(page.locator(".rich-text-editor")).toBeVisible();
+  await expect(page.locator(".content-editor")).toHaveCSS("height", "620px");
+  await expect(page.locator(".content-editor")).toHaveCSS("resize", "vertical");
+
+  await page.locator(".content-editor").evaluate(element => {
+    (element as HTMLElement).style.height = "700px";
+  });
+  await expect(page.locator(".content-editor")).toHaveCSS("height", "700px");
+  await page.locator(".form-grid select").first().selectOption("text");
+  await expect(page.getByRole("textbox", { name: "Paste content" })).toBeVisible();
+  await expect(page.locator(".content-editor")).toHaveCSS("height", "700px");
+});
+
 test("empty rich-text conversion skips preview and disables language", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");

@@ -35,11 +35,23 @@
   let attachmentSelection = $state("");
   let submitting = $state(false);
   let switching = $state(false);
+  let editorHeight = $state(410);
   let baseline = $state("");
   let initialized = $state(false);
   const initialLoadReady = deferRouteReady();
   const drafts = new Map<ContentKind, string>();
   let canOrganize = $derived(!paste || paste.owner_id === $appState.session.user?.id);
+
+  function trackEditorResize(node: HTMLElement): { destroy: () => void } {
+    const observer = new ResizeObserver(() => {
+      const resizedHeight = Number.parseFloat(node.style.height);
+      if (Number.isFinite(resizedHeight) && Math.abs(resizedHeight - editorHeight) > 1) {
+        editorHeight = Math.max(240, Math.round(resizedHeight));
+      }
+    });
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
+  }
 
   function snapshot(): string {
     return JSON.stringify({
@@ -221,7 +233,8 @@
       <label class="title-field"><span>Title</span><input bind:value={title} maxlength="200" placeholder="Optional title"/></label>
       {#if contentKind === "rich_text"}
         <div class="content-field"><span>Content</span>
-          <div class="content-editor content-editor-rich">
+          <div class="content-editor content-editor-rich" style={`height:${editorHeight}px`}
+            use:trackEditorResize>
             {#await import("../components/RichTextEditor.svelte") then module}
               {@const RichTextEditor = module.default}
               <RichTextEditor bind:document/>
@@ -230,7 +243,8 @@
         </div>
       {:else}
         <div class="content-field"><span>Content</span>
-          <div class="content-editor content-editor-text">
+          <div class="content-editor content-editor-text" style={`height:${editorHeight}px`}
+            use:trackEditorResize>
             <CodeEditor bind:value={content} bind:language/>
           </div>
         </div>
