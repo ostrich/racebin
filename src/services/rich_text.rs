@@ -140,7 +140,10 @@ fn validate_attributes(node_type: &str, attributes: Option<&Value>) -> Result<()
             ("paragraph" | "heading", "textAlign")
                 if matches!(value.as_str(), Some("left" | "center" | "right")) => {}
             ("paragraph" | "heading", "textAlign") if value.is_null() => {}
-            ("orderedList", "start") if value.as_i64().is_some_and(|start| start > 0) => {}
+            ("orderedList", "start") if value.as_i64().is_some() => {}
+            ("orderedList", "type") if value.is_null() => {}
+            ("orderedList", "type")
+                if matches!(value.as_str(), Some("1" | "a" | "A" | "i" | "I")) => {}
             ("codeBlock", "language") if value.is_string() || value.is_null() => {}
             _ => return Err(format!("Unsupported {node_type} attribute: {key}")),
         }
@@ -163,7 +166,10 @@ fn validate_mark(mark: &Value) -> Result<(), String> {
             .and_then(Value::as_object)
             .ok_or("Links require attributes")?;
         let href = string_field(attributes, "href")?;
-        let scheme = url::Url::parse(href)
+        let base = url::Url::parse("https://racebin.invalid/").expect("valid link base");
+        let scheme = url::Url::options()
+            .base_url(Some(&base))
+            .parse(href)
             .map_err(|_| "Link URL is invalid")?
             .scheme()
             .to_string();
@@ -279,5 +285,59 @@ mod tests {
             }]}]
         }]}))
         .is_err());
+    }
+
+    #[test]
+    fn validation_accepts_ordered_list_attributes_emitted_by_tiptap() {
+        let document = json!({"type":"doc","content":[{
+            "type":"orderedList","attrs":{"start":1,"type":null},"content":[{
+                "type":"listItem","content":[{
+                    "type":"paragraph","content":[{"type":"text","text":"First"}]
+                }]
+            }]
+        }]});
+        assert_eq!(validate_document(&document).unwrap(), "- First");
+
+        let mut styled = document.clone();
+        styled["content"][0]["attrs"]["type"] = json!("A");
+        assert!(validate_document(&styled).is_ok());
+        styled["content"][0]["attrs"]["type"] = json!("unsupported");
+        assert!(validate_document(&styled).is_err());
+
+        let mut reverse_start = document;
+        reverse_start["content"][0]["attrs"]["start"] = json!(-2);
+        assert!(validate_document(&reverse_start).is_ok());
+    }
+
+    #[test]
+    fn validation_accepts_safe_relative_links() {
+        let linked = |href| {
+            json!({"type":"doc","content":[{
+                "type":"paragraph","content":[{"type":"text","text":"link","marks":[{
+                    "type":"link","attrs":{
+                        "href":href,"target":"_blank",
+                        "rel":"noopener noreferrer nofollow","class":null,"title":null
+                    }
+                }]}]
+            }]})
+        };
+        for href in [
+            "/help",
+            "../pastes",
+            "#section",
+            "https://example.com",
+            "mailto:user@example.com",
+        ] {
+            assert!(validate_document(&linked(href)).is_ok(), "rejected {href}");
+        }
+        for href in [
+            "javascript:alert(1)",
+            "data:text/html,bad",
+            "tel:+15551212",
+            "sms:+15551212",
+            "ftp://example.com",
+        ] {
+            assert!(validate_document(&linked(href)).is_err(), "accepted {href}");
+        }
     }
 }

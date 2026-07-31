@@ -151,6 +151,55 @@ test("rich-text formatting uses a single-row icon toolbar and confirms clearing"
   await toolbar.getByRole("button", { name: "Clear all formatting" }).click();
 });
 
+test("ordered rich-text lists can be submitted", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.locator(".form-grid select").first().selectOption("rich_text");
+  await page.getByLabel("Rich-text paste content").fill("First item");
+  await page.getByRole("button", { name: "Numbered list" }).click();
+
+  const submitted = page.waitForRequest(request =>
+    request.url().endsWith("/api/v1/pastes") && request.method() === "POST"
+  );
+  await page.getByRole("button", { name: "Create paste" }).click();
+  const body = (await submitted).postDataJSON();
+  expect(body.document.content[0]).toMatchObject({
+    type: "orderedList",
+    attrs: { start: 1, type: null }
+  });
+});
+
+test("pasted links are normalized to the supported document contract", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.locator(".form-grid select").first().selectOption("rich_text");
+  const editor = page.getByLabel("Rich-text paste content");
+  await editor.focus();
+  await editor.evaluate(element => {
+    const clipboard = new DataTransfer();
+    clipboard.setData("text/plain", "Relative link and phone");
+    clipboard.setData("text/html", '<p><a href="/help" target="_self" rel="external" class="button" onclick="alert(1)">Relative link</a> and <a href="tel:+15551212">phone</a></p>');
+    element.dispatchEvent(new ClipboardEvent("paste", {
+      bubbles: true, cancelable: true, clipboardData: clipboard
+    }));
+  });
+
+  const submitted = page.waitForRequest(request =>
+    request.url().endsWith("/api/v1/pastes") && request.method() === "POST"
+  );
+  await page.getByRole("button", { name: "Create paste" }).click();
+  const body = (await submitted).postDataJSON();
+  const content = body.document.content[0].content;
+  expect(content[0].marks[0]).toEqual({
+    type: "link",
+    attrs: {
+      href: "/help", target: "_blank", rel: "noopener noreferrer nofollow",
+      class: null, title: null
+    }
+  });
+  expect(content.find((node: { text?: string }) => node.text?.includes("phone")).marks).toBeUndefined();
+});
+
 test("rich-text conversion populates the plain-text editor", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");

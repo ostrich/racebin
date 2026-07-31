@@ -3,6 +3,7 @@
   import { Editor } from "@tiptap/core";
   import TextAlign from "@tiptap/extension-text-align";
   import StarterKit from "@tiptap/starter-kit";
+  import { showNotice } from "../notices";
   import Icon from "./Icon.svelte";
   import type { RichTextDocument } from "../types";
 
@@ -15,6 +16,32 @@
   } = $props();
   let element: HTMLDivElement;
   let editor: Editor;
+
+  function safeLink(href: string): boolean {
+    try {
+      return ["http:", "https:", "mailto:"].includes(new URL(href, location.origin).protocol);
+    } catch {
+      return false;
+    }
+  }
+
+  function sanitizePastedHtml(html: string): string {
+    const parsed = new DOMParser().parseFromString(html, "text/html");
+    parsed.querySelectorAll("script, style, iframe, object, embed").forEach(node => node.remove());
+    parsed.querySelectorAll("*").forEach(node => {
+      for (const attribute of [...node.attributes]) {
+        if (attribute.name.toLowerCase().startsWith("on")) node.removeAttribute(attribute.name);
+      }
+    });
+    parsed.querySelectorAll("a").forEach(link => {
+      const href = link.getAttribute("href");
+      if (!href || !safeLink(href)) link.removeAttribute("href");
+      link.removeAttribute("target");
+      link.removeAttribute("rel");
+      link.removeAttribute("class");
+    });
+    return parsed.body.innerHTML;
+  }
 
   const commands: Array<{
     command: string;
@@ -78,6 +105,7 @@
         const href = prompt("Link URL", current ?? "https://");
         if (href === null) break;
         if (!href.trim()) chain.unsetLink().run();
+        else if (!safeLink(href.trim())) showNotice("Links support only HTTP, HTTPS, email, and relative URLs.", "error");
         else chain.extendMarkRange("link").setLink({ href: href.trim() }).run();
         break;
       }
@@ -97,6 +125,7 @@
             openOnClick: false,
             autolink: true,
             protocols: ["http", "https", "mailto"],
+            isAllowedUri: safeLink,
             HTMLAttributes: { rel: "noopener noreferrer nofollow", target: "_blank" }
           }
         }),
@@ -105,9 +134,7 @@
       content: document,
       editorProps: {
         attributes: { class: "rich-text-content", "aria-label": "Rich-text paste content" },
-        transformPastedHTML: html => html
-          .replace(/<(script|style|iframe|object|embed)[\s\S]*?<\/\1>/gi, "")
-          .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+        transformPastedHTML: sanitizePastedHtml
       },
       onUpdate: ({ editor: updated }) => {
         document = updated.getJSON() as RichTextDocument;
