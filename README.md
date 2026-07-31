@@ -73,7 +73,8 @@ All settings have equivalent `RACEBIN_*` environment variables.
 | `--public-url` | unset; required for QR output |
 | `--insecure-cookie` | disabled; use only for local HTTP |
 
-See the [database guide](docs/database.md), [account guide](docs/accounts.md),
+See the [architecture overview](docs/architecture.md),
+[database guide](docs/database.md), [account guide](docs/accounts.md),
 [API guide](docs/api.md), and [testing guide](docs/testing.md). The running
 server also exposes a machine-readable route list at `/api/v1/openapi.json`.
 
