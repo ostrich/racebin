@@ -10,12 +10,12 @@
   import { showNotice } from "../notices";
   import { deferRouteReady } from "../router";
   import type { FolderOverview, Page, Paste } from "../types";
+  import { uiPreferences } from "../uiPreferences";
 
   let { mine, query }: { mine: boolean; query: URLSearchParams } = $props();
   let page = $state<Page<Paste> | null>(null);
   let error = $state("");
   let folders = $state<FolderOverview | null>(null);
-  let folderSidebarCollapsed = $state(false);
   let selected = $state(new Set<string>());
   let moveFolder = $state("");
   let currentFolderId = $derived(query.get("folder_id") ? Number(query.get("folder_id")) : null);
@@ -89,10 +89,10 @@
   }
 </script>
 
-<section class:paste-workspace={mine} class:folder-sidebar-collapsed={mine && folderSidebarCollapsed}>
+<section class:paste-workspace={mine}
+  class:folder-sidebar-collapsed={mine && $uiPreferences.folderSidebarCollapsed}>
   {#if mine && folders}
     <FolderNav overview={folders} {currentFolderId} {unfiled}
-      bind:collapsed={folderSidebarCollapsed}
       oncreate={createFolder} onrename={renameFolder} ondelete={deleteFolder}/>
   {/if}
   <div class="paste-workspace-main">

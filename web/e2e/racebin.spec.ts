@@ -433,8 +433,20 @@ test("workspace boundaries align and the folder sidebar collapses persistently",
   );
   expect(collapsedWidth).toBeGreaterThan(geometry.contentWidth);
   expect(await page.evaluate(() => localStorage.getItem("racebin.folderSidebarCollapsed"))).toBe("true");
+  await page.addInitScript(() => {
+    const observed: string[] = [];
+    Object.assign(window, { __workspaceInitialClasses: observed });
+    new MutationObserver(() => {
+      if (observed.length) return;
+      const workspace = document.querySelector(".paste-workspace");
+      if (workspace) observed.push(workspace.className);
+    }).observe(document, { childList: true, subtree: true });
+  });
   await page.reload();
   await expect(page.getByRole("button", { name: "Expand folders" })).toBeVisible();
+  expect(await page.evaluate(() =>
+    (window as Window & { __workspaceInitialClasses: string[] }).__workspaceInitialClasses[0]
+  )).toContain("folder-sidebar-collapsed");
 });
 
 test("folders can be created, renamed, and deleted from the workspace menu", async ({ page }) => {

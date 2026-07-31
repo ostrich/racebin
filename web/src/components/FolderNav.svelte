@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import type { FolderOverview } from "../types";
   import { navigate } from "../router";
+  import { setFolderSidebarCollapsed, uiPreferences } from "../uiPreferences";
   import Icon from "./Icon.svelte";
   import Link from "./Link.svelte";
 
@@ -9,7 +9,6 @@
     overview,
     currentFolderId,
     unfiled,
-    collapsed = $bindable(false),
     oncreate,
     onrename,
     ondelete
@@ -17,24 +16,18 @@
     overview: FolderOverview;
     currentFolderId: number | null;
     unfiled: boolean;
-    collapsed?: boolean;
     oncreate: () => void;
     onrename: (id: number, name: string) => void;
     ondelete: (id: number, name: string) => void;
   } = $props();
-  const collapseStorageKey = "racebin.folderSidebarCollapsed";
   let openMenuId = $state<number | null>(null);
+  let collapsed = $derived($uiPreferences.folderSidebarCollapsed);
   let currentFolder = $derived(
     overview.items.find(folder => folder.id === currentFolderId)
   );
 
-  onMount(() => {
-    collapsed = localStorage.getItem(collapseStorageKey) === "true";
-  });
-
   function toggleCollapsed(): void {
-    collapsed = !collapsed;
-    localStorage.setItem(collapseStorageKey, String(collapsed));
+    setFolderSidebarCollapsed(!collapsed);
     openMenuId = null;
   }
 
