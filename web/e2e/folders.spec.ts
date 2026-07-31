@@ -77,6 +77,22 @@ test("workspace boundaries align and the folder sidebar collapses persistently",
   )).toContain("folder-sidebar-collapsed");
 });
 
+test("folder sidebar remains fixed at its initial position while scrolling", async ({ page }) => {
+  const items = Array.from({ length: 40 }, (_, index) => ({
+    ...paste,
+    id: `scroll-paste-${index}`,
+    title: `Scroll paste ${index + 1}`
+  }));
+  await mockApi(page, true, { items });
+  await page.goto("/pastes");
+  const sidebar = page.getByRole("complementary", { name: "Paste folders" });
+  const initialTop = await sidebar.evaluate(element => element.getBoundingClientRect().top);
+  await page.evaluate(() => window.scrollTo(0, 300));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(300);
+  const scrolledTop = await sidebar.evaluate(element => element.getBoundingClientRect().top);
+  expect(scrolledTop).toBe(initialTop);
+});
+
 test("folders can be created, renamed, and deleted from the workspace menu", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes?folder_id=5");
