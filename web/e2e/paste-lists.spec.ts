@@ -177,6 +177,7 @@ test("bulk controls retain their geometry as selection changes", async ({ page }
       return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width };
     };
     return {
+      view: bounds(".paste-view-switch"),
       count: bounds(".result-count"),
       destination: bounds("select"),
       move: bounds(".move-selected-button"),
@@ -190,8 +191,52 @@ test("bulk controls retain their geometry as selection changes", async ({ page }
   const all = await geometry();
   expect(one).toEqual(empty);
   expect(all).toEqual(empty);
-  expect(Math.abs(empty.count.top - empty.move.top)).toBeLessThanOrEqual(12);
+  expect(empty.view.top).toBe(empty.destination.top);
+  expect(empty.view.bottom).toBe(empty.destination.bottom);
+  expect(empty.count.top).toBe(empty.selectAll.top);
   expect(empty.selectAll.top).toBeGreaterThanOrEqual(empty.move.bottom);
+});
+
+test("compact view is persistent and preserves paste selection", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes");
+
+  const normal = page.getByRole("button", { name: "Normal", exact: true });
+  const compact = page.getByRole("button", { name: "Compact", exact: true });
+  const pasteCheckbox = page.getByRole("checkbox", {
+    name: "Select JavaScript example"
+  });
+  await expect(normal).toHaveAttribute("aria-pressed", "true");
+  await pasteCheckbox.check();
+  await compact.click();
+
+  await expect(compact).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".paste-list")).toHaveClass(/compact/);
+  await expect(pasteCheckbox).toBeChecked();
+  await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy link" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Edit" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Delete" })).toBeVisible();
+  await expect(page.getByText("const answer = 42; console.log(answer);")).toBeHidden();
+  await expect(page.getByText("1 attachment")).toBeHidden();
+  expect(await page.evaluate(() => localStorage.getItem("racebin.pasteListView"))).toBe("compact");
+
+  await page.reload();
+  await expect(compact).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".paste-list")).toHaveClass(/compact/);
+});
+
+test("compact view remains usable without horizontal overflow on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page, true);
+  await page.goto("/pastes");
+  await page.getByRole("button", { name: "Compact", exact: true }).click();
+
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth))
+    .toBe(true);
+  await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
+  await expect(page.getByLabel("Paste view")).toBeVisible();
 });
 
 test("selection and its range anchor reset with list navigation", async ({ page }) => {
@@ -222,6 +267,7 @@ test("query navigation retains list pages until their replacement is ready", asy
   });
 
   await page.goto("/pastes");
+  await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
   await page.evaluate(() => {
     Object.assign(window, { __retainedList: document.querySelector(".paste-workspace") });
   });
@@ -237,6 +283,7 @@ test("query navigation retains list pages until their replacement is ready", asy
   await expect(page.getByRole("link", { name: "Filtered result" })).toBeVisible();
 
   await page.goto("/admin/pastes");
+  await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
   await page.evaluate(() => {
     Object.assign(window, { __retainedAdmin: document.querySelector("main > section") });
   });

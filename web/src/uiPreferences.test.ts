@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   initializeUiPreferences,
   setFolderSidebarCollapsed,
+  setPasteListView,
   uiPreferences
 } from "./uiPreferences";
 
@@ -33,10 +34,38 @@ describe("UI preferences", () => {
     expect(get(uiPreferences).folderSidebarCollapsed).toBe(true);
   });
 
+  it("loads a valid compact paste-list preference", () => {
+    storage.setItem("racebin.pasteListView", "compact");
+    initializeUiPreferences(storage);
+
+    expect(get(uiPreferences).pasteListView).toBe("compact");
+  });
+
+  it("ignores unknown paste-list preferences", () => {
+    storage.setItem("racebin.pasteListView", "dense");
+    initializeUiPreferences(storage);
+
+    expect(get(uiPreferences).pasteListView).toBe("normal");
+  });
+
   it("updates memory and storage together", () => {
     setFolderSidebarCollapsed(true, storage);
 
     expect(get(uiPreferences).folderSidebarCollapsed).toBe(true);
     expect(storage.getItem("racebin.folderSidebarCollapsed")).toBe("true");
+  });
+
+  it("updates either preference without resetting the other", () => {
+    setFolderSidebarCollapsed(true, storage);
+    setPasteListView("compact", storage);
+
+    expect(get(uiPreferences)).toEqual({
+      folderSidebarCollapsed: true,
+      pasteListView: "compact"
+    });
+    expect(storage.getItem("racebin.pasteListView")).toBe("compact");
+
+    setFolderSidebarCollapsed(false, storage);
+    expect(get(uiPreferences).pasteListView).toBe("compact");
   });
 });

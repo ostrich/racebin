@@ -10,7 +10,7 @@
   import { cachedQuery, loadQuery } from "../queryCache";
   import { deferRouteReady, navigate } from "../router";
   import type { FolderOverview, Page, Paste } from "../types";
-  import { uiPreferences } from "../uiPreferences";
+  import { setPasteListView, uiPreferences } from "../uiPreferences";
 
   let { mine, query }: { mine: boolean; query: URLSearchParams } = $props();
   function requestPaths(requestedQuery: URLSearchParams): { paste: string; folders: string | null } {
@@ -171,7 +171,15 @@
   {#if page}
     {#if mine && page.items.length}
       <div class="paste-selection-bar">
-        <span class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</span>
+        <div class="paste-view-controls">
+          <div class="paste-view-switch" role="group" aria-label="Paste view">
+            <button type="button" aria-pressed={$uiPreferences.pasteListView === "normal"}
+              onclick={() => setPasteListView("normal")}>Normal</button>
+            <button type="button" aria-pressed={$uiPreferences.pasteListView === "compact"}
+              onclick={() => setPasteListView("compact")}>Compact</button>
+          </div>
+          <span class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</span>
+        </div>
         <div class="paste-selection-controls">
           <div class="paste-bulk-actions">
             <select bind:value={moveFolder} aria-label="Move selected to folder">
@@ -191,6 +199,7 @@
       <p class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</p>
     {/if}
     <PasteRows items={page.items} manage={mine} filterable selectable={mine}
+      view={mine ? $uiPreferences.pasteListView : "normal"}
       bind:selected {folderNames}/>
     <Pagination {page} params={appliedQuery}/>
   {:else if error}

@@ -1678,16 +1678,50 @@ nav svg,
 
 /* Paste list hierarchy */
 .paste-selection-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 18px;
   margin: 10px 0;
 }
+.paste-view-controls,
 .paste-selection-controls {
   display: grid;
-  justify-items: end;
   gap: 6px;
+}
+.paste-view-controls {
+  justify-items: start;
+}
+.paste-selection-controls {
+  justify-items: end;
+}
+.paste-view-switch {
+  display: inline-grid;
+  grid-template-columns: repeat(2, 1fr);
+  height: var(--control-height);
+  padding: 3px;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-subtle);
+}
+.paste-view-switch button {
+  min-width: 86px;
+  padding: 4px 11px;
+  border: 0;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  color: var(--color-label);
+  cursor: pointer;
+  font-weight: 650;
+}
+.paste-view-switch button[aria-pressed="true"] {
+  background: var(--color-surface);
+  color: var(--color-heading);
+  box-shadow: 0 1px 3px rgba(20, 30, 40, 0.16);
+}
+.paste-view-switch button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .select-all-pastes {
   display: flex;
@@ -1704,6 +1738,7 @@ nav svg,
 }
 .paste-selection-bar .paste-bulk-actions select {
   width: 100%;
+  height: var(--control-height);
 }
 .move-selected-button {
   width: 88px;
@@ -1713,17 +1748,31 @@ nav svg,
 }
 @media (max-width: 760px) {
   .paste-selection-bar {
-    align-items: stretch;
-    flex-direction: column;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 10px;
   }
+  .paste-view-controls,
   .paste-selection-controls {
-    justify-items: stretch;
+    display: contents;
+  }
+  .paste-view-switch {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    width: 100%;
+  }
+  .paste-view-controls .result-count {
+    grid-column: 1;
+    grid-row: 3;
+    justify-self: start;
   }
   .select-all-pastes {
+    grid-column: 2;
+    grid-row: 3;
     justify-self: end;
   }
   .paste-selection-bar .paste-bulk-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
     grid-template-columns: minmax(0, 1fr) 88px;
   }
 }
@@ -1739,6 +1788,28 @@ nav svg,
 }
 .paste-list .paste-main-content > p {
   margin: 5px 0 0;
+}
+.paste-list.compact > .paste-row {
+  padding-block: 11px;
+}
+.paste-list.compact .paste-main:has(> input[type="checkbox"]) {
+  align-items: center;
+}
+.paste-list.compact .paste-main > input {
+  margin-top: 0;
+}
+.paste-list.compact .paste-main-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+}
+.paste-list.compact .paste-main-content > p,
+.paste-list.compact .paste-meta {
+  display: none;
+}
+.paste-list.compact .paste-row-footer {
+  margin-top: 0;
 }
 .paste-row-footer {
   display: flex;

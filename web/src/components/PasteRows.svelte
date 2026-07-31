@@ -3,6 +3,7 @@
   import { formatByteSize, formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
   import { showNotice } from "../notices";
   import type { Paste } from "../types";
+  import type { PasteListView } from "../uiPreferences";
   import Icon from "./Icon.svelte";
   import Link from "./Link.svelte";
 
@@ -13,7 +14,8 @@
     filterable = false,
     selectable = false,
     selected = $bindable(new Set<string>()),
-    folderNames
+    folderNames,
+    view = "normal"
   }: {
     items: Paste[];
     manage?: boolean;
@@ -22,6 +24,7 @@
     selectable?: boolean;
     selected?: Set<string>;
     folderNames?: Map<number, string>;
+    view?: PasteListView;
   } = $props();
 
   let visible = $state<Paste[]>([]);
@@ -81,7 +84,7 @@
       Hold Shift while selecting to select a range.
     </span>
   {/if}
-  <div class="paste-list">
+  <div class="paste-list" class:compact={view === "compact"}>
     {#each visible as paste, index (paste.id)}
       <article class="paste-row">
         <div class="paste-main">
