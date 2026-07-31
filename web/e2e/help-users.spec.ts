@@ -14,6 +14,8 @@ test("signed-in help explains API keys using the current installation", async ({
   await page.goto("/help");
   await expect(page.getByRole("heading", { name: "Using Racebin" })).toBeVisible();
   await expect(page.getByText("Authorization: Bearer $RACEBIN_API_KEY", { exact: false }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Update a paste" })).toBeVisible();
+  await expect(page.getByText("curl -X PATCH", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "Copy" }).first().click();
   expect(await page.evaluate(() => (window as Window & { __copiedText: string }).__copiedText))
     .toContain(`${new URL(page.url()).origin}/api/v1/pastes`);
@@ -57,8 +59,10 @@ test("administrator can inspect a user and copy a recovery link", async ({ page 
   await page.getByRole("link", { name: "Manage" }).click();
   await expect(page.getByRole("heading", { name: "test-admin" })).toBeVisible();
   await page.getByRole("button", { name: /Create and copy reset link/ }).click();
-  expect(await page.evaluate(() => (window as Window & { __copiedText: string }).__copiedText))
-    .toBe(`${new URL(page.url()).origin}/password-reset/sample-reset-token`);
+  await expect(page.getByText("Password reset link copied.")).toBeVisible();
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & { __copiedText?: string }).__copiedText
+  )).toBe(`${new URL(page.url()).origin}/password-reset/sample-reset-token`);
 });
 
 test("user administration follows shared spacing and field primitives", async ({ page }) => {

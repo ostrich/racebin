@@ -13,6 +13,12 @@
     )],
     ["List your pastes", command(`curl "${origin}/api/v1/pastes?mine=true" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`)],
     ["Read a paste", command(`curl "${origin}/api/v1/pastes/PASTE_ID" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`)],
+    ["Update a paste", command(
+      `curl -X PATCH "${origin}/api/v1/pastes/PASTE_ID" \\`,
+      `  -H "Authorization: Bearer $RACEBIN_API_KEY" \\`,
+      `  -H "Content-Type: application/json" \\`,
+      `  -d '{"title":"Updated title","visibility":"public"}'`
+    )],
     ["Download raw text", command(`curl "${origin}/api/v1/pastes/PASTE_ID/raw" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`)],
     ["Upload an attachment", command(
       `curl -X POST "${origin}/api/v1/pastes/PASTE_ID/attachments" \\`,

@@ -19,7 +19,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("desktop paste workspace", async ({ page }) => {
+test("desktop paste workspace", { tag: "@visual" }, async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/pastes");
   await expect(page).toHaveScreenshot("workspace-desktop.png", screenshot);
@@ -33,13 +33,13 @@ test("desktop paste workspace", async ({ page }) => {
   );
 });
 
-test("mobile paste workspace", async ({ page }) => {
+test("mobile paste workspace", { tag: "@visual" }, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/pastes");
   await expect(page).toHaveScreenshot("workspace-mobile.png", screenshot);
 });
 
-test("paste editors", async ({ page }) => {
+test("paste editors", { tag: "@visual" }, async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/pastes/new");
   await expect(page).toHaveScreenshot("text-editor-desktop.png", screenshot);
@@ -51,7 +51,7 @@ test("paste editors", async ({ page }) => {
   );
 });
 
-test("paste view and administration", async ({ page }) => {
+test("paste view and administration", { tag: "@visual" }, async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/pastes/sample-paste");
   await expect(page).toHaveScreenshot("paste-view-desktop.png", screenshot);
@@ -59,7 +59,7 @@ test("paste view and administration", async ({ page }) => {
   await expect(page).toHaveScreenshot("admin-pastes-desktop.png", screenshot);
 });
 
-test("dark account page", async ({ page }) => {
+test("dark account page", { tag: "@visual" }, async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
   await page.goto("/account");

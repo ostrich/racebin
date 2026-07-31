@@ -16,6 +16,8 @@ jobs:
     name: Frontend
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      TZ: UTC
     steps:
       - uses: actions/checkout@v6
         with:
@@ -38,14 +40,42 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
         working-directory: web
-      - name: Run frontend tests
-        run: npm test
+      - name: Run functional frontend tests
+        run: npm run test:unit && npm run test:e2e
         working-directory: web
       - name: Upload Playwright failure details
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: playwright-failure-details
+          name: playwright-functional-failure-details
+          path: web/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  visual:
+    name: Visual regression
+    needs: frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    container:
+      image: mcr.microsoft.com/playwright@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+    env:
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: web
+      - name: Run visual regression tests
+        run: npm run test:visual
+        working-directory: web
+      - name: Upload visual failure details
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-visual-failure-details
           path: web/test-results
           if-no-files-found: ignore
           retention-days: 7
