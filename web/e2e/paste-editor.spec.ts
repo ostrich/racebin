@@ -215,3 +215,42 @@ test("edit page shows current attachments", async ({ page }) => {
   await expect(page.getByRole("link", { name: /example.txt/ })).toBeVisible();
   await expect(page.getByText(/takes effect immediately/)).toBeVisible();
 });
+
+test("failed edit attachment upload preserves the saved revision and retry state", async ({ page }) => {
+  await mockApi(page, true);
+  const patchHeaders: string[] = [];
+  await page.route("**/api/v1/pastes/sample-paste**", async route => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    if (pathname === "/api/v1/pastes/sample-paste" && request.method() === "PATCH") {
+      patchHeaders.push(request.headers()["if-match"] ?? "");
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ...paste, title: "Saved title", _etag: "\"paste-sample-paste-2\"" })
+      });
+    }
+    if (pathname.endsWith("/attachments") && request.method() === "POST") {
+      return route.fulfill({
+        status: 422,
+        contentType: "application/problem+json",
+        body: JSON.stringify({ detail: "Attachment was rejected" })
+      });
+    }
+    return route.fallback();
+  });
+  await page.goto("/pastes/sample-paste/edit");
+  await page.getByLabel("Title").fill("Saved title");
+  await page.getByLabel("Add attachments").setInputFiles({
+    name: "retry.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("retry")
+  });
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "Paste changes were saved, but attachments were not uploaded"
+  );
+  await expect(page).toHaveURL(/\/pastes\/sample-paste\/edit$/);
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect.poll(() => patchHeaders).toEqual(["*", "\"paste-sample-paste-2\""]);
+});

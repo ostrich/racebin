@@ -5,6 +5,8 @@ use std::time::Duration;
 
 use crate::args::ARGS;
 
+const ACCESS_LOG_FORMAT: &str = "%a \"%m\" %s %b \"%{User-Agent}i\" %T";
+
 pub mod account;
 pub mod args;
 mod cli;
@@ -53,7 +55,7 @@ async fn main() -> std::io::Result<()> {
             "--public-url is required when --qr is enabled",
         ));
     }
-    std::fs::create_dir_all(&ARGS.data_dir)?;
+    prepare_data_dir(std::path::Path::new(&ARGS.data_dir))?;
     let database_url = ARGS.effective_database_url();
     let repository = repository::Repository::open(&database_url, &ARGS.data_dir)
         .await
@@ -100,7 +102,7 @@ async fn main() -> std::io::Result<()> {
                     )),
             )
             .wrap(middleware::NormalizePath::trim())
-            .wrap(middleware::Logger::default())
+            .wrap(middleware::Logger::new(ACCESS_LOG_FORMAT))
             .configure(http::configure)
     })
     .workers(ARGS.threads as usize)
@@ -109,4 +111,48 @@ async fn main() -> std::io::Result<()> {
     .max_connections(1024)
     .bind((ARGS.bind, ARGS.port))?;
     server.run().await
+}
+
+fn prepare_data_dir(path: &std::path::Path) -> std::io::Result<()> {
+    let created = !path.exists();
+    std::fs::create_dir_all(path)?;
+    #[cfg(unix)]
+    if created {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{prepare_data_dir, ACCESS_LOG_FORMAT};
+
+    #[test]
+    fn access_log_format_never_contains_request_targets() {
+        for unsafe_directive in ["%r", "%U", "%q", "%{Referer}i"] {
+            assert!(!ACCESS_LOG_FORMAT.contains(unsafe_directive));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn newly_created_data_directories_are_private() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = std::env::temp_dir().join(format!("racebin-mode-{}", uuid::Uuid::new_v4()));
+        prepare_data_dir(&path).unwrap();
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        std::fs::remove_dir(path).unwrap();
+    }
+
+    #[test]
+    fn packaged_service_enforces_private_process_and_state_modes() {
+        let unit = include_str!("../packaging/racebin.service");
+        assert!(unit.contains("UMask=0077"));
+        assert!(unit.contains("StateDirectoryMode=0700"));
+    }
 }

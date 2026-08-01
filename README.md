@@ -83,6 +83,11 @@ server also exposes generated OpenAPI documentation at `/api/v1/openapi.json`.
 Signed-in users can open Help in the site navigation for API-key setup,
 privilege descriptions, and commands tailored to the current installation.
 
+When running without the packaged systemd unit, create the data directory with
+mode `0700` and run Racebin with a `0077` umask. The included unit applies both
+settings automatically. TLS deployments should add HSTS at the HTTPS reverse
+proxy after confirming the site is available exclusively over HTTPS.
+
 ## Databases
 
 Startup selects the database from `--database-url` or

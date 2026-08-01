@@ -233,10 +233,12 @@ async fn upload_attachments(
         );
     }
     cleanup.paths.clear();
-    let current = match services.get_source(&value, &paste_id).await {
-        Ok(Some(current)) => current,
-        Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
-        Err(error) => return internal(error),
+    let current = match services.ensure_can_update(&value, &paste_id).await {
+        Ok(current) => current,
+        Err(message) if message == "Paste not found" => {
+            return error(StatusCode::NOT_FOUND, "not_found", message)
+        }
+        Err(message) => return internal(message),
     };
     HttpResponse::Created()
         .insert_header((header::ETAG, super::dto::etag(&current)))

@@ -267,7 +267,13 @@ pub(crate) async fn create_paste(
         }
         Err(message) => return paste_error(message),
     };
-    if !replayed && !staged.is_empty() {
+    let attachments_complete = replayed
+        && staged.iter().all(|file| {
+            paste.attachments.iter().any(|attachment| {
+                attachment.filename == file.filename && attachment.size_bytes == file.size_bytes
+            })
+        });
+    if !staged.is_empty() && !attachments_complete {
         if let Err(message) =
             promote_created_files(&services, &principal, &mut paste, &mut staged).await
         {
@@ -876,10 +882,8 @@ async fn promote_created_files(
         .await
     {
         Ok(_) => {
-            *paste = services
-                .get_source(principal, &paste.id)
-                .await?
-                .ok_or("Paste disappeared after attachment upload")?;
+            *paste = services.ensure_can_update(principal, &paste.id).await?;
+            remove_unreferenced_attachment_files(services, paste).await;
             Ok(())
         }
         Err(message) => {
@@ -887,6 +891,34 @@ async fn promote_created_files(
                 let _ = tokio::fs::remove_file(path).await;
             }
             Err(message)
+        }
+    }
+}
+
+async fn remove_unreferenced_attachment_files(
+    services: &PasteService,
+    paste: &crate::services::Paste,
+) {
+    let directory = services
+        .storage
+        .data_dir
+        .join("attachments")
+        .join(&paste.id);
+    let referenced = paste
+        .attachments
+        .iter()
+        .map(|attachment| attachment.storage_key.as_str())
+        .collect::<std::collections::HashSet<_>>();
+    let Ok(mut entries) = tokio::fs::read_dir(directory).await else {
+        return;
+    };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if !name.starts_with('.') && !referenced.contains(name) {
+            let _ = tokio::fs::remove_file(entry.path()).await;
         }
     }
 }

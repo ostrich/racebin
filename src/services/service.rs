@@ -482,53 +482,130 @@ impl PasteService {
         let owner = principal.user_id().ok_or("Authentication required")?;
         let _guard = self.storage.lock_writes().await;
         let key_hash = hash_token(key);
+        let now = unix_timestamp();
+        sqlx::query(
+            "DELETE FROM idempotency_records
+             WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2 AND expires_at<=$3",
+        )
+        .bind(owner)
+        .bind(&key_hash)
+        .bind(now)
+        .execute(self.storage.pool())
+        .await
+        .map_err(|error| error.to_string())?;
+        if let Some(paste) = self
+            .existing_idempotent_create(owner, &key_hash, request_hash)
+            .await?
+        {
+            return Ok((paste, true));
+        }
+
+        if !principal.can("paste:write") && !matches!(principal, Principal::Session(_)) {
+            return Err("Missing paste:write scope".into());
+        }
+        validate_input(input, now)?;
+        let content_kind = input.content_kind.as_deref().unwrap_or("text");
+        let (content, document_json) = normalized_content(
+            content_kind,
+            input.content.as_deref().unwrap_or(""),
+            input.document.as_ref(),
+        )?;
+        let folder_id = input.folder_id.flatten();
+        self.validate_folder_owner(owner, folder_id).await?;
+        let id = Uuid::new_v4().simple().to_string()[..24].to_string();
+        let mut tx = self
+            .storage
+            .pool()
+            .begin()
+            .await
+            .map_err(|error| error.to_string())?;
+        sqlx::query(
+            "INSERT INTO pastes(id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,
+                                created_at,updated_at,revision,expires_at,last_read_at,read_count,read_limit)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10,1,$11,NULL,0,$12)",
+        )
+        .bind(&id)
+        .bind(owner)
+        .bind(folder_id)
+        .bind(input.title.as_deref().unwrap_or("").trim())
+        .bind(content)
+        .bind(document_json)
+        .bind(content_kind)
+        .bind(if content_kind == "text" {
+            input.language.as_deref().unwrap_or("plaintext")
+        } else {
+            "plaintext"
+        })
+        .bind(input.visibility.as_deref().unwrap_or("unlisted"))
+        .bind(now)
+        .bind(input.expires_at.flatten())
+        .bind(input.read_limit.flatten())
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| error.to_string())?;
+        let idempotency_insert = sqlx::query(
+            "INSERT INTO idempotency_records(user_id,operation,key_hash,request_hash,paste_id,created_at,expires_at)
+             VALUES($1,'create_paste',$2,$3,$4,$5,$6)",
+        )
+        .bind(owner)
+        .bind(&key_hash)
+        .bind(request_hash)
+        .bind(&id)
+        .bind(now)
+        .bind(now + 86400)
+        .execute(&mut *tx)
+        .await;
+        if let Err(error) = idempotency_insert {
+            tx.rollback()
+                .await
+                .map_err(|rollback| rollback.to_string())?;
+            if let Some(paste) = self
+                .existing_idempotent_create(owner, &key_hash, request_hash)
+                .await?
+            {
+                return Ok((paste, true));
+            }
+            return Err(error.to_string());
+        }
+        tx.commit().await.map_err(|error| error.to_string())?;
+        let paste = self.find_paste(&id).await?.ok_or("Paste creation failed")?;
+        Ok((paste, false))
+    }
+
+    async fn existing_idempotent_create(
+        &self,
+        owner: i64,
+        key_hash: &str,
+        request_hash: &str,
+    ) -> Result<Option<Paste>, String> {
         let existing = sqlx::query(
             "SELECT request_hash,paste_id FROM idempotency_records
              WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2 AND expires_at>$3",
         )
         .bind(owner)
-        .bind(&key_hash)
+        .bind(key_hash)
         .bind(unix_timestamp())
         .fetch_optional(self.storage.pool())
         .await
         .map_err(|error| error.to_string())?;
-        if let Some(row) = existing {
-            use sqlx::Row;
-            let stored_hash: String = row
-                .try_get("request_hash")
-                .map_err(|error| error.to_string())?;
-            if stored_hash != request_hash {
-                return Err("Idempotency key was already used with a different request".into());
-            }
-            let paste_id: Option<String> =
-                row.try_get("paste_id").map_err(|error| error.to_string())?;
-            let paste_id = paste_id.ok_or("Idempotency resource no longer exists")?;
-            let paste = self
-                .find_paste(&paste_id)
-                .await?
-                .filter(|paste| paste.owner_id == Some(owner))
-                .ok_or("Idempotency resource no longer exists")?;
-            return Ok((paste, true));
+        let Some(row) = existing else {
+            return Ok(None);
+        };
+        use sqlx::Row;
+        let stored_hash: String = row
+            .try_get("request_hash")
+            .map_err(|error| error.to_string())?;
+        if stored_hash != request_hash {
+            return Err("Idempotency key was already used with a different request".into());
         }
-        let paste = self.create_paste(principal, input).await?;
-        let now = unix_timestamp();
-        if let Err(error) = sqlx::query(
-            "INSERT INTO idempotency_records(user_id,operation,key_hash,request_hash,paste_id,created_at,expires_at)
-             VALUES($1,'create_paste',$2,$3,$4,$5,$6)",
-        )
-        .bind(owner)
-        .bind(key_hash)
-        .bind(request_hash)
-        .bind(&paste.id)
-        .bind(now)
-        .bind(now + 86400)
-        .execute(self.storage.pool())
-        .await
-        {
-            let _ = self.delete_paste(principal, &paste.id, None).await;
-            return Err(error.to_string());
-        }
-        Ok((paste, false))
+        let paste_id: Option<String> =
+            row.try_get("paste_id").map_err(|error| error.to_string())?;
+        let paste_id = paste_id.ok_or("Idempotency resource no longer exists")?;
+        self.find_paste(&paste_id)
+            .await?
+            .filter(|paste| paste.owner_id == Some(owner))
+            .map(Some)
+            .ok_or("Idempotency resource no longer exists".into())
     }
 
     pub async fn clear_create_idempotency(

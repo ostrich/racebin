@@ -54,11 +54,11 @@
     return { destroy: () => observer.disconnect() };
   }
 
-  function snapshot(): string {
+  function snapshot(selectedAttachments = attachmentSelection): string {
     return JSON.stringify({
       title, content, richHtml: contentKind === "rich_text" ? richHtml : null,
       contentKind, folderId, language: contentKind === "text" ? language : null,
-      visibility, expiresAt, readLimit, attachmentSelection
+      visibility, expiresAt, readLimit, attachmentSelection: selectedAttachments
     });
   }
   let dirty = $derived(initialized && snapshot() !== baseline);
@@ -214,11 +214,21 @@
       if (pasteId && selected.length) {
         const upload = new FormData();
         selected.forEach(file => upload.append("file", file));
-        await requestApi(`/pastes/${encodeURIComponent(created.id)}/attachments`, {
-          method: "POST",
-          headers: { "If-Match": created._etag ?? "*" },
-          body: upload
-        });
+        try {
+          await requestApi(`/pastes/${encodeURIComponent(created.id)}/attachments`, {
+            method: "POST",
+            headers: { "If-Match": created._etag ?? "*" },
+            body: upload
+          });
+        } catch (reason) {
+          paste = created;
+          baseline = snapshot("");
+          showNotice(
+            `Paste changes were saved, but attachments were not uploaded: ${reason instanceof Error ? reason.message : "upload failed"}`,
+            "error"
+          );
+          return;
+        }
       }
       initialized = false;
       guardUnsavedChanges();

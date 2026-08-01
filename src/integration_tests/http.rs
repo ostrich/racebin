@@ -484,6 +484,68 @@ mod tests {
             String::from_utf8(test::read_body(raw_replay).await.to_vec()).unwrap(),
             raw_url
         );
+        let idempotency_conflict = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/pastes?title=Different")
+                .insert_header(("Authorization", format!("Bearer {write_token}")))
+                .insert_header(("Content-Type", "text/plain"))
+                .insert_header(("Idempotency-Key", "raw-upload-contract"))
+                .set_payload("different content")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(idempotency_conflict.status(), StatusCode::CONFLICT);
+
+        let recovery_boundary = "racebin-recovery-boundary";
+        let recovery_body = format!(
+            "--{recovery_boundary}\r\nContent-Disposition: form-data; name=\"content\"\r\n\r\nrecovery body\r\n--{recovery_boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"recovery.txt\"\r\nContent-Type: text/plain\r\n\r\nrecovery file\r\n--{recovery_boundary}--\r\n"
+        );
+        let create_recovery = || {
+            test::TestRequest::post()
+                .uri("/api/v1/pastes")
+                .insert_header(("Authorization", format!("Bearer {write_token}")))
+                .insert_header(("Idempotency-Key", "multipart-recovery-contract"))
+                .insert_header((
+                    "Content-Type",
+                    format!("multipart/form-data; boundary={recovery_boundary}"),
+                ))
+                .set_payload(recovery_body.clone())
+                .to_request()
+        };
+        let recovery_created = test::call_service(&app, create_recovery()).await;
+        if recovery_created.status() != StatusCode::CREATED {
+            let status = recovery_created.status();
+            let body = test::read_body(recovery_created).await;
+            let latest: Option<(String, Option<i64>)> = sqlx::query_as(
+                "SELECT id,owner_id FROM pastes ORDER BY created_at DESC,id DESC LIMIT 1",
+            )
+            .fetch_optional(repository.pool())
+            .await
+            .unwrap();
+            panic!(
+                "multipart recovery create returned {status}: {}; latest={latest:?}",
+                String::from_utf8_lossy(&body)
+            );
+        }
+        let recovery_created: Value = test::read_body_json(recovery_created).await;
+        let recovery_id = recovery_created["id"].as_str().unwrap();
+        sqlx::query("DELETE FROM attachments WHERE paste_id=$1")
+            .bind(recovery_id)
+            .execute(repository.pool())
+            .await
+            .unwrap();
+        let recovery_directory = data_dir.join("attachments").join(recovery_id);
+        std::fs::write(recovery_directory.join("orphaned-crash-file"), b"orphan").unwrap();
+        let recovered = test::call_service(&app, create_recovery()).await;
+        assert_eq!(recovered.status(), StatusCode::CREATED);
+        assert_eq!(
+            recovered.headers().get("Idempotency-Replayed").unwrap(),
+            "true"
+        );
+        let recovered: Value = test::read_body_json(recovered).await;
+        assert_eq!(recovered["attachments"].as_array().unwrap().len(), 1);
+        assert!(!recovery_directory.join("orphaned-crash-file").exists());
 
         let write_allowed = test::call_service(
             &app,
