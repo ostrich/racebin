@@ -1,0 +1,283 @@
+/* Paste list hierarchy */
+.paste-selection-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: 18px;
+  margin: 10px 0;
+}
+.paste-view-controls,
+.paste-selection-controls {
+  display: grid;
+  gap: 6px;
+}
+.paste-view-controls {
+  justify-items: start;
+}
+.paste-selection-controls {
+  justify-items: end;
+}
+.paste-view-switch {
+  display: inline-grid;
+  grid-template-columns: repeat(2, 1fr);
+  height: var(--control-height);
+  padding: 3px;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-subtle);
+}
+.paste-view-switch button {
+  min-width: 86px;
+  padding: 4px 11px;
+  border: 0;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  color: var(--color-label);
+  cursor: pointer;
+  font-weight: 650;
+}
+.paste-view-switch button[aria-pressed="true"] {
+  background: var(--color-surface);
+  color: var(--color-heading);
+  box-shadow: 0 1px 3px rgba(20, 30, 40, 0.16);
+}
+.paste-view-switch button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.select-all-pastes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.paste-selection-bar .paste-bulk-actions {
+  display: grid;
+  grid-template-columns: 190px 88px;
+  margin: 0;
+}
+.paste-selection-bar .paste-bulk-actions select {
+  width: 100%;
+  height: var(--control-height);
+}
+.move-selected-button {
+  width: 88px;
+  padding-inline: 8px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .paste-selection-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+  .paste-view-controls,
+  .paste-selection-controls {
+    display: contents;
+  }
+  .paste-view-switch {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    width: 100%;
+  }
+  .paste-view-controls .result-count {
+    grid-column: 1;
+    grid-row: 3;
+    justify-self: start;
+  }
+  .select-all-pastes {
+    grid-column: 2;
+    grid-row: 3;
+    justify-self: end;
+  }
+  .paste-selection-bar .paste-bulk-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    grid-template-columns: minmax(0, 1fr) 88px;
+  }
+}
+.paste-list > .paste-row {
+  display: block;
+  padding: 17px 4px;
+}
+.paste-list .paste-main {
+  min-width: 0;
+}
+.paste-list .paste-main-content {
+  min-width: 0;
+}
+.paste-list .paste-main-content > p {
+  margin: 5px 0 0;
+}
+.paste-list.compact > .paste-row {
+  padding-block: 11px;
+}
+.paste-list.compact .paste-main:has(> input[type="checkbox"]) {
+  align-items: center;
+}
+.paste-list.compact .paste-main > input {
+  margin-top: 0;
+}
+.paste-list.compact .paste-main-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+}
+.paste-list.compact .paste-main-content > p,
+.paste-list.compact .paste-meta {
+  display: none;
+}
+.paste-list.compact .paste-row-footer {
+  margin-top: 0;
+}
+.paste-row-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 10px;
+  min-width: 0;
+}
+.paste-row-footer .paste-meta {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 9px;
+  min-width: 0;
+}
+.paste-meta .meta-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 3px;
+  background: #e9edef;
+  padding: 3px 6px;
+  color: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.paste-meta .meta-detail {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  padding: 0;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.paste-meta .meta-detail::before {
+  content: "·";
+  margin-right: 9px;
+  color: #9aa2ab;
+}
+.paste-meta a.meta-detail:hover {
+  text-decoration: underline;
+}
+.paste-row-footer .row-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 5px;
+}
+
+/* Folder navigation */
+.paste-workspace-main {
+  container-type: inline-size;
+}
+.folder-nav-heading {
+  gap: 8px;
+}
+.folder-nav-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.folder-nav .folder-collapse-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+}
+.folder-nav .folder-collapse-button:hover,
+.folder-nav .folder-menu-button:hover {
+  background: var(--color-surface-subtle);
+}
+.folder-nav .folder-collapse-button svg,
+.folder-nav .folder-menu-button svg {
+  width: 17px;
+  height: 17px;
+}
+.folder-nav nav {
+  overflow: visible;
+}
+.folder-nav-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+}
+.folder-nav-row > a {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 8px;
+}
+.folder-nav-row > a span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.folder-nav-row > a small {
+  flex: 0 0 auto;
+  min-width: 2ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.folder-menu-space {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+.folder-nav-row .folder-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  opacity: 1;
+  color: var(--muted);
+}
+.folder-menu {
+  position: absolute;
+  z-index: var(--z-menu);
+  top: calc(100% + 3px);
+  right: 0;
+  display: grid;
+  min-width: 112px;
+  padding: 4px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px #141e2824;
+}
+.folder-nav-row .folder-menu button {
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: 3px;
+  opacity: 1;
+  color: inherit;
+  text-align: left;
+}
+.folder-nav-row .folder-menu button:hover {
+  background: #e9edef;
+}
+.folder-nav-row .folder-menu button.danger {
+  color: var(--danger);
+}
+

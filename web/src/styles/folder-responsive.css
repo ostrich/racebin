@@ -1,0 +1,63 @@
+@media (max-width: 760px) {
+  .paste-workspace {
+    display: block;
+  }
+  .folder-nav {
+    position: static;
+    margin-bottom: 22px;
+  }
+  .folder-nav-heading,
+  .folder-nav nav {
+    display: none;
+  }
+  .folder-mobile-select {
+    display: grid;
+    gap: 6px;
+  }
+  .folder-mobile-controls {
+    display: flex;
+    align-items: end;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .folder-mobile-controls .folder-mobile-select {
+    flex: 1 1 100%;
+  }
+  .folder-mobile-select span {
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .folder-mobile-select select {
+    min-height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: #fff;
+    padding: 8px;
+  }
+  .paste-bulk-actions {
+    align-items: stretch;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .paste-bulk-actions label {
+    width: 100%;
+  }
+}
+@media (min-width: 761px) {
+  .folder-mobile-controls {
+    display: none;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .folder-nav,
+  .paste-bulk-actions select,
+  .folder-mobile-select select {
+    background: #192126;
+    color: #e8edf0;
+  }
+  .folder-nav nav a.current {
+    background: #263b39;
+    color: #dcebea;
+  }
+}
+

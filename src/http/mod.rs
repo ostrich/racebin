@@ -27,6 +27,7 @@ mod errors;
 mod folders;
 mod keys;
 mod meta;
+mod paste_payload;
 mod pastes;
 
 #[derive(Deserialize, utoipa::ToSchema)]

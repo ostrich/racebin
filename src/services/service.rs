@@ -1,12 +1,9 @@
 use crate::account::{self as accounts, api_keys};
 use crate::repository::Repository;
 use sqlx::{Any, Executor};
-use std::collections::HashSet;
 use uuid::Uuid;
 
-use super::model::{
-    Attachment, Folder, FolderOverview, Page, Paste, PasteInput, PasteQuery, PasteRead,
-};
+use super::model::{Attachment, Page, Paste, PasteInput, PasteQuery, PasteRead};
 use super::rich_text::validate_document;
 use super::validation::{authorize_owner, can_read, validate_input, validate_query};
 use super::{DomainError, DomainResult};
@@ -290,7 +287,7 @@ impl PasteService {
         Ok(Some(redact_folder(principal, paste, false)))
     }
 
-    async fn find_paste(&self, id: &str) -> DomainResult<Option<Paste>> {
+    pub(super) async fn find_paste(&self, id: &str) -> DomainResult<Option<Paste>> {
         let mut paste = sqlx::query_as::<_, Paste>(
             "SELECT id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,created_at,
                     updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
@@ -777,408 +774,12 @@ impl PasteService {
             .map(|paste| redact_folder(principal, paste, false)))
     }
 
-    pub async fn list_folders(&self, principal: &Principal) -> DomainResult<FolderOverview> {
-        let owner = folder_principal(principal, "paste:list")?;
-        let items = sqlx::query_as(
-            "SELECT f.id,f.owner_id,f.name,f.created_at,
-                    (SELECT count(*) FROM pastes p WHERE p.folder_id=f.id) AS paste_count
-             FROM folders f WHERE f.owner_id=$1 ORDER BY f.name_key,f.id",
-        )
-        .bind(owner)
-        .fetch_all(self.storage.pool())
-        .await
-        .map_err(|error| error.to_string())?;
-        let (total_count, unfiled_count): (i64, i64) = sqlx::query_as(
-            "SELECT count(*),coalesce(sum(CASE WHEN folder_id IS NULL THEN 1 ELSE 0 END),0)
-             FROM pastes WHERE owner_id=$1",
-        )
-        .bind(owner)
-        .fetch_one(self.storage.pool())
-        .await
-        .map_err(|error| error.to_string())?;
-        Ok(FolderOverview {
-            items,
-            total_count,
-            unfiled_count,
-        })
-    }
-
-    pub async fn create_folder(&self, principal: &Principal, name: &str) -> DomainResult<Folder> {
-        let owner = folder_principal(principal, "paste:write")?;
-        let name = validate_folder_name(name)?;
-        let name_key = folder_name_key(name);
-        let id: i64 = sqlx::query_scalar(
-            "INSERT INTO folders(owner_id,name,name_key,created_at) VALUES($1,$2,$3,$4) RETURNING id",
-        )
-        .bind(owner)
-        .bind(name)
-        .bind(name_key)
-        .bind(unix_timestamp())
-        .fetch_one(self.storage.pool())
-        .await
-        .map_err(|error| folder_database_error(error.to_string()))?;
-        self.folder_by_id(owner, id)
-            .await?
-            .ok_or_else(|| DomainError::internal("Folder creation failed"))
-    }
-
-    pub async fn rename_folder(
-        &self,
-        principal: &Principal,
-        id: i64,
-        name: &str,
-    ) -> DomainResult<Option<Folder>> {
-        let owner = folder_principal(principal, "paste:write")?;
-        let name = validate_folder_name(name)?;
-        let changed =
-            sqlx::query("UPDATE folders SET name=$3,name_key=$4 WHERE id=$1 AND owner_id=$2")
-                .bind(id)
-                .bind(owner)
-                .bind(name)
-                .bind(folder_name_key(name))
-                .execute(self.storage.pool())
-                .await
-                .map_err(|error| folder_database_error(error.to_string()))?
-                .rows_affected();
-        if changed == 0 {
-            Ok(None)
-        } else {
-            Ok(self.folder_by_id(owner, id).await?)
-        }
-    }
-
-    pub async fn delete_folder(&self, principal: &Principal, id: i64) -> DomainResult<bool> {
-        let owner = folder_principal(principal, "paste:write")?;
-        let mut transaction = self
-            .storage
-            .pool()
-            .begin()
-            .await
-            .map_err(|error| error.to_string())?;
-        sqlx::query(
-            "UPDATE pastes SET folder_id=NULL,updated_at=$3,revision=revision+1
-             WHERE folder_id=$1 AND owner_id=$2",
-        )
-        .bind(id)
-        .bind(owner)
-        .bind(unix_timestamp())
-        .execute(&mut *transaction)
-        .await
-        .map_err(|error| error.to_string())?;
-        let deleted = sqlx::query("DELETE FROM folders WHERE id=$1 AND owner_id=$2")
-            .bind(id)
-            .bind(owner)
-            .execute(&mut *transaction)
-            .await
-            .map_err(|error| error.to_string())?
-            .rows_affected()
-            == 1;
-        transaction
-            .commit()
-            .await
-            .map_err(|error| error.to_string())?;
-        Ok(deleted)
-    }
-
-    pub async fn move_pastes(
-        &self,
-        principal: &Principal,
-        paste_ids: &[String],
-        folder_id: Option<i64>,
-    ) -> DomainResult<()> {
-        let owner = folder_principal(principal, "paste:write")?;
-        if paste_ids.is_empty() || paste_ids.len() > 100 {
-            return Err(DomainError::validation("Select between 1 and 100 pastes"));
-        }
-        let unique = paste_ids.iter().collect::<HashSet<_>>();
-        if unique.len() != paste_ids.len() {
-            return Err(DomainError::validation("Paste IDs must be unique"));
-        }
-        self.validate_folder_owner(owner, folder_id).await?;
-        let _guard = self.storage.lock_writes().await;
-        let mut tx = self
-            .storage
-            .pool()
-            .begin()
-            .await
-            .map_err(|e| e.to_string())?;
-        for id in paste_ids {
-            let changed = sqlx::query(
-                "UPDATE pastes SET folder_id=$3,updated_at=$4,revision=revision+1
-                 WHERE id=$1 AND owner_id=$2",
-            )
-            .bind(id)
-            .bind(owner)
-            .bind(folder_id)
-            .bind(unix_timestamp())
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?
-            .rows_affected();
-            if changed != 1 {
-                return Err(DomainError::not_found("One or more pastes were not found"));
-            }
-        }
-        Ok(tx.commit().await.map_err(|e| e.to_string())?)
-    }
-
-    async fn validate_folder_owner(&self, owner: i64, folder_id: Option<i64>) -> DomainResult<()> {
-        let Some(id) = folder_id else {
-            return Ok(());
-        };
-        if self.folder_by_id(owner, id).await?.is_none() {
-            return Err(DomainError::not_found("Folder not found"));
-        }
-        Ok(())
-    }
-
-    async fn folder_by_id(&self, owner: i64, id: i64) -> DomainResult<Option<Folder>> {
-        Ok(sqlx::query_as(
-            "SELECT f.id,f.owner_id,f.name,f.created_at,
-                    (SELECT count(*) FROM pastes p WHERE p.folder_id=f.id) AS paste_count
-             FROM folders f WHERE f.id=$1 AND f.owner_id=$2",
-        )
-        .bind(id)
-        .bind(owner)
-        .fetch_optional(self.storage.pool())
-        .await
-        .map_err(|error| error.to_string())?)
-    }
-
-    pub async fn delete_paste(
-        &self,
-        principal: &Principal,
-        id: &str,
-        expected_revision: Option<i64>,
-    ) -> DomainResult<bool> {
-        let current = match self.find_paste(id).await? {
-            Some(value) => value,
-            None => return Ok(false),
-        };
-        authorize_owner(principal, &current, "paste:delete")?;
-        let directory = self.storage.data_dir.join("attachments").join(id);
-        let staged = self
-            .storage
-            .data_dir
-            .join("attachments")
-            .join(format!(".delete-{}", Uuid::new_v4()));
-        let had_directory = directory.exists();
-        if had_directory {
-            std::fs::rename(&directory, &staged).map_err(|e| e.to_string())?;
-        }
-        match sqlx::query("DELETE FROM pastes WHERE id=$1 AND ($2 IS NULL OR revision=$2)")
-            .bind(id)
-            .bind(expected_revision)
-            .execute(self.storage.pool())
-            .await
-        {
-            Ok(result) if result.rows_affected() == 1 => {
-                if had_directory {
-                    let _ = std::fs::remove_dir_all(staged);
-                }
-                Ok(true)
-            }
-            Ok(_) => {
-                if had_directory {
-                    let _ = std::fs::rename(staged, directory);
-                }
-                if expected_revision.is_some() {
-                    Err(DomainError::precondition("Paste revision changed"))
-                } else {
-                    Ok(false)
-                }
-            }
-            Err(error) => {
-                if had_directory {
-                    let _ = std::fs::rename(staged, directory);
-                }
-                Err(error.to_string().into())
-            }
-        }
-    }
-
-    pub async fn add_attachments(
-        &self,
-        principal: &Principal,
-        id: &str,
-        inputs: &[(String, String, i64)],
-        expected_revision: Option<i64>,
-    ) -> DomainResult<Vec<Attachment>> {
-        let _write_guard = self.storage.lock_writes().await;
-        let paste = self
-            .find_paste(id)
-            .await?
-            .ok_or_else(|| DomainError::not_found("Paste not found"))?;
-        authorize_owner(principal, &paste, "paste:write")?;
-        let mut names = paste
-            .attachments
-            .iter()
-            .map(|attachment| attachment.filename.as_str())
-            .collect::<HashSet<_>>();
-        for (name, _, _) in inputs {
-            if !names.insert(name) {
-                return Err(DomainError::conflict(
-                    "attachment_exists",
-                    format!("{name} already exists"),
-                ));
-            }
-        }
-        let mut tx = self
-            .storage
-            .pool()
-            .begin()
-            .await
-            .map_err(|e| e.to_string())?;
-        let starting_sort_order: i64 = sqlx::query_scalar(
-            "SELECT coalesce(max(sort_order)+1,0) FROM attachments WHERE paste_id=$1",
-        )
-        .bind(&paste.id)
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
-        let mut attachments = Vec::with_capacity(inputs.len());
-        for (offset, (filename, storage_key, size_bytes)) in inputs.iter().enumerate() {
-            let sort_order = starting_sort_order + offset as i64;
-            let id: i64 = sqlx::query_scalar(
-                "INSERT INTO attachments(paste_id,sort_order,filename,storage_key,size_bytes)
-                 VALUES($1,$2,$3,$4,$5) RETURNING id",
-            )
-            .bind(&paste.id)
-            .bind(sort_order)
-            .bind(filename)
-            .bind(storage_key)
-            .bind(size_bytes)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
-            attachments.push(Attachment {
-                id,
-                sort_order,
-                filename: filename.clone(),
-                storage_key: storage_key.clone(),
-                size_bytes: *size_bytes,
-            });
-        }
-        let changed = sqlx::query(
-            "UPDATE pastes SET updated_at=$2,revision=revision+1
-             WHERE id=$1 AND ($3 IS NULL OR revision=$3)",
-        )
-        .bind(&paste.id)
-        .bind(unix_timestamp())
-        .bind(expected_revision)
-        .execute(&mut *tx)
-        .await
-        .map_err(|error| error.to_string())?
-        .rows_affected();
-        if changed == 0 {
-            return Err(DomainError::precondition("Paste revision changed"));
-        }
-        tx.commit().await.map_err(|e| e.to_string())?;
-        Ok(attachments)
-    }
-
-    pub async fn delete_attachment(
-        &self,
-        principal: &Principal,
-        id: &str,
-        attachment_id: i64,
-        expected_revision: Option<i64>,
-    ) -> DomainResult<bool> {
-        let paste = self
-            .find_paste(id)
-            .await?
-            .ok_or_else(|| DomainError::not_found("Paste not found"))?;
-        authorize_owner(principal, &paste, "paste:write")?;
-        let attachment = paste
-            .attachments
-            .into_iter()
-            .find(|attachment| attachment.id == attachment_id);
-        let Some(attachment) = attachment else {
-            return Ok(false);
-        };
-        if attachment.storage_key.starts_with('.')
-            || std::path::Path::new(&attachment.storage_key)
-                .components()
-                .count()
-                != 1
-        {
-            return Err(DomainError::internal("Unsafe attachment metadata"));
-        }
-        let path = self
-            .storage
-            .data_dir
-            .join("attachments")
-            .join(&paste.id)
-            .join(&attachment.storage_key);
-        let staged = path.with_file_name(format!(".delete-{}", Uuid::new_v4()));
-        let existed = path.exists();
-        if existed {
-            std::fs::rename(&path, &staged).map_err(|e| e.to_string())?;
-        }
-        let mut transaction = self
-            .storage
-            .pool()
-            .begin()
-            .await
-            .map_err(|error| error.to_string())?;
-        let result = async {
-            let affected = sqlx::query("DELETE FROM attachments WHERE id=$1")
-                .bind(attachment_id)
-                .execute(&mut *transaction)
-                .await
-                .map_err(|error| error.to_string())?
-                .rows_affected();
-            if affected == 1 {
-                let changed = sqlx::query(
-                    "UPDATE pastes SET updated_at=$2,revision=revision+1
-                     WHERE id=$1 AND ($3 IS NULL OR revision=$3)",
-                )
-                .bind(&paste.id)
-                .bind(unix_timestamp())
-                .bind(expected_revision)
-                .execute(&mut *transaction)
-                .await
-                .map_err(|error| error.to_string())?
-                .rows_affected();
-                if changed == 0 {
-                    return Err(DomainError::precondition("Paste revision changed"));
-                }
-            }
-            transaction
-                .commit()
-                .await
-                .map_err(|error| error.to_string())?;
-            Ok::<u64, DomainError>(affected)
-        }
-        .await;
-        match result {
-            Ok(1) => {
-                if existed {
-                    let _ = std::fs::remove_file(staged);
-                }
-                Ok(true)
-            }
-            Ok(_) => {
-                if existed {
-                    let _ = std::fs::rename(staged, path);
-                }
-                Ok(false)
-            }
-            Err(error) => {
-                if existed {
-                    let _ = std::fs::rename(staged, path);
-                }
-                Err(error)
-            }
-        }
-    }
-
     async fn load_attachments(&self, paste_id: &str) -> DomainResult<Vec<Attachment>> {
         load_attachments_from(self.storage.pool(), paste_id).await
     }
 }
 
-fn folder_principal(principal: &Principal, scope: &str) -> DomainResult<i64> {
+pub(super) fn folder_principal(principal: &Principal, scope: &str) -> DomainResult<i64> {
     let owner = principal
         .user_id()
         .ok_or_else(|| DomainError::forbidden("Folders require a user-owned credential"))?;
@@ -1188,7 +789,7 @@ fn folder_principal(principal: &Principal, scope: &str) -> DomainResult<i64> {
     Ok(owner)
 }
 
-fn validate_folder_name(name: &str) -> DomainResult<&str> {
+pub(super) fn validate_folder_name(name: &str) -> DomainResult<&str> {
     let name = name.trim();
     if name.is_empty() || name.chars().count() > 100 || name.chars().any(char::is_control) {
         return Err(DomainError::validation(
@@ -1204,7 +805,7 @@ fn validate_folder_name(name: &str) -> DomainResult<&str> {
     Ok(name)
 }
 
-fn folder_database_error(error: String) -> DomainError {
+pub(super) fn folder_database_error(error: String) -> DomainError {
     if error.to_ascii_lowercase().contains("unique") {
         DomainError::conflict("folder_exists", "A folder with that name already exists")
     } else {
@@ -1212,7 +813,7 @@ fn folder_database_error(error: String) -> DomainError {
     }
 }
 
-fn folder_name_key(name: &str) -> String {
+pub(super) fn folder_name_key(name: &str) -> String {
     name.to_lowercase()
 }
 

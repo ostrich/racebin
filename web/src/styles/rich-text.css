@@ -1,0 +1,155 @@
+.rich-text-editor,
+.rich-text-viewer {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+.rich-text-editor {
+  min-height: 410px;
+}
+.rich-text-viewer .rich-text-content {
+  min-height: 240px;
+}
+.rich-text-content {
+  min-height: inherit;
+  padding: 22px 26px;
+  line-height: 1.65;
+  outline: 0;
+  overflow-wrap: anywhere;
+}
+.rich-text-content > :first-child {
+  margin-top: 0;
+}
+.rich-text-content > :last-child {
+  margin-bottom: 0;
+}
+.rich-text-content h1 {
+  font-size: 2em;
+}
+.rich-text-content h2 {
+  font-size: 1.5em;
+}
+.rich-text-content h3 {
+  font-size: 1.2em;
+}
+.rich-text-content blockquote {
+  margin-left: 0;
+  padding-left: 18px;
+  border-left: 4px solid var(--line);
+  color: var(--muted);
+}
+.rich-text-content pre {
+  padding: 16px;
+  overflow: auto;
+  border-radius: 5px;
+  background: #101820;
+  color: #eef4f5;
+}
+.rich-text-content code {
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: #edf0f2;
+}
+.rich-text-content pre code {
+  padding: 0;
+  background: transparent;
+}
+.rich-text-content hr {
+  margin: 28px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.rich-text-toolbar {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: #f4f6f7;
+  overflow-x: auto;
+}
+.rich-text-toolbar + .rich-text-editor {
+  border-radius: 0 0 6px 6px;
+}
+.rich-text-toolbar button {
+  display: inline-flex;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.rich-text-toolbar button:hover {
+  border-color: var(--accent);
+}
+.rich-text-toolbar button svg {
+  width: 17px;
+  height: 17px;
+}
+.rich-text-toolbar button span {
+  line-height: 1;
+  font-weight: 600;
+}
+.rich-text-toolbar button .paragraph {
+  font-family: serif;
+  font-size: 19px;
+}
+.rich-text-toolbar button .bold {
+  font-weight: 800;
+}
+.rich-text-toolbar button .italic {
+  font-family: serif;
+  font-size: 16px;
+  font-style: italic;
+}
+.rich-text-toolbar button .underline {
+  text-decoration: underline;
+}
+.rich-text-toolbar button .strike {
+  text-decoration: line-through;
+}
+.conversion-dialog {
+  width: min(680px, calc(100vw - 32px));
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: inherit;
+}
+.conversion-dialog::backdrop {
+  background: rgba(15, 22, 26, 0.58);
+}
+.conversion-dialog pre {
+  max-height: 45vh;
+  padding: 16px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: #f4f6f7;
+  white-space: pre-wrap;
+}
+@media (prefers-color-scheme: dark) {
+  .rich-text-editor,
+  .rich-text-viewer,
+  .conversion-dialog {
+    background: #192126;
+  }
+  .rich-text-toolbar,
+  .conversion-dialog pre {
+    background: #111619;
+  }
+  .rich-text-toolbar button {
+    background: #192126;
+  }
+  .rich-text-content code {
+    background: #2b353b;
+  }
+}

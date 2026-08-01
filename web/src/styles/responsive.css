@@ -1,0 +1,87 @@
+/* Use the content column, rather than the viewport, for filter breakpoints. */
+@container (max-width:900px) {
+  .advanced-filter-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@container (max-width:600px) {
+  .advanced-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container (max-width:480px) {
+  .paste-filter-toolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+  .paste-search {
+    flex-basis: 100%;
+    grid-template-columns: 1fr;
+  }
+  .paste-search .button {
+    justify-self: start;
+  }
+  .filter-toggle {
+    flex: 1;
+  }
+  .sort-control {
+    flex: 1;
+  }
+  .sort-button {
+    width: 100%;
+  }
+  .sort-button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .advanced-filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 761px) {
+  .paste-workspace.folder-sidebar-collapsed {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 20px;
+  }
+  .folder-nav.collapsed {
+    padding: 9px;
+  }
+  .folder-nav.collapsed .folder-nav-heading {
+    justify-content: center;
+    margin: 0;
+  }
+  .folder-nav.collapsed .folder-nav-heading > strong,
+  .folder-nav.collapsed .folder-new-button,
+  .folder-nav.collapsed nav {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .paste-row-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .paste-row-footer .row-actions {
+    align-self: flex-end;
+    grid-area: auto;
+  }
+  .folder-nav.collapsed {
+    padding: 14px;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .paste-meta .meta-badge {
+    background: #2b353b;
+  }
+  .folder-nav .folder-collapse-button:hover,
+  .folder-nav .folder-menu-button:hover,
+  .folder-nav-row .folder-menu button:hover {
+    background: #2b353b;
+  }
+  .folder-menu {
+    background: #192126;
+    box-shadow: 0 8px 24px #0006;
+  }
+}
