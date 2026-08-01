@@ -426,14 +426,14 @@ impl PasteService {
         if !principal.can("paste:write") && !matches!(principal, Principal::Session(_)) {
             return Err("Missing paste:write scope".into());
         }
-        validate_input(input)?;
+        let now = unix_timestamp();
+        validate_input(input, now)?;
         let content_kind = input.content_kind.as_deref().unwrap_or("text");
         let (content, document_json) = normalized_content(
             content_kind,
             input.content.as_deref().unwrap_or(""),
             input.document.as_ref(),
         )?;
-        let now = unix_timestamp();
         let id = Uuid::new_v4().simple().to_string()[..24].to_string();
         let folder_id = input.folder_id.flatten();
         self.validate_folder_owner(owner, folder_id).await?;
@@ -525,7 +525,7 @@ impl PasteService {
         .execute(self.storage.pool())
         .await
         {
-            let _ = self.delete_paste(principal, &paste.id).await;
+            let _ = self.delete_paste(principal, &paste.id, None).await;
             return Err(error.to_string());
         }
         Ok((paste, false))
@@ -554,8 +554,10 @@ impl PasteService {
         principal: &Principal,
         id: &str,
         input: &PasteInput,
+        expected_revision: Option<i64>,
     ) -> Result<Option<Paste>, String> {
-        validate_input(input)?;
+        let now = unix_timestamp();
+        validate_input(input, now)?;
         let current = match self.find_paste(id).await? {
             Some(value) => value,
             None => return Ok(None),
@@ -588,12 +590,13 @@ impl PasteService {
         } else {
             "plaintext"
         };
-        sqlx::query(
+        let result = sqlx::query(
             "UPDATE pastes SET title=coalesce($2,title),content=$3,document_json=$4,
              content_kind=$5,language=$6,visibility=coalesce($7,visibility),
              expires_at=CASE WHEN $8=1 THEN $9 ELSE expires_at END,
              read_limit=CASE WHEN $10=1 THEN $11 ELSE read_limit END,
-             folder_id=$12,updated_at=$13,revision=revision+1 WHERE id=$1",
+             folder_id=$12,updated_at=$13,revision=revision+1
+             WHERE id=$1 AND ($14 IS NULL OR revision=$14)",
         )
         .bind(id)
         .bind(input.title.as_deref().map(str::trim))
@@ -607,10 +610,14 @@ impl PasteService {
         .bind(i64::from(input.read_limit.is_some()))
         .bind(input.read_limit.flatten())
         .bind(folder_id)
-        .bind(unix_timestamp())
+        .bind(now)
+        .bind(expected_revision)
         .execute(self.storage.pool())
         .await
         .map_err(|e| e.to_string())?;
+        if result.rows_affected() == 0 {
+            return Err("Paste revision changed".into());
+        }
         Ok(self
             .find_paste(id)
             .await?
@@ -789,7 +796,12 @@ impl PasteService {
         .map_err(|error| error.to_string())
     }
 
-    pub async fn delete_paste(&self, principal: &Principal, id: &str) -> Result<bool, String> {
+    pub async fn delete_paste(
+        &self,
+        principal: &Principal,
+        id: &str,
+        expected_revision: Option<i64>,
+    ) -> Result<bool, String> {
         let current = match self.find_paste(id).await? {
             Some(value) => value,
             None => return Ok(false),
@@ -805,8 +817,9 @@ impl PasteService {
         if had_directory {
             std::fs::rename(&directory, &staged).map_err(|e| e.to_string())?;
         }
-        match sqlx::query("DELETE FROM pastes WHERE id=$1")
+        match sqlx::query("DELETE FROM pastes WHERE id=$1 AND ($2 IS NULL OR revision=$2)")
             .bind(id)
+            .bind(expected_revision)
             .execute(self.storage.pool())
             .await
         {
@@ -820,7 +833,11 @@ impl PasteService {
                 if had_directory {
                     let _ = std::fs::rename(staged, directory);
                 }
-                Ok(false)
+                if expected_revision.is_some() {
+                    Err("Paste revision changed".into())
+                } else {
+                    Ok(false)
+                }
             }
             Err(error) => {
                 if had_directory {
@@ -836,6 +853,7 @@ impl PasteService {
         principal: &Principal,
         id: &str,
         inputs: &[(String, String, i64)],
+        expected_revision: Option<i64>,
     ) -> Result<Vec<Attachment>, String> {
         let _write_guard = self.storage.lock_writes().await;
         let paste = self.find_paste(id).await?.ok_or("Paste not found")?;
@@ -886,12 +904,20 @@ impl PasteService {
                 size_bytes: *size_bytes,
             });
         }
-        sqlx::query("UPDATE pastes SET updated_at=$2,revision=revision+1 WHERE id=$1")
-            .bind(&paste.id)
-            .bind(unix_timestamp())
-            .execute(&mut *tx)
-            .await
-            .map_err(|error| error.to_string())?;
+        let changed = sqlx::query(
+            "UPDATE pastes SET updated_at=$2,revision=revision+1
+             WHERE id=$1 AND ($3 IS NULL OR revision=$3)",
+        )
+        .bind(&paste.id)
+        .bind(unix_timestamp())
+        .bind(expected_revision)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| error.to_string())?
+        .rows_affected();
+        if changed == 0 {
+            return Err("Paste revision changed".into());
+        }
         tx.commit().await.map_err(|e| e.to_string())?;
         Ok(attachments)
     }
@@ -901,6 +927,7 @@ impl PasteService {
         principal: &Principal,
         id: &str,
         attachment_id: i64,
+        expected_revision: Option<i64>,
     ) -> Result<bool, String> {
         let paste = self.find_paste(id).await?.ok_or("Paste not found")?;
         authorize_owner(principal, &paste, "paste:write")?;
@@ -944,12 +971,20 @@ impl PasteService {
                 .map_err(|error| error.to_string())?
                 .rows_affected();
             if affected == 1 {
-                sqlx::query("UPDATE pastes SET updated_at=$2,revision=revision+1 WHERE id=$1")
-                    .bind(&paste.id)
-                    .bind(unix_timestamp())
-                    .execute(&mut *transaction)
-                    .await
-                    .map_err(|error| error.to_string())?;
+                let changed = sqlx::query(
+                    "UPDATE pastes SET updated_at=$2,revision=revision+1
+                     WHERE id=$1 AND ($3 IS NULL OR revision=$3)",
+                )
+                .bind(&paste.id)
+                .bind(unix_timestamp())
+                .bind(expected_revision)
+                .execute(&mut *transaction)
+                .await
+                .map_err(|error| error.to_string())?
+                .rows_affected();
+                if changed == 0 {
+                    return Err("Paste revision changed".into());
+                }
             }
             transaction
                 .commit()

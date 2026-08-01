@@ -194,7 +194,48 @@ pub(super) async fn backend_contract(repo: Repository) {
     };
     assert_eq!(
         services
-            .update_paste(&owner, &public.id, &update)
+            .update_paste(&owner, &public.id, &update, None)
+            .await
+            .unwrap()
+            .unwrap()
+            .title,
+        "updated title"
+    );
+    let paste_count_before: i64 = sqlx::query_scalar("SELECT count(*) FROM pastes")
+        .fetch_one(repo.pool())
+        .await
+        .unwrap();
+    let expired_input = PasteInput {
+        expires_at: Some(Some(crate::time::unix_timestamp())),
+        ..paste_input("already expired", "private")
+    };
+    assert_eq!(
+        services
+            .create_paste(&owner, &expired_input)
+            .await
+            .unwrap_err(),
+        "Expiration must be in the future"
+    );
+    let paste_count_after: i64 = sqlx::query_scalar("SELECT count(*) FROM pastes")
+        .fetch_one(repo.pool())
+        .await
+        .unwrap();
+    assert_eq!(paste_count_after, paste_count_before);
+    let invalid_update = PasteInput {
+        title: Some("must not persist".to_string()),
+        expires_at: Some(Some(crate::time::unix_timestamp())),
+        ..PasteInput::default()
+    };
+    assert_eq!(
+        services
+            .update_paste(&owner, &public.id, &invalid_update, None)
+            .await
+            .unwrap_err(),
+        "Expiration must be in the future"
+    );
+    assert_eq!(
+        services
+            .get_source(&owner, &public.id)
             .await
             .unwrap()
             .unwrap()
@@ -315,9 +356,53 @@ pub(super) async fn backend_contract(repo: Repository) {
             &owner,
             &cascade.id,
             &[("file.txt".to_string(), "stored-file".to_string(), 4)],
+            None,
         )
         .await
         .unwrap();
+    let attachment = services
+        .get_source(&owner, &cascade.id)
+        .await
+        .unwrap()
+        .unwrap()
+        .attachments
+        .into_iter()
+        .next()
+        .unwrap();
+    assert_eq!(
+        services
+            .add_attachments(
+                &owner,
+                &cascade.id,
+                &[("stale.txt".to_string(), "stale-file".to_string(), 5)],
+                Some(1),
+            )
+            .await
+            .unwrap_err(),
+        "Paste revision changed"
+    );
+    assert_eq!(
+        services
+            .delete_attachment(&owner, &cascade.id, attachment.id, Some(1))
+            .await
+            .unwrap_err(),
+        "Paste revision changed"
+    );
+    assert_eq!(
+        services
+            .delete_paste(&owner, &cascade.id, Some(1))
+            .await
+            .unwrap_err(),
+        "Paste revision changed"
+    );
+    let unchanged = services
+        .get_source(&owner, &cascade.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(unchanged.revision, 2);
+    assert_eq!(unchanged.attachments.len(), 1);
+    assert_eq!(unchanged.attachments[0].filename, "file.txt");
     let attached = services
         .list_pastes(
             &owner,
@@ -468,5 +553,8 @@ pub(super) async fn backend_contract(repo: Repository) {
         .await
         .unwrap()
         .is_none());
-    assert!(services.delete_paste(&owner, &unlisted.id).await.unwrap());
+    assert!(services
+        .delete_paste(&owner, &unlisted.id, None)
+        .await
+        .unwrap());
 }

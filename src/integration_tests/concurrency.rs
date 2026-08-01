@@ -87,8 +87,8 @@ pub(super) async fn concurrency_contract(repo: Repository) {
     let left_file = [("left.txt".to_string(), "left-store".to_string(), 1)];
     let right_file = [("right.txt".to_string(), "right-store".to_string(), 1)];
     let (left, right) = futures::join!(
-        services.add_attachments(&admin, &paste.id, &left_file),
-        services.add_attachments(&admin, &paste.id, &right_file)
+        services.add_attachments(&admin, &paste.id, &left_file, None),
+        services.add_attachments(&admin, &paste.id, &right_file, None)
     );
     assert!(left.is_ok());
     assert!(right.is_ok());
@@ -100,4 +100,33 @@ pub(super) async fn concurrency_contract(repo: Repository) {
     .await
     .unwrap();
     assert_eq!(positions, vec![0, 1]);
+
+    let paste = services
+        .create_paste(&admin, &paste_input("revision race", "private"))
+        .await
+        .unwrap();
+    let revision = paste.revision;
+    let left_update = PasteInput {
+        title: Some("left update".to_string()),
+        ..PasteInput::default()
+    };
+    let right_update = PasteInput {
+        title: Some("right update".to_string()),
+        ..PasteInput::default()
+    };
+    let (left, right) = futures::join!(
+        services.update_paste(&admin, &paste.id, &left_update, Some(revision)),
+        services.update_paste(&admin, &paste.id, &right_update, Some(revision))
+    );
+    assert_eq!([left, right].into_iter().filter(Result::is_ok).count(), 1);
+    let current = services
+        .get_source(&admin, &paste.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(current.revision, revision + 1);
+    assert!(matches!(
+        current.title.as_str(),
+        "left update" | "right update"
+    ));
 }

@@ -79,7 +79,7 @@ pub struct Attachment {
     pub size_bytes: i64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PasteInput {
     pub title: Option<String>,

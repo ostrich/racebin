@@ -86,9 +86,10 @@ async fn upload_attachments(
         Ok(paste) => paste,
         Err(e) => return error(StatusCode::NOT_FOUND, "not_found", e),
     };
-    if let Err(response) = super::pastes::require_match(&req, &paste) {
-        return response;
-    }
+    let expected_revision = match super::pastes::require_match(&req, &paste) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
     let directory = services
         .storage
         .data_dir
@@ -205,11 +206,21 @@ async fn upload_attachments(
         .iter()
         .map(|(_, _, name, storage_key, size)| (name.clone(), storage_key.clone(), *size))
         .collect::<Vec<_>>();
-    let attachments = match services.add_attachments(&value, &paste_id, &inputs).await {
+    let attachments = match services
+        .add_attachments(&value, &paste_id, &inputs, expected_revision)
+        .await
+    {
         Ok(attachments) => attachments,
         Err(e) => {
             for path in promoted {
                 let _ = std::fs::remove_file(path);
+            }
+            if e == "Paste revision changed" {
+                return error(
+                    StatusCode::PRECONDITION_FAILED,
+                    "precondition_failed",
+                    "Paste changed since it was loaded",
+                );
             }
             return error(StatusCode::BAD_REQUEST, "invalid_attachment", e);
         }
@@ -309,11 +320,12 @@ async fn delete_attachment(
         }
         Err(message) => return error(StatusCode::FORBIDDEN, "forbidden", message),
     };
-    if let Err(response) = super::pastes::require_match(&req, &current) {
-        return response;
-    }
+    let expected_revision = match super::pastes::require_match(&req, &current) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
     match services
-        .delete_attachment(&value, &paste_id, attachment_id)
+        .delete_attachment(&value, &paste_id, attachment_id, expected_revision)
         .await
     {
         Ok(true) => HttpResponse::NoContent().finish(),
@@ -321,6 +333,11 @@ async fn delete_attachment(
         Err(e) if e == "You do not own this paste" || e.starts_with("Missing ") => {
             error(StatusCode::FORBIDDEN, "forbidden", e)
         }
+        Err(e) if e == "Paste revision changed" => error(
+            StatusCode::PRECONDITION_FAILED,
+            "precondition_failed",
+            "Paste changed since it was loaded",
+        ),
         Err(e) => internal(e),
     }
 }

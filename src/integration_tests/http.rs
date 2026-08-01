@@ -249,6 +249,31 @@ mod tests {
         .await;
         assert_eq!(without_csrf.status(), StatusCode::FORBIDDEN);
 
+        let paste_count_before: i64 = sqlx::query_scalar("SELECT count(*) FROM pastes")
+            .fetch_one(repository.pool())
+            .await
+            .unwrap();
+        let expired = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/pastes")
+                .cookie(cookie.clone())
+                .insert_header(("X-CSRF-Token", csrf.as_str()))
+                .set_json(json!({
+                    "title":"expired",
+                    "body":{"format":"text","content":"body"},
+                    "expires_at":"1970-01-01T00:00:00Z"
+                }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(expired.status(), StatusCode::BAD_REQUEST);
+        let paste_count_after: i64 = sqlx::query_scalar("SELECT count(*) FROM pastes")
+            .fetch_one(repository.pool())
+            .await
+            .unwrap();
+        assert_eq!(paste_count_after, paste_count_before);
+
         let created_at = test::call_service(
             &app,
             test::TestRequest::post()

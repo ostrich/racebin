@@ -27,7 +27,7 @@ pub(super) fn authorize_owner(
     }
 }
 
-pub(super) fn validate_input(input: &PasteInput) -> Result<(), String> {
+pub(super) fn validate_input(input: &PasteInput, now: i64) -> Result<(), String> {
     if input
         .title
         .as_deref()
@@ -54,6 +54,12 @@ pub(super) fn validate_input(input: &PasteInput) -> Result<(), String> {
         .is_some_and(|value| value.is_some_and(|limit| limit <= 0))
     {
         return Err("Read limit must be positive or null".into());
+    }
+    if input
+        .expires_at
+        .is_some_and(|value| value.is_some_and(|expires_at| expires_at <= now))
+    {
+        return Err("Expiration must be in the future".into());
     }
     Ok(())
 }

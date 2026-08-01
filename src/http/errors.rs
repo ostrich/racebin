@@ -56,6 +56,7 @@ pub(super) fn paste_error(message: String) -> HttpResponse {
         "Content kind must",
         "Visibility must",
         "Read limit",
+        "Expiration",
         "URL content",
         "Rich-text",
         "Only rich-text",

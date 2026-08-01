@@ -274,7 +274,7 @@ pub(crate) async fn create_paste(
             if let Some(key) = idempotency_key.as_deref() {
                 let _ = services.clear_create_idempotency(&principal, key).await;
             }
-            let _ = services.delete_paste(&principal, &paste.id).await;
+            let _ = services.delete_paste(&principal, &paste.id, None).await;
             return error(
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "invalid_attachment",
@@ -405,14 +405,18 @@ pub(crate) async fn update_paste(
         }
         Err(message) => return error(StatusCode::FORBIDDEN, "forbidden", message),
     };
-    if let Err(response) = require_match(&req, &current) {
-        return response;
-    }
+    let expected_revision = match require_match(&req, &current) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
     let input = match body.into_inner().into_input() {
         Ok(value) => value,
         Err(message) => return error(StatusCode::UNPROCESSABLE_ENTITY, "invalid_paste", message),
     };
-    match services.update_paste(&principal, &paste_id, &input).await {
+    match services
+        .update_paste(&principal, &paste_id, &input, expected_revision)
+        .await
+    {
         Ok(Some(paste)) => resource_response(
             &req,
             &principal,
@@ -421,6 +425,11 @@ pub(crate) async fn update_paste(
             None,
         ),
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
+        Err(message) if message == "Paste revision changed" => error(
+            StatusCode::PRECONDITION_FAILED,
+            "precondition_failed",
+            "Paste changed since it was loaded",
+        ),
         Err(message) => paste_error(message),
     }
 }
@@ -446,10 +455,14 @@ pub(crate) async fn delete_paste(
         }
         Err(message) => return error(StatusCode::FORBIDDEN, "forbidden", message),
     };
-    if let Err(response) = require_match(&req, &current) {
-        return response;
-    }
-    match services.delete_paste(&principal, &paste_id).await {
+    let expected_revision = match require_match(&req, &current) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    match services
+        .delete_paste(&principal, &paste_id, expected_revision)
+        .await
+    {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
         Err(message)
@@ -457,6 +470,11 @@ pub(crate) async fn delete_paste(
         {
             error(StatusCode::FORBIDDEN, "forbidden", message)
         }
+        Err(message) if message == "Paste revision changed" => error(
+            StatusCode::PRECONDITION_FAILED,
+            "precondition_failed",
+            "Paste changed since it was loaded",
+        ),
         Err(message) => internal(message),
     }
 }
@@ -854,7 +872,7 @@ async fn promote_created_files(
         })
         .collect::<Vec<_>>();
     match services
-        .add_attachments(principal, &paste.id, &inputs)
+        .add_attachments(principal, &paste.id, &inputs, None)
         .await
     {
         Ok(_) => {
@@ -1012,7 +1030,7 @@ fn idempotency_key(req: &HttpRequest) -> Result<Option<String>, HttpResponse> {
 pub(crate) fn require_match(
     req: &HttpRequest,
     paste: &crate::services::Paste,
-) -> Result<(), HttpResponse> {
+) -> Result<Option<i64>, HttpResponse> {
     let Some(value) = req.headers().get(header::IF_MATCH) else {
         return Err(error(
             StatusCode::PRECONDITION_REQUIRED,
@@ -1021,12 +1039,13 @@ pub(crate) fn require_match(
         ));
     };
     let value = value.to_str().unwrap_or("");
-    if value == "*"
-        || value
-            .split(',')
-            .any(|candidate| candidate.trim() == dto::etag(paste))
+    if value == "*" {
+        Ok(None)
+    } else if value
+        .split(',')
+        .any(|candidate| candidate.trim() == dto::etag(paste))
     {
-        Ok(())
+        Ok(Some(paste.revision))
     } else {
         Err(error(
             StatusCode::PRECONDITION_FAILED,
