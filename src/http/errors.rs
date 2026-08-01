@@ -1,16 +1,17 @@
 use actix_web::http::{header, StatusCode};
 use actix_web::HttpResponse;
+use serde::Serialize;
+use utoipa::ToSchema;
 
-#[derive(serde::Serialize)]
-struct ErrorEnvelope {
-    error: ErrorBody,
-}
-
-#[derive(serde::Serialize)]
-struct ErrorBody {
-    code: &'static str,
-    message: String,
-    details: Option<serde_json::Value>,
+#[derive(Debug, Serialize, ToSchema)]
+pub(crate) struct ProblemDetails {
+    #[serde(rename = "type")]
+    pub problem_type: String,
+    pub title: String,
+    pub status: u16,
+    pub detail: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub errors: Option<serde_json::Value>,
 }
 
 pub(super) fn error(
@@ -18,14 +19,19 @@ pub(super) fn error(
     code: &'static str,
     message: impl Into<String>,
 ) -> HttpResponse {
+    let title = status
+        .canonical_reason()
+        .unwrap_or("Request failed")
+        .to_string();
     HttpResponse::build(status)
         .insert_header((header::CACHE_CONTROL, "no-store"))
-        .json(ErrorEnvelope {
-            error: ErrorBody {
-                code,
-                message: message.into(),
-                details: None,
-            },
+        .content_type("application/problem+json")
+        .json(ProblemDetails {
+            problem_type: format!("urn:racebin:problem:{code}"),
+            title,
+            status: status.as_u16(),
+            detail: message.into(),
+            errors: None,
         })
 }
 

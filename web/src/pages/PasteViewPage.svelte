@@ -26,7 +26,14 @@
   ));
 
   onMount(() => {
-    void requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}/consume`)
+    void requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}`)
+      .then(metadata => metadata.source_url
+        ? requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}/source`)
+        : requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}/reads`, {
+            method: "POST",
+            headers: { "Idempotency-Key": crypto.randomUUID() },
+            invalidateQueries: false
+          }))
       .then(result => { paste = result; })
       .catch(reason => {
         error = reason instanceof Error ? reason.message : "Unable to load paste";
@@ -39,6 +46,13 @@
     await navigator.clipboard.writeText(paste.content);
     showNotice("Paste copied.");
   }
+
+  function openRaw(): void {
+    if (!paste) return;
+    const url = URL.createObjectURL(new Blob([paste.content], { type: "text/plain;charset=utf-8" }));
+    window.open(url, "_blank", "noopener,noreferrer");
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
 </script>
 
 {#if paste}
@@ -46,9 +60,9 @@
       <div class="page-heading" class:has-view-options={showWrapOption}>
         <div><p class="eyebrow">{paste.visibility} · {pasteFormatLabel(paste)}</p><h1>{pasteDisplayTitle(paste)}</h1></div>
         <div class="actions">
-          <a class="button" href={`/api/v1/pastes/${encodeURIComponent(paste.id)}/raw`}>Raw</a>
+          <button class="button" type="button" onclick={openRaw}>Raw</button>
           <button class="button" type="button" onclick={copyContent}><Icon name="copy"/> Copy</button>
-          {#if paste.attachments.length}<a class="button" href={`/api/v1/pastes/${encodeURIComponent(paste.id)}/archive`}>ZIP</a>{/if}
+          {#if paste.archive_url}<a class="button" href={paste.archive_url}>ZIP</a>{/if}
           {#if $appState.config.qr_codes_enabled}<a class="button" href={`/api/v1/pastes/${encodeURIComponent(paste.id)}/qr`}>QR</a>{/if}
           {#if own}<Link class="button primary" href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/> Edit</Link>{/if}
         </div>

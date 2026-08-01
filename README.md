@@ -78,7 +78,7 @@ All settings have equivalent `RACEBIN_*` environment variables.
 See the [architecture overview](docs/architecture.md),
 [database guide](docs/database.md), [account guide](docs/accounts.md),
 [API guide](docs/api.md), and [testing guide](docs/testing.md). The running
-server also exposes a machine-readable route list at `/api/v1/openapi.json`.
+server also exposes generated OpenAPI documentation at `/api/v1/openapi.json`.
 Signed-in users can open Help in the site navigation for API-key setup,
 privilege descriptions, and commands tailored to the current installation.
 

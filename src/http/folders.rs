@@ -9,7 +9,7 @@ struct FolderInput {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct MovePastesInput {
-    paste_ids: Vec<String>,
+    ids: Vec<String>,
     folder_id: Option<i64>,
 }
 
@@ -94,7 +94,7 @@ async fn delete_folder(
     }
 }
 
-#[patch("/pastes/folder")]
+#[patch("/pastes")]
 async fn move_pastes(
     req: HttpRequest,
     services: web::Data<PasteService>,
@@ -108,7 +108,7 @@ async fn move_pastes(
         Err(response) => return response,
     };
     match services
-        .move_pastes(&value, &body.paste_ids, body.folder_id)
+        .move_pastes(&value, &body.ids, body.folder_id)
         .await
     {
         Ok(()) => HttpResponse::NoContent().finish(),

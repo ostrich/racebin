@@ -9,23 +9,25 @@
       `curl -X POST "${origin}/api/v1/pastes" \\`,
       `  -H "Authorization: Bearer $RACEBIN_API_KEY" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '{"title":"Example","content":"Hello","language":"plaintext","visibility":"unlisted"}'`
+      `  -d '{"title":"Example","body":{"format":"text","content":"Hello","language":"plaintext"},"visibility":"unlisted"}'`
     )],
-    ["List your pastes", command(`curl "${origin}/api/v1/pastes?mine=true" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`)],
-    ["Read a paste", command(`curl "${origin}/api/v1/pastes/PASTE_ID" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`)],
+    ["List your pastes", command(`curl "${origin}/api/v1/pastes?owner=me" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`)],
+    ["Read a paste", command(`curl -X POST "${origin}/api/v1/pastes/PASTE_ID/reads" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`, `  -H "Idempotency-Key: $(uuidgen)"`)],
     ["Update a paste", command(
       `curl -X PATCH "${origin}/api/v1/pastes/PASTE_ID" \\`,
       `  -H "Authorization: Bearer $RACEBIN_API_KEY" \\`,
+      `  -H "If-Match: *" \\`,
       `  -H "Content-Type: application/json" \\`,
       `  -d '{"title":"Updated title","visibility":"public"}'`
     )],
-    ["Download raw text", command(`curl "${origin}/api/v1/pastes/PASTE_ID/raw" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`)],
+    ["Read plain text", command(`curl -X POST "${origin}/api/v1/pastes/PASTE_ID/reads" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`, `  -H "Accept: text/plain"`)],
     ["Upload an attachment", command(
       `curl -X POST "${origin}/api/v1/pastes/PASTE_ID/attachments" \\`,
       `  -H "Authorization: Bearer $RACEBIN_API_KEY" \\`,
-      `  -F "files=@./example.txt"`
+      `  -H "If-Match: *" \\`,
+      `  -F "file=@./example.txt"`
     )],
-    ["Delete a paste", command(`curl -X DELETE "${origin}/api/v1/pastes/PASTE_ID" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`)]
+    ["Delete a paste", command(`curl -X DELETE "${origin}/api/v1/pastes/PASTE_ID" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY" \\`, `  -H "If-Match: *"`)]
   ] as const;
 
   async function copy(value: string): Promise<void> {

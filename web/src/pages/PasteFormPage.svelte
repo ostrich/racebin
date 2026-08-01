@@ -14,7 +14,7 @@
   import type { Folder, FolderOverview, Paste, RichTextDocument } from "../types";
 
   type ContentKind = "text" | "rich_text";
-  type Conversion = { content: string; document: RichTextDocument | null };
+  type Conversion = { body: { format: ContentKind; content: string; language?: string; plain_text?: string } };
 
   let { pasteId }: { pasteId?: string } = $props();
   let paste = $state<Paste | null>(null);
@@ -25,6 +25,7 @@
   let title = $state("");
   let content = $state("");
   let document = $state<RichTextDocument>({ type: "doc", content: [{ type: "paragraph" }] });
+  let richHtml = $state("");
   let contentKind = $state<ContentKind>("text");
   let folderId = $state("");
   let folders = $state<Folder[]>([]);
@@ -55,7 +56,7 @@
 
   function snapshot(): string {
     return JSON.stringify({
-      title, content, document: contentKind === "rich_text" ? document : null,
+      title, content, richHtml: contentKind === "rich_text" ? richHtml : null,
       contentKind, folderId, language: contentKind === "text" ? language : null,
       visibility, expiresAt, readLimit, attachmentSelection
     });
@@ -72,6 +73,7 @@
     title = source?.title ?? "";
     content = source?.content ?? "";
     document = source?.document ?? { type: "doc", content: [{ type: "paragraph" }] };
+    richHtml = typeof source?.document === "string" ? source.document : "";
     contentKind = source?.content_kind ?? "text";
     folderId = source?.folder_id ? String(source.folder_id) : (
       source ? "" : new URLSearchParams(location.search).get("folder_id") ?? ""
@@ -100,7 +102,7 @@
       loading = false;
       return;
     }
-    void requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}`)
+    void requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}/source`)
       .then(initialize)
       .catch(reason => { error = reason instanceof Error ? reason.message : "Unable to load paste"; })
       .finally(() => {
@@ -113,14 +115,14 @@
     sourceKind: "text" | "rich_text",
     targetKind: "text" | "rich_text"
   ): Promise<Conversion> {
-    return requestApi<Conversion>("/pastes/convert", {
+    return requestApi<Conversion>("/content-conversions", {
       method: "POST",
       invalidateQueries: false,
       body: JSON.stringify({
-        source_kind: sourceKind,
-        target_kind: targetKind,
-        content,
-        document: sourceKind === "rich_text" ? document : null
+        source: sourceKind === "rich_text"
+          ? { format: "rich_text", content: richHtml }
+          : { format: "text", content, language },
+        target_format: targetKind
       })
     });
   }
@@ -135,14 +137,17 @@
     try {
       if (source === "rich_text") {
         const converted = await convert("rich_text", "text");
-        if (converted.content && !(await conversionDialog.ask(target, converted.content))) return;
-        drafts.set(target, converted.content);
-        content = converted.content;
+        const convertedText = converted.body.content;
+        if (convertedText && !(await conversionDialog.ask(target, convertedText))) return;
+        drafts.set(target, convertedText);
+        content = convertedText;
       } else if (target === "rich_text") {
         drafts.set(source, content);
         const converted = await convert("text", "rich_text");
-        if (converted.content && !(await conversionDialog.ask(target, converted.content))) return;
-        document = converted.document ?? { type: "doc", content: [{ type: "paragraph" }] };
+        const convertedHtml = converted.body.content;
+        if (convertedHtml && !(await conversionDialog.ask(target, content))) return;
+        document = convertedHtml;
+        richHtml = convertedHtml;
       }
       contentKind = target;
     } catch (reason) {
@@ -168,35 +173,52 @@
     try {
       const body = {
         title,
-        content,
-        document: contentKind === "rich_text" ? document : undefined,
-        content_kind: contentKind,
-        language: canonicalLanguage,
+        body: contentKind === "rich_text"
+          ? { format: "rich_text", content: richHtml }
+          : { format: "text", content, language: canonicalLanguage },
         visibility,
-        expires_at: expiresAt ? Math.floor(new Date(expiresAt).getTime() / 1000) : null,
+        expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
         read_limit: readLimit ? Number(readLimit) : null,
         ...(canOrganize ? { folder_id: folderId ? Number(folderId) : null } : {})
       };
-      created = pasteId
-        ? await requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}`, {
-            method: "PATCH", body: JSON.stringify(body)
-          })
-        : await requestApi<Paste>("/pastes", { method: "POST", body: JSON.stringify(body) });
       const selected = [...(files?.files ?? [])];
-      if (selected.length) {
+      if (pasteId) {
+        created = await requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}`, {
+          method: "PATCH",
+          headers: { "If-Match": paste?._etag ?? "*" },
+          body: JSON.stringify(body)
+        });
+      } else if (selected.length) {
         const upload = new FormData();
-        selected.forEach(file => upload.append("attachments", file));
-        try {
-          await requestApi(`/pastes/${encodeURIComponent(created.id)}/attachments`, {
-            method: "POST", body: upload
-          });
-        } catch (reason) {
-          if (!pasteId) {
-            await requestApi(`/pastes/${encodeURIComponent(created.id)}`, { method: "DELETE" })
-              .catch(() => undefined);
-          }
-          throw reason;
-        }
+        upload.append("title", title);
+        upload.append("format", contentKind);
+        upload.append("content", contentKind === "rich_text" ? richHtml : content);
+        if (contentKind === "text") upload.append("language", canonicalLanguage);
+        upload.append("visibility", visibility);
+        if (expiresAt) upload.append("expires_at", new Date(expiresAt).toISOString());
+        if (readLimit) upload.append("read_limit", readLimit);
+        if (canOrganize && folderId) upload.append("folder_id", folderId);
+        selected.forEach(file => upload.append("file", file));
+        created = await requestApi<Paste>("/pastes", {
+          method: "POST",
+          headers: { "Idempotency-Key": crypto.randomUUID() },
+          body: upload
+        });
+      } else {
+        created = await requestApi<Paste>("/pastes", {
+          method: "POST",
+          headers: { "Idempotency-Key": crypto.randomUUID() },
+          body: JSON.stringify(body)
+        });
+      }
+      if (pasteId && selected.length) {
+        const upload = new FormData();
+        selected.forEach(file => upload.append("file", file));
+        await requestApi(`/pastes/${encodeURIComponent(created.id)}/attachments`, {
+          method: "POST",
+          headers: { "If-Match": created._etag ?? "*" },
+          body: upload
+        });
       }
       initialized = false;
       guardUnsavedChanges();
@@ -211,7 +233,9 @@
   async function deletePaste(): Promise<void> {
     if (!pasteId || !confirm("Delete this paste permanently?")) return;
     try {
-      await requestApi(`/pastes/${encodeURIComponent(pasteId)}`, { method: "DELETE" });
+      await requestApi(`/pastes/${encodeURIComponent(pasteId)}`, {
+        method: "DELETE", headers: { "If-Match": paste?._etag ?? "*" }
+      });
       initialized = false;
       guardUnsavedChanges();
       await navigate("/pastes");
@@ -237,7 +261,7 @@
             use:trackEditorResize>
             {#await import("../components/RichTextEditor.svelte") then module}
               {@const RichTextEditor = module.default}
-              <RichTextEditor bind:document/>
+              <RichTextEditor bind:document bind:html={richHtml}/>
             {/await}
           </div>
         </div>

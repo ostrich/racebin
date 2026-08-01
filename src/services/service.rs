@@ -4,10 +4,13 @@ use sqlx::{Any, Executor};
 use std::collections::HashSet;
 use uuid::Uuid;
 
-use super::model::{Attachment, Folder, FolderOverview, Page, Paste, PasteInput, PasteQuery};
+use super::model::{
+    Attachment, Folder, FolderOverview, Page, Paste, PasteInput, PasteQuery, PasteRead,
+};
 use super::rich_text::validate_document;
 use super::validation::{authorize_owner, can_read, validate_input};
 use crate::time::unix_timestamp;
+use sha2::{Digest, Sha256};
 
 #[derive(Clone)]
 pub struct PasteService {
@@ -104,7 +107,8 @@ impl PasteService {
             "DESC"
         };
         let filter = format!(
-            "(($1=1) OR (($2 IS NULL AND visibility='public') OR
+            "consumed_at IS NULL
+             AND (($1=1) OR (($2 IS NULL AND visibility='public') OR
               ($2 IS NOT NULL AND (visibility='public' OR owner_id=$2))))
              AND ($3 IS NULL OR visibility=$3)
              AND ($4 IS NULL OR owner_id=$4)
@@ -162,7 +166,8 @@ impl PasteService {
             .map_err(|e| e.to_string())?;
         let items = sqlx::query_as::<_, Paste>(&format!(
             "SELECT id,owner_id,folder_id,title,substr(content,1,500) AS content,NULL AS document_json,
-                    content_kind,language,visibility,created_at,expires_at,last_read_at,read_count,read_limit,
+                    content_kind,language,visibility,created_at,updated_at,revision,consumed_at,
+                    expires_at,last_read_at,read_count,read_limit,
                     (SELECT count(*) FROM attachments summary_files
                      WHERE summary_files.paste_id=pastes.id) AS attachment_count,
                     {total_size} AS size_bytes
@@ -215,11 +220,23 @@ impl PasteService {
             .map(|paste| redact_folder(principal, paste, false)))
     }
 
+    pub async fn get_source(
+        &self,
+        principal: &Principal,
+        id: &str,
+    ) -> Result<Option<Paste>, String> {
+        let Some(paste) = self.find_paste(id).await? else {
+            return Ok(None);
+        };
+        authorize_owner(principal, &paste, "paste:read")?;
+        Ok(Some(redact_folder(principal, paste, false)))
+    }
+
     async fn find_paste(&self, id: &str) -> Result<Option<Paste>, String> {
         let mut paste = sqlx::query_as::<_, Paste>(
             "SELECT id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,created_at,
-                    expires_at,last_read_at,read_count,read_limit
-             FROM pastes WHERE id=$1 AND (expires_at IS NULL OR expires_at>$2)",
+                    updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
+             FROM pastes WHERE id=$1 AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at>$2)",
         )
         .bind(id)
         .bind(unix_timestamp())
@@ -234,11 +251,12 @@ impl PasteService {
         Ok(paste)
     }
 
-    pub async fn consume_paste(
+    pub async fn read_paste(
         &self,
         principal: &Principal,
         id: &str,
-    ) -> Result<Option<Paste>, String> {
+        idempotency_key: Option<&str>,
+    ) -> Result<Option<PasteRead>, String> {
         let _write_guard = self.storage.lock_writes().await;
         let mut tx = self
             .storage
@@ -246,6 +264,32 @@ impl PasteService {
             .begin()
             .await
             .map_err(|e| e.to_string())?;
+        let now = unix_timestamp();
+        let key_hash = idempotency_key.map(hash_token);
+        if let Some(key_hash) = key_hash.as_deref() {
+            let replay: Option<i64> = sqlx::query_scalar(
+                "SELECT 1 FROM paste_read_receipts WHERE paste_id=$1 AND key_hash=$2 AND expires_at>$3",
+            )
+            .bind(id)
+            .bind(key_hash)
+            .bind(now)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|error| error.to_string())?;
+            if replay.is_some() {
+                let Some(mut paste) = load_paste_for_read(&mut tx, principal, id).await? else {
+                    return Ok(None);
+                };
+                let grant_token = create_read_grant(&mut tx, &paste, now).await?;
+                paste = redact_folder(principal, paste, false);
+                tx.commit().await.map_err(|error| error.to_string())?;
+                return Ok(Some(PasteRead {
+                    paste,
+                    grant_token,
+                    replayed: true,
+                }));
+            }
+        }
         let lock = if self.storage.kind() == crate::repository::DatabaseKind::Postgres {
             " FOR UPDATE"
         } else {
@@ -253,11 +297,11 @@ impl PasteService {
         };
         let mut paste = sqlx::query_as::<_, Paste>(&format!(
             "SELECT id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,created_at,
-                    expires_at,last_read_at,read_count,read_limit
-             FROM pastes WHERE id=$1 AND (expires_at IS NULL OR expires_at>$2){lock}"
+                    updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
+             FROM pastes WHERE id=$1 AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at>$2){lock}"
         ))
         .bind(id)
-        .bind(unix_timestamp())
+        .bind(now)
         .fetch_optional(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -272,27 +316,85 @@ impl PasteService {
         paste.attachment_count = paste.attachments.len() as i64;
         paste.size_bytes = paste_size(&paste);
         if consumed {
-            sqlx::query("DELETE FROM pastes WHERE id=$1")
+            sqlx::query("UPDATE pastes SET read_count=$2,last_read_at=$3,consumed_at=$3,updated_at=$3,revision=revision+1 WHERE id=$1")
                 .bind(&paste.id)
+                .bind(next_reads)
+                .bind(now)
                 .execute(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
         } else {
-            sqlx::query("UPDATE pastes SET read_count=$2,last_read_at=$3 WHERE id=$1")
+            sqlx::query("UPDATE pastes SET read_count=$2,last_read_at=$3,updated_at=$3,revision=revision+1 WHERE id=$1")
                 .bind(&paste.id)
                 .bind(next_reads)
-                .bind(unix_timestamp())
+                .bind(now)
                 .execute(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
         }
-        tx.commit().await.map_err(|e| e.to_string())?;
-        if consumed {
-            let _ =
-                std::fs::remove_dir_all(self.storage.data_dir.join("attachments").join(&paste.id));
+        if let Some(key_hash) = key_hash.as_deref() {
+            sqlx::query(
+                "INSERT INTO paste_read_receipts(paste_id,key_hash,expires_at) VALUES($1,$2,$3)",
+            )
+            .bind(&paste.id)
+            .bind(key_hash)
+            .bind(now + 900)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| error.to_string())?;
         }
+        let grant_token = create_read_grant(&mut tx, &paste, now).await?;
+        tx.commit().await.map_err(|e| e.to_string())?;
         paste.read_count = next_reads;
-        Ok(Some(redact_folder(principal, paste, false)))
+        paste.last_read_at = Some(now);
+        paste.updated_at = paste.last_read_at.unwrap_or(paste.updated_at);
+        paste.revision += 1;
+        paste.consumed_at = consumed.then_some(paste.updated_at);
+        Ok(Some(PasteRead {
+            paste: redact_folder(principal, paste, false),
+            grant_token,
+            replayed: false,
+        }))
+    }
+
+    pub async fn valid_read_grant(&self, paste_id: &str, token: &str) -> Result<bool, String> {
+        let found: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM paste_read_grants WHERE paste_id=$1 AND token_hash=$2 AND expires_at>$3",
+        )
+        .bind(paste_id)
+        .bind(hash_token(token))
+        .bind(unix_timestamp())
+        .fetch_optional(self.storage.pool())
+        .await
+        .map_err(|error| error.to_string())?;
+        Ok(found.is_some())
+    }
+
+    pub async fn get_paste_with_grant(
+        &self,
+        id: &str,
+        token: &str,
+    ) -> Result<Option<Paste>, String> {
+        if !self.valid_read_grant(id, token).await? {
+            return Ok(None);
+        }
+        let mut paste = sqlx::query_as::<_, Paste>(
+            "SELECT id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,
+                    created_at,updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
+             FROM pastes WHERE id=$1",
+        )
+        .bind(id)
+        .fetch_optional(self.storage.pool())
+        .await
+        .map_err(|error| error.to_string())?;
+        if let Some(paste) = &mut paste {
+            paste.attachments = self.load_attachments(id).await?;
+            paste.attachment_count = paste.attachments.len() as i64;
+            paste.size_bytes = paste_size(paste);
+            paste.folder_id = None;
+            paste.owner_id = None;
+        }
+        Ok(paste)
     }
 
     pub async fn ensure_can_update(
@@ -302,6 +404,16 @@ impl PasteService {
     ) -> Result<Paste, String> {
         let paste = self.find_paste(id).await?.ok_or("Paste not found")?;
         authorize_owner(principal, &paste, "paste:write")?;
+        Ok(paste)
+    }
+
+    pub async fn ensure_can_delete(
+        &self,
+        principal: &Principal,
+        id: &str,
+    ) -> Result<Paste, String> {
+        let paste = self.find_paste(id).await?.ok_or("Paste not found")?;
+        authorize_owner(principal, &paste, "paste:delete")?;
         Ok(paste)
     }
 
@@ -327,8 +439,8 @@ impl PasteService {
         self.validate_folder_owner(owner, folder_id).await?;
         sqlx::query(
             "INSERT INTO pastes(id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,
-                               created_at,expires_at,last_read_at,read_count,read_limit)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$10,0,$12)",
+                               created_at,updated_at,revision,expires_at,last_read_at,read_count,read_limit)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10,1,$11,NULL,0,$12)",
         )
         .bind(&id)
         .bind(owner)
@@ -352,6 +464,89 @@ impl PasteService {
         self.get_paste(principal, &id)
             .await?
             .ok_or("Paste creation failed".into())
+    }
+
+    pub async fn create_paste_idempotent(
+        &self,
+        principal: &Principal,
+        input: &PasteInput,
+        idempotency_key: Option<&str>,
+        request_hash: &str,
+    ) -> Result<(Paste, bool), String> {
+        let Some(key) = idempotency_key else {
+            return self
+                .create_paste(principal, input)
+                .await
+                .map(|paste| (paste, false));
+        };
+        let owner = principal.user_id().ok_or("Authentication required")?;
+        let _guard = self.storage.lock_writes().await;
+        let key_hash = hash_token(key);
+        let existing = sqlx::query(
+            "SELECT request_hash,paste_id FROM idempotency_records
+             WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2 AND expires_at>$3",
+        )
+        .bind(owner)
+        .bind(&key_hash)
+        .bind(unix_timestamp())
+        .fetch_optional(self.storage.pool())
+        .await
+        .map_err(|error| error.to_string())?;
+        if let Some(row) = existing {
+            use sqlx::Row;
+            let stored_hash: String = row
+                .try_get("request_hash")
+                .map_err(|error| error.to_string())?;
+            if stored_hash != request_hash {
+                return Err("Idempotency key was already used with a different request".into());
+            }
+            let paste_id: Option<String> =
+                row.try_get("paste_id").map_err(|error| error.to_string())?;
+            let paste_id = paste_id.ok_or("Idempotency resource no longer exists")?;
+            let paste = self
+                .find_paste(&paste_id)
+                .await?
+                .filter(|paste| paste.owner_id == Some(owner))
+                .ok_or("Idempotency resource no longer exists")?;
+            return Ok((paste, true));
+        }
+        let paste = self.create_paste(principal, input).await?;
+        let now = unix_timestamp();
+        if let Err(error) = sqlx::query(
+            "INSERT INTO idempotency_records(user_id,operation,key_hash,request_hash,paste_id,created_at,expires_at)
+             VALUES($1,'create_paste',$2,$3,$4,$5,$6)",
+        )
+        .bind(owner)
+        .bind(key_hash)
+        .bind(request_hash)
+        .bind(&paste.id)
+        .bind(now)
+        .bind(now + 86400)
+        .execute(self.storage.pool())
+        .await
+        {
+            let _ = self.delete_paste(principal, &paste.id).await;
+            return Err(error.to_string());
+        }
+        Ok((paste, false))
+    }
+
+    pub async fn clear_create_idempotency(
+        &self,
+        principal: &Principal,
+        key: &str,
+    ) -> Result<(), String> {
+        let owner = principal.user_id().ok_or("Authentication required")?;
+        sqlx::query(
+            "DELETE FROM idempotency_records
+             WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2",
+        )
+        .bind(owner)
+        .bind(hash_token(key))
+        .execute(self.storage.pool())
+        .await
+        .map(|_| ())
+        .map_err(|error| error.to_string())
     }
 
     pub async fn update_paste(
@@ -398,7 +593,7 @@ impl PasteService {
              content_kind=$5,language=$6,visibility=coalesce($7,visibility),
              expires_at=CASE WHEN $8=1 THEN $9 ELSE expires_at END,
              read_limit=CASE WHEN $10=1 THEN $11 ELSE read_limit END,
-             folder_id=$12 WHERE id=$1",
+             folder_id=$12,updated_at=$13,revision=revision+1 WHERE id=$1",
         )
         .bind(id)
         .bind(input.title.as_deref().map(str::trim))
@@ -412,6 +607,7 @@ impl PasteService {
         .bind(i64::from(input.read_limit.is_some()))
         .bind(input.read_limit.flatten())
         .bind(folder_id)
+        .bind(unix_timestamp())
         .execute(self.storage.pool())
         .await
         .map_err(|e| e.to_string())?;
@@ -493,13 +689,35 @@ impl PasteService {
 
     pub async fn delete_folder(&self, principal: &Principal, id: i64) -> Result<bool, String> {
         let owner = folder_principal(principal, "paste:write")?;
-        sqlx::query("DELETE FROM folders WHERE id=$1 AND owner_id=$2")
+        let mut transaction = self
+            .storage
+            .pool()
+            .begin()
+            .await
+            .map_err(|error| error.to_string())?;
+        sqlx::query(
+            "UPDATE pastes SET folder_id=NULL,updated_at=$3,revision=revision+1
+             WHERE folder_id=$1 AND owner_id=$2",
+        )
+        .bind(id)
+        .bind(owner)
+        .bind(unix_timestamp())
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| error.to_string())?;
+        let deleted = sqlx::query("DELETE FROM folders WHERE id=$1 AND owner_id=$2")
             .bind(id)
             .bind(owner)
-            .execute(self.storage.pool())
+            .execute(&mut *transaction)
             .await
-            .map(|result| result.rows_affected() == 1)
-            .map_err(|error| error.to_string())
+            .map_err(|error| error.to_string())?
+            .rows_affected()
+            == 1;
+        transaction
+            .commit()
+            .await
+            .map_err(|error| error.to_string())?;
+        Ok(deleted)
     }
 
     pub async fn move_pastes(
@@ -525,14 +743,18 @@ impl PasteService {
             .await
             .map_err(|e| e.to_string())?;
         for id in paste_ids {
-            let changed = sqlx::query("UPDATE pastes SET folder_id=$3 WHERE id=$1 AND owner_id=$2")
-                .bind(id)
-                .bind(owner)
-                .bind(folder_id)
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| e.to_string())?
-                .rows_affected();
+            let changed = sqlx::query(
+                "UPDATE pastes SET folder_id=$3,updated_at=$4,revision=revision+1
+                 WHERE id=$1 AND owner_id=$2",
+            )
+            .bind(id)
+            .bind(owner)
+            .bind(folder_id)
+            .bind(unix_timestamp())
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?
+            .rows_affected();
             if changed != 1 {
                 return Err("One or more pastes were not found".into());
             }
@@ -664,6 +886,12 @@ impl PasteService {
                 size_bytes: *size_bytes,
             });
         }
+        sqlx::query("UPDATE pastes SET updated_at=$2,revision=revision+1 WHERE id=$1")
+            .bind(&paste.id)
+            .bind(unix_timestamp())
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| error.to_string())?;
         tx.commit().await.map_err(|e| e.to_string())?;
         Ok(attachments)
     }
@@ -702,12 +930,34 @@ impl PasteService {
         if existed {
             std::fs::rename(&path, &staged).map_err(|e| e.to_string())?;
         }
-        let result = sqlx::query("DELETE FROM attachments WHERE id=$1")
-            .bind(attachment_id)
-            .execute(self.storage.pool())
+        let mut transaction = self
+            .storage
+            .pool()
+            .begin()
             .await
-            .map(|result| result.rows_affected())
-            .map_err(|e| e.to_string());
+            .map_err(|error| error.to_string())?;
+        let result = async {
+            let affected = sqlx::query("DELETE FROM attachments WHERE id=$1")
+                .bind(attachment_id)
+                .execute(&mut *transaction)
+                .await
+                .map_err(|error| error.to_string())?
+                .rows_affected();
+            if affected == 1 {
+                sqlx::query("UPDATE pastes SET updated_at=$2,revision=revision+1 WHERE id=$1")
+                    .bind(&paste.id)
+                    .bind(unix_timestamp())
+                    .execute(&mut *transaction)
+                    .await
+                    .map_err(|error| error.to_string())?;
+            }
+            transaction
+                .commit()
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok::<u64, String>(affected)
+        }
+        .await;
         match result {
             Ok(1) => {
                 if existed {
@@ -797,6 +1047,52 @@ fn normalized_content(
     }
 }
 
+fn hash_token(token: &str) -> String {
+    format!("{:x}", Sha256::digest(token.as_bytes()))
+}
+
+async fn load_paste_for_read(
+    transaction: &mut sqlx::Transaction<'_, Any>,
+    principal: &Principal,
+    id: &str,
+) -> Result<Option<Paste>, String> {
+    let mut paste = sqlx::query_as::<_, Paste>(
+        "SELECT id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,
+                created_at,updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
+         FROM pastes WHERE id=$1",
+    )
+    .bind(id)
+    .fetch_optional(&mut **transaction)
+    .await
+    .map_err(|error| error.to_string())?;
+    let Some(mut paste) = paste.take().filter(|paste| can_read(principal, paste)) else {
+        return Ok(None);
+    };
+    paste.attachments = load_attachments_from(&mut **transaction, id).await?;
+    paste.attachment_count = paste.attachments.len() as i64;
+    paste.size_bytes = paste_size(&paste);
+    Ok(Some(paste))
+}
+
+async fn create_read_grant(
+    transaction: &mut sqlx::Transaction<'_, Any>,
+    paste: &Paste,
+    now: i64,
+) -> Result<Option<String>, String> {
+    if paste.read_limit.is_none() || paste.attachments.is_empty() {
+        return Ok(None);
+    }
+    let token = format!("rbg_{}", Uuid::new_v4().simple());
+    sqlx::query("INSERT INTO paste_read_grants(token_hash,paste_id,expires_at) VALUES($1,$2,$3)")
+        .bind(hash_token(&token))
+        .bind(&paste.id)
+        .bind(now + 900)
+        .execute(&mut **transaction)
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(Some(token))
+}
+
 async fn load_attachments_from<'e, E>(
     executor: E,
     paste_id: &str,
@@ -848,6 +1144,9 @@ mod tests {
             language: "plaintext".to_string(),
             visibility: "private".to_string(),
             created_at: 0,
+            updated_at: 0,
+            revision: 1,
+            consumed_at: None,
             expires_at: None,
             last_read_at: None,
             read_count: 0,
@@ -917,17 +1216,26 @@ mod tests {
         });
         let services = PasteService::new(repository.clone());
         let consumed = services
-            .consume_paste(&principal, "limited")
+            .read_paste(&principal, "limited", None)
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(consumed.content, "secret");
-        let remaining: i64 = sqlx::query_scalar("SELECT count(*) FROM pastes WHERE id=$1")
-            .bind("limited")
-            .fetch_one(repository.pool())
-            .await
-            .unwrap();
+        assert_eq!(consumed.paste.content, "secret");
+        let remaining: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM pastes WHERE id=$1 AND consumed_at IS NULL")
+                .bind("limited")
+                .fetch_one(repository.pool())
+                .await
+                .unwrap();
         assert_eq!(remaining, 0);
+        let tombstone: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM pastes WHERE id=$1 AND consumed_at IS NOT NULL",
+        )
+        .bind("limited")
+        .fetch_one(repository.pool())
+        .await
+        .unwrap();
+        assert_eq!(tombstone, 1);
         let _ = std::fs::remove_dir_all(path);
     }
 }

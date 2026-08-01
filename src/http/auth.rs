@@ -1,7 +1,7 @@
 use super::errors::{error, internal};
 use crate::account::{self as accounts, api_keys};
 use crate::services::{PasteService, Principal};
-use actix_web::http::StatusCode;
+use actix_web::http::{header, StatusCode};
 use actix_web::{HttpRequest, HttpResponse};
 
 pub(super) async fn principal(
@@ -14,7 +14,7 @@ pub(super) async fn principal(
             if message == "Password change required" {
                 error(StatusCode::FORBIDDEN, "password_change_required", message)
             } else if message.contains("authorization") || message.contains("bearer") {
-                error(StatusCode::UNAUTHORIZED, "invalid_token", message)
+                unauthorized("invalid_token", message)
             } else {
                 internal(message)
             }
@@ -63,14 +63,22 @@ async fn resolve_principal(
 
 pub(super) fn require_auth(principal: Principal) -> Result<Principal, HttpResponse> {
     if matches!(principal, Principal::Anonymous) {
-        Err(error(
-            StatusCode::UNAUTHORIZED,
+        Err(unauthorized(
             "authentication_required",
             "Authentication required",
         ))
     } else {
         Ok(principal)
     }
+}
+
+fn unauthorized(code: &'static str, detail: impl Into<String>) -> HttpResponse {
+    let mut response = error(StatusCode::UNAUTHORIZED, code, detail);
+    response.headers_mut().insert(
+        header::WWW_AUTHENTICATE,
+        header::HeaderValue::from_static("Bearer realm=\"Racebin API\""),
+    );
+    response
 }
 
 pub(super) fn require_mutation(

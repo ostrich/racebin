@@ -10,11 +10,11 @@ test("folders filter the workspace and carry into new pastes", async ({ page }) 
   const selectedPaste = page.getByRole("checkbox", { name: /Select JavaScript example/ });
   await selectedPaste.check();
   const moveRequest = page.waitForRequest(request =>
-    request.url().endsWith("/api/v1/pastes/folder") && request.method() === "PATCH"
+    request.url().endsWith("/api/v1/pastes") && request.method() === "PATCH"
   );
   await page.getByRole("button", { name: "Move 1" }).click();
   expect((await moveRequest).postDataJSON()).toEqual({
-    paste_ids: ["sample-paste"],
+    ids: ["sample-paste"],
     folder_id: null
   });
 

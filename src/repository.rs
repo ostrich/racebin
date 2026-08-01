@@ -90,18 +90,39 @@ impl Repository {
 
     pub async fn purge_expired(&self, now: i64) -> Result<usize, String> {
         let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
+        sqlx::query("DELETE FROM paste_read_grants WHERE expires_at<=$1")
+            .bind(now)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+        sqlx::query("DELETE FROM paste_read_receipts WHERE expires_at<=$1")
+            .bind(now)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+        sqlx::query("DELETE FROM idempotency_records WHERE expires_at<=$1")
+            .bind(now)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
         let paste_ids: Vec<String> = sqlx::query_scalar(
-            "SELECT id FROM pastes WHERE expires_at IS NOT NULL AND expires_at<=$1",
+            "SELECT id FROM pastes
+             WHERE (expires_at IS NOT NULL AND expires_at<=$1)
+                OR (consumed_at IS NOT NULL AND consumed_at<=$1-900)",
         )
         .bind(now)
         .fetch_all(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
-        sqlx::query("DELETE FROM pastes WHERE expires_at IS NOT NULL AND expires_at<=$1")
-            .bind(now)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
+        sqlx::query(
+            "DELETE FROM pastes
+             WHERE (expires_at IS NOT NULL AND expires_at<=$1)
+                OR (consumed_at IS NOT NULL AND consumed_at<=$1-900)",
+        )
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
         sqlx::query("DELETE FROM sessions WHERE expires_at<=$1")
             .bind(now)
             .execute(&mut *tx)
@@ -131,6 +152,23 @@ impl Repository {
         if let Ok(entries) = fs::read_dir(attachment_root) {
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().into_owned();
+                if name == ".staging" {
+                    if let Ok(staged) = fs::read_dir(entry.path()) {
+                        for file in staged.flatten() {
+                            let stale = file
+                                .metadata()
+                                .and_then(|metadata| metadata.modified())
+                                .and_then(|modified| {
+                                    modified.elapsed().map_err(std::io::Error::other)
+                                })
+                                .is_ok_and(|age| age.as_secs() >= 3600);
+                            if stale {
+                                let _ = fs::remove_file(file.path());
+                            }
+                        }
+                    }
+                    continue;
+                }
                 if entry.path().is_dir() && !valid.contains(&name) {
                     let _ = fs::remove_dir_all(entry.path());
                 }

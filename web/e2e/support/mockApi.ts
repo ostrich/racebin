@@ -80,7 +80,7 @@ export async function mockApi(
         ? { authenticated: true, user, csrf_token: "csrf" }
         : { authenticated: false });
     }
-    if (url.pathname === "/api/v1/config") {
+    if (url.pathname === "/api/v1/capabilities") {
       return json(route, { ...config, plain_home_enabled: options.plainHome ?? false });
     }
     if (url.pathname === "/api/v1/folders") {
@@ -104,17 +104,14 @@ export async function mockApi(
         return route.fulfill({ status: 204 });
       }
     }
-    if (url.pathname === "/api/v1/pastes/folder") return route.fulfill({ status: 204 });
-    if (url.pathname.endsWith("/consume")) return json(route, viewPaste);
+    if (url.pathname === "/api/v1/pastes" && route.request().method() === "PATCH") return route.fulfill({ status: 204 });
+    if (url.pathname.endsWith("/reads")) return json(route, viewPaste);
     if (url.pathname === "/api/v1/pastes/sample-paste") return json(route, viewPaste);
-    if (url.pathname === "/api/v1/pastes/convert") {
-      const body = route.request().postDataJSON() as { source_kind: string; content?: string };
-      return json(route, body.source_kind === "text"
-        ? {
-            content: body.content ?? "",
-            document: { type: "doc", content: [{ type: "paragraph", content: [] }] }
-          }
-        : { content: paste.content, document: null });
+    if (url.pathname === "/api/v1/content-conversions") {
+      const body = route.request().postDataJSON() as { source: { format: string; content: string }; target_format: string };
+      return json(route, body.target_format === "rich_text"
+        ? { body: { format: "rich_text", content: `<p>${body.source.content}</p>` } }
+        : { body: { format: "text", content: paste.content, language: "plaintext" } });
     }
     if (url.pathname === "/api/v1/account/api-keys") {
       return json(route, [{

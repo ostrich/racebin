@@ -18,11 +18,23 @@ export type AdminUser = User & {
 };
 
 export type Session = { authenticated: boolean; user?: User; csrf_token?: string };
-export type Attachment = { id: number; filename: string; size_bytes: number };
-export type RichTextDocument = Record<string, unknown>;
+export type Attachment = { id: number; filename: string; size_bytes: number; url?: string };
+export type RichTextDocument = Record<string, unknown> | string;
+
+export type PasteBody =
+  | { format: "text"; content: string; language: string }
+  | { format: "rich_text"; content: string; plain_text: string };
 
 export type Paste = {
   id: string;
+  url?: string;
+  api_url?: string;
+  read_url?: string;
+  source_url?: string;
+  archive_url?: string;
+  _etag?: string;
+  body?: PasteBody;
+  format?: "text" | "rich_text";
   owner_id: number | null;
   folder_id: number | null;
   title: string;
@@ -32,6 +44,7 @@ export type Paste = {
   language: string;
   visibility: "public" | "unlisted" | "private";
   created_at: number;
+  updated_at?: number;
   expires_at: number | null;
   last_read_at: number | null;
   read_count: number;

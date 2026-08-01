@@ -15,6 +15,10 @@ pub struct Paste {
     pub language: String,
     pub visibility: String,
     pub created_at: i64,
+    pub updated_at: i64,
+    pub revision: i64,
+    #[serde(skip)]
+    pub consumed_at: Option<i64>,
     pub expires_at: Option<i64>,
     pub last_read_at: Option<i64>,
     pub read_count: i64,
@@ -22,6 +26,13 @@ pub struct Paste {
     pub attachment_count: i64,
     pub size_bytes: i64,
     pub attachments: Vec<Attachment>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PasteRead {
+    pub paste: Paste,
+    pub grant_token: Option<String>,
+    pub replayed: bool,
 }
 
 impl<'r> FromRow<'r, AnyRow> for Paste {
@@ -41,6 +52,11 @@ impl<'r> FromRow<'r, AnyRow> for Paste {
             language: row.try_get("language")?,
             visibility: row.try_get("visibility")?,
             created_at: row.try_get("created_at")?,
+            updated_at: row
+                .try_get("updated_at")
+                .unwrap_or_else(|_| row.try_get("created_at").unwrap_or(0)),
+            revision: row.try_get("revision").unwrap_or(1),
+            consumed_at: row.try_get("consumed_at").unwrap_or(None),
             expires_at: row.try_get("expires_at")?,
             last_read_at: row.try_get("last_read_at")?,
             read_count: row.try_get("read_count")?,

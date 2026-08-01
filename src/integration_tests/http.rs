@@ -157,25 +157,23 @@ mod tests {
         let converted = test::call_service(
             &app,
             test::TestRequest::post()
-                .uri("/api/v1/pastes/convert")
+                .uri("/api/v1/content-conversions")
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
                 .set_json(json!({
-                    "source_kind":"text",
-                    "target_kind":"rich_text",
-                    "content":"INT. LAB - NIGHT\n\nADA\nWe should go.",
-                    "document":null
+                    "source":{"format":"text","content":"INT. LAB - NIGHT\n\nADA\nWe should go."},
+                    "target_format":"rich_text"
                 }))
                 .to_request(),
         )
         .await;
         assert_eq!(converted.status(), StatusCode::OK);
         let converted: Value = test::read_body_json(converted).await;
-        assert_eq!(converted["document"]["type"], "doc");
-        assert_eq!(
-            converted["content"],
-            "INT. LAB - NIGHT\n\nADA\nWe should go."
-        );
+        assert_eq!(converted["body"]["format"], "rich_text");
+        assert!(converted["body"]["content"]
+            .as_str()
+            .unwrap()
+            .contains("INT. LAB"));
 
         let unsafe_document = test::call_service(
             &app,
@@ -184,13 +182,17 @@ mod tests {
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
                 .set_json(json!({
-                    "content_kind":"rich_text",
-                    "document":{"type":"doc","content":[{"type":"script"}]}
+                    "body":{"format":"rich_text","content":"<script>alert(1)</script>"}
                 }))
                 .to_request(),
         )
         .await;
-        assert_eq!(unsafe_document.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(unsafe_document.status(), StatusCode::CREATED);
+        let sanitized: Value = test::read_body_json(unsafe_document).await;
+        assert!(!sanitized["body"]["content"]
+            .as_str()
+            .unwrap()
+            .contains("script"));
 
         let created_folder = test::call_service(
             &app,
@@ -208,10 +210,10 @@ mod tests {
         let moved = test::call_service(
             &app,
             test::TestRequest::patch()
-                .uri("/api/v1/pastes/folder")
+                .uri("/api/v1/pastes")
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
-                .set_json(json!({"paste_ids":[public.id],"folder_id":folder_id}))
+                .set_json(json!({"ids":[public.id],"folder_id":folder_id}))
                 .to_request(),
         )
         .await;
@@ -241,7 +243,7 @@ mod tests {
             test::TestRequest::post()
                 .uri("/api/v1/pastes")
                 .cookie(cookie.clone())
-                .set_json(json!({"title":"blocked","content":"body"}))
+                .set_json(json!({"title":"blocked","body":{"format":"text","content":"body"}}))
                 .to_request(),
         )
         .await;
@@ -253,7 +255,7 @@ mod tests {
                 .uri("/api/v1/pastes")
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
-                .set_json(json!({"title":"files","content":"body","visibility":"private"}))
+                .set_json(json!({"title":"files","body":{"format":"text","content":"body"},"visibility":"private"}))
                 .to_request(),
         )
         .await;
@@ -271,6 +273,7 @@ mod tests {
                 .uri(&format!("/api/v1/pastes/{id}/attachments"))
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
+                .insert_header(("If-Match", "*"))
                 .insert_header((
                     "Content-Type",
                     format!("multipart/form-data; boundary={boundary}"),
@@ -312,7 +315,7 @@ mod tests {
             test::TestRequest::post()
                 .uri("/api/v1/pastes")
                 .insert_header(("Authorization", format!("Bearer {read_token}")))
-                .set_json(json!({"title":"forbidden","content":"body"}))
+                .set_json(json!({"title":"forbidden","body":{"format":"text","content":"body"}}))
                 .to_request(),
         )
         .await;
@@ -336,7 +339,7 @@ mod tests {
             ),
             (
                 "paste:list",
-                "/api/v1/pastes?mine=true".to_string(),
+                "/api/v1/pastes?owner=me".to_string(),
                 owner.id.as_str(),
                 StatusCode::NOT_FOUND,
             ),
@@ -395,7 +398,7 @@ mod tests {
         }
 
         let forbidden_gets = [
-            "/api/v1/pastes?mine=true",
+            "/api/v1/pastes?owner=me",
             "/api/v1/admin/pastes",
             "/api/v1/admin/users",
             "/api/v1/admin/invitations",
@@ -417,22 +420,64 @@ mod tests {
             api_keys::create(&repository, Some(1), "write", &["paste:write".to_string()])
                 .await
                 .unwrap();
+        let raw_created = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/pastes?title=Raw%20upload&visibility=unlisted&language=js")
+                .insert_header(("Authorization", format!("Bearer {write_token}")))
+                .insert_header(("Content-Type", "text/plain"))
+                .insert_header(("Accept", "text/plain"))
+                .insert_header(("Idempotency-Key", "raw-upload-contract"))
+                .set_payload("const answer = 42;")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(raw_created.status(), StatusCode::CREATED);
+        assert!(raw_created.headers().contains_key("Location"));
+        assert!(raw_created.headers().contains_key("ETag"));
+        let raw_url = String::from_utf8(test::read_body(raw_created).await.to_vec()).unwrap();
+        let raw_url_parsed = url::Url::parse(&raw_url).unwrap();
+        assert!(raw_url_parsed.path().starts_with("/pastes/"));
+
+        let raw_replay = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/pastes?title=Raw%20upload&visibility=unlisted&language=js")
+                .insert_header(("Authorization", format!("Bearer {write_token}")))
+                .insert_header(("Content-Type", "text/plain"))
+                .insert_header(("Accept", "text/plain"))
+                .insert_header(("Idempotency-Key", "raw-upload-contract"))
+                .set_payload("const answer = 42;")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(raw_replay.status(), StatusCode::CREATED);
+        assert_eq!(
+            raw_replay.headers().get("Idempotency-Replayed").unwrap(),
+            "true"
+        );
+        assert_eq!(
+            String::from_utf8(test::read_body(raw_replay).await.to_vec()).unwrap(),
+            raw_url
+        );
+
         let write_allowed = test::call_service(
             &app,
             test::TestRequest::patch()
                 .uri(&format!("/api/v1/pastes/{}", owner.id))
                 .insert_header(("Authorization", format!("Bearer {write_token}")))
+                .insert_header(("If-Match", "*"))
                 .set_json(json!({"title":"written by key"}))
                 .to_request(),
         )
         .await;
-        assert_eq!(write_allowed.status(), StatusCode::NO_CONTENT);
+        assert_eq!(write_allowed.status(), StatusCode::OK);
         let write_create_allowed = test::call_service(
             &app,
             test::TestRequest::post()
                 .uri("/api/v1/pastes")
                 .insert_header(("Authorization", format!("Bearer {write_token}")))
-                .set_json(json!({"title":"key-created_at","content":"body"}))
+                .set_json(json!({"title":"key-created","body":{"format":"text","content":"body"}}))
                 .to_request(),
         )
         .await;
@@ -502,6 +547,7 @@ mod tests {
             test::TestRequest::delete()
                 .uri(&format!("/api/v1/pastes/{}", disposable.id))
                 .insert_header(("Authorization", format!("Bearer {delete_token}")))
+                .insert_header(("If-Match", "*"))
                 .to_request(),
         )
         .await;
@@ -538,6 +584,7 @@ mod tests {
             test::TestRequest::get()
                 .uri(&format!("/api/v1/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {paste_admin_token}")))
+                .insert_header(("If-Match", "*"))
                 .to_request(),
         )
         .await;
@@ -547,6 +594,7 @@ mod tests {
             test::TestRequest::patch()
                 .uri(&format!("/api/v1/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {paste_admin_token}")))
+                .insert_header(("If-Match", "*"))
                 .set_json(json!({"title":"administered"}))
                 .to_request(),
         )
@@ -587,6 +635,7 @@ mod tests {
                 .uri("/api/v1/account/api-keys")
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
+                .insert_header(("If-Match", "*"))
                 .set_json(json!({"name":"admin attempt","scopes":["user:manage"]}))
                 .to_request(),
         )
@@ -678,6 +727,7 @@ mod tests {
             test::TestRequest::delete()
                 .uri(&format!("/api/v1/pastes/{}", other_owner.id))
                 .insert_header(("Authorization", format!("Bearer {paste_admin_token}")))
+                .insert_header(("If-Match", "*"))
                 .to_request(),
         )
         .await;
@@ -689,6 +739,7 @@ mod tests {
                 .uri(&format!("/api/v1/pastes/{id}/attachments/{attachment_id}"))
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
+                .insert_header(("If-Match", "*"))
                 .to_request(),
         )
         .await;

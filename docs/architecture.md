@@ -108,9 +108,10 @@ resource:
 - user-owned API keys; and
 - administrative users, invitations, API keys, and paste management.
 
-The API uses JSON for ordinary requests and responses and multipart bodies for
-file uploads. Errors have stable machine-readable codes and human-readable
-messages. The machine-readable route description is exposed at
+The API uses JSON for ordinary requests and responses, accepts raw text and
+forms for generic uploader compatibility, and uses multipart bodies for atomic
+paste-and-file creation. Errors use RFC 9457-style problem details. The
+code-generated contract is exposed at
 `/api/v1/openapi.json`.
 
 Unknown API routes return JSON errors. Known browser routes receive the SPA
@@ -160,16 +161,17 @@ The main relational entities are:
 | `invitations` | Expiring, revocable account invitations with creator and redeemer attribution |
 | `api_keys` | Hashed bearer credentials, optionally owned by a user |
 | `api_key_scopes` | Many-to-one scope assignments deleted with their API key |
-| `pastes` | Text or rich-text content, owner, visibility, expiration, and read-limit state |
+| `pastes` | Text or rich-text content, owner, visibility, expiration, revision, and read-limit state |
 | `folders` | Private, flat organizational containers owned by users |
 | `attachments` | Ordered attachment metadata owned by a paste |
+| `idempotency_records` | Expiring create-request results used to make retries safe |
+| `paste_read_receipts` | Expiring replay records for idempotent read requests |
+| `paste_read_grants` | Short-lived capabilities for final-read attachment downloads |
 
 Rich text is stored as a validated JSON document alongside a plain-text
-representation. The document supplies formatting semantics; the text
-representation supports conversion, search, API consumers, and graceful
-plain-text behavior. The frontend uses Tiptap's ProseMirror document model,
-but the backend validates the supported schema rather than accepting
-arbitrary editor JSON.
+representation. The frontend uses Tiptap's ProseMirror model internally, but
+the public API accepts and returns sanitized HTML. This keeps an editor-specific
+document schema out of the public contract.
 
 Foreign keys implement ownership cleanup where possible. A deleted user
 leaves their pastes intact with a null owner, while their sessions and
@@ -307,28 +309,32 @@ responses for fast browser tests.
 
 A typical paste creation follows this path:
 
-1. A Svelte form collects text or a rich-text document and optional files.
-2. The frontend sends paste metadata to `/api/v1/pastes`.
+1. A Svelte form collects text or sanitized rich-text HTML and optional files.
+2. The frontend sends one JSON or multipart request to `/api/v1/pastes`.
 3. The HTTP handler resolves the principal and validates CSRF or API-key
    authentication.
 4. `PasteService` validates content, visibility, language, expiration, read
    limits, ownership, and rich-text structure.
-5. SQLx writes the paste in a transaction.
-6. The frontend uploads attachments using the new paste ID.
-7. The attachment handler streams files to staged paths, promotes them, and
-   records their metadata.
-8. The browser navigates to the paste view and consumes it through the same
+5. The attachment handler streams files to staging while calculating their
+   digests and enforcing configured limits.
+6. SQLx records the paste, revision, idempotency result, and attachment metadata.
+7. The browser navigates to the paste view and reads it through the same
    API available to other clients.
 
-Reading through the consume endpoint atomically updates the read count and
-removes a paste whose read limit has been reached. The response still
-contains the consumed paste so the final permitted reader receives it.
+`GET /pastes/{id}` is metadata-only. `POST /pastes/{id}/reads` atomically
+updates the read count. A final read tombstones the paste instead of immediately
+deleting its row and issues a 15-minute capability for its files; cleanup later
+removes the tombstone and storage. Owner and administrator source reads do not
+consume the paste. Revisions and ETags protect update and delete operations from
+lost updates.
 
 ## Background work and cleanup
 
 Racebin performs a cleanup pass at startup and then hourly. It:
 
 - deletes expired pastes;
+- deletes consumed paste tombstones after the attachment-grant window;
+- deletes expired idempotency receipts and attachment grants;
 - deletes expired sessions;
 - removes old expired invitations;
 - removes attachment directories belonging to deleted or unknown pastes.

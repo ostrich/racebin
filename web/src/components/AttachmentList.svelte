@@ -25,7 +25,8 @@
     if (!confirm(`Delete this attachment permanently?${suffix}`)) return;
     try {
       await requestApi(`/pastes/${encodeURIComponent(pasteId)}/attachments/${attachment.id}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers: { "If-Match": "*" }
       });
       ondelete?.(attachment);
       showNotice("Attachment deleted.");
@@ -38,7 +39,7 @@
 <div class="attachments">
   {#each attachments as attachment (attachment.id)}
     <div class="attachment-row">
-      <a href={`/api/v1/pastes/${encodeURIComponent(pasteId)}/attachments/${attachment.id}`}>
+      <a href={attachment.url ?? `/api/v1/pastes/${encodeURIComponent(pasteId)}/attachments/${attachment.id}`}>
         <Icon name="file-text"/>
         <span>{attachment.filename}</span>
         <small>{attachment.size_bytes.toLocaleString()} bytes</small>

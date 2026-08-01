@@ -1,4 +1,8 @@
 use serde_json::{json, Map, Value};
+use std::collections::{HashMap, HashSet};
+
+use html5ever::{local_name, ns, parse_fragment, tendril::TendrilSink, QualName};
+use markup5ever_rcdom::{Handle, NodeData, RcDom};
 
 const MAX_DOCUMENT_BYTES: usize = 2 * 1024 * 1024;
 const MAX_DEPTH: usize = 32;
@@ -220,6 +224,465 @@ pub fn document_to_text(document: &Value) -> String {
     output.trim_end_matches('\n').to_string()
 }
 
+pub fn document_to_html(document: &Value) -> String {
+    let mut output = String::new();
+    if let Some(children) = document.get("content").and_then(Value::as_array) {
+        for child in children {
+            write_html_node(child, &mut output);
+        }
+    }
+    output
+}
+
+pub fn html_to_document(input: &str) -> Result<Value, String> {
+    if input.len() > MAX_DOCUMENT_BYTES {
+        return Err("Rich-text HTML exceeds 2 MiB".into());
+    }
+    let tags = [
+        "p",
+        "h1",
+        "h2",
+        "h3",
+        "strong",
+        "b",
+        "em",
+        "i",
+        "u",
+        "s",
+        "del",
+        "code",
+        "pre",
+        "blockquote",
+        "ul",
+        "ol",
+        "li",
+        "hr",
+        "br",
+        "a",
+    ]
+    .into_iter()
+    .collect::<HashSet<_>>();
+    let attributes = HashMap::from([
+        ("a", HashSet::from(["href", "title"])),
+        ("p", HashSet::from(["style"])),
+        ("h1", HashSet::from(["style"])),
+        ("h2", HashSet::from(["style"])),
+        ("h3", HashSet::from(["style"])),
+        ("ol", HashSet::from(["start", "type"])),
+        ("code", HashSet::from(["class"])),
+    ]);
+    let cleaned = ammonia::Builder::new()
+        .tags(tags)
+        .tag_attributes(attributes)
+        .clean_content_tags(HashSet::from([
+            "script", "style", "iframe", "object", "embed",
+        ]))
+        .url_schemes(HashSet::from(["http", "https", "mailto"]))
+        .url_relative(ammonia::UrlRelative::PassThrough)
+        .link_rel(Some("noopener noreferrer nofollow"))
+        .attribute_filter(|element, attribute, value| match (element, attribute) {
+            ("p" | "h1" | "h2" | "h3", "style") => normalize_alignment(value),
+            ("code", "class") => normalize_language_class(value),
+            ("ol", "start") if value.parse::<i64>().is_ok() => Some(value.into()),
+            ("ol", "type") if matches!(value, "1" | "a" | "A" | "i" | "I") => Some(value.into()),
+            (_, "href" | "title") => Some(value.into()),
+            _ => None,
+        })
+        .clean(input)
+        .to_string();
+    let dom = parse_fragment(
+        RcDom::default(),
+        Default::default(),
+        QualName::new(None, ns!(html), local_name!("div")),
+        Vec::new(),
+        false,
+    )
+    .one(cleaned);
+    let mut content = Vec::new();
+    let root = dom.document.clone();
+    collect_blocks(&root, &mut content);
+    if content.is_empty() {
+        content.push(json!({"type":"paragraph","content":[]}));
+    }
+    let document = json!({"type":"doc","content":content});
+    validate_document(&document)?;
+    Ok(document)
+}
+
+fn normalize_alignment(value: &str) -> Option<std::borrow::Cow<'_, str>> {
+    let compact = value.replace(' ', "").to_ascii_lowercase();
+    let alignment = compact.strip_prefix("text-align:")?.trim_end_matches(';');
+    matches!(alignment, "left" | "center" | "right")
+        .then(|| std::borrow::Cow::Owned(format!("text-align: {alignment}")))
+}
+
+fn normalize_language_class(value: &str) -> Option<std::borrow::Cow<'_, str>> {
+    let language = value.strip_prefix("language-")?;
+    (!language.is_empty()
+        && language.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '+')
+        }))
+    .then(|| std::borrow::Cow::Owned(format!("language-{language}")))
+}
+
+fn node_name(node: &Handle) -> Option<String> {
+    match &node.data {
+        NodeData::Element { name, .. } => Some(name.local.to_string()),
+        _ => None,
+    }
+}
+
+fn node_attributes(node: &Handle) -> HashMap<String, String> {
+    match &node.data {
+        NodeData::Element { attrs, .. } => attrs
+            .borrow()
+            .iter()
+            .map(|attribute| {
+                (
+                    attribute.name.local.to_string(),
+                    attribute.value.to_string(),
+                )
+            })
+            .collect(),
+        _ => HashMap::new(),
+    }
+}
+
+fn collect_blocks(node: &Handle, output: &mut Vec<Value>) {
+    for child in node.children.borrow().iter() {
+        let Some(name) = node_name(child) else {
+            if matches!(&child.data, NodeData::Document) {
+                collect_blocks(child, output);
+            } else if matches!(&child.data, NodeData::Text { contents } if !contents.borrow().trim().is_empty())
+            {
+                let mut inline = Vec::new();
+                collect_inline(child, &[], &mut inline);
+                output.push(json!({"type":"paragraph","content":inline}));
+            }
+            continue;
+        };
+        match name.as_str() {
+            "p" | "h1" | "h2" | "h3" => {
+                let mut inline = Vec::new();
+                collect_inline_children(child, &[], &mut inline);
+                let attrs = node_attributes(child);
+                let align = attrs
+                    .get("style")
+                    .and_then(|style| style.strip_prefix("text-align: "));
+                if name == "p" {
+                    output.push(json!({
+                        "type":"paragraph",
+                        "attrs":{"textAlign":align},
+                        "content":inline
+                    }));
+                } else {
+                    output.push(json!({
+                        "type":"heading",
+                        "attrs":{"level":name[1..].parse::<i64>().unwrap_or(1),"textAlign":align},
+                        "content":inline
+                    }));
+                }
+            }
+            "ul" | "ol" => output.push(list_node(child, name == "ol")),
+            "blockquote" => {
+                let mut content = Vec::new();
+                collect_blocks(child, &mut content);
+                output.push(json!({"type":"blockquote","content":content}));
+            }
+            "pre" => {
+                let mut text = String::new();
+                collect_text(child, &mut text);
+                let language = child
+                    .children
+                    .borrow()
+                    .iter()
+                    .find(|item| node_name(item).as_deref() == Some("code"))
+                    .and_then(|code| node_attributes(code).get("class").cloned())
+                    .and_then(|class| class.strip_prefix("language-").map(str::to_string));
+                output.push(json!({
+                    "type":"codeBlock","attrs":{"language":language},
+                    "content": if text.is_empty() { Vec::<Value>::new() } else { vec![json!({"type":"text","text":text})] }
+                }));
+            }
+            "hr" => output.push(json!({"type":"horizontalRule"})),
+            "html" | "body" | "div" | "section" | "article" | "main" => {
+                collect_blocks(child, output);
+            }
+            _ => {
+                let mut inline = Vec::new();
+                collect_inline(child, &[], &mut inline);
+                if !inline.is_empty() {
+                    output.push(json!({"type":"paragraph","content":inline}));
+                }
+            }
+        }
+    }
+}
+
+fn list_node(node: &Handle, ordered: bool) -> Value {
+    let attrs = node_attributes(node);
+    let mut items = Vec::new();
+    for child in node.children.borrow().iter() {
+        if node_name(child).as_deref() != Some("li") {
+            continue;
+        }
+        let mut blocks = Vec::new();
+        let mut direct_inline = Vec::new();
+        for item in child.children.borrow().iter() {
+            if node_name(item).is_some_and(|name| {
+                matches!(
+                    name.as_str(),
+                    "p" | "h1" | "h2" | "h3" | "ul" | "ol" | "blockquote" | "pre"
+                )
+            }) {
+                if !direct_inline.is_empty() {
+                    blocks.push(
+                        json!({"type":"paragraph","content":std::mem::take(&mut direct_inline)}),
+                    );
+                }
+                let temporary = RcDom::default();
+                temporary.document.children.borrow_mut().push(item.clone());
+                collect_blocks(&temporary.document, &mut blocks);
+            } else {
+                collect_inline(item, &[], &mut direct_inline);
+            }
+        }
+        if !direct_inline.is_empty() || blocks.is_empty() {
+            blocks.insert(0, json!({"type":"paragraph","content":direct_inline}));
+        }
+        items.push(json!({"type":"listItem","content":blocks}));
+    }
+    if ordered {
+        json!({"type":"orderedList","attrs":{
+            "start":attrs.get("start").and_then(|value| value.parse::<i64>().ok()).unwrap_or(1),
+            "type":attrs.get("type")
+        },"content":items})
+    } else {
+        json!({"type":"bulletList","content":items})
+    }
+}
+
+fn collect_inline_children(node: &Handle, marks: &[Value], output: &mut Vec<Value>) {
+    for child in node.children.borrow().iter() {
+        collect_inline(child, marks, output);
+    }
+}
+
+fn collect_inline(node: &Handle, marks: &[Value], output: &mut Vec<Value>) {
+    match &node.data {
+        NodeData::Text { contents } => {
+            let text = contents.borrow().to_string();
+            if !text.is_empty() {
+                let mut value = json!({"type":"text","text":text});
+                if !marks.is_empty() {
+                    value["marks"] = Value::Array(marks.to_vec());
+                }
+                output.push(value);
+            }
+        }
+        NodeData::Element { name, .. } if name.local.as_ref() == "br" => {
+            output.push(json!({"type":"hardBreak"}));
+        }
+        NodeData::Element { name, .. } => {
+            let name = name.local.as_ref();
+            let mut next_marks = marks.to_vec();
+            let mark = match name {
+                "strong" | "b" => Some(json!({"type":"bold"})),
+                "em" | "i" => Some(json!({"type":"italic"})),
+                "u" => Some(json!({"type":"underline"})),
+                "s" | "del" => Some(json!({"type":"strike"})),
+                "code" => Some(json!({"type":"code"})),
+                "a" => {
+                    let attrs = node_attributes(node);
+                    attrs.get("href").map(|href| {
+                        json!({"type":"link","attrs":{
+                            "href":href,"title":attrs.get("title"),"target":"_blank",
+                            "rel":"noopener noreferrer nofollow","class":null
+                        }})
+                    })
+                }
+                _ => None,
+            };
+            if let Some(mark) = mark {
+                next_marks.push(mark);
+            }
+            collect_inline_children(node, &next_marks, output);
+        }
+        _ => collect_inline_children(node, marks, output),
+    }
+}
+
+fn collect_text(node: &Handle, output: &mut String) {
+    if let NodeData::Text { contents } = &node.data {
+        output.push_str(&contents.borrow());
+    }
+    for child in node.children.borrow().iter() {
+        collect_text(child, output);
+    }
+}
+
+fn write_html_node(node: &Value, output: &mut String) {
+    let node_type = node.get("type").and_then(Value::as_str).unwrap_or("");
+    let attrs = node.get("attrs").and_then(Value::as_object);
+    let align = attrs
+        .and_then(|attrs| attrs.get("textAlign"))
+        .and_then(Value::as_str)
+        .filter(|value| matches!(*value, "left" | "center" | "right"))
+        .map(|value| format!(" style=\"text-align: {value}\""))
+        .unwrap_or_default();
+    match node_type {
+        "text" => write_marked_text(node, output),
+        "hardBreak" => output.push_str("<br>"),
+        "horizontalRule" => output.push_str("<hr>"),
+        "paragraph" => write_container("p", &align, node, output),
+        "heading" => {
+            let level = attrs
+                .and_then(|attrs| attrs.get("level"))
+                .and_then(Value::as_i64)
+                .unwrap_or(1)
+                .clamp(1, 3);
+            write_container(&format!("h{level}"), &align, node, output);
+        }
+        "bulletList" => write_container("ul", "", node, output),
+        "orderedList" => {
+            let start = attrs
+                .and_then(|attrs| attrs.get("start"))
+                .and_then(Value::as_i64)
+                .unwrap_or(1);
+            let list_type = attrs
+                .and_then(|attrs| attrs.get("type"))
+                .and_then(Value::as_str);
+            let mut html_attrs = if start != 1 {
+                format!(" start=\"{start}\"")
+            } else {
+                String::new()
+            };
+            if let Some(list_type) =
+                list_type.filter(|value| matches!(*value, "1" | "a" | "A" | "i" | "I"))
+            {
+                html_attrs.push_str(&format!(" type=\"{list_type}\""));
+            }
+            write_container("ol", &html_attrs, node, output);
+        }
+        "listItem" => write_container("li", "", node, output),
+        "blockquote" => write_container("blockquote", "", node, output),
+        "codeBlock" => {
+            let language = attrs
+                .and_then(|attrs| attrs.get("language"))
+                .and_then(Value::as_str)
+                .filter(|value| {
+                    value.chars().all(|character| {
+                        character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '+')
+                    })
+                });
+            output.push_str("<pre><code");
+            if let Some(language) = language {
+                output.push_str(&format!(" class=\"language-{language}\""));
+            }
+            output.push('>');
+            if let Some(children) = node.get("content").and_then(Value::as_array) {
+                for child in children {
+                    escape_html(
+                        child.get("text").and_then(Value::as_str).unwrap_or(""),
+                        output,
+                    );
+                }
+            }
+            output.push_str("</code></pre>");
+        }
+        "doc" => {
+            if let Some(children) = node.get("content").and_then(Value::as_array) {
+                for child in children {
+                    write_html_node(child, output);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn write_container(tag: &str, attributes: &str, node: &Value, output: &mut String) {
+    output.push('<');
+    output.push_str(tag);
+    output.push_str(attributes);
+    output.push('>');
+    if let Some(children) = node.get("content").and_then(Value::as_array) {
+        for child in children {
+            write_html_node(child, output);
+        }
+    }
+    output.push_str("</");
+    output.push_str(tag);
+    output.push('>');
+}
+
+fn write_marked_text(node: &Value, output: &mut String) {
+    let marks = node
+        .get("marks")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for mark in &marks {
+        match mark.get("type").and_then(Value::as_str).unwrap_or("") {
+            "bold" => output.push_str("<strong>"),
+            "italic" => output.push_str("<em>"),
+            "underline" => output.push_str("<u>"),
+            "strike" => output.push_str("<s>"),
+            "code" => output.push_str("<code>"),
+            "link" => {
+                let attrs = mark.get("attrs").and_then(Value::as_object);
+                output.push_str("<a href=\"");
+                escape_html(
+                    attrs
+                        .and_then(|attrs| attrs.get("href"))
+                        .and_then(Value::as_str)
+                        .unwrap_or(""),
+                    output,
+                );
+                output.push_str("\" rel=\"noopener noreferrer nofollow\" target=\"_blank\"");
+                if let Some(title) = attrs
+                    .and_then(|attrs| attrs.get("title"))
+                    .and_then(Value::as_str)
+                {
+                    output.push_str(" title=\"");
+                    escape_html(title, output);
+                    output.push('"');
+                }
+                output.push('>');
+            }
+            _ => {}
+        }
+    }
+    escape_html(
+        node.get("text").and_then(Value::as_str).unwrap_or(""),
+        output,
+    );
+    for mark in marks.iter().rev() {
+        match mark.get("type").and_then(Value::as_str).unwrap_or("") {
+            "bold" => output.push_str("</strong>"),
+            "italic" => output.push_str("</em>"),
+            "underline" => output.push_str("</u>"),
+            "strike" => output.push_str("</s>"),
+            "code" => output.push_str("</code>"),
+            "link" => output.push_str("</a>"),
+            _ => {}
+        }
+    }
+}
+
+fn escape_html(value: &str, output: &mut String) {
+    for character in value.chars() {
+        match character {
+            '&' => output.push_str("&amp;"),
+            '<' => output.push_str("&lt;"),
+            '>' => output.push_str("&gt;"),
+            '"' => output.push_str("&quot;"),
+            '\'' => output.push_str("&#39;"),
+            _ => output.push(character),
+        }
+    }
+}
+
 fn append_text(node: &Value, output: &mut String, list_depth: usize) {
     let Some(object) = node.as_object() else {
         return;
@@ -339,5 +802,32 @@ mod tests {
         ] {
             assert!(validate_document(&linked(href)).is_err(), "accepted {href}");
         }
+    }
+
+    #[test]
+    fn html_round_trip_preserves_supported_script_formatting() {
+        let html = "<h1>Episode title</h1><p><strong>INT. LAB - NIGHT</strong></p><p style=\"text-align:center\"><em>Quietly</em><br>We should go.</p><ol start=\"0\"><li><p>First beat</p></li></ol>";
+        let document = html_to_document(html).unwrap();
+        let output = document_to_html(&document);
+        assert!(output.contains("<h1>Episode title</h1>"), "{output}");
+        assert!(output.contains("<strong>INT. LAB - NIGHT</strong>"));
+        assert!(output.contains("text-align: center"));
+        assert!(output.contains("<ol start=\"0\">"));
+        assert!(validate_document(&document).is_ok());
+    }
+
+    #[test]
+    fn html_import_removes_active_content_and_normalizes_links() {
+        let document = html_to_document(
+            "<script>alert(1)</script><p onclick=\"bad()\"><a href=\"javascript:alert(2)\">bad</a><a href=\"/help\" target=\"popup\" class=\"foreign\">good</a></p>",
+        )
+        .unwrap();
+        let output = document_to_html(&document);
+        assert!(!output.contains("script"));
+        assert!(!output.contains("onclick"));
+        assert!(!output.contains("javascript:"));
+        assert!(!output.contains("foreign"));
+        assert!(output.contains("href=\"/help\""));
+        assert!(output.contains("noopener noreferrer nofollow"));
     }
 }

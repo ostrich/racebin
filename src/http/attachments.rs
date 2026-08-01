@@ -56,6 +56,11 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(get_qr);
 }
 
+#[derive(Deserialize)]
+struct ReadGrantQuery {
+    read_token: Option<String>,
+}
+
 #[post("/pastes/{paste_id}/attachments")]
 async fn upload_attachments(
     req: HttpRequest,
@@ -81,6 +86,9 @@ async fn upload_attachments(
         Ok(paste) => paste,
         Err(e) => return error(StatusCode::NOT_FOUND, "not_found", e),
     };
+    if let Err(response) = super::pastes::require_match(&req, &paste) {
+        return response;
+    }
     let directory = services
         .storage
         .data_dir
@@ -108,6 +116,13 @@ async fn upload_attachments(
                 StatusCode::PAYLOAD_TOO_LARGE,
                 "too_many_attachments",
                 "A paste may contain at most 32 attachments",
+            );
+        }
+        if field.name() != Some("file") {
+            return error(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "invalid_attachment",
+                "File parts must use the field name file",
             );
         }
         let Some(filename) = field
@@ -207,7 +222,14 @@ async fn upload_attachments(
         );
     }
     cleanup.paths.clear();
-    HttpResponse::Created().json(json!({"items": attachments}))
+    let current = match services.get_source(&value, &paste_id).await {
+        Ok(Some(current)) => current,
+        Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
+        Err(error) => return internal(error),
+    };
+    HttpResponse::Created()
+        .insert_header((header::ETAG, super::dto::etag(&current)))
+        .json(json!({"items": attachments}))
 }
 
 #[get("/pastes/{paste_id}/attachments/{attachment_id}")]
@@ -215,17 +237,19 @@ async fn get_attachment(
     req: HttpRequest,
     services: web::Data<PasteService>,
     path: web::Path<(String, i64)>,
+    query: web::Query<ReadGrantQuery>,
 ) -> HttpResponse {
     let value = match principal(&services, &req).await {
         Ok(value) => value,
         Err(response) => return response,
     };
     let (paste_id, attachment_id) = path.into_inner();
-    let paste = match services.get_paste(&value, &paste_id).await {
-        Ok(Some(paste)) => paste,
-        Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
-        Err(e) => return internal(e),
-    };
+    let paste =
+        match paste_for_download(&services, &value, &paste_id, query.read_token.as_deref()).await {
+            Ok(Some(paste)) => paste,
+            Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Attachment not found"),
+            Err(e) => return internal(e),
+        };
     let Some(attachment) = paste
         .attachments
         .iter()
@@ -278,6 +302,16 @@ async fn delete_attachment(
         Err(response) => return response,
     };
     let (paste_id, attachment_id) = path.into_inner();
+    let current = match services.ensure_can_update(&value, &paste_id).await {
+        Ok(current) => current,
+        Err(message) if message == "Paste not found" => {
+            return error(StatusCode::NOT_FOUND, "not_found", message)
+        }
+        Err(message) => return error(StatusCode::FORBIDDEN, "forbidden", message),
+    };
+    if let Err(response) = super::pastes::require_match(&req, &current) {
+        return response;
+    }
     match services
         .delete_attachment(&value, &paste_id, attachment_id)
         .await
@@ -296,16 +330,18 @@ async fn get_archive(
     req: HttpRequest,
     services: web::Data<PasteService>,
     paste_id: web::Path<String>,
+    query: web::Query<ReadGrantQuery>,
 ) -> HttpResponse {
     let value = match principal(&services, &req).await {
         Ok(value) => value,
         Err(response) => return response,
     };
-    let paste = match services.get_paste(&value, &paste_id).await {
-        Ok(Some(paste)) => paste,
-        Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
-        Err(e) => return internal(e),
-    };
+    let paste =
+        match paste_for_download(&services, &value, &paste_id, query.read_token.as_deref()).await {
+            Ok(Some(paste)) => paste,
+            Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
+            Err(e) => return internal(e),
+        };
     const MAX_ARCHIVE_INPUT: u64 = 64 * 1024 * 1024;
     let archive_input = paste.content.len() as u64
         + paste
@@ -354,6 +390,24 @@ async fn get_archive(
             .body(bytes),
         Ok(Err(e)) => internal(e),
         Err(e) => internal(e.to_string()),
+    }
+}
+
+async fn paste_for_download(
+    services: &PasteService,
+    principal: &Principal,
+    paste_id: &str,
+    read_token: Option<&str>,
+) -> Result<Option<crate::services::Paste>, String> {
+    if let Some(paste) = services.get_paste(principal, paste_id).await? {
+        let owner = principal.is_admin() || principal.user_id() == paste.owner_id;
+        if paste.read_limit.is_none() || owner {
+            return Ok(Some(paste));
+        }
+    }
+    match read_token {
+        Some(token) => services.get_paste_with_grant(paste_id, token).await,
+        None => Ok(None),
     }
 }
 

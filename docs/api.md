@@ -1,179 +1,161 @@
-# Racebin API v1
+# HTTP API
 
-The API is rooted at `/api/v1`. This is Racebin's initial supported API
-contract.
+Racebin exposes its supported API under `/api/v1`. The live service document is
+available at `/api/v1`, and the generated OpenAPI document is at
+`/api/v1/openapi.json`.
 
 ## Authentication
 
-API clients send a key as a bearer token:
+Create an API key from **Account → API keys**, then send it as a bearer token:
 
-```http
-Authorization: Bearer rbk_PREFIX_SECRET
+```sh
+curl -H 'Authorization: Bearer YOUR_API_KEY' \
+  https://example.com/api/v1/pastes?owner=me
 ```
 
-Browser sessions use the `racebin_session` Secure, HttpOnly, SameSite=Lax
-cookie. `GET /session` returns the CSRF token; session-authenticated mutations
-must send it in `X-CSRF-Token`. Bearer-authenticated mutations do not use CSRF.
+Browser sessions use the session cookie and `X-CSRF-Token`. API clients should
+use bearer authentication and do not send CSRF tokens. Creating a paste requires
+authentication.
 
-Keys are displayed only once and stored as SHA-256 digests. Available scopes:
+API keys have explicit scopes: `paste:read`, `paste:write`, `paste:delete`, and
+`paste:list`. Administrative scopes are documented by the OpenAPI endpoint and
+the Help page.
 
-| Scope | Permission |
-| --- | --- |
-| `paste:read` | Read private pastes owned by the key's user |
-| `paste:write` | Create and update that user's pastes and attachments |
-| `paste:delete` | Delete owned pastes |
-| `paste:list` | List owned pastes |
-| `paste:manage` | Manage every paste |
-| `user:manage` | Manage users |
-| `invitation:manage` | Manage invitations |
-| `api_key:manage` | Manage keys and delegate held scopes |
+Errors use `application/problem+json` with `type`, `title`, `status`, and
+`detail` fields.
 
-An API key with `api_key:manage` can grant only scopes it already holds.
-Browser administrators may grant any scope. Ordinary users may grant the four
-non-management paste scopes.
+## Discovery
 
-Private folders use the existing paste scopes: `paste:list` lists the key
-owner's folders, while `paste:write` creates, renames, deletes, and assigns
-them. Folder metadata is never returned for another user's paste.
+- `GET /api/v1/capabilities` reports enabled formats, visibility modes, and
+  upload limits.
+- `GET /api/v1/languages` lists accepted syntax names and aliases.
+- `GET /healthz` reports whether the process is running.
+- `GET /readyz` reports whether the database is available.
 
-## Pastes
+## Create a paste
 
-Create a paste:
+The canonical JSON representation uses a tagged `body`:
 
-```bash
-curl https://example.com/api/v1/pastes \
-  -H "Authorization: Bearer $RACEBIN_KEY" \
-  -H "Content-Type: application/json" \
+```sh
+curl -X POST https://example.com/api/v1/pastes \
+  -H 'Authorization: Bearer YOUR_API_KEY' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: a-new-unique-value' \
   -d '{
     "title": "Example",
-    "content": "console.log(\"hello\")",
-    "content_kind": "text",
-    "language": "javascript",
-    "visibility": "unlisted",
-    "folder_id": null,
-    "expires_at": null,
-    "read_limit": null
+    "body": {
+      "format": "text",
+      "content": "const answer = 42;",
+      "language": "javascript"
+    },
+    "visibility": "unlisted"
   }'
 ```
 
-`content_kind` is `text` or `rich_text`. `visibility` is `public`, `unlisted`,
-or `private`. Timestamp fields are Unix seconds. A null `expires_at` never
-expires, and a null `read_limit` permits unlimited reads.
-
-Rich-text pastes include a validated ProseMirror `document` object. Their
-`content` field is server-generated plaintext used for search, previews, raw
-downloads, copying, and clients that do not render rich text. Supported nodes
-are paragraphs, headings 1–3, lists, blockquotes, horizontal rules, hard
-breaks, text, and code blocks. Supported marks are bold, italic, underline,
-strike, inline code, and safe HTTP(S) or mail links.
-
-Convert between text and rich text without saving a paste:
-
-```bash
-curl -X POST https://example.com/api/v1/pastes/convert \
-  -H "Content-Type: application/json" \
-  -H "X-CSRF-Token: $RACEBIN_CSRF" \
-  -d '{"source_kind":"text","target_kind":"rich_text","content":"SCENE 1\n\nADA\nHello.","document":null}'
-```
-
-The reverse conversion accepts the rich-text `document` and returns normalized
-plaintext.
-
-List and filter:
-
-```bash
-curl 'https://example.com/api/v1/pastes?page=1&page_size=50&search=example&visibility=public'
-curl -H "Authorization: Bearer $RACEBIN_KEY" \
-  'https://example.com/api/v1/pastes?mine=true'
-```
-
-Available filters are `search`, `visibility`, `owner_id`, `content_kind`,
-`language`, `has_attachments`, `created_after`, `created_before`,
-`expiration` (`never` or `scheduled`), `min_reads`, `max_reads`, and
-`read_limit` (`unlimited` or `limited`). `min_size_bytes` and
-`max_size_bytes` filter the combined UTF-8 content, rich-text document JSON,
-and attachment size. Sort with `sort` (`created`, `title`, `reads`, `expires`,
-or `size`) and `direction` (`asc` or `desc`). Administrative
-searches also match owner usernames; all searches match attachment filenames.
-List items include `attachment_count` and `size_bytes` without loading the
-complete attachment records.
-
-For an owner list (`mine=true`), `folder_id=ID` selects one folder and
-`unfiled=true` selects Uncategorized. These filters are mutually exclusive.
-Owner-visible pastes include a nullable `folder_id`; other responses redact
-it.
-
-Lists return:
+Rich text uses sanitized HTML on the wire:
 
 ```json
-{"items":[],"page":1,"page_size":50,"total_items":0}
+{"body":{"format":"rich_text","content":"<h1>Scene</h1><p>Text</p>"}}
 ```
 
-Retrieve without consuming, consume a read, update, and delete:
+Racebin also accepts `text/plain`, `text/markdown`, `text/html`, URL-encoded
+forms, and multipart forms at the same endpoint. Raw uploads can put metadata in
+the query string, which makes a generic uploader configuration straightforward:
 
-```bash
-curl https://example.com/api/v1/pastes/PASTE_ID
-curl https://example.com/api/v1/pastes/PASTE_ID/consume
+```sh
+curl -X POST \
+  'https://example.com/api/v1/pastes?title=Example&visibility=unlisted&language=javascript' \
+  -H 'Authorization: Bearer YOUR_API_KEY' \
+  -H 'Content-Type: text/plain' \
+  -H 'Accept: text/plain' \
+  --data-binary @example.js
+```
+
+With `Accept: text/plain`, creation returns only the absolute paste URL. JSON is
+the default. `Idempotency-Key` is optional but recommended for retried uploads;
+reuse with different content returns `409 Conflict`.
+
+Multipart creation is atomic from the caller's perspective and supports a body,
+files, or both. Text fields use the JSON field names and every attachment uses a
+repeated `file` part:
+
+```sh
+curl -X POST https://example.com/api/v1/pastes \
+  -H 'Authorization: Bearer YOUR_API_KEY' \
+  -F 'title=Build output' \
+  -F 'visibility=private' \
+  -F 'content=See attached logs.' \
+  -F 'file=@build.log' \
+  -F 'file=@report.txt'
+```
+
+`expires_at` is RFC 3339. `expires_in` is a positive number of seconds. They
+cannot be combined.
+
+## Read a paste
+
+`GET /api/v1/pastes/{id}` returns metadata without incrementing the read count.
+It deliberately does not consume a limited paste.
+
+`POST /api/v1/pastes/{id}/reads` performs a read and returns content. Send an
+`Idempotency-Key` when retrying. Owners and administrators receive a
+`source_url`; retrieving that URL does not consume a read.
+
+For a final permitted read, the response can include attachment and archive URLs
+with a short-lived `read_token`. That capability remains valid for 15 minutes so
+the reader can download the files after receiving the paste.
+
+## Update and delete
+
+Paste responses include an `ETag`. Mutating an existing paste requires
+`If-Match`, preventing one client from silently overwriting another client's
+changes:
+
+```sh
 curl -X PATCH https://example.com/api/v1/pastes/PASTE_ID \
-  -H "Authorization: Bearer $RACEBIN_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Updated","visibility":"public"}'
-curl -X DELETE -H "Authorization: Bearer $RACEBIN_KEY" \
-  https://example.com/api/v1/pastes/PASTE_ID
+  -H 'Authorization: Bearer YOUR_API_KEY' \
+  -H 'If-Match: "paste-PASTE_ID-r3"' \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Revised title"}'
 ```
 
-`/pastes/{paste_id}/consume` and `/pastes/{paste_id}/raw` atomically consume a
-read. Upload attachments with multipart POST to
-`/pastes/{paste_id}/attachments`. Download or delete an attachment at
-`/pastes/{paste_id}/attachments/{attachment_id}`. ZIP and QR output are at
-`/pastes/{paste_id}/archive` and `/pastes/{paste_id}/qr`.
+Use `DELETE /api/v1/pastes/{id}` with the same conditional header. `If-Match: *`
+is available when the caller explicitly accepts overwriting the current
+revision.
 
-## Folders
+## Lists and folders
 
-Folders are private, flat, and owned by the same user as their pastes:
+`GET /api/v1/pastes` returns `{items, pagination}`. Common query parameters are:
 
-- `GET|POST /folders`
-- `PATCH|DELETE /folders/{folder_id}`
-- `PATCH /pastes/folder`
+- `q`, `page`, and `page_size`
+- `owner=me`, `visibility`, `format`, and `language`
+- `folder_id`, `unfiled`, and `has_attachments`
+- `created_after`, `created_before`, `expiration`, and `read_limit`
+- `min_reads`, `max_reads`, `min_size_bytes`, and `max_size_bytes`
+- `sort` and `direction`
 
-Folder listing returns `items`, `total_count`, and `unfiled_count`. Each folder
-includes its ID, name, creation time, and paste count. Deleting a folder moves
-its pastes to Uncategorized. Bulk movement accepts:
+Folder endpoints are `GET/POST /folders` and `PATCH/DELETE /folders/{id}`. Move
+owned pastes as a collection operation:
+
+```http
+PATCH /api/v1/pastes
+Content-Type: application/json
+
+{"ids":["PASTE_ID"],"folder_id":12}
+```
+
+Use `null` as `folder_id` to move pastes out of a folder.
+
+## Content conversion
+
+`POST /api/v1/content-conversions` converts between plain text and sanitized
+rich-text HTML:
 
 ```json
-{"paste_ids":["PASTE_ID"],"folder_id":12}
+{
+  "source":{"format":"text","content":"Scene heading\n\nDialogue"},
+  "target_format":"rich_text"
+}
 ```
 
-Use a null `folder_id` to move pastes to Uncategorized.
-
-## Accounts And Administration
-
-- `GET|POST|DELETE /session`
-- `PATCH /account/password`
-- `POST /password-resets/{token}`
-- `GET|POST /account/api-keys`
-- `PATCH|DELETE /account/api-keys/{id}`
-- `POST /invitations/{token}/redeem`
-- `GET /admin/pastes`
-- `GET /admin/users`, `GET|PATCH /admin/users/{id}`
-- `POST /admin/users/{id}/password-reset`
-- `DELETE /admin/users/{id}/sessions`, `DELETE /admin/users/{id}/api-keys`
-- `GET|POST /admin/invitations`, `DELETE /admin/invitations/{id}`
-- `GET /admin/api-keys`, `PATCH|DELETE /admin/api-keys/{id}`
-
-Listed invitations include a root-relative `url` only while the invitation is
-active and its token is recoverable. The browser resolves that path against
-its origin before copying it. Redeemed, revoked, expired, and pre-migration
-invitations return `null`.
-
-Creating a password reset returns a root-relative, one-time `url`. It expires
-after one hour. The reset endpoint accepts `{"new_password":"..."}` and
-revokes the user's browser sessions after the password is replaced.
-
-The machine-readable route list is `/api/v1/openapi.json`.
-
-## Errors
-
-```json
-{"error":{"code":"not_found","message":"Paste not found","details":null}}
-```
+The internal editor document is intentionally not part of the public API.

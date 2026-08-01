@@ -154,10 +154,10 @@ test("paste checkboxes support range selection and indeterminate select-all", as
   await first.check();
   await fourth.click({ modifiers: ["Shift"] });
   const moveRequest = page.waitForRequest(request =>
-    request.url().endsWith("/api/v1/pastes/folder") && request.method() === "PATCH");
+    request.url().endsWith("/api/v1/pastes") && request.method() === "PATCH");
   await page.getByRole("button", { name: "Move 4" }).click();
   expect((await moveRequest).postDataJSON()).toEqual({
-    paste_ids: ["range-paste-0", "range-paste-1", "range-paste-2", "range-paste-3"],
+    ids: ["range-paste-0", "range-paste-1", "range-paste-2", "range-paste-3"],
     folder_id: null
   });
 });

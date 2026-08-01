@@ -16,8 +16,8 @@ pub(super) async fn concurrency_contract(repo: Repository) {
     };
     let limited = services.create_paste(&admin, &limited).await.unwrap();
     let (left, right) = futures::join!(
-        services.consume_paste(&Principal::Anonymous, &limited.id),
-        services.consume_paste(&Principal::Anonymous, &limited.id)
+        services.read_paste(&Principal::Anonymous, &limited.id, None),
+        services.read_paste(&Principal::Anonymous, &limited.id, None)
     );
     assert_eq!(
         [left, right]

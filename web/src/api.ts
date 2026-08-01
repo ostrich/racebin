@@ -28,11 +28,51 @@ export async function requestApi<T>(path: string, init: ApiRequestInit = {}): Pr
   if (!response.ok) {
     const body = await response
       .json()
-      .catch(() => ({ error: { message: response.statusText } }));
-    throw new ApiError(response.status, body.error?.message ?? response.statusText);
+      .catch(() => ({ detail: response.statusText }));
+    throw new ApiError(response.status, body.detail ?? body.error?.message ?? response.statusText);
   }
   if (invalidateQueries) clearQueryCache();
-  return response.status === 204
-    ? (undefined as T)
-    : (response.json() as Promise<T>);
+  if (response.status === 204) return undefined as T;
+  const data = await response.json();
+  return normalizePayload(data, response.headers.get("ETag")) as T;
+}
+
+function unixTimestamp(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") return value;
+  const milliseconds = Date.parse(String(value));
+  return Number.isFinite(milliseconds) ? Math.floor(milliseconds / 1000) : null;
+}
+
+function normalizePayload(value: unknown, etag?: string | null): unknown {
+  if (Array.isArray(value)) return value.map(item => normalizePayload(item));
+  if (!value || typeof value !== "object") return value;
+  const object = value as Record<string, unknown>;
+  if (Array.isArray(object.items)) object.items = object.items.map(item => normalizePayload(item));
+  if (object.pagination && typeof object.pagination === "object") {
+    const pagination = object.pagination as Record<string, unknown>;
+    object.page = pagination.page;
+    object.page_size = pagination.page_size;
+    object.total_items = pagination.total_items;
+  }
+  if (typeof object.url === "string" && typeof object.id === "string" && typeof object.format === "string") {
+    const body = object.body as Record<string, unknown> | undefined;
+    object.content_kind = object.format;
+    object.content = body?.format === "rich_text"
+      ? String(body.plain_text ?? "")
+      : String(body?.content ?? object.excerpt ?? "");
+    object.document = body?.format === "rich_text" ? body.content : null;
+    object.language = body?.format === "text"
+      ? String(body.language ?? object.language ?? "plaintext")
+      : "plaintext";
+    object.owner_id ??= null;
+    object.folder_id ??= null;
+    object.attachments ??= [];
+    object.created_at = unixTimestamp(object.created_at) ?? 0;
+    object.updated_at = unixTimestamp(object.updated_at) ?? object.created_at;
+    object.expires_at = unixTimestamp(object.expires_at);
+    object.last_read_at = unixTimestamp(object.last_read_at);
+    if (etag) object._etag = etag;
+  }
+  return object;
 }

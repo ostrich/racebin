@@ -139,9 +139,9 @@ async fn admin_create_password_reset(
         return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
     };
     match accounts::create_password_reset(&services.storage, *id, created_by_user_id).await {
-        Ok(token) => {
-            HttpResponse::Created().json(json!({"url":format!("/password-reset/{token}")}))
-        }
+        Ok(token) => HttpResponse::Created().json(json!({
+            "url": super::dto::absolute(&req, &format!("/password-reset/{token}"))
+        })),
         Err(message) => error(StatusCode::BAD_REQUEST, "invalid_user", message),
     }
 }
@@ -211,9 +211,9 @@ async fn admin_invitations(req: HttpRequest, services: web::Data<PasteService>) 
                 .map(|i| {
                     let status = i.status();
                     let url = if i.is_active() {
-                        i.token
-                            .as_ref()
-                            .map(|token| format!("/invitations/{token}"))
+                        i.token.as_ref().map(|token| {
+                            super::dto::absolute(&req, &format!("/invitations/{token}"))
+                        })
                     } else {
                         None
                     };
@@ -251,8 +251,10 @@ async fn admin_create_invitation(
         return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
     };
     match accounts::create_invitation(&services.storage, user_id).await {
-        Ok(token) => HttpResponse::Created()
-            .json(json!({"token":token,"url":format!("/invitations/{token}")})),
+        Ok(token) => HttpResponse::Created().json(json!({
+            "token": token,
+            "url": super::dto::absolute(&req, &format!("/invitations/{token}"))
+        })),
         Err(e) => internal(e),
     }
 }

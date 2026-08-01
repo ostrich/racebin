@@ -1,8 +1,6 @@
 use crate::account::{self as accounts, api_keys};
 use crate::args::ARGS;
-use crate::services::{
-    text_to_document, validate_document, PasteInput, PasteQuery, PasteService, Principal,
-};
+use crate::services::{text_to_document, PasteInput, PasteQuery, PasteService, Principal};
 use actix_files::NamedFile;
 use actix_multipart::Multipart;
 use actix_web::cookie::{Cookie, SameSite};
@@ -24,6 +22,7 @@ mod assets;
 pub(crate) mod attachments;
 mod auth;
 mod cookies;
+mod dto;
 mod errors;
 mod folders;
 mod keys;
@@ -64,6 +63,8 @@ pub fn configure(config: &mut web::ServiceConfig) {
             )
             .into()
         }))
+        .service(web::resource("/healthz").route(web::get().to(meta::health)))
+        .service(web::resource("/readyz").route(web::get().to(meta::ready)))
         .service(
             web::scope("/api/v1")
                 .configure(meta::configure)

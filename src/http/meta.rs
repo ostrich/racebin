@@ -1,100 +1,255 @@
 use super::*;
+use utoipa::{Modify, OpenApi};
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        crate::http::pastes::list_pastes,
+        crate::http::pastes::create_paste,
+        crate::http::pastes::get_paste,
+        crate::http::pastes::get_paste_source,
+        crate::http::pastes::read_paste,
+        crate::http::pastes::update_paste,
+        crate::http::pastes::delete_paste,
+        crate::http::pastes::convert_paste_content,
+        get_capabilities,
+        get_languages
+    ),
+    components(schemas(
+        crate::http::dto::BodyInput,
+        crate::http::dto::BodyOutput,
+        crate::http::dto::CreatePasteRequest,
+        crate::http::dto::UpdatePasteRequest,
+        crate::http::dto::PasteResource,
+        crate::http::dto::PasteSummary,
+        crate::http::dto::PastePage,
+        crate::http::dto::Pagination,
+        crate::http::dto::AttachmentResource,
+        crate::http::errors::ProblemDetails
+    )),
+    modifiers(&Security),
+    tags((name = "pastes"), (name = "discovery"))
+)]
+struct ApiDoc;
+
+struct Security;
+
+impl Modify for Security {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        use utoipa::openapi::security::{
+            ApiKey, ApiKeyValue, Http, HttpAuthScheme, SecurityScheme,
+        };
+        let components = openapi.components.get_or_insert_with(Default::default);
+        components.add_security_scheme(
+            "bearerAuth",
+            SecurityScheme::Http(Http::new(HttpAuthScheme::Bearer)),
+        );
+        components.add_security_scheme(
+            "sessionCookie",
+            SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::new("racebin_session"))),
+        );
+        openapi.info.title = "Racebin API".into();
+        openapi.info.version = env!("CARGO_PKG_VERSION").into();
+        openapi.servers = Some(vec![utoipa::openapi::Server::new("/api/v1")]);
+    }
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+struct Capabilities {
+    site_name: String,
+    plain_home_enabled: bool,
+    max_attachment_size_bytes: usize,
+    max_attachments_per_paste: usize,
+    attachments_enabled: bool,
+    qr_codes_enabled: bool,
+    formats: [&'static str; 2],
+    visibility_modes: [&'static str; 3],
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+struct Language {
+    id: &'static str,
+    label: &'static str,
+    aliases: &'static [&'static str],
+}
+
+const LANGUAGES: &[Language] = &[
+    Language {
+        id: "plaintext",
+        label: "Plain text",
+        aliases: &["text", "txt"],
+    },
+    Language {
+        id: "bash",
+        label: "Bash / Shell",
+        aliases: &["sh", "shell", "zsh"],
+    },
+    Language {
+        id: "c",
+        label: "C",
+        aliases: &[],
+    },
+    Language {
+        id: "cpp",
+        label: "C++",
+        aliases: &["c++"],
+    },
+    Language {
+        id: "csharp",
+        label: "C#",
+        aliases: &["cs", "c#"],
+    },
+    Language {
+        id: "css",
+        label: "CSS",
+        aliases: &[],
+    },
+    Language {
+        id: "go",
+        label: "Go",
+        aliases: &["golang"],
+    },
+    Language {
+        id: "html",
+        label: "HTML",
+        aliases: &["htm"],
+    },
+    Language {
+        id: "java",
+        label: "Java",
+        aliases: &[],
+    },
+    Language {
+        id: "javascript",
+        label: "JavaScript",
+        aliases: &["js", "jsx"],
+    },
+    Language {
+        id: "json",
+        label: "JSON",
+        aliases: &[],
+    },
+    Language {
+        id: "markdown",
+        label: "Markdown",
+        aliases: &["md"],
+    },
+    Language {
+        id: "python",
+        label: "Python",
+        aliases: &["py"],
+    },
+    Language {
+        id: "ruby",
+        label: "Ruby",
+        aliases: &["rb"],
+    },
+    Language {
+        id: "rust",
+        label: "Rust",
+        aliases: &["rs"],
+    },
+    Language {
+        id: "sql",
+        label: "SQL",
+        aliases: &[],
+    },
+    Language {
+        id: "typescript",
+        label: "TypeScript",
+        aliases: &["ts", "tsx"],
+    },
+    Language {
+        id: "xml",
+        label: "XML",
+        aliases: &["svg"],
+    },
+    Language {
+        id: "yaml",
+        label: "YAML",
+        aliases: &["yml"],
+    },
+];
 
 pub(super) fn configure(config: &mut web::ServiceConfig) {
-    config.service(get_openapi).service(get_config);
+    config
+        .service(api_root)
+        .service(get_openapi)
+        .service(get_capabilities)
+        .service(get_languages);
+}
+
+#[get("")]
+async fn api_root() -> impl Responder {
+    HttpResponse::Ok().json(json!({
+        "name": "Racebin API",
+        "version": env!("CARGO_PKG_VERSION"),
+        "openapi_url": "/api/v1/openapi.json",
+        "capabilities_url": "/api/v1/capabilities",
+        "languages_url": "/api/v1/languages"
+    }))
 }
 
 #[get("/openapi.json")]
 async fn get_openapi() -> impl Responder {
-    HttpResponse::Ok().json(json!({
-      "openapi": "3.1.0",
-      "info": {"title":"Racebin API","version":"1.0.0"},
-      "servers": [{"url":"/api/v1"}],
-      "components": {
-        "securitySchemes": {
-          "bearerAuth": {"type":"http","scheme":"bearer"},
-          "sessionCookie": {"type":"apiKey","in":"cookie","name":"racebin_session"}
-        }
-      },
-      "paths": {
-        "/config": {"get":{"summary":"Runtime configuration"}},
-        "/session": {
-          "get":{"summary":"Current session"},
-          "post":{"summary":"Log in"},
-          "delete":{"summary":"Log out"}
-        },
-        "/account/password":{"patch":{"summary":"Change current user's password"}},
-        "/password-resets/{token}":{"post":{"summary":"Use a one-time password reset link"}},
-        "/account/api-keys":{
-          "get":{"summary":"List current user's API keys"},
-          "post":{"summary":"Create an API key"}
-        },
-        "/account/api-keys/{id}":{
-          "patch":{"summary":"Enable or disable an API key"},
-          "delete":{"summary":"Delete an API key"}
-        },
-        "/invitations/{token}/redeem":{"post":{"summary":"Redeem an invitation"}},
-        "/folders":{
-          "get":{"summary":"List current user's folders"},
-          "post":{"summary":"Create a folder"}
-        },
-        "/folders/{folder_id}":{
-          "patch":{"summary":"Rename a folder"},
-          "delete":{"summary":"Delete a folder and unfile its pastes"}
-        },
-        "/pastes":{
-          "get":{"summary":"List visible pastes"},
-          "post":{"summary":"Create a paste"}
-        },
-        "/pastes/convert":{"post":{"summary":"Convert text and rich-text content"}},
-        "/pastes/folder":{"patch":{"summary":"Move owned pastes to a folder"}},
-        "/pastes/{paste_id}":{
-          "get":{"summary":"Get paste metadata and content without consuming a read"},
-          "patch":{"summary":"Update a paste"},
-          "delete":{"summary":"Delete a paste"}
-        },
-        "/pastes/{paste_id}/consume":{"get":{"summary":"Read and consume a paste"}},
-        "/pastes/{paste_id}/raw":{"get":{"summary":"Read raw paste content"}},
-        "/pastes/{paste_id}/attachments":{"post":{"summary":"Upload paste attachments"}},
-        "/pastes/{paste_id}/attachments/{attachment_id}":{
-          "get":{"summary":"Download a paste attachment"},
-          "delete":{"summary":"Delete a paste attachment"}
-        },
-        "/pastes/{paste_id}/archive":{"get":{"summary":"Download paste and attachments as ZIP"}},
-        "/pastes/{paste_id}/qr":{"get":{"summary":"Generate a paste QR code"}},
-        "/admin/pastes":{"get":{"summary":"List all pastes"}},
-        "/admin/users":{
-          "get":{"summary":"List users"}
-        },
-        "/admin/users/{id}":{
-          "get":{"summary":"Get a user and account metrics"},
-          "patch":{"summary":"Update a user"}
-        },
-        "/admin/users/{id}/password-reset":{"post":{"summary":"Create a one-time password reset link"}},
-        "/admin/users/{id}/sessions":{"delete":{"summary":"Revoke every session for a user"}},
-        "/admin/users/{id}/api-keys":{"delete":{"summary":"Delete every API key for a user"}},
-        "/admin/invitations":{
-          "get":{"summary":"List invitations"},
-          "post":{"summary":"Create an invitation"}
-        },
-        "/admin/invitations/{id}":{"delete":{"summary":"Revoke an invitation"}},
-        "/admin/api-keys":{"get":{"summary":"List all API keys"}},
-        "/admin/api-keys/{id}":{
-          "patch":{"summary":"Enable or disable any API key"},
-          "delete":{"summary":"Delete any API key"}
-        }
-      }
-    }))
+    HttpResponse::Ok().json(ApiDoc::openapi())
 }
 
-#[get("/config")]
-async fn get_config() -> impl Responder {
-    HttpResponse::Ok().json(json!({
-        "site_name": ARGS.site_name.as_deref().unwrap_or("Racebin"),
-        "plain_home_enabled": ARGS.plain_home,
-        "max_attachment_size_bytes": ARGS.max_attachment_size_mb * 1024 * 1024,
-        "attachments_enabled": ARGS.attachments_enabled,
-        "qr_codes_enabled": ARGS.qr_codes,
-        "visibility_modes": ["public", "unlisted", "private"]
-    }))
+#[utoipa::path(get, path = "/capabilities", tag = "discovery", responses((status = 200, body = Capabilities)))]
+#[get("/capabilities")]
+async fn get_capabilities() -> impl Responder {
+    HttpResponse::Ok().json(Capabilities {
+        site_name: ARGS.site_name.clone().unwrap_or_else(|| "Racebin".into()),
+        plain_home_enabled: ARGS.plain_home,
+        max_attachment_size_bytes: ARGS.max_attachment_size_mb * 1024 * 1024,
+        max_attachments_per_paste: 32,
+        attachments_enabled: ARGS.attachments_enabled,
+        qr_codes_enabled: ARGS.qr_codes,
+        formats: ["text", "rich_text"],
+        visibility_modes: ["public", "unlisted", "private"],
+    })
+}
+
+#[utoipa::path(get, path = "/languages", tag = "discovery", responses((status = 200, body = [Language])))]
+#[get("/languages")]
+async fn get_languages() -> impl Responder {
+    HttpResponse::Ok().json(LANGUAGES)
+}
+
+pub(super) async fn health() -> HttpResponse {
+    HttpResponse::NoContent().finish()
+}
+
+pub(super) async fn ready(services: web::Data<PasteService>) -> HttpResponse {
+    match sqlx::query("SELECT 1")
+        .execute(services.storage.pool())
+        .await
+    {
+        Ok(_) => HttpResponse::NoContent().finish(),
+        Err(_) => HttpResponse::ServiceUnavailable().finish(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generated_contract_contains_canonical_paste_lifecycle() {
+        let document = ApiDoc::openapi();
+        let paths = document.paths.paths;
+        for path in [
+            "/pastes",
+            "/pastes/{paste_id}",
+            "/pastes/{paste_id}/source",
+            "/pastes/{paste_id}/reads",
+            "/content-conversions",
+            "/capabilities",
+            "/languages",
+        ] {
+            assert!(paths.contains_key(path), "missing OpenAPI path {path}");
+        }
+        assert!(!paths.contains_key("/pastes/{paste_id}/consume"));
+        assert!(!paths.contains_key("/pastes/{paste_id}/raw"));
+    }
 }

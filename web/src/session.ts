@@ -7,7 +7,7 @@ export async function loadSession(): Promise<void> {
     requestApi<Session>("/session").catch(
       (): Session => ({ authenticated: false })
     ),
-    requestApi<Config>("/config")
+    requestApi<Config>("/capabilities")
   ]);
   appState.set({ session, config, ready: true });
 }

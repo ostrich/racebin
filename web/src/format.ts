@@ -1,11 +1,12 @@
 import type { Paste } from "./types";
 
-export function formatDate(value: number | null): string {
-  return value
+export function formatDate(value: number | string | null): string {
+  const timestamp = typeof value === "string" ? Date.parse(value) : value ? value * 1000 : 0;
+  return timestamp
     ? new Intl.DateTimeFormat(undefined, {
         dateStyle: "medium",
         timeStyle: "short"
-      }).format(value * 1000)
+      }).format(timestamp)
     : "Never";
 }
 

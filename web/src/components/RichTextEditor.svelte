@@ -9,9 +9,11 @@
 
   let {
     document = $bindable(),
+    html = $bindable(),
     onchange
   }: {
     document: RichTextDocument;
+    html: string;
     onchange?: () => void;
   } = $props();
   let element: HTMLDivElement;
@@ -138,9 +140,11 @@
       },
       onUpdate: ({ editor: updated }) => {
         document = updated.getJSON() as RichTextDocument;
+        html = updated.getHTML();
         onchange?.();
       }
     });
+    html = editor.getHTML();
     return () => editor.destroy();
   });
 </script>

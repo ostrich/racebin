@@ -15,8 +15,22 @@
   let { mine, query }: { mine: boolean; query: URLSearchParams } = $props();
   function requestPaths(requestedQuery: URLSearchParams): { paste: string; folders: string | null } {
     const params = new URLSearchParams(requestedQuery);
+    if (params.has("search")) {
+      params.set("q", params.get("search") ?? "");
+      params.delete("search");
+    }
+    if (params.has("content_kind")) {
+      params.set("format", params.get("content_kind") ?? "");
+      params.delete("content_kind");
+    }
+    for (const key of ["created_after", "created_before"]) {
+      const value = params.get(key);
+      if (value && Number.isFinite(Number(value))) {
+        params.set(key, new Date(Number(value) * 1000).toISOString());
+      }
+    }
     params.set("page_size", "50");
-    if (mine) params.set("mine", "true");
+    if (mine) params.set("owner", "me");
     else params.set("visibility", "public");
     return { paste: `/pastes?${params}`, folders: mine ? "/folders" : null };
   }
@@ -141,10 +155,10 @@
   async function moveSelected(): Promise<void> {
     if (!selected.size) return;
     try {
-      await requestApi("/pastes/folder", {
+      await requestApi("/pastes", {
         method: "PATCH",
         body: JSON.stringify({
-          paste_ids: [...selected],
+          ids: [...selected],
           folder_id: moveFolder ? Number(moveFolder) : null
         })
       });
