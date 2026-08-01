@@ -1,5 +1,14 @@
 import { currentState } from "./state";
 import { clearQueryCache } from "./queryCache";
+import type {
+  Attachment,
+  Paste,
+  PasteBody,
+  WireAttachment,
+  WirePasteBase,
+  WirePasteResource,
+  WirePasteSummary
+} from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -37,42 +46,81 @@ export async function requestApi<T>(path: string, init: ApiRequestInit = {}): Pr
   return normalizePayload(data, response.headers.get("ETag")) as T;
 }
 
-function unixTimestamp(value: unknown): number | null {
+function unixTimestamp(value: string | null | undefined): number | null {
   if (value === null || value === undefined) return null;
-  if (typeof value === "number") return value;
-  const milliseconds = Date.parse(String(value));
+  const milliseconds = Date.parse(value);
   return Number.isFinite(milliseconds) ? Math.floor(milliseconds / 1000) : null;
 }
 
-function normalizePayload(value: unknown, etag?: string | null): unknown {
+function isWirePaste(value: unknown): value is WirePasteResource | WirePasteSummary {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<WirePasteBase>;
+  return typeof candidate.id === "string"
+    && typeof candidate.url === "string"
+    && (candidate.format === "text" || candidate.format === "rich_text")
+    && typeof candidate.created_at === "string";
+}
+
+function attachmentFromWire(value: WireAttachment): Attachment {
+  return { id: value.id, filename: value.filename, size_bytes: value.size_bytes, url: value.url };
+}
+
+function pasteFromWire(
+  value: WirePasteResource | WirePasteSummary,
+  etag?: string | null
+): Paste {
+  const resource = "attachments" in value ? value : undefined;
+  const body: PasteBody | undefined = resource?.body;
+  return {
+    id: value.id,
+    url: value.url,
+    api_url: resource?.api_url,
+    read_url: resource?.read_url,
+    source_url: resource?.source_url,
+    archive_url: resource?.archive_url,
+    _etag: etag ?? undefined,
+    owner_id: value.owner_id ?? null,
+    folder_id: value.folder_id ?? null,
+    title: value.title,
+    content: body?.format === "rich_text"
+      ? body.plain_text
+      : body?.content ?? ("excerpt" in value ? value.excerpt ?? "" : ""),
+    document: body?.format === "rich_text" ? body.content : null,
+    content_kind: value.format,
+    language: body?.format === "text"
+      ? body.language
+      : value.language ?? "plaintext",
+    visibility: value.visibility,
+    created_at: unixTimestamp(value.created_at) ?? 0,
+    updated_at: unixTimestamp(value.updated_at) ?? unixTimestamp(value.created_at) ?? 0,
+    expires_at: unixTimestamp(value.expires_at),
+    last_read_at: unixTimestamp(value.last_read_at),
+    read_count: value.read_count,
+    read_limit: value.read_limit,
+    attachment_count: value.attachment_count,
+    size_bytes: value.size_bytes,
+    attachments: resource?.attachments.map(attachmentFromWire) ?? []
+  };
+}
+
+export function normalizePayload(value: unknown, etag?: string | null): unknown {
   if (Array.isArray(value)) return value.map(item => normalizePayload(item));
   if (!value || typeof value !== "object") return value;
+  if (isWirePaste(value)) return pasteFromWire(value, etag);
   const object = value as Record<string, unknown>;
-  if (Array.isArray(object.items)) object.items = object.items.map(item => normalizePayload(item));
-  if (object.pagination && typeof object.pagination === "object") {
-    const pagination = object.pagination as Record<string, unknown>;
-    object.page = pagination.page;
-    object.page_size = pagination.page_size;
-    object.total_items = pagination.total_items;
+  if (Array.isArray(object.items)) {
+    const pagination = object.pagination && typeof object.pagination === "object"
+      ? object.pagination as Record<string, unknown>
+      : undefined;
+    return {
+      ...object,
+      items: object.items.map(item => normalizePayload(item)),
+      ...(pagination ? {
+        page: pagination.page,
+        page_size: pagination.page_size,
+        total_items: pagination.total_items
+      } : {})
+    };
   }
-  if (typeof object.url === "string" && typeof object.id === "string" && typeof object.format === "string") {
-    const body = object.body as Record<string, unknown> | undefined;
-    object.content_kind = object.format;
-    object.content = body?.format === "rich_text"
-      ? String(body.plain_text ?? "")
-      : String(body?.content ?? object.excerpt ?? "");
-    object.document = body?.format === "rich_text" ? body.content : null;
-    object.language = body?.format === "text"
-      ? String(body.language ?? object.language ?? "plaintext")
-      : "plaintext";
-    object.owner_id ??= null;
-    object.folder_id ??= null;
-    object.attachments ??= [];
-    object.created_at = unixTimestamp(object.created_at) ?? 0;
-    object.updated_at = unixTimestamp(object.updated_at) ?? object.created_at;
-    object.expires_at = unixTimestamp(object.expires_at);
-    object.last_read_at = unixTimestamp(object.last_read_at);
-    if (etag) object._etag = etag;
-  }
-  return object;
+  return { ...object };
 }

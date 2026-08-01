@@ -25,6 +25,38 @@ export type PasteBody =
   | { format: "text"; content: string; language: string }
   | { format: "rich_text"; content: string; plain_text: string };
 
+export type WireAttachment = { id: number; filename: string; size_bytes: number; url: string };
+
+export type WirePasteBase = {
+  id: string;
+  url: string;
+  title: string;
+  format: "text" | "rich_text";
+  language?: string | null;
+  visibility: "public" | "unlisted" | "private";
+  owner_id?: number | null;
+  folder_id?: number | null;
+  created_at: string;
+  updated_at: string;
+  expires_at: string | null;
+  last_read_at: string | null;
+  read_count: number;
+  read_limit: number | null;
+  attachment_count: number;
+  size_bytes: number;
+};
+
+export type WirePasteResource = WirePasteBase & {
+  api_url: string;
+  read_url: string;
+  source_url?: string;
+  archive_url?: string;
+  body?: PasteBody;
+  attachments: WireAttachment[];
+};
+
+export type WirePasteSummary = WirePasteBase & { excerpt?: string };
+
 export type Paste = {
   id: string;
   url?: string;
@@ -33,8 +65,6 @@ export type Paste = {
   source_url?: string;
   archive_url?: string;
   _etag?: string;
-  body?: PasteBody;
-  format?: "text" | "rich_text";
   owner_id: number | null;
   folder_id: number | null;
   title: string;
