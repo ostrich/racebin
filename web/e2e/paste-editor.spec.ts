@@ -163,10 +163,9 @@ test("ordered rich-text lists can be submitted", async ({ page }) => {
   );
   await page.getByRole("button", { name: "Create paste" }).click();
   const body = (await submitted).postDataJSON();
-  expect(body.document.content[0]).toMatchObject({
-    type: "orderedList",
-    attrs: { start: 1, type: null }
-  });
+  expect(body.body).toMatchObject({ format: "rich_text" });
+  expect(body.body.content).toContain("<ol>");
+  expect(body.body.content).toContain("<li><p>First item</p></li>");
 });
 
 test("pasted links are normalized to the supported document contract", async ({ page }) => {
@@ -189,15 +188,11 @@ test("pasted links are normalized to the supported document contract", async ({ 
   );
   await page.getByRole("button", { name: "Create paste" }).click();
   const body = (await submitted).postDataJSON();
-  const content = body.document.content[0].content;
-  expect(content[0].marks[0]).toEqual({
-    type: "link",
-    attrs: {
-      href: "/help", target: "_blank", rel: "noopener noreferrer nofollow",
-      class: null, title: null
-    }
-  });
-  expect(content.find((node: { text?: string }) => node.text?.includes("phone")).marks).toBeUndefined();
+  expect(body.body).toMatchObject({ format: "rich_text" });
+  expect(body.body.content).toContain('href="/help"');
+  expect(body.body.content).toContain('rel="noopener noreferrer nofollow"');
+  expect(body.body.content).not.toContain("onclick");
+  expect(body.body.content).not.toContain("tel:");
 });
 
 test("rich-text conversion populates the plain-text editor", async ({ page }) => {

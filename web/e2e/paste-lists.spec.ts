@@ -258,7 +258,7 @@ test("selection and its range anchor reset with list navigation", async ({ page 
 test("query navigation retains list pages until their replacement is ready", async ({ page }) => {
   const filteredPaste = { ...paste, id: "filtered-paste", title: "Filtered result" };
   await mockApi(page, true, {
-    pastePage: url => url.searchParams.has("search")
+    pastePage: url => url.searchParams.has("q")
       ? { items: [filteredPaste], delay: 150 }
       : { items: [paste] },
     adminPastePage: url => url.searchParams.has("search")

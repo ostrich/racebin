@@ -145,7 +145,7 @@
         drafts.set(source, content);
         const converted = await convert("text", "rich_text");
         const convertedHtml = converted.body.content;
-        if (convertedHtml && !(await conversionDialog.ask(target, content))) return;
+        if (content && !(await conversionDialog.ask(target, content))) return;
         document = convertedHtml;
         richHtml = convertedHtml;
       }

@@ -106,6 +106,7 @@ export async function mockApi(
     }
     if (url.pathname === "/api/v1/pastes" && route.request().method() === "PATCH") return route.fulfill({ status: 204 });
     if (url.pathname.endsWith("/reads")) return json(route, viewPaste);
+    if (url.pathname === "/api/v1/pastes/sample-paste/source") return json(route, viewPaste);
     if (url.pathname === "/api/v1/pastes/sample-paste") return json(route, viewPaste);
     if (url.pathname === "/api/v1/content-conversions") {
       const body = route.request().postDataJSON() as { source: { format: string; content: string }; target_format: string };
