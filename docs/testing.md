@@ -23,6 +23,20 @@ Vitest covers route, formatting, and Svelte component behavior in jsdom.
 Playwright runs critical navigation, editor, highlighting, and dirty-form
 workflows in Chromium against deterministic API fixtures.
 
+The compiled-stack smoke test uses a temporary SQLite database and data
+directory, starts the actual Racebin binary with its embedded production
+frontend, and drives login plus paste creation through a browser:
+
+```bash
+npm run build
+cargo build
+cd web
+npm run test:real
+```
+
+The harness removes its temporary account, database, and attachments when the
+server exits; it never opens the configured development or production database.
+
 Playwright also protects the shared UI geometry in two complementary ways:
 
 - `layout-invariants.spec.ts` checks measurable contracts such as common
@@ -68,4 +82,4 @@ key scope, ownership and administrative boundaries, scope delegation, and the
 file lifecycle.
 
 CI provisions a disposable PostgreSQL service and runs formatting, strict
-Clippy, and the complete Rust test suite.
+Clippy, the complete Rust suite, and the compiled-stack browser smoke test.

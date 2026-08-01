@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crate::args::ARGS;
 
-const ACCESS_LOG_FORMAT: &str = "%a \"%m\" %s %b \"%{User-Agent}i\" %T";
+const ACCESS_LOG_FORMAT: &str = "%a \"%{METHOD}xi\" %s %b \"%{User-Agent}i\" %T";
 
 pub mod account;
 pub mod args;
@@ -103,7 +103,10 @@ async fn main() -> std::io::Result<()> {
                     )),
             )
             .wrap(middleware::NormalizePath::trim())
-            .wrap(middleware::Logger::new(ACCESS_LOG_FORMAT))
+            .wrap(
+                middleware::Logger::new(ACCESS_LOG_FORMAT)
+                    .custom_request_replace("METHOD", |request| request.method().to_string()),
+            )
             .configure(http::configure)
     })
     .workers(ARGS.threads as usize)
@@ -134,6 +137,7 @@ mod tests {
         for unsafe_directive in ["%r", "%U", "%q", "%{Referer}i"] {
             assert!(!ACCESS_LOG_FORMAT.contains(unsafe_directive));
         }
+        assert!(ACCESS_LOG_FORMAT.contains("%{METHOD}xi"));
     }
 
     #[cfg(unix)]

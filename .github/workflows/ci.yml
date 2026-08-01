@@ -43,6 +43,12 @@ jobs:
       - name: Run functional frontend tests
         run: npm run test:unit && npm run test:e2e
         working-directory: web
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build the application stack
+        run: cargo build --locked
+      - name: Smoke-test the compiled frontend and disposable backend
+        run: npm run test:real
+        working-directory: web
       - name: Upload Playwright failure details
         if: failure()
         uses: actions/upload-artifact@v6
