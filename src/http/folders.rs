@@ -1,12 +1,12 @@
 use super::*;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 struct FolderInput {
     name: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 struct MovePastesInput {
     ids: Vec<String>,
@@ -22,8 +22,12 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(move_pastes);
 }
 
+#[utoipa::path(get, path = "/folders", tag = "folders")]
 #[get("/folders")]
-async fn list_folders(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
+pub(crate) async fn list_folders(
+    req: HttpRequest,
+    services: web::Data<PasteService>,
+) -> HttpResponse {
     let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(value) => value,
         Err(response) => return response,
@@ -34,8 +38,9 @@ async fn list_folders(req: HttpRequest, services: web::Data<PasteService>) -> Ht
     }
 }
 
+#[utoipa::path(post, path = "/folders", tag = "folders")]
 #[post("/folders")]
-async fn create_folder(
+pub(crate) async fn create_folder(
     req: HttpRequest,
     services: web::Data<PasteService>,
     body: web::Json<FolderInput>,
@@ -53,8 +58,9 @@ async fn create_folder(
     }
 }
 
+#[utoipa::path(patch, path = "/folders/{folder_id}", tag = "folders", params(("folder_id" = i64, Path)))]
 #[patch("/folders/{folder_id}")]
-async fn rename_folder(
+pub(crate) async fn rename_folder(
     req: HttpRequest,
     services: web::Data<PasteService>,
     folder_id: web::Path<i64>,
@@ -74,8 +80,9 @@ async fn rename_folder(
     }
 }
 
+#[utoipa::path(delete, path = "/folders/{folder_id}", tag = "folders", params(("folder_id" = i64, Path)))]
 #[delete("/folders/{folder_id}")]
-async fn delete_folder(
+pub(crate) async fn delete_folder(
     req: HttpRequest,
     services: web::Data<PasteService>,
     folder_id: web::Path<i64>,
@@ -94,8 +101,9 @@ async fn delete_folder(
     }
 }
 
+#[utoipa::path(patch, path = "/pastes", tag = "folders")]
 #[patch("/pastes")]
-async fn move_pastes(
+pub(crate) async fn move_pastes(
     req: HttpRequest,
     services: web::Data<PasteService>,
     body: web::Json<MovePastesInput>,

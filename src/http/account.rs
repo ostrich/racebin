@@ -10,8 +10,12 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(redeem_invitation);
 }
 
+#[utoipa::path(get, path = "/session", tag = "account")]
 #[get("/session")]
-async fn get_session(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
+pub(crate) async fn get_session(
+    req: HttpRequest,
+    services: web::Data<PasteService>,
+) -> HttpResponse {
     match principal(&services, &req).await {
         Ok(Principal::Session(session)) => HttpResponse::Ok().json(json!({
             "authenticated": true,
@@ -29,7 +33,7 @@ async fn get_session(req: HttpRequest, services: web::Data<PasteService>) -> Htt
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 struct LoginInput {
     username: String,
@@ -37,8 +41,9 @@ struct LoginInput {
     remember: Option<bool>,
 }
 
+#[utoipa::path(post, path = "/session", tag = "account")]
 #[post("/session")]
-async fn login(
+pub(crate) async fn login(
     req: HttpRequest,
     services: web::Data<PasteService>,
     body: web::Json<LoginInput>,
@@ -94,8 +99,9 @@ async fn login(
     }
 }
 
+#[utoipa::path(delete, path = "/session", tag = "account")]
 #[delete("/session")]
-async fn logout(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
+pub(crate) async fn logout(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
     let value = match principal(&services, &req)
         .await
         .and_then(|p| require_mutation(&services, &req, p))
@@ -128,15 +134,16 @@ async fn logout(req: HttpRequest, services: web::Data<PasteService>) -> HttpResp
         .finish()
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 struct PasswordInput {
     current_password: String,
     new_password: String,
 }
 
+#[utoipa::path(patch, path = "/account/password", tag = "account")]
 #[patch("/account/password")]
-async fn change_password(
+pub(crate) async fn change_password(
     req: HttpRequest,
     services: web::Data<PasteService>,
     body: web::Json<PasswordInput>,
@@ -185,21 +192,22 @@ async fn change_password(
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 struct InvitationInput {
     username: String,
     password: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 struct PasswordResetInput {
     new_password: String,
 }
 
+#[utoipa::path(post, path = "/password-resets/{token}", tag = "account", params(("token" = String, Path)))]
 #[post("/password-resets/{token}")]
-async fn reset_password(
+pub(crate) async fn reset_password(
     req: HttpRequest,
     services: web::Data<PasteService>,
     token: web::Path<String>,
@@ -239,8 +247,9 @@ async fn reset_password(
     }
 }
 
+#[utoipa::path(post, path = "/invitations/{token}/redeem", tag = "account", params(("token" = String, Path)))]
 #[post("/invitations/{token}/redeem")]
-async fn redeem_invitation(
+pub(crate) async fn redeem_invitation(
     req: HttpRequest,
     services: web::Data<PasteService>,
     token: web::Path<String>,

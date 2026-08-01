@@ -17,8 +17,12 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(admin_delete_key);
 }
 
+#[utoipa::path(get, path = "/admin/users", tag = "administration")]
 #[get("/admin/users")]
-async fn admin_users(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
+pub(crate) async fn admin_users(
+    req: HttpRequest,
+    services: web::Data<PasteService>,
+) -> HttpResponse {
     let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(v) => v,
         Err(r) => return r,
@@ -32,8 +36,9 @@ async fn admin_users(req: HttpRequest, services: web::Data<PasteService>) -> Htt
     }
 }
 
+#[utoipa::path(get, path = "/admin/users/{id}", tag = "administration", params(("id" = i64, Path)))]
 #[get("/admin/users/{id}")]
-async fn admin_user(
+pub(crate) async fn admin_user(
     req: HttpRequest,
     services: web::Data<PasteService>,
     id: web::Path<i64>,
@@ -52,8 +57,9 @@ async fn admin_user(
     }
 }
 
+#[utoipa::path(get, path = "/admin/pastes", tag = "administration")]
 #[get("/admin/pastes")]
-async fn admin_pastes(
+pub(crate) async fn admin_pastes(
     req: HttpRequest,
     services: web::Data<PasteService>,
     query: web::Query<PasteQuery>,
@@ -74,15 +80,16 @@ async fn admin_pastes(
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 struct UserUpdate {
     enabled: Option<bool>,
     role: Option<String>,
 }
 
+#[utoipa::path(patch, path = "/admin/users/{id}", tag = "administration", params(("id" = i64, Path)))]
 #[patch("/admin/users/{id}")]
-async fn admin_update_user(
+pub(crate) async fn admin_update_user(
     req: HttpRequest,
     services: web::Data<PasteService>,
     id: web::Path<i64>,
@@ -117,8 +124,9 @@ async fn admin_update_user(
     }
 }
 
+#[utoipa::path(post, path = "/admin/users/{id}/password-reset", tag = "administration", params(("id" = i64, Path)))]
 #[post("/admin/users/{id}/password-reset")]
-async fn admin_create_password_reset(
+pub(crate) async fn admin_create_password_reset(
     req: HttpRequest,
     services: web::Data<PasteService>,
     id: web::Path<i64>,
@@ -144,8 +152,9 @@ async fn admin_create_password_reset(
     }
 }
 
+#[utoipa::path(delete, path = "/admin/users/{id}/sessions", tag = "administration", params(("id" = i64, Path)))]
 #[delete("/admin/users/{id}/sessions")]
-async fn admin_revoke_user_sessions(
+pub(crate) async fn admin_revoke_user_sessions(
     req: HttpRequest,
     services: web::Data<PasteService>,
     id: web::Path<i64>,
@@ -167,8 +176,9 @@ async fn admin_revoke_user_sessions(
     }
 }
 
+#[utoipa::path(delete, path = "/admin/users/{id}/api-keys", tag = "administration", params(("id" = i64, Path)))]
 #[delete("/admin/users/{id}/api-keys")]
-async fn admin_revoke_user_keys(
+pub(crate) async fn admin_revoke_user_keys(
     req: HttpRequest,
     services: web::Data<PasteService>,
     id: web::Path<i64>,
@@ -193,8 +203,12 @@ async fn admin_revoke_user_keys(
     }
 }
 
+#[utoipa::path(get, path = "/admin/invitations", tag = "administration")]
 #[get("/admin/invitations")]
-async fn admin_invitations(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
+pub(crate) async fn admin_invitations(
+    req: HttpRequest,
+    services: web::Data<PasteService>,
+) -> HttpResponse {
     let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(v) => v,
         Err(r) => return r,
@@ -230,8 +244,9 @@ async fn admin_invitations(req: HttpRequest, services: web::Data<PasteService>) 
     }
 }
 
+#[utoipa::path(post, path = "/admin/invitations", tag = "administration")]
 #[post("/admin/invitations")]
-async fn admin_create_invitation(
+pub(crate) async fn admin_create_invitation(
     req: HttpRequest,
     services: web::Data<PasteService>,
 ) -> HttpResponse {
@@ -257,8 +272,9 @@ async fn admin_create_invitation(
     }
 }
 
+#[utoipa::path(delete, path = "/admin/invitations/{id}", tag = "administration", params(("id" = i64, Path)))]
 #[delete("/admin/invitations/{id}")]
-async fn admin_revoke_invitation(
+pub(crate) async fn admin_revoke_invitation(
     req: HttpRequest,
     services: web::Data<PasteService>,
     id: web::Path<i64>,
@@ -280,8 +296,12 @@ async fn admin_revoke_invitation(
     }
 }
 
+#[utoipa::path(get, path = "/admin/api-keys", tag = "administration")]
 #[get("/admin/api-keys")]
-async fn admin_keys(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
+pub(crate) async fn admin_keys(
+    req: HttpRequest,
+    services: web::Data<PasteService>,
+) -> HttpResponse {
     let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(v) => v,
         Err(r) => return r,
@@ -295,8 +315,9 @@ async fn admin_keys(req: HttpRequest, services: web::Data<PasteService>) -> Http
     }
 }
 
+#[utoipa::path(patch, path = "/admin/api-keys/{id}", tag = "administration", params(("id" = i64, Path)))]
 #[patch("/admin/api-keys/{id}")]
-async fn admin_update_key(
+pub(crate) async fn admin_update_key(
     req: HttpRequest,
     services: web::Data<PasteService>,
     id: web::Path<i64>,
@@ -319,8 +340,9 @@ async fn admin_update_key(
     }
 }
 
+#[utoipa::path(delete, path = "/admin/api-keys/{id}", tag = "administration", params(("id" = i64, Path)))]
 #[delete("/admin/api-keys/{id}")]
-async fn admin_delete_key(
+pub(crate) async fn admin_delete_key(
     req: HttpRequest,
     services: web::Data<PasteService>,
     id: web::Path<i64>,

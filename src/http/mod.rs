@@ -29,7 +29,7 @@ mod keys;
 mod meta;
 mod pastes;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 struct EnabledInput {
     enabled: bool,

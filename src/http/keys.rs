@@ -8,8 +8,9 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(delete_key);
 }
 
+#[utoipa::path(get, path = "/account/api-keys", tag = "api keys")]
 #[get("/account/api-keys")]
-async fn list_keys(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
+pub(crate) async fn list_keys(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
     let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(v) => v,
         Err(r) => return r,
@@ -30,15 +31,16 @@ async fn list_keys(req: HttpRequest, services: web::Data<PasteService>) -> HttpR
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 struct KeyInput {
     name: String,
     scopes: Vec<String>,
 }
 
+#[utoipa::path(post, path = "/account/api-keys", tag = "api keys")]
 #[post("/account/api-keys")]
-async fn create_key(
+pub(crate) async fn create_key(
     req: HttpRequest,
     services: web::Data<PasteService>,
     body: web::Json<KeyInput>,
@@ -82,8 +84,9 @@ async fn create_key(
     }
 }
 
+#[utoipa::path(patch, path = "/account/api-keys/{id}", tag = "api keys", params(("id" = i64, Path)))]
 #[patch("/account/api-keys/{id}")]
-async fn update_key(
+pub(crate) async fn update_key(
     req: HttpRequest,
     services: web::Data<PasteService>,
     id: web::Path<i64>,
@@ -113,8 +116,9 @@ async fn update_key(
     }
 }
 
+#[utoipa::path(delete, path = "/account/api-keys/{id}", tag = "api keys", params(("id" = i64, Path)))]
 #[delete("/account/api-keys/{id}")]
-async fn delete_key(
+pub(crate) async fn delete_key(
     req: HttpRequest,
     services: web::Data<PasteService>,
     id: web::Path<i64>,

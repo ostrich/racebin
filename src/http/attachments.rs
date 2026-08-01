@@ -61,8 +61,9 @@ struct ReadGrantQuery {
     read_token: Option<String>,
 }
 
+#[utoipa::path(post, path = "/pastes/{paste_id}/attachments", tag = "attachments", params(("paste_id" = String, Path)))]
 #[post("/pastes/{paste_id}/attachments")]
-async fn upload_attachments(
+pub(crate) async fn upload_attachments(
     req: HttpRequest,
     services: web::Data<PasteService>,
     paste_id: web::Path<String>,
@@ -245,8 +246,9 @@ async fn upload_attachments(
         .json(json!({"items": attachments}))
 }
 
+#[utoipa::path(get, path = "/pastes/{paste_id}/attachments/{attachment_id}", tag = "attachments", params(("paste_id" = String, Path), ("attachment_id" = i64, Path)))]
 #[get("/pastes/{paste_id}/attachments/{attachment_id}")]
-async fn get_attachment(
+pub(crate) async fn get_attachment(
     req: HttpRequest,
     services: web::Data<PasteService>,
     path: web::Path<(String, i64)>,
@@ -301,8 +303,9 @@ async fn get_attachment(
         .into_response(&req)
 }
 
+#[utoipa::path(delete, path = "/pastes/{paste_id}/attachments/{attachment_id}", tag = "attachments", params(("paste_id" = String, Path), ("attachment_id" = i64, Path)))]
 #[delete("/pastes/{paste_id}/attachments/{attachment_id}")]
-async fn delete_attachment(
+pub(crate) async fn delete_attachment(
     req: HttpRequest,
     services: web::Data<PasteService>,
     path: web::Path<(String, i64)>,
@@ -344,8 +347,9 @@ async fn delete_attachment(
     }
 }
 
+#[utoipa::path(get, path = "/pastes/{paste_id}/archive", tag = "attachments", params(("paste_id" = String, Path)))]
 #[get("/pastes/{paste_id}/archive")]
-async fn get_archive(
+pub(crate) async fn get_archive(
     req: HttpRequest,
     services: web::Data<PasteService>,
     paste_id: web::Path<String>,
@@ -430,8 +434,9 @@ async fn paste_for_download(
     }
 }
 
+#[utoipa::path(get, path = "/pastes/{paste_id}/qr", tag = "attachments", params(("paste_id" = String, Path)))]
 #[get("/pastes/{paste_id}/qr")]
-async fn get_qr(
+pub(crate) async fn get_qr(
     req: HttpRequest,
     services: web::Data<PasteService>,
     paste_id: web::Path<String>,

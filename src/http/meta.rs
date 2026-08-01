@@ -12,8 +12,45 @@ use utoipa::{Modify, OpenApi};
         crate::http::pastes::update_paste,
         crate::http::pastes::delete_paste,
         crate::http::pastes::convert_paste_content,
+        crate::http::attachments::upload_attachments,
+        crate::http::attachments::get_attachment,
+        crate::http::attachments::delete_attachment,
+        crate::http::attachments::get_archive,
+        crate::http::attachments::get_qr,
+        crate::http::folders::list_folders,
+        crate::http::folders::create_folder,
+        crate::http::folders::rename_folder,
+        crate::http::folders::delete_folder,
+        crate::http::folders::move_pastes,
+        crate::http::account::get_session,
+        crate::http::account::login,
+        crate::http::account::logout,
+        crate::http::account::change_password,
+        crate::http::account::reset_password,
+        crate::http::account::redeem_invitation,
+        crate::http::keys::list_keys,
+        crate::http::keys::create_key,
+        crate::http::keys::update_key,
+        crate::http::keys::delete_key,
+        crate::http::admin::admin_users,
+        crate::http::admin::admin_user,
+        crate::http::admin::admin_pastes,
+        crate::http::admin::admin_update_user,
+        crate::http::admin::admin_create_password_reset,
+        crate::http::admin::admin_revoke_user_sessions,
+        crate::http::admin::admin_revoke_user_keys,
+        crate::http::admin::admin_invitations,
+        crate::http::admin::admin_create_invitation,
+        crate::http::admin::admin_revoke_invitation,
+        crate::http::admin::admin_keys,
+        crate::http::admin::admin_update_key,
+        crate::http::admin::admin_delete_key,
+        api_root,
+        get_openapi,
         get_capabilities,
-        get_languages
+        get_languages,
+        get_health,
+        get_readiness
     ),
     components(schemas(
         crate::http::dto::BodyInput,
@@ -28,7 +65,15 @@ use utoipa::{Modify, OpenApi};
         crate::http::errors::ProblemDetails
     )),
     modifiers(&Security),
-    tags((name = "pastes"), (name = "discovery"))
+    tags(
+        (name = "pastes"),
+        (name = "attachments"),
+        (name = "folders"),
+        (name = "account"),
+        (name = "api keys"),
+        (name = "administration"),
+        (name = "discovery")
+    )
 )]
 struct ApiDoc;
 
@@ -176,9 +221,12 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(api_root)
         .service(get_openapi)
         .service(get_capabilities)
-        .service(get_languages);
+        .service(get_languages)
+        .service(get_health)
+        .service(get_readiness);
 }
 
+#[utoipa::path(get, path = "/", tag = "discovery")]
 #[get("")]
 async fn api_root() -> impl Responder {
     HttpResponse::Ok().json(json!({
@@ -190,6 +238,7 @@ async fn api_root() -> impl Responder {
     }))
 }
 
+#[utoipa::path(get, path = "/openapi.json", tag = "discovery")]
 #[get("/openapi.json")]
 async fn get_openapi() -> impl Responder {
     HttpResponse::Ok().json(ApiDoc::openapi())
@@ -216,6 +265,18 @@ async fn get_languages() -> impl Responder {
     HttpResponse::Ok().json(LANGUAGES)
 }
 
+#[utoipa::path(get, path = "/health", tag = "discovery", responses((status = 204)))]
+#[get("/health")]
+async fn get_health() -> HttpResponse {
+    health().await
+}
+
+#[utoipa::path(get, path = "/readiness", tag = "discovery", responses((status = 204), (status = 503)))]
+#[get("/readiness")]
+async fn get_readiness(services: web::Data<PasteService>) -> HttpResponse {
+    ready(services).await
+}
+
 pub(super) async fn health() -> HttpResponse {
     HttpResponse::NoContent().finish()
 }
@@ -235,10 +296,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn generated_contract_contains_canonical_paste_lifecycle() {
+    fn generated_contract_contains_every_supported_route() {
         let document = ApiDoc::openapi();
         let paths = document.paths.paths;
         for path in [
+            "/",
+            "/openapi.json",
             "/pastes",
             "/pastes/{paste_id}",
             "/pastes/{paste_id}/source",
@@ -246,10 +309,66 @@ mod tests {
             "/content-conversions",
             "/capabilities",
             "/languages",
+            "/health",
+            "/readiness",
+            "/session",
+            "/account/password",
+            "/password-resets/{token}",
+            "/invitations/{token}/redeem",
+            "/account/api-keys",
+            "/account/api-keys/{id}",
+            "/folders",
+            "/folders/{folder_id}",
+            "/pastes/{paste_id}/attachments",
+            "/pastes/{paste_id}/attachments/{attachment_id}",
+            "/pastes/{paste_id}/archive",
+            "/pastes/{paste_id}/qr",
+            "/admin/users",
+            "/admin/users/{id}",
+            "/admin/users/{id}/password-reset",
+            "/admin/users/{id}/sessions",
+            "/admin/users/{id}/api-keys",
+            "/admin/pastes",
+            "/admin/invitations",
+            "/admin/invitations/{id}",
+            "/admin/api-keys",
+            "/admin/api-keys/{id}",
         ] {
             assert!(paths.contains_key(path), "missing OpenAPI path {path}");
         }
         assert!(!paths.contains_key("/pastes/{paste_id}/consume"));
         assert!(!paths.contains_key("/pastes/{paste_id}/raw"));
+        for (method, path) in [
+            ("get", "/session"),
+            ("post", "/session"),
+            ("delete", "/session"),
+            ("get", "/folders"),
+            ("post", "/folders"),
+            ("patch", "/folders/{folder_id}"),
+            ("delete", "/folders/{folder_id}"),
+            ("get", "/account/api-keys"),
+            ("post", "/account/api-keys"),
+            ("patch", "/account/api-keys/{id}"),
+            ("delete", "/account/api-keys/{id}"),
+            ("post", "/pastes/{paste_id}/attachments"),
+            ("get", "/pastes/{paste_id}/attachments/{attachment_id}"),
+            ("delete", "/pastes/{paste_id}/attachments/{attachment_id}"),
+            ("get", "/admin/users"),
+            ("patch", "/admin/users/{id}"),
+            ("get", "/admin/invitations"),
+            ("post", "/admin/invitations"),
+            ("get", "/health"),
+            ("get", "/readiness"),
+        ] {
+            let item = paths.get(path).unwrap();
+            let present = match method {
+                "get" => item.get.is_some(),
+                "post" => item.post.is_some(),
+                "patch" => item.patch.is_some(),
+                "delete" => item.delete.is_some(),
+                _ => false,
+            };
+            assert!(present, "missing OpenAPI operation {method} {path}");
+        }
     }
 }
