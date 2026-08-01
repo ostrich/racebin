@@ -192,7 +192,7 @@ pub(crate) async fn list_pastes(
                 },
             })
         }
-        Err(message) => paste_error(message),
+        Err(value) => domain_error(value),
     }
 }
 
@@ -259,13 +259,7 @@ pub(crate) async fn create_paste(
         .await
     {
         Ok(value) => value,
-        Err(message) if message.starts_with("Idempotency key") => {
-            return error(StatusCode::CONFLICT, "idempotency_conflict", message)
-        }
-        Err(message) if message.starts_with("Idempotency resource") => {
-            return error(StatusCode::CONFLICT, "idempotency_resource_gone", message)
-        }
-        Err(message) => return paste_error(message),
+        Err(value) => return domain_error(value),
     };
     let attachments_complete = replayed
         && staged.iter().all(|file| {
@@ -327,7 +321,7 @@ pub(crate) async fn get_paste(
     match services.get_paste(&principal, &paste_id).await {
         Ok(Some(paste)) => resource_response(&req, &principal, paste, false, None),
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
-        Err(message) => internal(message),
+        Err(value) => domain_error(value),
     }
 }
 
@@ -345,12 +339,7 @@ pub(crate) async fn get_paste_source(
     match services.get_source(&principal, &paste_id).await {
         Ok(Some(paste)) => content_response(&req, &principal, paste, None),
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
-        Err(message)
-            if message == "You do not own this paste" || message.starts_with("Missing ") =>
-        {
-            error(StatusCode::FORBIDDEN, "forbidden", message)
-        }
-        Err(message) => internal(message),
+        Err(value) => domain_error(value),
     }
 }
 
@@ -385,7 +374,7 @@ pub(crate) async fn read_paste(
             response
         }
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
-        Err(message) => internal(message),
+        Err(value) => domain_error(value),
     }
 }
 
@@ -406,10 +395,7 @@ pub(crate) async fn update_paste(
     };
     let current = match services.ensure_can_update(&principal, &paste_id).await {
         Ok(value) => value,
-        Err(message) if message == "Paste not found" => {
-            return error(StatusCode::NOT_FOUND, "not_found", message)
-        }
-        Err(message) => return error(StatusCode::FORBIDDEN, "forbidden", message),
+        Err(value) => return domain_error(value),
     };
     let expected_revision = match require_match(&req, &current) {
         Ok(value) => value,
@@ -431,12 +417,7 @@ pub(crate) async fn update_paste(
             None,
         ),
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
-        Err(message) if message == "Paste revision changed" => error(
-            StatusCode::PRECONDITION_FAILED,
-            "precondition_failed",
-            "Paste changed since it was loaded",
-        ),
-        Err(message) => paste_error(message),
+        Err(value) => domain_error(value),
     }
 }
 
@@ -456,10 +437,7 @@ pub(crate) async fn delete_paste(
     };
     let current = match services.ensure_can_delete(&principal, &paste_id).await {
         Ok(value) => value,
-        Err(message) if message == "Paste not found" => {
-            return error(StatusCode::NOT_FOUND, "not_found", message)
-        }
-        Err(message) => return error(StatusCode::FORBIDDEN, "forbidden", message),
+        Err(value) => return domain_error(value),
     };
     let expected_revision = match require_match(&req, &current) {
         Ok(value) => value,
@@ -471,17 +449,7 @@ pub(crate) async fn delete_paste(
     {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
-        Err(message)
-            if message == "You do not own this paste" || message.starts_with("Missing ") =>
-        {
-            error(StatusCode::FORBIDDEN, "forbidden", message)
-        }
-        Err(message) if message == "Paste revision changed" => error(
-            StatusCode::PRECONDITION_FAILED,
-            "precondition_failed",
-            "Paste changed since it was loaded",
-        ),
-        Err(message) => internal(message),
+        Err(value) => domain_error(value),
     }
 }
 
@@ -842,7 +810,7 @@ async fn promote_created_files(
     principal: &Principal,
     paste: &mut crate::services::Paste,
     staged: &mut [StagedFile],
-) -> Result<(), String> {
+) -> crate::services::DomainResult<()> {
     let directory = services
         .storage
         .data_dir
@@ -850,7 +818,7 @@ async fn promote_created_files(
         .join(&paste.id);
     tokio::fs::create_dir_all(&directory)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| crate::services::DomainError::internal(error.to_string()))?;
     let mut promoted = Vec::new();
     for file in staged.iter_mut() {
         let destination = super::attachments::attachment_path(
@@ -862,7 +830,7 @@ async fn promote_created_files(
             for path in promoted {
                 let _ = tokio::fs::remove_file(path).await;
             }
-            return Err(error.to_string());
+            return Err(crate::services::DomainError::internal(error.to_string()));
         }
         file.temporary = PathBuf::new();
         promoted.push(destination);

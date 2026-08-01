@@ -8,7 +8,8 @@ use super::model::{
     Attachment, Folder, FolderOverview, Page, Paste, PasteInput, PasteQuery, PasteRead,
 };
 use super::rich_text::validate_document;
-use super::validation::{authorize_owner, can_read, validate_input};
+use super::validation::{authorize_owner, can_read, validate_input, validate_query};
+use super::{DomainError, DomainResult};
 use crate::time::unix_timestamp;
 use sha2::{Digest, Sha256};
 
@@ -47,12 +48,67 @@ impl PasteService {
         Self { storage }
     }
 
+    fn key_owner(&self, principal: &Principal) -> DomainResult<i64> {
+        let owner = principal
+            .user_id()
+            .ok_or_else(|| DomainError::forbidden("User identity required"))?;
+        if matches!(principal, Principal::ApiKey(key) if !key.has_scope("api_key:manage")) {
+            return Err(DomainError::forbidden("Missing api_key:manage permission"));
+        }
+        Ok(owner)
+    }
+
+    pub async fn list_api_keys(
+        &self,
+        principal: &Principal,
+    ) -> DomainResult<Vec<api_keys::ApiKey>> {
+        Ok(api_keys::list_for_user(&self.storage, self.key_owner(principal)?).await?)
+    }
+
+    pub async fn create_api_key(
+        &self,
+        principal: &Principal,
+        name: &str,
+        scopes: &[String],
+    ) -> DomainResult<(api_keys::ApiKey, String)> {
+        let owner = self.key_owner(principal)?;
+        if let Principal::ApiKey(key) = principal {
+            if scopes.iter().any(|scope| !key.has_scope(scope)) {
+                return Err(DomainError::forbidden(
+                    "A key can only grant scopes it holds",
+                ));
+            }
+        } else if !principal.is_admin() && scopes.iter().any(|scope| scope.ends_with(":manage")) {
+            return Err(DomainError::forbidden(
+                "Only administrators can grant administrative scopes",
+            ));
+        }
+        Ok(api_keys::create(&self.storage, Some(owner), name, scopes).await?)
+    }
+
+    pub async fn set_api_key_enabled(
+        &self,
+        principal: &Principal,
+        id: i64,
+        enabled: bool,
+    ) -> DomainResult<bool> {
+        Ok(
+            api_keys::set_enabled_for_user(&self.storage, id, self.key_owner(principal)?, enabled)
+                .await?,
+        )
+    }
+
+    pub async fn delete_api_key(&self, principal: &Principal, id: i64) -> DomainResult<bool> {
+        Ok(api_keys::delete_for_user(&self.storage, id, self.key_owner(principal)?).await?)
+    }
+
     pub async fn list_pastes(
         &self,
         principal: &Principal,
         query: &PasteQuery,
         admin: bool,
-    ) -> Result<Page<Paste>, String> {
+    ) -> DomainResult<Page<Paste>> {
+        validate_query(query)?;
         let page = query.page.unwrap_or(1).max(1);
         let page_size = query.page_size.unwrap_or(30).clamp(1, 100);
         let offset = i64::from(page - 1).saturating_mul(i64::from(page_size));
@@ -76,9 +132,10 @@ impl PasteService {
             query.owner_id
         };
         if let Some(folder_id) = query.folder_id {
-            let owner = user_id.ok_or("Folder filters require an owner")?;
+            let owner = user_id
+                .ok_or_else(|| DomainError::validation("Folder filters require an owner"))?;
             if self.folder_by_id(owner, folder_id).await?.is_none() {
-                return Err("Folder not found".into());
+                return Err(DomainError::not_found("Folder not found"));
             }
         }
         let folder_id = query.folder_id;
@@ -208,11 +265,7 @@ impl PasteService {
         })
     }
 
-    pub async fn get_paste(
-        &self,
-        principal: &Principal,
-        id: &str,
-    ) -> Result<Option<Paste>, String> {
+    pub async fn get_paste(&self, principal: &Principal, id: &str) -> DomainResult<Option<Paste>> {
         Ok(self
             .find_paste(id)
             .await?
@@ -220,11 +273,7 @@ impl PasteService {
             .map(|paste| redact_folder(principal, paste, false)))
     }
 
-    pub async fn get_source(
-        &self,
-        principal: &Principal,
-        id: &str,
-    ) -> Result<Option<Paste>, String> {
+    pub async fn get_source(&self, principal: &Principal, id: &str) -> DomainResult<Option<Paste>> {
         let Some(paste) = self.find_paste(id).await? else {
             return Ok(None);
         };
@@ -232,7 +281,7 @@ impl PasteService {
         Ok(Some(redact_folder(principal, paste, false)))
     }
 
-    async fn find_paste(&self, id: &str) -> Result<Option<Paste>, String> {
+    async fn find_paste(&self, id: &str) -> DomainResult<Option<Paste>> {
         let mut paste = sqlx::query_as::<_, Paste>(
             "SELECT id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,created_at,
                     updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
@@ -256,7 +305,7 @@ impl PasteService {
         principal: &Principal,
         id: &str,
         idempotency_key: Option<&str>,
-    ) -> Result<Option<PasteRead>, String> {
+    ) -> DomainResult<Option<PasteRead>> {
         let _write_guard = self.storage.lock_writes().await;
         let mut tx = self
             .storage
@@ -357,7 +406,7 @@ impl PasteService {
         }))
     }
 
-    pub async fn valid_read_grant(&self, paste_id: &str, token: &str) -> Result<bool, String> {
+    pub async fn valid_read_grant(&self, paste_id: &str, token: &str) -> DomainResult<bool> {
         let found: Option<i64> = sqlx::query_scalar(
             "SELECT 1 FROM paste_read_grants WHERE paste_id=$1 AND token_hash=$2 AND expires_at>$3",
         )
@@ -370,11 +419,7 @@ impl PasteService {
         Ok(found.is_some())
     }
 
-    pub async fn get_paste_with_grant(
-        &self,
-        id: &str,
-        token: &str,
-    ) -> Result<Option<Paste>, String> {
+    pub async fn get_paste_with_grant(&self, id: &str, token: &str) -> DomainResult<Option<Paste>> {
         if !self.valid_read_grant(id, token).await? {
             return Ok(None);
         }
@@ -397,22 +442,20 @@ impl PasteService {
         Ok(paste)
     }
 
-    pub async fn ensure_can_update(
-        &self,
-        principal: &Principal,
-        id: &str,
-    ) -> Result<Paste, String> {
-        let paste = self.find_paste(id).await?.ok_or("Paste not found")?;
+    pub async fn ensure_can_update(&self, principal: &Principal, id: &str) -> DomainResult<Paste> {
+        let paste = self
+            .find_paste(id)
+            .await?
+            .ok_or_else(|| DomainError::not_found("Paste not found"))?;
         authorize_owner(principal, &paste, "paste:write")?;
         Ok(paste)
     }
 
-    pub async fn ensure_can_delete(
-        &self,
-        principal: &Principal,
-        id: &str,
-    ) -> Result<Paste, String> {
-        let paste = self.find_paste(id).await?.ok_or("Paste not found")?;
+    pub async fn ensure_can_delete(&self, principal: &Principal, id: &str) -> DomainResult<Paste> {
+        let paste = self
+            .find_paste(id)
+            .await?
+            .ok_or_else(|| DomainError::not_found("Paste not found"))?;
         authorize_owner(principal, &paste, "paste:delete")?;
         Ok(paste)
     }
@@ -421,10 +464,12 @@ impl PasteService {
         &self,
         principal: &Principal,
         input: &PasteInput,
-    ) -> Result<Paste, String> {
-        let owner = principal.user_id().ok_or("Authentication required")?;
+    ) -> DomainResult<Paste> {
+        let owner = principal
+            .user_id()
+            .ok_or_else(|| DomainError::forbidden("Authentication required"))?;
         if !principal.can("paste:write") && !matches!(principal, Principal::Session(_)) {
-            return Err("Missing paste:write scope".into());
+            return Err(DomainError::forbidden("Missing paste:write scope"));
         }
         let now = unix_timestamp();
         validate_input(input, now)?;
@@ -463,7 +508,7 @@ impl PasteService {
         .map_err(|e| e.to_string())?;
         self.get_paste(principal, &id)
             .await?
-            .ok_or("Paste creation failed".into())
+            .ok_or_else(|| DomainError::internal("Paste creation failed"))
     }
 
     pub async fn create_paste_idempotent(
@@ -472,14 +517,16 @@ impl PasteService {
         input: &PasteInput,
         idempotency_key: Option<&str>,
         request_hash: &str,
-    ) -> Result<(Paste, bool), String> {
+    ) -> DomainResult<(Paste, bool)> {
         let Some(key) = idempotency_key else {
             return self
                 .create_paste(principal, input)
                 .await
                 .map(|paste| (paste, false));
         };
-        let owner = principal.user_id().ok_or("Authentication required")?;
+        let owner = principal
+            .user_id()
+            .ok_or_else(|| DomainError::forbidden("Authentication required"))?;
         let _guard = self.storage.lock_writes().await;
         let key_hash = hash_token(key);
         let now = unix_timestamp();
@@ -501,7 +548,7 @@ impl PasteService {
         }
 
         if !principal.can("paste:write") && !matches!(principal, Principal::Session(_)) {
-            return Err("Missing paste:write scope".into());
+            return Err(DomainError::forbidden("Missing paste:write scope"));
         }
         validate_input(input, now)?;
         let content_kind = input.content_kind.as_deref().unwrap_or("text");
@@ -565,10 +612,13 @@ impl PasteService {
             {
                 return Ok((paste, true));
             }
-            return Err(error.to_string());
+            return Err(error.to_string().into());
         }
         tx.commit().await.map_err(|error| error.to_string())?;
-        let paste = self.find_paste(&id).await?.ok_or("Paste creation failed")?;
+        let paste = self
+            .find_paste(&id)
+            .await?
+            .ok_or_else(|| DomainError::internal("Paste creation failed"))?;
         Ok((paste, false))
     }
 
@@ -577,7 +627,7 @@ impl PasteService {
         owner: i64,
         key_hash: &str,
         request_hash: &str,
-    ) -> Result<Option<Paste>, String> {
+    ) -> DomainResult<Option<Paste>> {
         let existing = sqlx::query(
             "SELECT request_hash,paste_id FROM idempotency_records
              WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2 AND expires_at>$3",
@@ -596,25 +646,40 @@ impl PasteService {
             .try_get("request_hash")
             .map_err(|error| error.to_string())?;
         if stored_hash != request_hash {
-            return Err("Idempotency key was already used with a different request".into());
+            return Err(DomainError::conflict(
+                "idempotency_conflict",
+                "Idempotency key was already used with a different request",
+            ));
         }
         let paste_id: Option<String> =
             row.try_get("paste_id").map_err(|error| error.to_string())?;
-        let paste_id = paste_id.ok_or("Idempotency resource no longer exists")?;
+        let paste_id = paste_id.ok_or_else(|| {
+            DomainError::conflict(
+                "idempotency_resource_gone",
+                "Idempotency resource no longer exists",
+            )
+        })?;
         self.find_paste(&paste_id)
             .await?
             .filter(|paste| paste.owner_id == Some(owner))
             .map(Some)
-            .ok_or("Idempotency resource no longer exists".into())
+            .ok_or_else(|| {
+                DomainError::conflict(
+                    "idempotency_resource_gone",
+                    "Idempotency resource no longer exists",
+                )
+            })
     }
 
     pub async fn clear_create_idempotency(
         &self,
         principal: &Principal,
         key: &str,
-    ) -> Result<(), String> {
-        let owner = principal.user_id().ok_or("Authentication required")?;
-        sqlx::query(
+    ) -> DomainResult<()> {
+        let owner = principal
+            .user_id()
+            .ok_or_else(|| DomainError::forbidden("Authentication required"))?;
+        Ok(sqlx::query(
             "DELETE FROM idempotency_records
              WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2",
         )
@@ -623,7 +688,7 @@ impl PasteService {
         .execute(self.storage.pool())
         .await
         .map(|_| ())
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?)
     }
 
     pub async fn update_paste(
@@ -632,7 +697,7 @@ impl PasteService {
         id: &str,
         input: &PasteInput,
         expected_revision: Option<i64>,
-    ) -> Result<Option<Paste>, String> {
+    ) -> DomainResult<Option<Paste>> {
         let now = unix_timestamp();
         validate_input(input, now)?;
         let current = match self.find_paste(id).await? {
@@ -642,7 +707,9 @@ impl PasteService {
         authorize_owner(principal, &current, "paste:write")?;
         let folder_id = if let Some(folder) = input.folder_id {
             if current.owner_id != principal.user_id() {
-                return Err("Folder organization is private to the paste owner".into());
+                return Err(DomainError::forbidden(
+                    "Folder organization is private to the paste owner",
+                ));
             }
             self.validate_folder_owner(current.owner_id.unwrap_or_default(), folder)
                 .await?;
@@ -693,7 +760,7 @@ impl PasteService {
         .await
         .map_err(|e| e.to_string())?;
         if result.rows_affected() == 0 {
-            return Err("Paste revision changed".into());
+            return Err(DomainError::precondition("Paste revision changed"));
         }
         Ok(self
             .find_paste(id)
@@ -701,7 +768,7 @@ impl PasteService {
             .map(|paste| redact_folder(principal, paste, false)))
     }
 
-    pub async fn list_folders(&self, principal: &Principal) -> Result<FolderOverview, String> {
+    pub async fn list_folders(&self, principal: &Principal) -> DomainResult<FolderOverview> {
         let owner = folder_principal(principal, "paste:list")?;
         let items = sqlx::query_as(
             "SELECT f.id,f.owner_id,f.name,f.created_at,
@@ -727,7 +794,7 @@ impl PasteService {
         })
     }
 
-    pub async fn create_folder(&self, principal: &Principal, name: &str) -> Result<Folder, String> {
+    pub async fn create_folder(&self, principal: &Principal, name: &str) -> DomainResult<Folder> {
         let owner = folder_principal(principal, "paste:write")?;
         let name = validate_folder_name(name)?;
         let name_key = folder_name_key(name);
@@ -743,7 +810,7 @@ impl PasteService {
         .map_err(|error| folder_database_error(error.to_string()))?;
         self.folder_by_id(owner, id)
             .await?
-            .ok_or("Folder creation failed".into())
+            .ok_or_else(|| DomainError::internal("Folder creation failed"))
     }
 
     pub async fn rename_folder(
@@ -751,7 +818,7 @@ impl PasteService {
         principal: &Principal,
         id: i64,
         name: &str,
-    ) -> Result<Option<Folder>, String> {
+    ) -> DomainResult<Option<Folder>> {
         let owner = folder_principal(principal, "paste:write")?;
         let name = validate_folder_name(name)?;
         let changed =
@@ -767,11 +834,11 @@ impl PasteService {
         if changed == 0 {
             Ok(None)
         } else {
-            self.folder_by_id(owner, id).await
+            Ok(self.folder_by_id(owner, id).await?)
         }
     }
 
-    pub async fn delete_folder(&self, principal: &Principal, id: i64) -> Result<bool, String> {
+    pub async fn delete_folder(&self, principal: &Principal, id: i64) -> DomainResult<bool> {
         let owner = folder_principal(principal, "paste:write")?;
         let mut transaction = self
             .storage
@@ -809,14 +876,14 @@ impl PasteService {
         principal: &Principal,
         paste_ids: &[String],
         folder_id: Option<i64>,
-    ) -> Result<(), String> {
+    ) -> DomainResult<()> {
         let owner = folder_principal(principal, "paste:write")?;
         if paste_ids.is_empty() || paste_ids.len() > 100 {
-            return Err("Select between 1 and 100 pastes".into());
+            return Err(DomainError::validation("Select between 1 and 100 pastes"));
         }
         let unique = paste_ids.iter().collect::<HashSet<_>>();
         if unique.len() != paste_ids.len() {
-            return Err("Paste IDs must be unique".into());
+            return Err(DomainError::validation("Paste IDs must be unique"));
         }
         self.validate_folder_owner(owner, folder_id).await?;
         let _guard = self.storage.lock_writes().await;
@@ -840,28 +907,24 @@ impl PasteService {
             .map_err(|e| e.to_string())?
             .rows_affected();
             if changed != 1 {
-                return Err("One or more pastes were not found".into());
+                return Err(DomainError::not_found("One or more pastes were not found"));
             }
         }
-        tx.commit().await.map_err(|e| e.to_string())
+        Ok(tx.commit().await.map_err(|e| e.to_string())?)
     }
 
-    async fn validate_folder_owner(
-        &self,
-        owner: i64,
-        folder_id: Option<i64>,
-    ) -> Result<(), String> {
+    async fn validate_folder_owner(&self, owner: i64, folder_id: Option<i64>) -> DomainResult<()> {
         let Some(id) = folder_id else {
             return Ok(());
         };
         if self.folder_by_id(owner, id).await?.is_none() {
-            return Err("Folder not found".into());
+            return Err(DomainError::not_found("Folder not found"));
         }
         Ok(())
     }
 
-    async fn folder_by_id(&self, owner: i64, id: i64) -> Result<Option<Folder>, String> {
-        sqlx::query_as(
+    async fn folder_by_id(&self, owner: i64, id: i64) -> DomainResult<Option<Folder>> {
+        Ok(sqlx::query_as(
             "SELECT f.id,f.owner_id,f.name,f.created_at,
                     (SELECT count(*) FROM pastes p WHERE p.folder_id=f.id) AS paste_count
              FROM folders f WHERE f.id=$1 AND f.owner_id=$2",
@@ -870,7 +933,7 @@ impl PasteService {
         .bind(owner)
         .fetch_optional(self.storage.pool())
         .await
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?)
     }
 
     pub async fn delete_paste(
@@ -878,7 +941,7 @@ impl PasteService {
         principal: &Principal,
         id: &str,
         expected_revision: Option<i64>,
-    ) -> Result<bool, String> {
+    ) -> DomainResult<bool> {
         let current = match self.find_paste(id).await? {
             Some(value) => value,
             None => return Ok(false),
@@ -911,7 +974,7 @@ impl PasteService {
                     let _ = std::fs::rename(staged, directory);
                 }
                 if expected_revision.is_some() {
-                    Err("Paste revision changed".into())
+                    Err(DomainError::precondition("Paste revision changed"))
                 } else {
                     Ok(false)
                 }
@@ -920,7 +983,7 @@ impl PasteService {
                 if had_directory {
                     let _ = std::fs::rename(staged, directory);
                 }
-                Err(error.to_string())
+                Err(error.to_string().into())
             }
         }
     }
@@ -931,9 +994,12 @@ impl PasteService {
         id: &str,
         inputs: &[(String, String, i64)],
         expected_revision: Option<i64>,
-    ) -> Result<Vec<Attachment>, String> {
+    ) -> DomainResult<Vec<Attachment>> {
         let _write_guard = self.storage.lock_writes().await;
-        let paste = self.find_paste(id).await?.ok_or("Paste not found")?;
+        let paste = self
+            .find_paste(id)
+            .await?
+            .ok_or_else(|| DomainError::not_found("Paste not found"))?;
         authorize_owner(principal, &paste, "paste:write")?;
         let mut names = paste
             .attachments
@@ -942,7 +1008,10 @@ impl PasteService {
             .collect::<HashSet<_>>();
         for (name, _, _) in inputs {
             if !names.insert(name) {
-                return Err(format!("{name} already exists"));
+                return Err(DomainError::conflict(
+                    "attachment_exists",
+                    format!("{name} already exists"),
+                ));
             }
         }
         let mut tx = self
@@ -993,7 +1062,7 @@ impl PasteService {
         .map_err(|error| error.to_string())?
         .rows_affected();
         if changed == 0 {
-            return Err("Paste revision changed".into());
+            return Err(DomainError::precondition("Paste revision changed"));
         }
         tx.commit().await.map_err(|e| e.to_string())?;
         Ok(attachments)
@@ -1005,8 +1074,11 @@ impl PasteService {
         id: &str,
         attachment_id: i64,
         expected_revision: Option<i64>,
-    ) -> Result<bool, String> {
-        let paste = self.find_paste(id).await?.ok_or("Paste not found")?;
+    ) -> DomainResult<bool> {
+        let paste = self
+            .find_paste(id)
+            .await?
+            .ok_or_else(|| DomainError::not_found("Paste not found"))?;
         authorize_owner(principal, &paste, "paste:write")?;
         let attachment = paste
             .attachments
@@ -1021,7 +1093,7 @@ impl PasteService {
                 .count()
                 != 1
         {
-            return Err("Unsafe attachment metadata".to_string());
+            return Err(DomainError::internal("Unsafe attachment metadata"));
         }
         let path = self
             .storage
@@ -1060,14 +1132,14 @@ impl PasteService {
                 .map_err(|error| error.to_string())?
                 .rows_affected();
                 if changed == 0 {
-                    return Err("Paste revision changed".into());
+                    return Err(DomainError::precondition("Paste revision changed"));
                 }
             }
             transaction
                 .commit()
                 .await
                 .map_err(|error| error.to_string())?;
-            Ok::<u64, String>(affected)
+            Ok::<u64, DomainError>(affected)
         }
         .await;
         match result {
@@ -1087,45 +1159,47 @@ impl PasteService {
                 if existed {
                     let _ = std::fs::rename(staged, path);
                 }
-                Err(error)
+                Err(error.into())
             }
         }
     }
 
-    async fn load_attachments(&self, paste_id: &str) -> Result<Vec<Attachment>, String> {
+    async fn load_attachments(&self, paste_id: &str) -> DomainResult<Vec<Attachment>> {
         load_attachments_from(self.storage.pool(), paste_id).await
     }
 }
 
-fn folder_principal(principal: &Principal, scope: &str) -> Result<i64, String> {
+fn folder_principal(principal: &Principal, scope: &str) -> DomainResult<i64> {
     let owner = principal
         .user_id()
-        .ok_or("Folders require a user-owned credential")?;
+        .ok_or_else(|| DomainError::forbidden("Folders require a user-owned credential"))?;
     if matches!(principal, Principal::ApiKey(_)) && !principal.can(scope) {
-        return Err(format!("Missing {scope} scope"));
+        return Err(DomainError::forbidden(format!("Missing {scope} scope")));
     }
     Ok(owner)
 }
 
-fn validate_folder_name(name: &str) -> Result<&str, String> {
+fn validate_folder_name(name: &str) -> DomainResult<&str> {
     let name = name.trim();
     if name.is_empty() || name.chars().count() > 100 || name.chars().any(char::is_control) {
-        return Err("Folder name must contain 1 to 100 printable characters".into());
+        return Err(DomainError::validation(
+            "Folder name must contain 1 to 100 printable characters",
+        ));
     }
     if matches!(
         name.to_ascii_lowercase().as_str(),
         "all pastes" | "uncategorized"
     ) {
-        return Err("Folder name is reserved".into());
+        return Err(DomainError::validation("Folder name is reserved"));
     }
     Ok(name)
 }
 
-fn folder_database_error(error: String) -> String {
+fn folder_database_error(error: String) -> DomainError {
     if error.to_ascii_lowercase().contains("unique") {
-        "A folder with that name already exists".into()
+        DomainError::conflict("folder_exists", "A folder with that name already exists")
     } else {
-        error
+        DomainError::internal(error)
     }
 }
 
@@ -1144,16 +1218,21 @@ fn normalized_content(
     content_kind: &str,
     content: &str,
     document: Option<&serde_json::Value>,
-) -> Result<(String, Option<String>), String> {
+) -> DomainResult<(String, Option<String>)> {
     if content_kind == "rich_text" {
-        let document = document.ok_or("Rich-text pastes require a document")?;
-        let content = validate_document(document)
-            .map_err(|error| format!("Rich-text document is invalid: {error}"))?;
-        let document_json = serde_json::to_string(document).map_err(|error| error.to_string())?;
+        let document = document
+            .ok_or_else(|| DomainError::validation("Rich-text pastes require a document"))?;
+        let content = validate_document(document).map_err(|error| {
+            DomainError::validation(format!("Rich-text document is invalid: {error}"))
+        })?;
+        let document_json = serde_json::to_string(document)
+            .map_err(|error| DomainError::internal(error.to_string()))?;
         Ok((content, Some(document_json)))
     } else {
         if document.is_some() {
-            return Err("Only rich-text pastes accept a document".into());
+            return Err(DomainError::validation(
+                "Only rich-text pastes accept a document",
+            ));
         }
         Ok((content.to_string(), None))
     }
@@ -1167,7 +1246,7 @@ async fn load_paste_for_read(
     transaction: &mut sqlx::Transaction<'_, Any>,
     principal: &Principal,
     id: &str,
-) -> Result<Option<Paste>, String> {
+) -> DomainResult<Option<Paste>> {
     let mut paste = sqlx::query_as::<_, Paste>(
         "SELECT id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,
                 created_at,updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
@@ -1190,7 +1269,7 @@ async fn create_read_grant(
     transaction: &mut sqlx::Transaction<'_, Any>,
     paste: &Paste,
     now: i64,
-) -> Result<Option<String>, String> {
+) -> DomainResult<Option<String>> {
     if paste.read_limit.is_none() || paste.attachments.is_empty() {
         return Ok(None);
     }
@@ -1205,21 +1284,18 @@ async fn create_read_grant(
     Ok(Some(token))
 }
 
-async fn load_attachments_from<'e, E>(
-    executor: E,
-    paste_id: &str,
-) -> Result<Vec<Attachment>, String>
+async fn load_attachments_from<'e, E>(executor: E, paste_id: &str) -> DomainResult<Vec<Attachment>>
 where
     E: Executor<'e, Database = Any>,
 {
-    sqlx::query_as::<_, Attachment>(
+    Ok(sqlx::query_as::<_, Attachment>(
         "SELECT id,sort_order,filename,storage_key,size_bytes FROM attachments
          WHERE paste_id=$1 ORDER BY sort_order",
     )
     .bind(paste_id)
     .fetch_all(executor)
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?)
 }
 
 fn paste_size(paste: &Paste) -> i64 {

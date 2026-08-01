@@ -7,7 +7,7 @@ use actix_web::cookie::{Cookie, SameSite};
 use actix_web::http::{header, StatusCode};
 use actix_web::{delete, get, patch, post, web, HttpRequest, HttpResponse, Responder};
 use auth::{principal, require_admin, require_auth, require_mutation};
-use errors::{error, internal, paste_error};
+use errors::{domain_error, error, internal};
 use futures::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;

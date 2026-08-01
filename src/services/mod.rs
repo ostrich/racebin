@@ -1,8 +1,10 @@
+mod error;
 mod model;
 mod rich_text;
 mod service;
 mod validation;
 
+pub use error::{DomainError, DomainResult, ErrorKind};
 pub use model::{
     Attachment, Folder, FolderOverview, Page, Paste, PasteInput, PasteQuery, PasteRead,
 };

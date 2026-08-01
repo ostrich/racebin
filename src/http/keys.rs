@@ -15,19 +15,9 @@ pub(crate) async fn list_keys(req: HttpRequest, services: web::Data<PasteService
         Ok(v) => v,
         Err(r) => return r,
     };
-    let Some(user_id) = value.user_id() else {
-        return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
-    };
-    if matches!(&value, Principal::ApiKey(key) if !key.has_scope("api_key:manage")) {
-        return error(
-            StatusCode::FORBIDDEN,
-            "forbidden",
-            "Missing api_key:manage permission",
-        );
-    }
-    match api_keys::list_for_user(&services.storage, user_id).await {
+    match services.list_api_keys(&value).await {
         Ok(v) => HttpResponse::Ok().json(v),
-        Err(e) => internal(e),
+        Err(e) => domain_error(e),
     }
 }
 
@@ -52,35 +42,12 @@ pub(crate) async fn create_key(
         Ok(v) => v,
         Err(r) => return r,
     };
-    let Some(user_id) = value.user_id() else {
-        return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
-    };
-    if matches!(&value, Principal::ApiKey(key) if !key.has_scope("api_key:manage")) {
-        return error(
-            StatusCode::FORBIDDEN,
-            "forbidden",
-            "Missing api_key:manage permission",
-        );
-    }
-    if let Principal::ApiKey(key) = &value {
-        if !key.has_scope("api_key:manage") || body.scopes.iter().any(|scope| !key.has_scope(scope))
-        {
-            return error(
-                StatusCode::FORBIDDEN,
-                "forbidden",
-                "A key can only grant scopes it holds",
-            );
-        }
-    } else if !value.is_admin() && body.scopes.iter().any(|scope| scope.ends_with(":manage")) {
-        return error(
-            StatusCode::FORBIDDEN,
-            "forbidden",
-            "Only administrators can grant administrative scopes",
-        );
-    }
-    match api_keys::create(&services.storage, Some(user_id), &body.name, &body.scopes).await {
+    match services
+        .create_api_key(&value, &body.name, &body.scopes)
+        .await
+    {
         Ok((key, token)) => HttpResponse::Created().json(json!({"key": key, "token": token})),
-        Err(e) => error(StatusCode::BAD_REQUEST, "invalid_api_key", e),
+        Err(e) => domain_error(e),
     }
 }
 
@@ -99,20 +66,13 @@ pub(crate) async fn update_key(
         Ok(v) => v,
         Err(r) => return r,
     };
-    let Some(user_id) = value.user_id() else {
-        return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
-    };
-    if matches!(&value, Principal::ApiKey(key) if !key.has_scope("api_key:manage")) {
-        return error(
-            StatusCode::FORBIDDEN,
-            "forbidden",
-            "Missing api_key:manage permission",
-        );
-    }
-    match api_keys::set_enabled_for_user(&services.storage, *id, user_id, body.enabled).await {
+    match services
+        .set_api_key_enabled(&value, *id, body.enabled)
+        .await
+    {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "API key not found"),
-        Err(e) => internal(e),
+        Err(e) => domain_error(e),
     }
 }
 
@@ -130,19 +90,9 @@ pub(crate) async fn delete_key(
         Ok(v) => v,
         Err(r) => return r,
     };
-    let Some(user_id) = value.user_id() else {
-        return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
-    };
-    if matches!(&value, Principal::ApiKey(key) if !key.has_scope("api_key:manage")) {
-        return error(
-            StatusCode::FORBIDDEN,
-            "forbidden",
-            "Missing api_key:manage permission",
-        );
-    }
-    match api_keys::delete_for_user(&services.storage, *id, user_id).await {
+    match services.delete_api_key(&value, *id).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "API key not found"),
-        Err(e) => internal(e),
+        Err(e) => domain_error(e),
     }
 }

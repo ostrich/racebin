@@ -34,7 +34,7 @@ pub(crate) async fn list_folders(
     };
     match services.list_folders(&value).await {
         Ok(folders) => HttpResponse::Ok().json(folders),
-        Err(message) => paste_error(message),
+        Err(value) => domain_error(value),
     }
 }
 
@@ -54,7 +54,7 @@ pub(crate) async fn create_folder(
     };
     match services.create_folder(&value, &body.name).await {
         Ok(folder) => HttpResponse::Created().json(folder),
-        Err(message) => paste_error(message),
+        Err(value) => domain_error(value),
     }
 }
 
@@ -76,7 +76,7 @@ pub(crate) async fn rename_folder(
     match services.rename_folder(&value, *folder_id, &body.name).await {
         Ok(Some(folder)) => HttpResponse::Ok().json(folder),
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Folder not found"),
-        Err(message) => paste_error(message),
+        Err(value) => domain_error(value),
     }
 }
 
@@ -97,7 +97,7 @@ pub(crate) async fn delete_folder(
     match services.delete_folder(&value, *folder_id).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "Folder not found"),
-        Err(message) => paste_error(message),
+        Err(value) => domain_error(value),
     }
 }
 
@@ -120,6 +120,6 @@ pub(crate) async fn move_pastes(
         .await
     {
         Ok(()) => HttpResponse::NoContent().finish(),
-        Err(message) => paste_error(message),
+        Err(value) => domain_error(value),
     }
 }

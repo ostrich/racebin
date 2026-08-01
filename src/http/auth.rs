@@ -93,7 +93,7 @@ pub(super) fn require_auth(principal: Principal) -> Result<Principal, HttpRespon
     }
 }
 
-fn unauthorized(code: &'static str, detail: impl Into<String>) -> HttpResponse {
+fn unauthorized(code: &'static str, detail: impl std::fmt::Display) -> HttpResponse {
     let mut response = error(StatusCode::UNAUTHORIZED, code, detail);
     response.headers_mut().insert(
         header::WWW_AUTHENTICATE,

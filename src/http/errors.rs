@@ -1,3 +1,4 @@
+use crate::services::{DomainError, ErrorKind};
 use actix_web::http::{header, StatusCode};
 use actix_web::HttpResponse;
 use serde::Serialize;
@@ -17,7 +18,7 @@ pub(crate) struct ProblemDetails {
 pub(super) fn error(
     status: StatusCode,
     code: &'static str,
-    message: impl Into<String>,
+    message: impl std::fmt::Display,
 ) -> HttpResponse {
     let title = status
         .canonical_reason()
@@ -30,13 +31,13 @@ pub(super) fn error(
             problem_type: format!("urn:racebin:problem:{code}"),
             title,
             status: status.as_u16(),
-            detail: message.into(),
+            detail: message.to_string(),
             errors: None,
         })
 }
 
-pub(super) fn internal(message: impl Into<String>) -> HttpResponse {
-    log::error!("{}", message.into());
+pub(super) fn internal(message: impl std::fmt::Display) -> HttpResponse {
+    log::error!("{message}");
     error(
         StatusCode::INTERNAL_SERVER_ERROR,
         "internal_error",
@@ -44,37 +45,14 @@ pub(super) fn internal(message: impl Into<String>) -> HttpResponse {
     )
 }
 
-pub(super) fn paste_error(message: String) -> HttpResponse {
-    if message.starts_with("Missing ")
-        || message == "You do not own this paste"
-        || message.starts_with("Folders require")
-    {
-        error(StatusCode::FORBIDDEN, "forbidden", message)
-    } else if [
-        "Content is required",
-        "Title exceeds",
-        "Content kind must",
-        "Visibility must",
-        "Read limit",
-        "Expiration",
-        "URL content",
-        "Rich-text",
-        "Only rich-text",
-        "Unsupported rich-text",
-        "Every rich-text",
-        "Folder not found",
-        "Folder ",
-        "Folder name",
-        "A folder",
-        "Paste IDs",
-        "Select between",
-        "One or more pastes",
-    ]
-    .iter()
-    .any(|prefix| message.starts_with(prefix))
-    {
-        error(StatusCode::BAD_REQUEST, "invalid_paste", message)
-    } else {
-        internal(message)
-    }
+pub(super) fn domain_error(value: DomainError) -> HttpResponse {
+    let status = match value.kind {
+        ErrorKind::NotFound => StatusCode::NOT_FOUND,
+        ErrorKind::Forbidden => StatusCode::FORBIDDEN,
+        ErrorKind::Validation => StatusCode::BAD_REQUEST,
+        ErrorKind::Conflict => StatusCode::CONFLICT,
+        ErrorKind::Precondition => StatusCode::PRECONDITION_FAILED,
+        ErrorKind::Internal => return internal(value.message),
+    };
+    error(status, value.code, value.message)
 }

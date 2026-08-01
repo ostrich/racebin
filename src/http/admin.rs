@@ -76,7 +76,7 @@ pub(crate) async fn admin_pastes(
     }
     match services.list_pastes(&value, &query, true).await {
         Ok(page) => HttpResponse::Ok().json(page),
-        Err(e) => internal(e),
+        Err(e) => domain_error(e),
     }
 }
 

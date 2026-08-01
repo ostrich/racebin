@@ -36,6 +36,7 @@ pub(super) async fn backend_contract(repo: Repository) {
         .create_paste(&owner, &unsupported_kind)
         .await
         .unwrap_err()
+        .message
         .contains("Content kind"));
 
     let verified = accounts::verify_user(&repo, "paste-owner", "correct horse battery staple")
@@ -241,7 +242,8 @@ pub(super) async fn backend_contract(repo: Repository) {
         services
             .create_paste(&owner, &expired_input)
             .await
-            .unwrap_err(),
+            .unwrap_err()
+            .message,
         "Expiration must be in the future"
     );
     let paste_count_after: i64 = sqlx::query_scalar("SELECT count(*) FROM pastes")
@@ -258,7 +260,8 @@ pub(super) async fn backend_contract(repo: Repository) {
         services
             .update_paste(&owner, &public.id, &invalid_update, None)
             .await
-            .unwrap_err(),
+            .unwrap_err()
+            .message,
         "Expiration must be in the future"
     );
     assert_eq!(
@@ -406,21 +409,24 @@ pub(super) async fn backend_contract(repo: Repository) {
                 Some(1),
             )
             .await
-            .unwrap_err(),
+            .unwrap_err()
+            .message,
         "Paste revision changed"
     );
     assert_eq!(
         services
             .delete_attachment(&owner, &cascade.id, attachment.id, Some(1))
             .await
-            .unwrap_err(),
+            .unwrap_err()
+            .message,
         "Paste revision changed"
     );
     assert_eq!(
         services
             .delete_paste(&owner, &cascade.id, Some(1))
             .await
-            .unwrap_err(),
+            .unwrap_err()
+            .message,
         "Paste revision changed"
     );
     let unchanged = services

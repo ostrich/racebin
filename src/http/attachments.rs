@@ -85,7 +85,7 @@ pub(crate) async fn upload_attachments(
     };
     let paste = match services.ensure_can_update(&value, &paste_id).await {
         Ok(paste) => paste,
-        Err(e) => return error(StatusCode::NOT_FOUND, "not_found", e),
+        Err(value) => return domain_error(value),
     };
     let expected_revision = match super::pastes::require_match(&req, &paste) {
         Ok(value) => value,
@@ -216,14 +216,7 @@ pub(crate) async fn upload_attachments(
             for path in promoted {
                 let _ = std::fs::remove_file(path);
             }
-            if e == "Paste revision changed" {
-                return error(
-                    StatusCode::PRECONDITION_FAILED,
-                    "precondition_failed",
-                    "Paste changed since it was loaded",
-                );
-            }
-            return error(StatusCode::BAD_REQUEST, "invalid_attachment", e);
+            return domain_error(e);
         }
     };
     if attachments.is_empty() {
@@ -236,10 +229,7 @@ pub(crate) async fn upload_attachments(
     cleanup.paths.clear();
     let current = match services.ensure_can_update(&value, &paste_id).await {
         Ok(current) => current,
-        Err(message) if message == "Paste not found" => {
-            return error(StatusCode::NOT_FOUND, "not_found", message)
-        }
-        Err(message) => return internal(message),
+        Err(value) => return domain_error(value),
     };
     HttpResponse::Created()
         .insert_header((header::ETAG, super::dto::etag(&current)))
@@ -320,10 +310,7 @@ pub(crate) async fn delete_attachment(
     let (paste_id, attachment_id) = path.into_inner();
     let current = match services.ensure_can_update(&value, &paste_id).await {
         Ok(current) => current,
-        Err(message) if message == "Paste not found" => {
-            return error(StatusCode::NOT_FOUND, "not_found", message)
-        }
-        Err(message) => return error(StatusCode::FORBIDDEN, "forbidden", message),
+        Err(value) => return domain_error(value),
     };
     let expected_revision = match super::pastes::require_match(&req, &current) {
         Ok(value) => value,
@@ -335,15 +322,7 @@ pub(crate) async fn delete_attachment(
     {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "Attachment not found"),
-        Err(e) if e == "You do not own this paste" || e.starts_with("Missing ") => {
-            error(StatusCode::FORBIDDEN, "forbidden", e)
-        }
-        Err(e) if e == "Paste revision changed" => error(
-            StatusCode::PRECONDITION_FAILED,
-            "precondition_failed",
-            "Paste changed since it was loaded",
-        ),
-        Err(e) => internal(e),
+        Err(value) => domain_error(value),
     }
 }
 
@@ -421,7 +400,7 @@ async fn paste_for_download(
     principal: &Principal,
     paste_id: &str,
     read_token: Option<&str>,
-) -> Result<Option<crate::services::Paste>, String> {
+) -> crate::services::DomainResult<Option<crate::services::Paste>> {
     if let Some(paste) = services.get_paste(principal, paste_id).await? {
         let owner = principal.is_admin() || principal.user_id() == paste.owner_id;
         if paste.read_limit.is_none() || owner {
@@ -451,7 +430,7 @@ pub(crate) async fn get_qr(
     match services.get_paste(&value, &paste_id).await {
         Ok(Some(_)) => {}
         Ok(None) => return error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
-        Err(e) => return internal(e),
+        Err(e) => return domain_error(e),
     }
     let origin = ARGS
         .public_url
