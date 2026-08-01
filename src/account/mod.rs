@@ -341,6 +341,19 @@ pub async fn admin_user(repo: &Repository, id: i64) -> Result<Option<AdminUser>,
 }
 
 pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> Result<(), String> {
+    update_user(repo, id, Some(enabled), None).await
+}
+
+pub async fn set_role(repo: &Repository, id: i64, admin: bool) -> Result<(), String> {
+    update_user(repo, id, None, Some(admin)).await
+}
+
+pub async fn update_user(
+    repo: &Repository,
+    id: i64,
+    enabled: Option<bool>,
+    admin: Option<bool>,
+) -> Result<(), String> {
     let _write_guard = repo.lock_writes().await;
     let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
     let lock = if repo.kind() == DatabaseKind::Postgres {
@@ -348,33 +361,40 @@ pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> Result<()
     } else {
         ""
     };
-    if !enabled {
-        let target: Option<(String, i64)> =
-            sqlx::query_as(&format!("SELECT role,enabled FROM users WHERE id=$1{lock}"))
-                .bind(id)
-                .fetch_optional(&mut *tx)
-                .await
-                .map_err(|e| e.to_string())?;
-        let (role, currently_enabled) = target.ok_or("User not found")?;
+    let target: Option<(String, i64)> =
+        sqlx::query_as(&format!("SELECT role,enabled FROM users WHERE id=$1{lock}"))
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+    let (current_role, currently_enabled) = target.ok_or("User not found")?;
+    let final_enabled = enabled.unwrap_or(currently_enabled != 0);
+    let final_admin = admin.unwrap_or(current_role == "admin");
+    if current_role == "admin" && currently_enabled != 0 && (!final_enabled || !final_admin) {
         let admins: i64 =
             sqlx::query_scalar("SELECT count(*) FROM users WHERE role='admin' AND enabled=1")
                 .fetch_one(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
-        if role == "admin" && currently_enabled != 0 && admins <= 1 {
-            return Err("The last enabled administrator cannot be disabled".to_string());
+        if admins <= 1 {
+            return Err(if !final_enabled {
+                "The last enabled administrator cannot be disabled".to_string()
+            } else {
+                "The last administrator cannot be demoted".to_string()
+            });
         }
     }
-    let result = sqlx::query("UPDATE users SET enabled=$2 WHERE id=$1")
+    let result = sqlx::query("UPDATE users SET enabled=$2,role=$3 WHERE id=$1")
         .bind(id)
-        .bind(i64::from(enabled))
+        .bind(i64::from(final_enabled))
+        .bind(if final_admin { "admin" } else { "user" })
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     if result.rows_affected() == 0 {
         return Err("User not found".to_string());
     }
-    if !enabled {
+    if !final_enabled {
         sqlx::query("DELETE FROM sessions WHERE user_id=$1")
             .bind(id)
             .execute(&mut *tx)
@@ -386,39 +406,7 @@ pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> Result<()
             .await
             .map_err(|e| e.to_string())?;
     }
-    tx.commit().await.map_err(|e| e.to_string())
-}
-
-pub async fn set_role(repo: &Repository, id: i64, admin: bool) -> Result<(), String> {
-    let _write_guard = repo.lock_writes().await;
-    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
-    if !admin {
-        let target: Option<(String, i64)> =
-            sqlx::query_as("SELECT role,enabled FROM users WHERE id=$1")
-                .bind(id)
-                .fetch_optional(&mut *tx)
-                .await
-                .map_err(|e| e.to_string())?;
-        let (role, enabled) = target.ok_or("User not found")?;
-        let admins: i64 =
-            sqlx::query_scalar("SELECT count(*) FROM users WHERE role='admin' AND enabled=1")
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(|e| e.to_string())?;
-        if role == "admin" && enabled != 0 && admins <= 1 {
-            return Err("The last administrator cannot be demoted".to_string());
-        }
-    }
-    let result = sqlx::query("UPDATE users SET role=$2 WHERE id=$1")
-        .bind(id)
-        .bind(if admin { "admin" } else { "user" })
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
-    if result.rows_affected() == 0 {
-        return Err("User not found".to_string());
-    }
-    if !admin {
+    if !final_admin {
         sqlx::query(
             "UPDATE api_keys SET enabled=0 WHERE user_id=$1 AND EXISTS (
                SELECT 1 FROM api_key_scopes

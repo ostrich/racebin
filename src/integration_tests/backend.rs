@@ -3,6 +3,28 @@ use super::*;
 pub(super) async fn backend_contract(repo: Repository) {
     insert_user(&repo, 1, "administrator", "admin").await;
     insert_user(&repo, 2, "paste-owner", "user").await;
+    assert_eq!(
+        accounts::update_user(&repo, 1, Some(false), Some(false))
+            .await
+            .unwrap_err(),
+        "The last enabled administrator cannot be disabled"
+    );
+    let administrator: (String, i64) = sqlx::query_as("SELECT role,enabled FROM users WHERE id=1")
+        .fetch_one(repo.pool())
+        .await
+        .unwrap();
+    assert_eq!(administrator, ("admin".to_string(), 1));
+    accounts::update_user(&repo, 2, Some(false), Some(true))
+        .await
+        .unwrap();
+    let updated_user: (String, i64) = sqlx::query_as("SELECT role,enabled FROM users WHERE id=2")
+        .fetch_one(repo.pool())
+        .await
+        .unwrap();
+    assert_eq!(updated_user, ("admin".to_string(), 0));
+    accounts::update_user(&repo, 2, Some(true), Some(false))
+        .await
+        .unwrap();
     let services = PasteService::new(repo.clone());
     let owner = principal(2, "paste-owner", "user");
     let anonymous = Principal::Anonymous;

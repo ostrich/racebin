@@ -98,21 +98,19 @@ async fn admin_update_user(
     if let Err(r) = require_admin(&value, "user:manage") {
         return r;
     }
-    let result = async {
-        if let Some(enabled) = body.enabled {
-            accounts::set_enabled(&services.storage, *id, enabled).await?;
+    let admin = match body.role.as_deref() {
+        Some("admin") => Some(true),
+        Some("user") => Some(false),
+        Some(_) => {
+            return error(
+                StatusCode::BAD_REQUEST,
+                "invalid_user",
+                "Role must be user or admin",
+            )
         }
-        if let Some(role) = &body.role {
-            let admin = match role.as_str() {
-                "admin" => true,
-                "user" => false,
-                _ => return Err("Role must be user or admin".to_string()),
-            };
-            accounts::set_role(&services.storage, *id, admin).await?;
-        }
-        Ok::<_, String>(())
-    }
-    .await;
+        None => None,
+    };
+    let result = accounts::update_user(&services.storage, *id, body.enabled, admin).await;
     match result {
         Ok(()) => HttpResponse::NoContent().finish(),
         Err(e) => error(StatusCode::BAD_REQUEST, "invalid_user", e),
