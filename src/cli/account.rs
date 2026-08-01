@@ -53,7 +53,8 @@ pub(crate) async fn run_if_requested() -> Result<bool, String> {
         "create" => {
             let username = accounts::validate_username(arguments.get(3).ok_or(
                 "usage: racebin account create USERNAME [--admin] [--password-file PATH]",
-            )?)?;
+            )?)
+            .map_err(|error| error.to_string())?;
             let role = if arguments.iter().any(|value| value == "--admin") {
                 "admin"
             } else {
@@ -64,7 +65,7 @@ pub(crate) async fn run_if_requested() -> Result<bool, String> {
                  VALUES($1,$2,$3,1,0,$4)",
             )
             .bind(username)
-            .bind(accounts::password_hash(&password(&arguments)?)?)
+            .bind(accounts::password_hash(&password(&arguments)?).map_err(|error| error.to_string())?)
             .bind(role)
             .bind(crate::time::unix_timestamp())
             .execute(repository.pool())
@@ -87,7 +88,9 @@ pub(crate) async fn run_if_requested() -> Result<bool, String> {
                 .get(3)
                 .ok_or("usage: racebin account password USERNAME [--password-file PATH]")?;
             let id = user_id(&repository, username).await?;
-            accounts::set_password(&repository, id, &password(&arguments)?, false).await?;
+            accounts::set_password(&repository, id, &password(&arguments)?, false)
+                .await
+                .map_err(|error| error.to_string())?;
             println!("password updated for {username}; existing sessions revoked");
         }
         "enable" | "disable" => {
@@ -95,7 +98,9 @@ pub(crate) async fn run_if_requested() -> Result<bool, String> {
                 .get(3)
                 .ok_or_else(|| format!("usage: racebin account {command} USERNAME"))?;
             let id = user_id(&repository, username).await?;
-            accounts::set_enabled(&repository, id, command == "enable").await?;
+            accounts::set_enabled(&repository, id, command == "enable")
+                .await
+                .map_err(|error| error.to_string())?;
             println!("{command}d account {username}");
         }
         "role" => {
@@ -107,7 +112,9 @@ pub(crate) async fn run_if_requested() -> Result<bool, String> {
                 return Err("role must be user or admin".to_string());
             }
             let id = user_id(&repository, username).await?;
-            accounts::set_role(&repository, id, role == "admin").await?;
+            accounts::set_role(&repository, id, role == "admin")
+                .await
+                .map_err(|error| error.to_string())?;
             println!("set {username} role to {role}");
         }
         _ => println!(

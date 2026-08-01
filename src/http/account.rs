@@ -176,7 +176,7 @@ pub(crate) async fn change_password(
                 .map(|_| true)
         }
         Ok(None) => Ok(false),
-        Err(error) => Err(error),
+        Err(error) => Err(crate::services::DomainError::internal(error)),
     };
     match result {
         Ok(true) => HttpResponse::NoContent().finish(),
@@ -185,10 +185,7 @@ pub(crate) async fn change_password(
             "invalid_credentials",
             "Current password is incorrect",
         ),
-        Err(e) if e.starts_with("Password must") => {
-            error(StatusCode::BAD_REQUEST, "invalid_password", e)
-        }
-        Err(e) => internal(e),
+        Err(e) => domain_error(e),
     }
 }
 
@@ -232,17 +229,13 @@ pub(crate) async fn reset_password(
     }
     match accounts::reset_password(&services.storage, &token, &body.new_password).await {
         Ok(()) => HttpResponse::NoContent().finish(),
-        Err(message) => {
+        Err(value) => {
             if let Err(error) =
                 accounts::record_password_reset_failure(&services.storage, &client).await
             {
                 return internal(error);
             }
-            if message.starts_with("Password must") {
-                error(StatusCode::BAD_REQUEST, "invalid_password", message)
-            } else {
-                error(StatusCode::BAD_REQUEST, "invalid_password_reset", message)
-            }
+            domain_error(value)
         }
     }
 }
@@ -282,11 +275,11 @@ pub(crate) async fn redeem_invitation(
                 .json(json!({"user": {"id": user.id, "username": user.username, "role": user.role}, "csrf_token": csrf})),
             Err(e) => internal(e),
         },
-        Err(e) => {
+        Err(value) => {
             if let Err(error) = accounts::record_invitation_failure(&services.storage, &client).await {
                 return internal(error);
             }
-            error(StatusCode::BAD_REQUEST, "invalid_invitation", e)
+            domain_error(value)
         }
     }
 }

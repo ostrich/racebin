@@ -1,7 +1,7 @@
-use super::errors::{error, internal};
+use super::errors::{domain_error, error};
 use crate::account::{self as accounts, api_keys};
 use crate::args::ARGS;
-use crate::services::{PasteService, Principal};
+use crate::services::{DomainError, DomainResult, PasteService, Principal};
 
 pub(super) fn client_address(req: &HttpRequest) -> String {
     let Some(peer) = req.peer_addr() else {
@@ -31,36 +31,30 @@ pub(super) async fn principal(
 ) -> Result<Principal, HttpResponse> {
     resolve_principal(services, request)
         .await
-        .map_err(|message| {
-            if message == "Password change required" {
-                error(StatusCode::FORBIDDEN, "password_change_required", message)
-            } else if message.contains("authorization") || message.contains("bearer") {
-                unauthorized("invalid_token", message)
-            } else {
-                internal(message)
-            }
-        })
+        .map_err(domain_error)
 }
 
 async fn resolve_principal(
     services: &PasteService,
     request: &HttpRequest,
-) -> Result<Principal, String> {
+) -> DomainResult<Principal> {
     if let Some(header) = request.headers().get("Authorization") {
-        let header = header
-            .to_str()
-            .map_err(|_| "Invalid authorization header")?;
-        let value = header
-            .strip_prefix("Bearer ")
-            .ok_or("Invalid authorization scheme")?;
+        let header = header.to_str().map_err(|_| {
+            DomainError::unauthorized("invalid_token", "Invalid authorization header")
+        })?;
+        let value = header.strip_prefix("Bearer ").ok_or_else(|| {
+            DomainError::unauthorized("invalid_token", "Invalid authorization scheme")
+        })?;
         return api_keys::authenticate(&services.storage, value)
-            .await?
+            .await
+            .map_err(DomainError::internal)?
             .map(Principal::ApiKey)
-            .ok_or_else(|| "Invalid bearer token".to_string());
+            .ok_or_else(|| DomainError::unauthorized("invalid_token", "Invalid bearer token"));
     }
     let session = match request.cookie(accounts::SESSION_COOKIE) {
         Some(cookie) => accounts::session_user(&services.storage, cookie.value())
-            .await?
+            .await
+            .map_err(DomainError::internal)?
             .map(Principal::Session)
             .unwrap_or(Principal::Anonymous),
         None => Principal::Anonymous,
@@ -76,7 +70,10 @@ async fn resolve_principal(
                         | ("PATCH", "/api/v1/account/password")
                 )
     ) {
-        Err("Password change required".to_string())
+        Err(DomainError::forbidden_code(
+            "password_change_required",
+            "Password change required",
+        ))
     } else {
         Ok(session)
     }

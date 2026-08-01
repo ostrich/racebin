@@ -3,10 +3,12 @@ use super::*;
 pub(super) async fn backend_contract(repo: Repository) {
     insert_user(&repo, 1, "administrator", "admin").await;
     insert_user(&repo, 2, "paste-owner", "user").await;
+    let last_admin = accounts::update_user(&repo, 1, Some(false), Some(false))
+        .await
+        .unwrap_err();
+    assert_eq!(last_admin.code, "last_administrator");
     assert_eq!(
-        accounts::update_user(&repo, 1, Some(false), Some(false))
-            .await
-            .unwrap_err(),
+        last_admin.message,
         "The last enabled administrator cannot be disabled"
     );
     let administrator: (String, i64) = sqlx::query_as("SELECT role,enabled FROM users WHERE id=1")
@@ -67,12 +69,11 @@ pub(super) async fn backend_contract(repo: Repository) {
     );
 
     let invitation = accounts::create_invitation(&repo, 1).await.unwrap();
-    assert_eq!(
+    let invalid_invitation =
         accounts::redeem_invitation(&repo, "invalid-token", "valid-name", "short")
             .await
-            .unwrap_err(),
-        "Invitation is invalid or expired"
-    );
+            .unwrap_err();
+    assert_eq!(invalid_invitation.code, "invalid_invitation");
     assert_eq!(
         accounts::list_invitations(&repo).await.unwrap()[0]
             .token

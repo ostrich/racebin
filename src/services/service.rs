@@ -72,6 +72,15 @@ impl PasteService {
         scopes: &[String],
     ) -> DomainResult<(api_keys::ApiKey, String)> {
         let owner = self.key_owner(principal)?;
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 100 {
+            return Err(DomainError::validation_code(
+                "invalid_api_key_name",
+                "Key name must contain 1 to 100 characters",
+            ));
+        }
+        let scopes = api_keys::normalize_scopes(scopes)
+            .map_err(|message| DomainError::validation_code("invalid_api_key_scopes", message))?;
         if let Principal::ApiKey(key) = principal {
             if scopes.iter().any(|scope| !key.has_scope(scope)) {
                 return Err(DomainError::forbidden(
@@ -83,7 +92,7 @@ impl PasteService {
                 "Only administrators can grant administrative scopes",
             ));
         }
-        Ok(api_keys::create(&self.storage, Some(owner), name, scopes).await?)
+        Ok(api_keys::create(&self.storage, Some(owner), name, &scopes).await?)
     }
 
     pub async fn set_api_key_enabled(
@@ -1159,7 +1168,7 @@ impl PasteService {
                 if existed {
                     let _ = std::fs::rename(staged, path);
                 }
-                Err(error.into())
+                Err(error)
             }
         }
     }

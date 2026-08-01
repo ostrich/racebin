@@ -48,6 +48,7 @@ pub(super) fn internal(message: impl std::fmt::Display) -> HttpResponse {
 pub(super) fn domain_error(value: DomainError) -> HttpResponse {
     let status = match value.kind {
         ErrorKind::NotFound => StatusCode::NOT_FOUND,
+        ErrorKind::Unauthorized => StatusCode::UNAUTHORIZED,
         ErrorKind::Forbidden => StatusCode::FORBIDDEN,
         ErrorKind::Validation => StatusCode::BAD_REQUEST,
         ErrorKind::Conflict => StatusCode::CONFLICT,

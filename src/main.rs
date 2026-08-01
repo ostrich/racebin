@@ -10,6 +10,7 @@ const ACCESS_LOG_FORMAT: &str = "%a \"%m\" %s %b \"%{User-Agent}i\" %T";
 pub mod account;
 pub mod args;
 mod cli;
+pub mod domain_error;
 pub mod http;
 #[cfg(test)]
 mod integration_tests;

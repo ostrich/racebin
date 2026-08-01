@@ -1,10 +1,9 @@
-mod error;
+pub use crate::domain_error::{DomainError, DomainResult, ErrorKind};
 mod model;
 mod rich_text;
 mod service;
 mod validation;
 
-pub use error::{DomainError, DomainResult, ErrorKind};
 pub use model::{
     Attachment, Folder, FolderOverview, Page, Paste, PasteInput, PasteQuery, PasteRead,
 };

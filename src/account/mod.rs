@@ -9,6 +9,7 @@ use sqlx::any::AnyRow;
 use sqlx::{FromRow, Row};
 use std::sync::LazyLock;
 
+use crate::domain_error::{DomainError, DomainResult};
 use crate::repository::{DatabaseKind, Repository};
 use crate::time::unix_timestamp;
 
@@ -141,17 +142,20 @@ fn random_token(length: usize) -> String {
         .collect()
 }
 
-pub fn password_hash(password: &str) -> Result<String, String> {
+pub fn password_hash(password: &str) -> DomainResult<String> {
     if password.chars().count() < 12 {
-        return Err("Password must contain at least 12 characters".to_string());
+        return Err(DomainError::validation_code(
+            "invalid_password",
+            "Password must contain at least 12 characters",
+        ));
     }
     Argon2::default()
         .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
         .map(|hash| hash.to_string())
-        .map_err(|error| error.to_string())
+        .map_err(|error| DomainError::internal(error.to_string()))
 }
 
-pub(crate) fn validate_username(username: &str) -> Result<&str, String> {
+pub(crate) fn validate_username(username: &str) -> DomainResult<&str> {
     let username = username.trim();
     if username.len() < 3
         || username.len() > 64
@@ -159,9 +163,10 @@ pub(crate) fn validate_username(username: &str) -> Result<&str, String> {
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
     {
-        return Err(
-            "Username must be 3-64 ASCII letters, numbers, underscores, or hyphens".to_string(),
-        );
+        return Err(DomainError::validation_code(
+            "invalid_username",
+            "Username must be 3-64 ASCII letters, numbers, underscores, or hyphens",
+        ));
     }
     Ok(username)
 }
@@ -355,11 +360,11 @@ pub async fn admin_user(repo: &Repository, id: i64) -> Result<Option<AdminUser>,
         .map_err(|e| e.to_string())
 }
 
-pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> Result<(), String> {
+pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> DomainResult<()> {
     update_user(repo, id, Some(enabled), None).await
 }
 
-pub async fn set_role(repo: &Repository, id: i64, admin: bool) -> Result<(), String> {
+pub async fn set_role(repo: &Repository, id: i64, admin: bool) -> DomainResult<()> {
     update_user(repo, id, None, Some(admin)).await
 }
 
@@ -368,7 +373,7 @@ pub async fn update_user(
     id: i64,
     enabled: Option<bool>,
     admin: Option<bool>,
-) -> Result<(), String> {
+) -> DomainResult<()> {
     let _write_guard = repo.lock_writes().await;
     let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
     let lock = if repo.kind() == DatabaseKind::Postgres {
@@ -382,7 +387,8 @@ pub async fn update_user(
             .fetch_optional(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
-    let (current_role, currently_enabled) = target.ok_or("User not found")?;
+    let (current_role, currently_enabled) =
+        target.ok_or_else(|| DomainError::not_found("User not found"))?;
     let final_enabled = enabled.unwrap_or(currently_enabled != 0);
     let final_admin = admin.unwrap_or(current_role == "admin");
     if current_role == "admin" && currently_enabled != 0 && (!final_enabled || !final_admin) {
@@ -392,11 +398,14 @@ pub async fn update_user(
                 .await
                 .map_err(|e| e.to_string())?;
         if admins <= 1 {
-            return Err(if !final_enabled {
-                "The last enabled administrator cannot be disabled".to_string()
-            } else {
-                "The last administrator cannot be demoted".to_string()
-            });
+            return Err(DomainError::validation_code(
+                "last_administrator",
+                if !final_enabled {
+                    "The last enabled administrator cannot be disabled"
+                } else {
+                    "The last administrator cannot be demoted"
+                },
+            ));
         }
     }
     let result = sqlx::query("UPDATE users SET enabled=$2,role=$3 WHERE id=$1")
@@ -407,7 +416,7 @@ pub async fn update_user(
         .await
         .map_err(|e| e.to_string())?;
     if result.rows_affected() == 0 {
-        return Err("User not found".to_string());
+        return Err(DomainError::not_found("User not found"));
     }
     if !final_enabled {
         sqlx::query("DELETE FROM sessions WHERE user_id=$1")
@@ -434,7 +443,7 @@ pub async fn update_user(
         .await
         .map_err(|e| e.to_string())?;
     }
-    tx.commit().await.map_err(|e| e.to_string())
+    tx.commit().await.map_err(DomainError::from)
 }
 
 pub async fn set_password(
@@ -442,7 +451,7 @@ pub async fn set_password(
     id: i64,
     password: &str,
     force: bool,
-) -> Result<(), String> {
+) -> DomainResult<()> {
     let encoded = password_hash(password)?;
     let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
     sqlx::query("UPDATE users SET password_hash=$2,password_change_required=$3 WHERE id=$1")
@@ -462,14 +471,14 @@ pub async fn set_password(
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
-    tx.commit().await.map_err(|e| e.to_string())
+    tx.commit().await.map_err(DomainError::from)
 }
 
 pub async fn create_password_reset(
     repo: &Repository,
     user_id: i64,
     created_by_user_id: i64,
-) -> Result<String, String> {
+) -> DomainResult<String> {
     let _write_guard = repo.lock_writes().await;
     let token = random_token(64);
     let now = unix_timestamp();
@@ -480,8 +489,13 @@ pub async fn create_password_reset(
         .await
         .map_err(|e| e.to_string())?;
     match enabled {
-        None => return Err("User not found".to_string()),
-        Some(0) => return Err("Disabled users cannot reset their password".to_string()),
+        None => return Err(DomainError::not_found("User not found")),
+        Some(0) => {
+            return Err(DomainError::validation_code(
+                "disabled_user",
+                "Disabled users cannot reset their password",
+            ))
+        }
         Some(_) => {}
     }
     sqlx::query("DELETE FROM password_reset_tokens WHERE user_id=$1")
@@ -505,7 +519,7 @@ pub async fn create_password_reset(
     Ok(token)
 }
 
-pub async fn reset_password(repo: &Repository, token: &str, password: &str) -> Result<(), String> {
+pub async fn reset_password(repo: &Repository, token: &str, password: &str) -> DomainResult<()> {
     let token_hash = hash(token);
     let valid: Option<i64> = sqlx::query_scalar(
         "SELECT r.user_id FROM password_reset_tokens r JOIN users u ON u.id=r.user_id
@@ -517,7 +531,10 @@ pub async fn reset_password(repo: &Repository, token: &str, password: &str) -> R
     .await
     .map_err(|e| e.to_string())?;
     if valid.is_none() {
-        return Err("Password reset link is invalid or expired".to_string());
+        return Err(DomainError::validation_code(
+            "invalid_password_reset",
+            "Password reset link is invalid or expired",
+        ));
     }
     let encoded = password_hash(password)?;
     let _write_guard = repo.lock_writes().await;
@@ -536,7 +553,12 @@ pub async fn reset_password(repo: &Repository, token: &str, password: &str) -> R
     .fetch_optional(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
-    let user_id = user_id.ok_or("Password reset link is invalid or expired")?;
+    let user_id = user_id.ok_or_else(|| {
+        DomainError::validation_code(
+            "invalid_password_reset",
+            "Password reset link is invalid or expired",
+        )
+    })?;
     sqlx::query("UPDATE users SET password_hash=$2,password_change_required=0 WHERE id=$1")
         .bind(user_id)
         .bind(encoded)
@@ -553,7 +575,7 @@ pub async fn reset_password(repo: &Repository, token: &str, password: &str) -> R
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
-    tx.commit().await.map_err(|e| e.to_string())
+    tx.commit().await.map_err(DomainError::from)
 }
 
 pub async fn revoke_sessions(repo: &Repository, user_id: i64) -> Result<bool, String> {
@@ -619,7 +641,7 @@ pub async fn redeem_invitation(
     token: &str,
     username: &str,
     password: &str,
-) -> Result<User, String> {
+) -> DomainResult<User> {
     let _write_guard = repo.lock_writes().await;
     let username = validate_username(username)?.to_string();
     let token_hash = hash(token);
@@ -633,7 +655,10 @@ pub async fn redeem_invitation(
     .await
     .map_err(|e| e.to_string())?;
     if active.is_none() {
-        return Err("Invitation is invalid or expired".into());
+        return Err(DomainError::validation_code(
+            "invalid_invitation",
+            "Invitation is invalid or expired",
+        ));
     }
     let encoded = password_hash(password)?;
     let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
@@ -651,7 +676,9 @@ pub async fn redeem_invitation(
     .fetch_optional(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
-    let invitation_id = invitation_id.ok_or("Invitation is invalid or expired")?;
+    let invitation_id = invitation_id.ok_or_else(|| {
+        DomainError::validation_code("invalid_invitation", "Invitation is invalid or expired")
+    })?;
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO users(username,password_hash,role,password_change_required,created_at)
          VALUES($1,$2,'user',0,$3) RETURNING id",

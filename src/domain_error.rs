@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ErrorKind {
     NotFound,
+    Unauthorized,
     Forbidden,
     Validation,
     Conflict,
@@ -20,47 +21,40 @@ pub struct DomainError {
 pub type DomainResult<T> = Result<T, DomainError>;
 
 impl DomainError {
-    pub fn not_found(message: impl Into<String>) -> Self {
+    fn new(kind: ErrorKind, code: &'static str, message: impl Into<String>) -> Self {
         Self {
-            kind: ErrorKind::NotFound,
-            code: "not_found",
-            message: message.into(),
-        }
-    }
-    pub fn forbidden(message: impl Into<String>) -> Self {
-        Self {
-            kind: ErrorKind::Forbidden,
-            code: "forbidden",
-            message: message.into(),
-        }
-    }
-    pub fn validation(message: impl Into<String>) -> Self {
-        Self {
-            kind: ErrorKind::Validation,
-            code: "invalid_request",
-            message: message.into(),
-        }
-    }
-    pub fn conflict(code: &'static str, message: impl Into<String>) -> Self {
-        Self {
-            kind: ErrorKind::Conflict,
+            kind,
             code,
             message: message.into(),
         }
     }
+
+    pub fn not_found(message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::NotFound, "not_found", message)
+    }
+    pub fn unauthorized(code: &'static str, message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::Unauthorized, code, message)
+    }
+    pub fn forbidden(message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::Forbidden, "forbidden", message)
+    }
+    pub fn forbidden_code(code: &'static str, message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::Forbidden, code, message)
+    }
+    pub fn validation(message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::Validation, "invalid_request", message)
+    }
+    pub fn validation_code(code: &'static str, message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::Validation, code, message)
+    }
+    pub fn conflict(code: &'static str, message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::Conflict, code, message)
+    }
     pub fn precondition(message: impl Into<String>) -> Self {
-        Self {
-            kind: ErrorKind::Precondition,
-            code: "precondition_failed",
-            message: message.into(),
-        }
+        Self::new(ErrorKind::Precondition, "precondition_failed", message)
     }
     pub fn internal(message: impl Into<String>) -> Self {
-        Self {
-            kind: ErrorKind::Internal,
-            code: "internal_error",
-            message: message.into(),
-        }
+        Self::new(ErrorKind::Internal, "internal_error", message)
     }
 }
 
@@ -92,10 +86,11 @@ mod tests {
     use super::{DomainError, ErrorKind};
 
     #[test]
-    fn constructors_assign_stable_kinds() {
+    fn constructors_assign_stable_kinds_and_codes() {
+        assert_eq!(DomainError::not_found("missing").kind, ErrorKind::NotFound);
         assert_eq!(
-            DomainError::not_found("Paste not found").kind,
-            ErrorKind::NotFound
+            DomainError::unauthorized("invalid_token", "bad").kind,
+            ErrorKind::Unauthorized
         );
         assert_eq!(
             DomainError::precondition("changed").kind,
@@ -105,6 +100,10 @@ mod tests {
         assert_eq!(
             DomainError::validation("invalid").kind,
             ErrorKind::Validation
+        );
+        assert_eq!(
+            DomainError::validation_code("invalid_password", "bad").code,
+            "invalid_password"
         );
     }
 }

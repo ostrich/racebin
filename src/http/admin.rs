@@ -84,7 +84,14 @@ pub(crate) async fn admin_pastes(
 #[serde(deny_unknown_fields)]
 struct UserUpdate {
     enabled: Option<bool>,
-    role: Option<String>,
+    role: Option<UserRole>,
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "lowercase")]
+enum UserRole {
+    User,
+    Admin,
 }
 
 #[utoipa::path(patch, path = "/admin/users/{id}", tag = "administration", params(("id" = i64, Path)))]
@@ -105,22 +112,14 @@ pub(crate) async fn admin_update_user(
     if let Err(r) = require_admin(&value, "user:manage") {
         return r;
     }
-    let admin = match body.role.as_deref() {
-        Some("admin") => Some(true),
-        Some("user") => Some(false),
-        Some(_) => {
-            return error(
-                StatusCode::BAD_REQUEST,
-                "invalid_user",
-                "Role must be user or admin",
-            )
-        }
-        None => None,
-    };
+    let admin = body
+        .role
+        .as_ref()
+        .map(|role| matches!(role, UserRole::Admin));
     let result = accounts::update_user(&services.storage, *id, body.enabled, admin).await;
     match result {
         Ok(()) => HttpResponse::NoContent().finish(),
-        Err(e) => error(StatusCode::BAD_REQUEST, "invalid_user", e),
+        Err(e) => domain_error(e),
     }
 }
 
@@ -148,7 +147,7 @@ pub(crate) async fn admin_create_password_reset(
         Ok(token) => HttpResponse::Created().json(json!({
             "url": super::dto::absolute(&req, &format!("/password-reset/{token}"))
         })),
-        Err(message) => error(StatusCode::BAD_REQUEST, "invalid_user", message),
+        Err(value) => domain_error(value),
     }
 }
 
