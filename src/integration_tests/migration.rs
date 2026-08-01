@@ -16,6 +16,48 @@ async fn sqlite_migration_repeatability_and_checksum_validation() {
 }
 
 #[actix_web::test]
+async fn sqlite_query_indexes_match_repository_workloads() {
+    let (repo, data_dir) = sqlite_repository("migration-indexes").await;
+    repo.migrate().await.unwrap();
+
+    let indexes: Vec<String> = sqlx::query_scalar(
+        "SELECT name FROM sqlite_master
+         WHERE type='index' AND name IN (
+           'folders_owner_idx',
+           'folders_owner_name_idx',
+           'sessions_expiry_idx',
+           'sessions_user_expiry_idx',
+           'api_keys_user_idx',
+           'invitations_expiry_idx',
+           'password_reset_tokens_expiry_idx',
+           'auth_attempts_expiry_idx',
+           'pastes_folder_only_idx'
+         )
+         ORDER BY name",
+    )
+    .fetch_all(repo.pool())
+    .await
+    .unwrap();
+
+    assert_eq!(
+        indexes,
+        [
+            "api_keys_user_idx",
+            "auth_attempts_expiry_idx",
+            "folders_owner_name_idx",
+            "invitations_expiry_idx",
+            "password_reset_tokens_expiry_idx",
+            "pastes_folder_only_idx",
+            "sessions_expiry_idx",
+            "sessions_user_expiry_idx",
+        ]
+    );
+
+    drop(repo);
+    let _ = std::fs::remove_dir_all(data_dir);
+}
+
+#[actix_web::test]
 async fn sqlite_redirect_records_become_plaintext_pastes() {
     let data_dir = std::env::temp_dir().join(format!("racebin-redirect-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&data_dir).unwrap();
