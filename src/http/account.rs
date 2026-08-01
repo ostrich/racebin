@@ -43,20 +43,31 @@ async fn login(
     services: web::Data<PasteService>,
     body: web::Json<LoginInput>,
 ) -> HttpResponse {
-    let client = req
-        .peer_addr()
-        .map(|address| address.ip().to_string())
-        .unwrap_or_else(|| "unknown".to_string());
-    if !accounts::login_allowed(&body.username, &client) {
-        return error(
+    let client = auth::client_address(&req);
+    let retry_after =
+        match accounts::login_retry_after(&services.storage, &body.username, &client).await {
+            Ok(value) => value,
+            Err(error) => return internal(error),
+        };
+    if let Some(retry_after) = retry_after {
+        let mut response = error(
             StatusCode::TOO_MANY_REQUESTS,
             "rate_limited",
             "Too many login attempts",
         );
+        response.headers_mut().insert(
+            header::RETRY_AFTER,
+            header::HeaderValue::from_str(&retry_after.to_string()).unwrap(),
+        );
+        return response;
     }
     match accounts::verify_user(&services.storage, &body.username, &body.password).await {
         Ok(Some(user)) => {
-            accounts::clear_login_failures(&body.username, &client);
+            if let Err(error) =
+                accounts::clear_login_failures(&services.storage, &body.username).await
+            {
+                return internal(error);
+            }
             match accounts::create_session(&services.storage, user.id, body.remember.unwrap_or(false)).await {
                 Ok((token, csrf, _)) => HttpResponse::Ok()
                     .cookie(cookies::session_cookie(
@@ -68,7 +79,11 @@ async fn login(
             }
         }
         Ok(None) => {
-            accounts::record_login_failure(&body.username, &client);
+            if let Err(error) =
+                accounts::record_login_failure(&services.storage, &body.username, &client).await
+            {
+                return internal(error);
+            }
             error(
                 StatusCode::UNAUTHORIZED,
                 "invalid_credentials",
@@ -185,25 +200,69 @@ struct PasswordResetInput {
 
 #[post("/password-resets/{token}")]
 async fn reset_password(
+    req: HttpRequest,
     services: web::Data<PasteService>,
     token: web::Path<String>,
     body: web::Json<PasswordResetInput>,
 ) -> HttpResponse {
+    let client = auth::client_address(&req);
+    let retry_after = match accounts::password_reset_retry_after(&services.storage, &client).await {
+        Ok(value) => value,
+        Err(error) => return internal(error),
+    };
+    if let Some(retry_after) = retry_after {
+        let mut response = error(
+            StatusCode::TOO_MANY_REQUESTS,
+            "rate_limited",
+            "Too many password reset attempts",
+        );
+        response.headers_mut().insert(
+            header::RETRY_AFTER,
+            header::HeaderValue::from_str(&retry_after.to_string()).unwrap(),
+        );
+        return response;
+    }
     match accounts::reset_password(&services.storage, &token, &body.new_password).await {
         Ok(()) => HttpResponse::NoContent().finish(),
-        Err(message) if message.starts_with("Password must") => {
-            error(StatusCode::BAD_REQUEST, "invalid_password", message)
+        Err(message) => {
+            if let Err(error) =
+                accounts::record_password_reset_failure(&services.storage, &client).await
+            {
+                return internal(error);
+            }
+            if message.starts_with("Password must") {
+                error(StatusCode::BAD_REQUEST, "invalid_password", message)
+            } else {
+                error(StatusCode::BAD_REQUEST, "invalid_password_reset", message)
+            }
         }
-        Err(message) => error(StatusCode::BAD_REQUEST, "invalid_password_reset", message),
     }
 }
 
 #[post("/invitations/{token}/redeem")]
 async fn redeem_invitation(
+    req: HttpRequest,
     services: web::Data<PasteService>,
     token: web::Path<String>,
     body: web::Json<InvitationInput>,
 ) -> HttpResponse {
+    let client = auth::client_address(&req);
+    let retry_after = match accounts::invitation_retry_after(&services.storage, &client).await {
+        Ok(value) => value,
+        Err(error) => return internal(error),
+    };
+    if let Some(retry_after) = retry_after {
+        let mut response = error(
+            StatusCode::TOO_MANY_REQUESTS,
+            "rate_limited",
+            "Too many invitation redemption attempts",
+        );
+        response.headers_mut().insert(
+            header::RETRY_AFTER,
+            header::HeaderValue::from_str(&retry_after.to_string()).unwrap(),
+        );
+        return response;
+    }
     let token = token.into_inner();
     let username = body.username.clone();
     let password = body.password.clone();
@@ -214,6 +273,11 @@ async fn redeem_invitation(
                 .json(json!({"user": {"id": user.id, "username": user.username, "role": user.role}, "csrf_token": csrf})),
             Err(e) => internal(e),
         },
-        Err(e) => error(StatusCode::BAD_REQUEST, "invalid_invitation", e),
+        Err(e) => {
+            if let Err(error) = accounts::record_invitation_failure(&services.storage, &client).await {
+                return internal(error);
+            }
+            error(StatusCode::BAD_REQUEST, "invalid_invitation", e)
+        }
     }
 }

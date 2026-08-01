@@ -34,6 +34,9 @@ pub struct Args {
     #[clap(long, env = "RACEBIN_PUBLIC_URL")]
     pub public_url: Option<url::Url>,
 
+    #[clap(long, env = "RACEBIN_TRUSTED_PROXIES", use_value_delimiter = true)]
+    pub trusted_proxies: Vec<IpAddr>,
+
     #[clap(long = "site-name", env = "RACEBIN_SITE_NAME")]
     pub site_name: Option<String>,
 
@@ -92,5 +95,13 @@ mod tests {
         assert!(Args::parse_from(["racebin", "--attachments", "true"]).attachments_enabled);
         assert!(!Args::parse_from(["racebin", "--attachments", "false"]).attachments_enabled);
         assert!(Args::try_parse_from(["racebin", "--disable-attachments"]).is_err());
+    }
+
+    #[test]
+    fn trusted_proxies_are_explicit() {
+        let defaults = Args::parse_from(["racebin"]);
+        assert!(defaults.trusted_proxies.is_empty());
+        let configured = Args::parse_from(["racebin", "--trusted-proxies", "127.0.0.1,10.0.0.1"]);
+        assert_eq!(configured.trusted_proxies.len(), 2);
     }
 }

@@ -7,8 +7,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use sqlx::any::AnyRow;
 use sqlx::{FromRow, Row};
-use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
+use std::sync::LazyLock;
 
 use crate::repository::{DatabaseKind, Repository};
 use crate::time::unix_timestamp;
@@ -16,8 +15,6 @@ use crate::time::unix_timestamp;
 pub mod api_keys;
 
 pub const SESSION_COOKIE: &str = "racebin_session";
-static LOGIN_FAILURES: LazyLock<Mutex<HashMap<String, Vec<i64>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
 static DUMMY_PASSWORD_HASH: LazyLock<String> =
     LazyLock::new(|| password_hash("racebin-dummy-password").expect("valid dummy password"));
 
@@ -220,6 +217,13 @@ pub async fn create_session(
     let csrf = random_token(48);
     let created_at = unix_timestamp();
     let expires_at = created_at + if remember { 30 * 86400 } else { 12 * 3600 };
+    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM sessions WHERE user_id=$1 AND expires_at<=$2")
+        .bind(user_id)
+        .bind(created_at)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
     sqlx::query(
         "INSERT INTO sessions(user_id,token_hash,csrf_token,created_at,expires_at,last_used_at)
          VALUES($1,$2,$3,$4,$5,$4)",
@@ -229,15 +233,26 @@ pub async fn create_session(
     .bind(&csrf)
     .bind(created_at)
     .bind(expires_at)
-    .execute(repo.pool())
+    .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
     sqlx::query("UPDATE users SET last_login_at=$2 WHERE id=$1")
         .bind(user_id)
         .bind(created_at)
-        .execute(repo.pool())
+        .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
+    sqlx::query(
+        "DELETE FROM sessions WHERE user_id=$1 AND id NOT IN (
+           SELECT id FROM sessions WHERE user_id=$1
+           ORDER BY last_used_at DESC,id DESC LIMIT 20
+         )",
+    )
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|e| e.to_string())?;
     Ok((token, csrf, expires_at))
 }
 
@@ -607,6 +622,19 @@ pub async fn redeem_invitation(
 ) -> Result<User, String> {
     let _write_guard = repo.lock_writes().await;
     let username = validate_username(username)?.to_string();
+    let token_hash = hash(token);
+    let active: Option<i64> = sqlx::query_scalar(
+        "SELECT id FROM invitations
+         WHERE token_hash=$1 AND expires_at>$2 AND redeemed=0 AND revoked=0",
+    )
+    .bind(&token_hash)
+    .bind(unix_timestamp())
+    .fetch_optional(repo.pool())
+    .await
+    .map_err(|e| e.to_string())?;
+    if active.is_none() {
+        return Err("Invitation is invalid or expired".into());
+    }
     let encoded = password_hash(password)?;
     let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
     let lock = if repo.kind() == DatabaseKind::Postgres {
@@ -618,7 +646,7 @@ pub async fn redeem_invitation(
         "SELECT id FROM invitations
          WHERE token_hash=$1 AND expires_at>$2 AND redeemed=0 AND revoked=0{lock}"
     ))
-    .bind(hash(token))
+    .bind(token_hash)
     .bind(unix_timestamp())
     .fetch_optional(&mut *tx)
     .await
@@ -650,35 +678,123 @@ pub async fn redeem_invitation(
     })
 }
 
-pub fn login_allowed(username: &str, client: &str) -> bool {
-    let key = format!("{}\n{}", username.to_ascii_lowercase(), client);
-    let mut failures = LOGIN_FAILURES.lock().unwrap();
-    let cutoff = unix_timestamp() - 900;
-    failures.retain(|_, attempts| {
-        attempts.retain(|timestamp| *timestamp > cutoff);
-        !attempts.is_empty()
-    });
-    if failures.len() > 10_000 {
-        failures.clear();
+const ATTEMPT_WINDOW_SECONDS: i64 = 900;
+
+async fn retry_after(
+    repo: &Repository,
+    keys: &[(&str, String, i64)],
+) -> Result<Option<u64>, String> {
+    let now = unix_timestamp();
+    let cutoff = now - ATTEMPT_WINDOW_SECONDS;
+    sqlx::query("DELETE FROM auth_attempts WHERE occurred_at<=$1")
+        .bind(cutoff)
+        .execute(repo.pool())
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut retry = None;
+    for (kind, subject, limit) in keys {
+        let (count, first): (i64, Option<i64>) = sqlx::query_as(
+            "SELECT count(*),min(occurred_at) FROM auth_attempts
+             WHERE kind=$1 AND subject=$2 AND occurred_at>$3",
+        )
+        .bind(kind)
+        .bind(subject)
+        .bind(cutoff)
+        .fetch_one(repo.pool())
+        .await
+        .map_err(|e| e.to_string())?;
+        if count >= *limit {
+            let seconds = (first.unwrap_or(now) + ATTEMPT_WINDOW_SECONDS - now).max(1) as u64;
+            retry = Some(retry.map_or(seconds, |current: u64| current.max(seconds)));
+        }
     }
-    failures.entry(key).or_default().len() < 5
+    Ok(retry)
 }
 
-pub fn record_login_failure(username: &str, client: &str) {
-    LOGIN_FAILURES
-        .lock()
-        .unwrap()
-        .entry(format!("{}\n{}", username.to_ascii_lowercase(), client))
-        .or_default()
-        .push(unix_timestamp());
+pub async fn login_retry_after(
+    repo: &Repository,
+    username: &str,
+    client: &str,
+) -> Result<Option<u64>, String> {
+    retry_after(
+        repo,
+        &[
+            ("login_account", username.to_ascii_lowercase(), 5),
+            ("login_address", client.to_string(), 20),
+        ],
+    )
+    .await
 }
 
-pub fn clear_login_failures(username: &str, client: &str) {
-    LOGIN_FAILURES.lock().unwrap().remove(&format!(
-        "{}\n{}",
-        username.to_ascii_lowercase(),
-        client
-    ));
+pub async fn record_login_failure(
+    repo: &Repository,
+    username: &str,
+    client: &str,
+) -> Result<(), String> {
+    let now = unix_timestamp();
+    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
+    for (kind, subject) in [
+        ("login_account", username.to_ascii_lowercase()),
+        ("login_address", client.to_string()),
+    ] {
+        sqlx::query("INSERT INTO auth_attempts(kind,subject,occurred_at) VALUES($1,$2,$3)")
+            .bind(kind)
+            .bind(subject)
+            .bind(now)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    tx.commit().await.map_err(|e| e.to_string())
+}
+
+pub async fn clear_login_failures(repo: &Repository, username: &str) -> Result<(), String> {
+    sqlx::query("DELETE FROM auth_attempts WHERE kind='login_account' AND subject=$1")
+        .bind(username.to_ascii_lowercase())
+        .execute(repo.pool())
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+pub async fn invitation_retry_after(
+    repo: &Repository,
+    client: &str,
+) -> Result<Option<u64>, String> {
+    retry_after(repo, &[("invitation_address", client.to_string(), 20)]).await
+}
+
+pub async fn record_invitation_failure(repo: &Repository, client: &str) -> Result<(), String> {
+    sqlx::query(
+        "INSERT INTO auth_attempts(kind,subject,occurred_at)
+         VALUES('invitation_address',$1,$2)",
+    )
+    .bind(client)
+    .bind(unix_timestamp())
+    .execute(repo.pool())
+    .await
+    .map(|_| ())
+    .map_err(|e| e.to_string())
+}
+
+pub async fn password_reset_retry_after(
+    repo: &Repository,
+    client: &str,
+) -> Result<Option<u64>, String> {
+    retry_after(repo, &[("password_reset_address", client.to_string(), 20)]).await
+}
+
+pub async fn record_password_reset_failure(repo: &Repository, client: &str) -> Result<(), String> {
+    sqlx::query(
+        "INSERT INTO auth_attempts(kind,subject,occurred_at)
+         VALUES('password_reset_address',$1,$2)",
+    )
+    .bind(client)
+    .bind(unix_timestamp())
+    .execute(repo.pool())
+    .await
+    .map(|_| ())
+    .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

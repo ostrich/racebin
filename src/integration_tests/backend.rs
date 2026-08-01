@@ -67,6 +67,12 @@ pub(super) async fn backend_contract(repo: Repository) {
 
     let invitation = accounts::create_invitation(&repo, 1).await.unwrap();
     assert_eq!(
+        accounts::redeem_invitation(&repo, "invalid-token", "valid-name", "short")
+            .await
+            .unwrap_err(),
+        "Invitation is invalid or expired"
+    );
+    assert_eq!(
         accounts::list_invitations(&repo).await.unwrap()[0]
             .token
             .as_deref(),
@@ -567,6 +573,70 @@ pub(super) async fn backend_contract(repo: Repository) {
     assert!(managed.paste_count > 0);
     assert!(managed.api_key_count > 0);
     assert!(accounts::list_admin_users(&repo).await.unwrap().len() >= 2);
+
+    for index in 0..5 {
+        accounts::record_login_failure(
+            &repo,
+            "limited-account",
+            &format!("account-client-{index}"),
+        )
+        .await
+        .unwrap();
+    }
+    assert!(
+        accounts::login_retry_after(&repo, "limited-account", "fresh-client")
+            .await
+            .unwrap()
+            .is_some()
+    );
+    for index in 0..20 {
+        accounts::record_login_failure(
+            &repo,
+            &format!("address-account-{index}"),
+            "limited-address",
+        )
+        .await
+        .unwrap();
+    }
+    assert!(
+        accounts::login_retry_after(&repo, "fresh-account", "limited-address")
+            .await
+            .unwrap()
+            .is_some()
+    );
+    for _ in 0..20 {
+        accounts::record_invitation_failure(&repo, "limited-invitation-address")
+            .await
+            .unwrap();
+    }
+    assert!(
+        accounts::invitation_retry_after(&repo, "limited-invitation-address")
+            .await
+            .unwrap()
+            .is_some()
+    );
+    for _ in 0..20 {
+        accounts::record_password_reset_failure(&repo, "limited-reset-address")
+            .await
+            .unwrap();
+    }
+    assert!(
+        accounts::password_reset_retry_after(&repo, "limited-reset-address")
+            .await
+            .unwrap()
+            .is_some()
+    );
+
+    for _ in 0..25 {
+        accounts::create_session(&repo, 2, false).await.unwrap();
+    }
+    let capped_sessions: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM sessions WHERE user_id=2 AND expires_at>$1")
+            .bind(crate::time::unix_timestamp())
+            .fetch_one(repo.pool())
+            .await
+            .unwrap();
+    assert_eq!(capped_sessions, 20);
 
     accounts::delete_session(&repo, &session_token)
         .await

@@ -1,6 +1,27 @@
 use super::errors::{error, internal};
 use crate::account::{self as accounts, api_keys};
+use crate::args::ARGS;
 use crate::services::{PasteService, Principal};
+
+pub(super) fn client_address(req: &HttpRequest) -> String {
+    let Some(peer) = req.peer_addr() else {
+        return "unknown".to_string();
+    };
+    if ARGS.trusted_proxies.contains(&peer.ip()) {
+        if let Some(forwarded) = req
+            .headers()
+            .get("X-Forwarded-For")
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.split(',').next())
+            .map(str::trim)
+            .filter(|value| value.parse::<std::net::IpAddr>().is_ok())
+        {
+            return forwarded.to_string();
+        }
+    }
+    peer.ip().to_string()
+}
+
 use actix_web::http::{header, StatusCode};
 use actix_web::{HttpRequest, HttpResponse};
 
@@ -115,5 +136,21 @@ pub(super) fn require_admin(principal: &Principal, scope: &str) -> Result<(), Ht
             "forbidden",
             format!("Missing {scope} permission"),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::client_address;
+    use actix_web::test;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    #[actix_web::test]
+    async fn forwarding_headers_from_untrusted_peers_are_ignored() {
+        let request = test::TestRequest::default()
+            .peer_addr(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 1234))
+            .insert_header(("X-Forwarded-For", "203.0.113.10"))
+            .to_http_request();
+        assert_eq!(client_address(&request), "127.0.0.1");
     }
 }

@@ -461,8 +461,7 @@ mod tests {
         assert!(raw_created.headers().contains_key("Location"));
         assert!(raw_created.headers().contains_key("ETag"));
         let raw_url = String::from_utf8(test::read_body(raw_created).await.to_vec()).unwrap();
-        let raw_url_parsed = url::Url::parse(&raw_url).unwrap();
-        assert!(raw_url_parsed.path().starts_with("/pastes/"));
+        assert!(raw_url.starts_with("/pastes/"));
 
         let raw_replay = test::call_service(
             &app,
@@ -778,6 +777,58 @@ mod tests {
         )
         .await;
         assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+
+        let (_, invitation_token) = api_keys::create(
+            &repository,
+            Some(1),
+            "invitation administration",
+            &["invitation:manage".to_string()],
+        )
+        .await
+        .unwrap();
+        let invitation = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/admin/invitations")
+                .insert_header(("Authorization", format!("Bearer {invitation_token}")))
+                .insert_header(("Host", "attacker.example"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(invitation.status(), StatusCode::CREATED);
+        let invitation: Value = test::read_body_json(invitation).await;
+        assert!(invitation["url"]
+            .as_str()
+            .unwrap()
+            .starts_with("/invitations/"));
+        assert!(!invitation["url"]
+            .as_str()
+            .unwrap()
+            .contains("attacker.example"));
+
+        for _ in 0..5 {
+            let failed_login = test::call_service(
+                &app,
+                test::TestRequest::post()
+                    .uri("/api/v1/session")
+                    .set_json(
+                        json!({"username":"rate-limited-user","password":"incorrect password"}),
+                    )
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(failed_login.status(), StatusCode::UNAUTHORIZED);
+        }
+        let limited_login = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/session")
+                .set_json(json!({"username":"rate-limited-user","password":"incorrect password"}))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(limited_login.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert!(limited_login.headers().contains_key("Retry-After"));
 
         let logout = test::call_service(
             &app,

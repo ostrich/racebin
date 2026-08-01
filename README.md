@@ -67,12 +67,13 @@ All settings have equivalent `RACEBIN_*` environment variables.
 | `--threads` | `2` |
 | `--data-dir` | `racebin_data` |
 | `--database-url` | `sqlite://<data-dir>/database.sqlite` |
+| `--trusted-proxies` | unset; comma-separated proxy IPs allowed to supply the client address |
 | `--site-name` | `Racebin` |
 | `--plain-home` | disabled; show a login-only anonymous homepage when enabled |
 | `--attachments` | `true` |
 | `--max-attachment-size-mb` | `2048` |
 | `--qr-codes` | disabled |
-| `--public-url` | unset; required for QR output |
+| `--public-url` | unset; required for QR output and absolute externally shared URLs |
 | `--insecure-cookie` | disabled; use only for local HTTP |
 
 See the [architecture overview](docs/architecture.md),

@@ -1,6 +1,7 @@
 use actix_web::{middleware, web, App, HttpServer};
 use env_logger::Builder;
 use log::LevelFilter;
+use std::time::Duration;
 
 use crate::args::ARGS;
 
@@ -90,6 +91,10 @@ async fn main() -> std::io::Result<()> {
                     .add(("X-Frame-Options", "DENY"))
                     .add(("Referrer-Policy", "no-referrer"))
                     .add((
+                        "Permissions-Policy",
+                        "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+                    ))
+                    .add((
                         "Content-Security-Policy",
                         "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
                     )),
@@ -99,6 +104,9 @@ async fn main() -> std::io::Result<()> {
             .configure(http::configure)
     })
     .workers(ARGS.threads as usize)
+    .client_request_timeout(Duration::from_secs(15))
+    .client_disconnect_timeout(Duration::from_secs(5))
+    .max_connections(1024)
     .bind((ARGS.bind, ARGS.port))?;
     server.run().await
 }

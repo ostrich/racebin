@@ -9,6 +9,8 @@ RACEBIN_BIND=127.0.0.1
 ## Storage and public URL
 RACEBIN_DATA_DIR=/var/lib/racebin
 # RACEBIN_PUBLIC_URL=https://paste.example.com
+# Comma-separated immediate proxy addresses whose X-Forwarded-For value is trusted.
+# RACEBIN_TRUSTED_PROXIES=127.0.0.1,::1
 
 ## Browser application
 # RACEBIN_SITE_NAME=Racebin

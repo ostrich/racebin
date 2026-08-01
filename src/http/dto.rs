@@ -335,20 +335,14 @@ pub(crate) fn etag(paste: &Paste) -> String {
     format!("\"paste-{}-{}\"", paste.id, paste.revision)
 }
 
-pub(crate) fn absolute(request: &HttpRequest, path: &str) -> String {
+pub(crate) fn absolute(_request: &HttpRequest, path: &str) -> String {
     if let Some(base) = ARGS.public_url.as_ref() {
         return base.join(path.trim_start_matches('/')).map_or_else(
             |_| format!("{}{}", base.as_str().trim_end_matches('/'), path),
             |url| url.to_string(),
         );
     }
-    let connection = request.connection_info();
-    let scheme = if connection.scheme() == "https" {
-        "https"
-    } else {
-        "http"
-    };
-    format!("{scheme}://{}{}", connection.host(), path)
+    path.to_string()
 }
 
 pub(crate) fn format_timestamp(timestamp: i64) -> String {
