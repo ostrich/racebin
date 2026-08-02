@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { requestApi } from "../api";
+  import { changePassword } from "../api";
   import Link from "../components/Link.svelte";
   import { showNotice } from "../notices";
   import { clearUnsavedChangesGuard, guardUnsavedChanges, navigate } from "../navigation";
@@ -17,12 +17,9 @@
     const data = new FormData(event.currentTarget as HTMLFormElement);
     submitting = true;
     try {
-      await requestApi("/account/password", {
-        method: "PATCH",
-        body: JSON.stringify({
-          current_password: String(data.get("current_password") ?? ""),
-          new_password: String(data.get("new_password") ?? "")
-        })
+      await changePassword({
+        current_password: String(data.get("current_password") ?? ""),
+        new_password: String(data.get("new_password") ?? "")
       });
       dirty = false;
       clearUnsavedChangesGuard();

@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { requestApi } from "../api";
+  import {
+    createPasswordReset, getAdminUser, revokeUserApiKeys, revokeUserSessions,
+    updateAdminUser, type UserUpdate
+  } from "../api";
   import Icon from "../components/Icon.svelte";
   import Link from "../components/Link.svelte";
   import { formatByteSize, formatDate } from "../format";
@@ -16,16 +19,16 @@
   let busy = $state(false);
 
   async function load(): Promise<void> {
-    user = await requestApi<AdminUser>(`/admin/users/${userId}`);
+    user = await getAdminUser(userId);
     role = user.role;
   }
   onMount(() => { void load().catch(reason => { error = reason instanceof Error ? reason.message : "Unable to load user"; }).finally(initialLoadReady); });
 
-  async function patch(values: { role?: string; enabled?: boolean }): Promise<void> {
+  async function patch(values: UserUpdate): Promise<void> {
     if (!user) return;
     busy = true;
     try {
-      await requestApi(`/admin/users/${user.id}`, { method: "PATCH", body: JSON.stringify(values) });
+      await updateAdminUser(user.id, values);
       await load();
       showNotice("Account updated.");
     } catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to update account", "error"); await load(); }
@@ -35,15 +38,18 @@
   async function resetLink(): Promise<void> {
     if (!user) return;
     try {
-      const result = await requestApi<{ url: string }>(`/admin/users/${user.id}/password-reset`, { method: "POST" });
+      const result = await createPasswordReset(user.id);
       await navigator.clipboard.writeText(new URL(result.url, location.origin).href);
       showNotice("Password reset link copied.");
     } catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to create reset link", "error"); }
   }
 
-  async function revoke(path: "sessions" | "api-keys", label: string): Promise<void> {
+  async function revoke(kind: "sessions" | "api-keys", label: string): Promise<void> {
     if (!user || !confirm(`${label} for ${user.username}?`)) return;
-    try { await requestApi(`/admin/users/${user.id}/${path}`, { method: "DELETE" }); await load(); showNotice(`${label} completed.`); }
+    try {
+      await (kind === "sessions" ? revokeUserSessions(user.id) : revokeUserApiKeys(user.id));
+      await load(); showNotice(`${label} completed.`);
+    }
     catch (reason) { showNotice(reason instanceof Error ? reason.message : `Unable to ${label.toLowerCase()}`, "error"); }
   }
 

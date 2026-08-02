@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { requestApi } from "../api";
+  import { createInvitation as createInvitationRequest, listAdminUsers } from "../api";
   import Icon from "../components/Icon.svelte";
   import Link from "../components/Link.svelte";
   import { formatByteSize, formatDate } from "../format";
@@ -28,7 +28,7 @@
   }));
 
   onMount(() => {
-    void requestApi<AdminUser[]>("/admin/users")
+    void listAdminUsers()
       .then(value => { users = value; })
       .catch(reason => { error = reason instanceof Error ? reason.message : "Unable to load users"; })
       .finally(initialLoadReady);
@@ -36,7 +36,7 @@
 
   async function createInvitation(): Promise<void> {
     try {
-      const invitation = await requestApi<{ url: string }>("/admin/invitations", { method: "POST" });
+      const invitation = await createInvitationRequest();
       await navigator.clipboard.writeText(new URL(invitation.url, location.origin).href);
       showNotice("Invitation link copied.");
     } catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to create invitation", "error"); }

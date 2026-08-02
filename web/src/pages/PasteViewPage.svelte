@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { requestApi } from "../api";
+  import { getPaste, getPasteSource, pasteQrUrl, readPaste } from "../api";
   import AttachmentList from "../components/AttachmentList.svelte";
   import CodeViewer from "../components/CodeViewer.svelte";
   import Icon from "../components/Icon.svelte";
@@ -25,14 +25,10 @@
   ));
 
   onMount(() => {
-    void requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}`)
+    void getPaste(pasteId)
       .then(metadata => metadata.source_url
-        ? requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}/source`)
-        : requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}/reads`, {
-            method: "POST",
-            headers: { "Idempotency-Key": crypto.randomUUID() },
-            invalidateQueries: false
-          }))
+        ? getPasteSource(pasteId)
+        : readPaste(pasteId, crypto.randomUUID()).then(result => result.paste))
       .then(result => { paste = result; })
       .catch(reason => {
         error = reason instanceof Error ? reason.message : "Unable to load paste";
@@ -62,7 +58,7 @@
           <button class="button" type="button" onclick={openRaw}>Raw</button>
           <button class="button" type="button" onclick={copyContent}><Icon name="copy"/> Copy</button>
           {#if paste.archive_url}<a class="button" href={paste.archive_url}>ZIP</a>{/if}
-          {#if $appState.config.qr_codes_enabled}<a class="button" href={`${$appState.config.api_base_url ?? "/api/v1"}/pastes/${encodeURIComponent(paste.id)}/qr`}>QR</a>{/if}
+          {#if $appState.config.qr_codes_enabled}<a class="button" href={pasteQrUrl($appState.config.api_base_url ?? "/api/v1", paste.id)}>QR</a>{/if}
           {#if own}<Link class="button primary" href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/> Edit</Link>{/if}
         </div>
       </div>

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, normalizePayload, requestApi, requestApiResult } from "./api";
-import type { Paste, WirePasteResource } from "./types";
+import { normalizePayload } from "./api/normalize";
+import { ApiError, transport } from "./api/transport";
+import type { components } from "./api/generated";
+import type { Paste } from "./types";
+
+type WirePasteResource = components["schemas"]["PasteResource"];
 
 describe("API wire mapping", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -66,7 +70,7 @@ describe("API wire mapping", () => {
       }
     })));
 
-    const result = await requestApiResult<void>("/pastes/example-paste", { method: "DELETE" });
+    const result = await transport<void>("/pastes/example-paste", { method: "DELETE" });
     expect(result).toEqual({
       data: undefined,
       etag: "\"paste-example-paste-2\"",
@@ -85,7 +89,7 @@ describe("API wire mapping", () => {
       headers: { "Content-Type": "application/problem+json", "Retry-After": "3" }
     })));
 
-    const error = await requestApi("/pastes").catch(reason => reason) as ApiError;
+    const error = await transport("/pastes").catch(reason => reason) as ApiError;
     expect(error).toMatchObject({
       status: 422,
       code: "validation_failed",

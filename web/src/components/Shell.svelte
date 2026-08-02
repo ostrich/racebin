@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { requestApi } from "../api";
+  import { logout as logoutSession } from "../api";
   import { appState } from "../state";
   import { replaceSession } from "../session";
   import { clearUnsavedChangesGuard, confirmDiscardChanges, navigate } from "../navigation";
@@ -18,7 +18,7 @@
   async function logout(): Promise<void> {
     if (!(await confirmDiscardChanges())) return;
     clearUnsavedChangesGuard();
-    await requestApi("/session", { method: "DELETE" });
+    await logoutSession();
     replaceSession({ authenticated: false });
     await navigate("/");
   }

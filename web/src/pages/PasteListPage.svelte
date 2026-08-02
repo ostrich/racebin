@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { requestApi } from "../api";
+  import { createFolder as createFolderRequest, deleteFolder as deleteFolderRequest,
+    listFolders, listPastes, movePastes, renameFolder as renameFolderRequest } from "../api";
   import Icon from "../components/Icon.svelte";
   import FolderNav from "../components/FolderNav.svelte";
   import Link from "../components/Link.svelte";
@@ -97,9 +98,9 @@
       error = "";
     }
     void Promise.all([
-      loadQuery(paths.paste, () => requestApi<Page<Paste>>(paths.paste)),
+      loadQuery(paths.paste, () => listPastes(new URLSearchParams(paths.paste.split("?")[1]))),
       paths.folders
-        ? loadQuery(paths.folders, () => requestApi<FolderOverview>(paths.folders!))
+        ? loadQuery(paths.folders, () => listFolders())
         : Promise.resolve(null)
     ])
       .then(([result, loadedFolders]) => {
@@ -126,9 +127,7 @@
     const name = prompt("Folder name");
     if (!name?.trim()) return;
     try {
-      const folder = await requestApi<{id:number}>("/folders", {
-        method: "POST", body: JSON.stringify({ name })
-      });
+      const folder = await createFolderRequest(name);
       await navigate(`/pastes?folder_id=${folder.id}`);
     } catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to create folder", "error"); }
   }
@@ -137,7 +136,7 @@
     const name = prompt("Folder name", current);
     if (!name?.trim() || name.trim() === current) return;
     try {
-      await requestApi(`/folders/${id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+      await renameFolderRequest(id, name);
       if (folders) folders = { ...folders, items: folders.items.map(folder =>
         folder.id === id ? { ...folder, name: name.trim() } : folder) };
     } catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to rename folder", "error"); }
@@ -146,7 +145,7 @@
   async function deleteFolder(id: number, name: string): Promise<void> {
     if (!confirm(`Delete “${name}”? Its pastes will move to Uncategorized.`)) return;
     try {
-      await requestApi<PasteRevisionResponse>(`/folders/${id}`, { method: "DELETE" });
+      await deleteFolderRequest(id);
       if (currentFolderId === id) await navigate("/pastes?unfiled=true");
       else reloadToken += 1;
     } catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to delete folder", "error"); }
@@ -155,12 +154,9 @@
   async function moveSelected(): Promise<void> {
     if (!selected.size) return;
     try {
-      await requestApi<PasteRevisionResponse>("/pastes", {
-        method: "PATCH",
-        body: JSON.stringify({
-          ids: [...selected],
-          folder_id: moveFolder ? Number(moveFolder) : null
-        })
+      await movePastes({
+        ids: [...selected],
+        folder_id: moveFolder ? Number(moveFolder) : null
       });
       selected = new Set();
       reloadToken += 1;

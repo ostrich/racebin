@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { requestApiResult } from "../api";
+  import { deleteAttachment } from "../api";
   import { showNotice } from "../notices";
   import type { Attachment } from "../types";
   import Icon from "./Icon.svelte";
@@ -26,10 +26,7 @@
       : "";
     if (!confirm(`Delete this attachment permanently?${suffix}`)) return;
     try {
-      const result = await requestApiResult<void>(`/pastes/${encodeURIComponent(pasteId)}/attachments/${attachment.id}`, {
-        method: "DELETE",
-        headers: { "If-Match": etag ?? "*" }
-      });
+      const result = await deleteAttachment(pasteId, attachment.id, etag ?? "*");
       ondelete?.(attachment, result.etag);
       showNotice("Attachment deleted.");
     } catch (error) {

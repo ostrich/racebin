@@ -1,12 +1,12 @@
-import { requestApi } from "./api";
+import { getCapabilities, getLanguages, getSession } from "./api";
 import { appState } from "./state";
-import type { Config, Language, Session } from "./types";
+import type { Session } from "./types";
 
 export async function loadSession(): Promise<void> {
   const [session, config, languages] = await Promise.all([
-    requestApi<Session>("/session"),
-    requestApi<Config>("/capabilities"),
-    requestApi<Language[]>("/languages")
+    getSession(),
+    getCapabilities(),
+    getLanguages()
   ]);
   appState.set({ session, config, languages, ready: true });
 }

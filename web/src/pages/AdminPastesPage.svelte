@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { requestApi } from "../api";
+  import { deletePaste, listAdminPastes, listAdminUsers } from "../api";
   import Icon from "../components/Icon.svelte";
   import Link from "../components/Link.svelte";
   import Pagination from "../components/Pagination.svelte";
@@ -74,8 +74,8 @@
       error = "";
     }
     void Promise.all([
-      loadQuery(requestedPastePath, () => requestApi<Page<Paste>>(requestedPastePath)),
-      loadQuery("/admin/users", () => requestApi<User[]>("/admin/users"))
+      loadQuery(requestedPastePath, () => listAdminPastes(new URLSearchParams(requestedPastePath.split("?")[1]))),
+      loadQuery("/admin/users", () => listAdminUsers())
     ]).then(([result, loadedUsers]) => {
       if (generation !== loadGeneration) return;
       page = result;
@@ -108,10 +108,7 @@
   async function remove(paste: Paste): Promise<void> {
     if (!confirm("Delete this paste permanently?")) return;
     try {
-      await requestApi(`/pastes/${encodeURIComponent(paste.id)}`, {
-        method: "DELETE",
-        headers: { "If-Match": paste._etag ?? "*" }
-      });
+      await deletePaste(paste.id, paste._etag ?? "*");
       if (page) page = { ...page, items: page.items.filter(item => item.id !== paste.id), total_items: page.total_items - 1 };
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Request failed", "error");

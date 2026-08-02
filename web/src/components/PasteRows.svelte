@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { requestApi } from "../api";
+  import { deletePaste } from "../api";
   import { formatByteSize, formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
   import { showNotice } from "../notices";
   import type { Paste } from "../types";
@@ -49,10 +49,7 @@
   async function remove(paste: Paste): Promise<void> {
     if (!confirm("Delete this paste permanently?")) return;
     try {
-      await requestApi(`/pastes/${encodeURIComponent(paste.id)}`, {
-        method: "DELETE",
-        headers: { "If-Match": paste._etag ?? "*" }
-      });
+      await deletePaste(paste.id, paste._etag ?? "*");
       visible = visible.filter(candidate => candidate.id !== paste.id);
       showNotice("Paste deleted.");
     } catch (error) {

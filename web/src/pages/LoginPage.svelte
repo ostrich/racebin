@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { requestApi } from "../api";
+  import { login } from "../api";
   import { showNotice } from "../notices";
   import { navigate } from "../navigation";
   import { loadSession } from "../session";
@@ -10,13 +10,10 @@
     const data = new FormData(event.currentTarget as HTMLFormElement);
     submitting = true;
     try {
-      await requestApi("/session", {
-        method: "POST",
-        body: JSON.stringify({
-          username: String(data.get("username") ?? ""),
-          password: String(data.get("password") ?? ""),
-          remember: data.has("remember")
-        })
+      await login({
+        username: String(data.get("username") ?? ""),
+        password: String(data.get("password") ?? ""),
+        remember: data.has("remember")
       });
       await loadSession();
       await navigate("/pastes");

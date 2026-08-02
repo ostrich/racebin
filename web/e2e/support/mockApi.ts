@@ -237,11 +237,11 @@ export async function mockApi(
       return json(route, [
         {
           id: 4, token_prefix: "active", expires_at: expiresAt,
-          status: "Active", url: "/invitations/active-token", redeemed_by_username: null
+          status: "active", url: "/invitations/active-token", redeemed_by_username: null
         },
         {
           id: 3, token_prefix: "invite", expires_at: expiresAt,
-          status: "Redeemed", url: null, redeemed_by_username: "reader"
+          status: "redeemed", url: null, redeemed_by_username: "reader"
         }
       ]);
     }

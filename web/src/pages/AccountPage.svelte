@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { requestApi } from "../api";
+  import { createApiKey, deleteApiKey, listApiKeys, updateApiKey } from "../api";
   import Icon from "../components/Icon.svelte";
   import Link from "../components/Link.svelte";
   import { formatDate } from "../format";
@@ -20,7 +20,7 @@
   async function load(): Promise<void> {
     loading = true;
     try {
-      keys = await requestApi<ApiKey[]>("/account/api-keys");
+      keys = await listApiKeys();
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Unable to load API keys", "error");
     } finally {
@@ -33,10 +33,7 @@
     const previous = key.enabled;
     key.enabled = enabled;
     try {
-      await requestApi(`/account/api-keys/${key.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ enabled })
-      });
+      await updateApiKey(key.id, enabled);
     } catch (error) {
       key.enabled = previous;
       keys = [...keys];
@@ -47,7 +44,7 @@
   async function remove(key: ApiKey): Promise<void> {
     if (!confirm("Delete this API key permanently?")) return;
     try {
-      await requestApi(`/account/api-keys/${key.id}`, { method: "DELETE" });
+      await deleteApiKey(key.id);
       keys = keys.filter(candidate => candidate.id !== key.id);
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Request failed", "error");
@@ -59,12 +56,9 @@
     const data = new FormData(form);
     submitting = true;
     try {
-      const result = await requestApi<{ token: string }>("/account/api-keys", {
-        method: "POST",
-        body: JSON.stringify({
-          name: String(data.get("name") ?? ""),
-          scopes: data.getAll("scopes")
-        })
+      const result = await createApiKey({
+        name: String(data.get("name") ?? ""),
+        scopes: data.getAll("scopes").map(String)
       });
       prompt("API key created. Store it now; it will not be shown again.", result.token);
       form.reset();

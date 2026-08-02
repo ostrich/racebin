@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { requestApi } from "../api";
+  import { resetPassword } from "../api";
   import Link from "../components/Link.svelte";
   import { loadSession } from "../session";
   import { appState } from "../state";
@@ -17,9 +17,7 @@
     if (password !== confirmation) { error = "Passwords do not match."; return; }
     saving = true;
     try {
-      await requestApi(`/password-resets/${encodeURIComponent(token)}`, {
-        method: "POST", body: JSON.stringify({ new_password: password })
-      });
+      await resetPassword(token, { new_password: password });
       await loadSession();
       complete = true;
       password = confirmation = "";

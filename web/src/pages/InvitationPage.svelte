@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { requestApi } from "../api";
+  import { redeemInvitation } from "../api";
   import { showNotice } from "../notices";
   import { navigate } from "../navigation";
   import { loadSession } from "../session";
@@ -12,12 +12,9 @@
     const data = new FormData(event.currentTarget as HTMLFormElement);
     submitting = true;
     try {
-      await requestApi(`/invitations/${encodeURIComponent(token)}/redeem`, {
-        method: "POST",
-        body: JSON.stringify({
-          username: String(data.get("username") ?? ""),
-          password: String(data.get("password") ?? "")
-        })
+      await redeemInvitation(token, {
+        username: String(data.get("username") ?? ""),
+        password: String(data.get("password") ?? "")
       });
       await loadSession();
       await navigate("/pastes");

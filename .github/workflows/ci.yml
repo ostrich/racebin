@@ -34,6 +34,9 @@ jobs:
       - name: Verify API contract and generated types
         run: npm run check:api
         working-directory: web
+      - name: Verify frontend API boundary
+        run: npm run check:api-boundary
+        working-directory: web
       - name: Build embedded frontend
         run: npm run build
         working-directory: web

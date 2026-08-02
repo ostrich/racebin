@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { requestApi } from "../api";
+  import {
+    createInvitation as createInvitationRequest, deleteAdminApiKey, listAdminApiKeys,
+    listAdminUsers, listInvitations, revokeInvitation, updateAdminApiKey,
+    type Invitation
+  } from "../api";
   import Icon from "../components/Icon.svelte";
   import Link from "../components/Link.svelte";
   import { formatDate } from "../format";
@@ -7,15 +11,6 @@
   import type { ApiKey, User } from "../types";
 
   type Section = "invitations" | "keys";
-  type Invitation = {
-    id: number;
-    token_prefix: string;
-    expires_at: number;
-    status: string;
-    url: string | null;
-    redeemed_by_username: string | null;
-  };
-
   let section = $state<Section | null>(null);
   let users = $state<User[]>([]);
   let invitations = $state<Invitation[]>([]);
@@ -26,11 +21,11 @@
     section = target;
     loading = true;
     try {
-      if (target === "invitations") invitations = await requestApi<Invitation[]>("/admin/invitations");
+      if (target === "invitations") invitations = await listInvitations();
       else {
         [keys, users] = await Promise.all([
-          requestApi<ApiKey[]>("/admin/api-keys"),
-          requestApi<User[]>("/admin/users")
+          listAdminApiKeys(),
+          listAdminUsers()
         ]);
       }
     } catch (error) {
@@ -42,7 +37,7 @@
 
   async function createInvitation(): Promise<void> {
     try {
-      const invitation = await requestApi<{ url: string }>("/admin/invitations", { method: "POST" });
+      const invitation = await createInvitationRequest();
       await copyInvitationUrl(invitation.url);
       showNotice("Invitation link copied.");
       await load("invitations");
@@ -67,7 +62,7 @@
 
   async function revoke(invitation: Invitation): Promise<void> {
     try {
-      await requestApi(`/admin/invitations/${invitation.id}`, { method: "DELETE" });
+      await revokeInvitation(invitation.id);
       await load("invitations");
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Request failed", "error");
@@ -76,9 +71,7 @@
 
   async function toggleKey(key: ApiKey, enabled: boolean): Promise<void> {
     try {
-      await requestApi(`/admin/api-keys/${key.id}`, {
-        method: "PATCH", body: JSON.stringify({ enabled })
-      });
+      await updateAdminApiKey(key.id, enabled);
       key.enabled = enabled;
       keys = [...keys];
     } catch (error) {
@@ -90,7 +83,7 @@
   async function deleteKey(key: ApiKey): Promise<void> {
     if (!confirm("Delete this API key permanently?")) return;
     try {
-      await requestApi(`/admin/api-keys/${key.id}`, { method: "DELETE" });
+      await deleteAdminApiKey(key.id);
       keys = keys.filter(candidate => candidate.id !== key.id);
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Request failed", "error");
@@ -120,10 +113,10 @@
         <div class="table">
           {#each invitations as invitation (invitation.id)}
             <div><code>{invitation.token_prefix}…</code>
-              <span>{invitation.status === "Redeemed" && invitation.redeemed_by_username
+              <span>{invitation.status === "redeemed" && invitation.redeemed_by_username
                 ? `Redeemed by ${invitation.redeemed_by_username}`
-                : `${invitation.status} · ${formatDate(invitation.expires_at)}`}</span>
-              {#if invitation.status === "Active"}
+                : `${invitation.status.charAt(0).toUpperCase()}${invitation.status.slice(1)} · ${formatDate(invitation.expires_at)}`}</span>
+              {#if invitation.status === "active"}
                 <div class="invitation-actions">
                   {#if invitation.url}<button class="icon-button" title="Copy invitation link"
                     aria-label={`Copy invitation ${invitation.token_prefix}`} type="button"

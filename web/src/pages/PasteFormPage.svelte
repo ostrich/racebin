@@ -1,6 +1,10 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import { requestApi } from "../api";
+  import {
+    convertPaste, createPaste, createPasteWithAttachments, deletePaste as deletePasteRequest,
+    getPasteSource, listFolders, updatePaste, uploadAttachments,
+    type Conversion, type CreatePasteInput, type FlatCreateInput, type UpdatePasteInput
+  } from "../api";
   import AttachmentList from "../components/AttachmentList.svelte";
   import CodeEditor from "../components/CodeEditor.svelte";
   import ConversionDialog from "../components/ConversionDialog.svelte";
@@ -15,7 +19,6 @@
 
   type ContentKind = "text" | "rich_text";
   type ExpirationMode = "never" | "1h" | "12h" | "1d" | "1w" | "30d" | "1y" | "custom";
-  type Conversion = { body: { format: ContentKind; content: string; language?: string; plain_text?: string } };
 
   let { pasteId }: { pasteId?: string } = $props();
   let paste = $state<Paste | null>(null);
@@ -136,7 +139,7 @@
   }
 
   onMount(() => {
-    void requestApi<FolderOverview>("/folders")
+    void listFolders()
       .then(result => { folders = result.items; })
       .catch(reason => showNotice(reason instanceof Error ? reason.message : "Unable to load folders", "error"));
     loading = Boolean(pasteId);
@@ -145,7 +148,7 @@
       loading = false;
       return;
     }
-    void requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}/source`)
+    void getPasteSource(pasteId)
       .then(initialize)
       .catch(reason => { error = reason instanceof Error ? reason.message : "Unable to load paste"; })
       .finally(() => {
@@ -158,15 +161,11 @@
     sourceKind: "text" | "rich_text",
     targetKind: "text" | "rich_text"
   ): Promise<Conversion> {
-    return requestApi<Conversion>("/content-conversions", {
-      method: "POST",
-      invalidateQueries: false,
-      body: JSON.stringify({
-        source: sourceKind === "rich_text"
-          ? { format: "rich_text", content: richHtml }
-          : { format: "text", content, language },
-        target_format: targetKind
-      })
+    return convertPaste({
+      source: sourceKind === "rich_text"
+        ? { format: "rich_text", content: richHtml }
+        : { format: "text", content, language },
+      target_format: targetKind
     });
   }
 
@@ -245,45 +244,22 @@
           : {})
       };
       if (pasteId) {
-        created = await requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}`, {
-          method: "PATCH",
-          headers: { "If-Match": paste?._etag ?? "*" },
-          body: JSON.stringify(body)
-        });
+        created = await updatePaste(pasteId, body as UpdatePasteInput, paste?._etag ?? "*");
       } else if (selected.length) {
-        const upload = new FormData();
-        upload.append("title", title);
-        upload.append("format", contentKind);
-        upload.append("content", contentKind === "rich_text" ? richHtml : content);
-        if (contentKind === "text") upload.append("language", canonicalLanguage);
-        upload.append("visibility", visibility);
-        if (expirationMode !== "never" && expiresAt) {
-          upload.append("expires_at", new Date(expiresAt).toISOString());
-        }
-        if (readLimit) upload.append("read_limit", readLimit);
-        if (canOrganize && folderId) upload.append("folder_id", folderId);
-        selected.forEach(file => upload.append("file", file));
-        created = await requestApi<Paste>("/pastes", {
-          method: "POST",
-          headers: { "Idempotency-Key": crypto.randomUUID() },
-          body: upload
-        });
+        const flat: FlatCreateInput = {
+          title, format: contentKind, content: submittedContent, visibility,
+          ...(contentKind === "text" ? { language: canonicalLanguage } : {}),
+          ...(expirationMode !== "never" && expiresAt ? { expires_at: new Date(expiresAt).toISOString() } : {}),
+          ...(readLimit ? { read_limit: Number(readLimit) } : {}),
+          ...(canOrganize && folderId ? { folder_id: Number(folderId) } : {})
+        };
+        created = await createPasteWithAttachments(flat, selected, crypto.randomUUID());
       } else {
-        created = await requestApi<Paste>("/pastes", {
-          method: "POST",
-          headers: { "Idempotency-Key": crypto.randomUUID() },
-          body: JSON.stringify(body)
-        });
+        created = await createPaste(body as CreatePasteInput, crypto.randomUUID());
       }
       if (pasteId && selected.length) {
-        const upload = new FormData();
-        selected.forEach(file => upload.append("file", file));
         try {
-          await requestApi(`/pastes/${encodeURIComponent(created.id)}/attachments`, {
-            method: "POST",
-            headers: { "If-Match": created._etag ?? "*" },
-            body: upload
-          });
+          await uploadAttachments(created.id, selected, created._etag ?? "*");
         } catch (reason) {
           paste = created;
           baseline = snapshot("");
@@ -307,9 +283,7 @@
   async function deletePaste(): Promise<void> {
     if (!pasteId || !confirm("Delete this paste permanently?")) return;
     try {
-      await requestApi(`/pastes/${encodeURIComponent(pasteId)}`, {
-        method: "DELETE", headers: { "If-Match": paste?._etag ?? "*" }
-      });
+      await deletePasteRequest(pasteId, paste?._etag ?? "*");
       initialized = false;
       clearUnsavedChangesGuard();
       await navigate("/pastes");
