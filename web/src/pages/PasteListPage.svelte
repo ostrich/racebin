@@ -9,7 +9,7 @@
   import { showNotice } from "../notices";
   import { cachedQuery, loadQuery } from "../queryCache";
   import { holdNavigation, navigate } from "../navigation";
-  import type { FolderOverview, Page, Paste } from "../types";
+  import type { FolderOverview, Page, Paste, PasteRevisionResponse } from "../types";
   import { setPasteListView, uiPreferences } from "../uiPreferences";
 
   let { mine, query }: { mine: boolean; query: URLSearchParams } = $props();
@@ -146,7 +146,7 @@
   async function deleteFolder(id: number, name: string): Promise<void> {
     if (!confirm(`Delete “${name}”? Its pastes will move to Uncategorized.`)) return;
     try {
-      await requestApi(`/folders/${id}`, { method: "DELETE" });
+      await requestApi<PasteRevisionResponse>(`/folders/${id}`, { method: "DELETE" });
       if (currentFolderId === id) await navigate("/pastes?unfiled=true");
       else reloadToken += 1;
     } catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to delete folder", "error"); }
@@ -155,7 +155,7 @@
   async function moveSelected(): Promise<void> {
     if (!selected.size) return;
     try {
-      await requestApi("/pastes", {
+      await requestApi<PasteRevisionResponse>("/pastes", {
         method: "PATCH",
         body: JSON.stringify({
           ids: [...selected],

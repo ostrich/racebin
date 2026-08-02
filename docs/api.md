@@ -104,7 +104,8 @@ Racebin also accepts `text/plain`, `text/markdown`, `text/html`, URL-encoded
 forms, and multipart forms at the same endpoint. Creation query parameters are
 accepted only with the three raw text media types; JSON, URL-encoded, and
 multipart requests must carry all creation fields in their body. Raw uploads
-can put metadata in the query string, which makes a generic uploader
+use their request body as content and can put the remaining metadata in the
+query string, which makes a generic uploader
 configuration straightforward:
 
 ```sh
@@ -119,6 +120,13 @@ curl -X POST \
 With `Accept: text/plain`, creation returns only the absolute paste URL. JSON is
 the default. `Idempotency-Key` is optional but recommended for retried uploads;
 reuse with different content returns `409 Conflict`.
+
+The raw media type determines the representation: `text/plain` creates plain
+text and may use the `language` query parameter, `text/markdown` creates plain
+text with the Markdown language, and `text/html` creates sanitized rich text
+and does not accept a language. Raw requests therefore do not accept `content`
+or `format` query parameters. An empty structured request creates an empty
+plain-text paste. Create fields may be omitted but may not be JSON `null`.
 
 Multipart creation is atomic from the caller's perspective and supports a body,
 files, or both. Text fields use the JSON field names and every attachment uses a
@@ -176,9 +184,15 @@ is available when the caller explicitly accepts overwriting the current
 revision.
 
 Attachment uploads and deletions return the paste's new `ETag`. Bulk folder
-moves intentionally do not accept or return individual paste ETags; clients
-must refetch moved paste resources before making a subsequent conditional
-mutation.
+moves and folder deletion return `{pastes:[{id,etag}]}` with a replacement ETag
+for every affected paste, so clients can continue with a conditional mutation
+without first refetching each resource.
+
+In paste updates, omitted fields remain unchanged. `folder_id: null` makes the
+paste unfiled, `expires_at: null` removes expiration, and `read_limit: null`
+makes reads unlimited. The `title`, `body`, and `visibility` fields cannot be
+`null`; send a replacement value or omit them. Administrative user updates
+likewise accept only non-null `enabled` and `role` values.
 
 ## Lists and folders
 

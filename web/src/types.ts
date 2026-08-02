@@ -100,6 +100,10 @@ export type FolderOverview = {
   unfiled_count: number;
 };
 
+export type PasteRevisionResponse = {
+  pastes: Array<{ id: string; etag: string }>;
+};
+
 export type Page<T> = {
   items: T[];
   page: number;

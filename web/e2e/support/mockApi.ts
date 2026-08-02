@@ -183,10 +183,12 @@ export async function mockApi(
       }
       if (route.request().method() === "DELETE") {
         folders.items = folders.items.filter(folder => folder.id !== 5);
-        return route.fulfill({ status: 204 });
+        return json(route, { pastes: [{ id: paste.id, etag: '"sample-paste:2"' }] });
       }
     }
-    if (url.pathname === "/api/v1/pastes" && route.request().method() === "PATCH") return route.fulfill({ status: 204 });
+    if (url.pathname === "/api/v1/pastes" && route.request().method() === "PATCH") {
+      return json(route, { pastes: [{ id: paste.id, etag: '"sample-paste:2"' }] });
+    }
     if (url.pathname.endsWith("/reads")) return json(route, viewPaste);
     if (url.pathname === "/api/v1/pastes/sample-paste/source") return json(route, viewPaste);
     if (url.pathname === "/api/v1/pastes/sample-paste") return json(route, viewPaste);
