@@ -116,7 +116,15 @@ test("paste editor uses the page width without stretching metadata controls", as
   expect(editor.right).toBe(main.right - main.paddingRight);
   expect(controls.slice(0, 4).map(control => control.width)).toEqual([140, 260, 200, 140]);
   expect(controls[4]?.left).toBe(controls[0]?.left);
+  expect(controls[4]?.width).toBe(140);
   expect(controls[5]?.left).toBe(controls[1]?.left);
   expect(controls[6]?.left).toBe(controls[2]?.left);
-  expect(controls[6]?.width).toBe(140);
+  expect(controls[6]?.width).toBe(120);
+  expect(controls[1]!.left - controls[0]!.right).toBe(12);
+  expect(controls[5]!.left - controls[4]!.right).toBe(12);
+  const readLimitWidths = await page.locator(".read-limit-field").evaluate(field => ({
+    field: field.getBoundingClientRect().width,
+    input: field.querySelector("input")!.getBoundingClientRect().width
+  }));
+  expect(readLimitWidths).toEqual({ field: 120, input: 120 });
 });
