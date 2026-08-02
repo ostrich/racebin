@@ -33,6 +33,17 @@ pub(crate) struct ApiRootResponse {
 }
 
 #[derive(Serialize, ToSchema)]
+pub(crate) struct PasteRevisionResource {
+    pub id: String,
+    pub etag: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub(crate) struct PasteRevisionResponse {
+    pub pastes: Vec<PasteRevisionResource>,
+}
+
+#[derive(Serialize, ToSchema)]
 pub(crate) struct UserResource {
     #[schema(minimum = 1)]
     pub id: i64,
@@ -70,6 +81,7 @@ pub(crate) enum SessionResponse {
 }
 
 #[derive(Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct BrowserSessionResponse {
     pub authenticated: bool,
     pub user: UserResource,
@@ -77,12 +89,14 @@ pub(crate) struct BrowserSessionResponse {
 }
 
 #[derive(Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct BearerSessionResponse {
     pub authenticated: bool,
     pub api_key: ApiKeyIdentity,
 }
 
 #[derive(Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct AnonymousSessionResponse {
     pub authenticated: bool,
 }

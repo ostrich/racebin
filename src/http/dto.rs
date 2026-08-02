@@ -4,6 +4,22 @@ use serde::{Deserialize, Serialize};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use utoipa::ToSchema;
 
+pub(super) fn optional_non_null<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
+}
+
+fn optional_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
 #[serde(tag = "format", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum BodyInput {
@@ -24,24 +40,24 @@ pub(crate) enum BodyInput {
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct CreatePasteRequest {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "optional_non_null")]
     #[schema(max_length = 200)]
     pub title: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "optional_non_null")]
     pub body: Option<BodyInput>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "optional_non_null")]
     pub visibility: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "optional_non_null")]
     #[schema(minimum = 1)]
     pub folder_id: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "optional_non_null")]
     #[schema(format = DateTime)]
     pub expires_at: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "optional_non_null")]
     /// Positive lifetime in seconds from the time of creation. Cannot be combined with `expires_at`.
     #[schema(minimum = 1)]
     pub expires_in: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "optional_non_null")]
     #[schema(minimum = 1)]
     pub read_limit: Option<i64>,
 }
@@ -49,20 +65,26 @@ pub(crate) struct CreatePasteRequest {
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct UpdatePasteRequest {
-    #[serde(default)]
+    /// Replace the title. Explicit `null` is invalid; omit this field to leave it unchanged.
+    #[serde(default, deserialize_with = "optional_non_null")]
     #[schema(max_length = 200)]
     pub title: Option<String>,
-    #[serde(default)]
+    /// Replace the body. Explicit `null` is invalid; omit this field to leave it unchanged.
+    #[serde(default, deserialize_with = "optional_non_null")]
     pub body: Option<BodyInput>,
-    #[serde(default)]
+    /// Replace the visibility. Explicit `null` is invalid; omit this field to leave it unchanged.
+    #[serde(default, deserialize_with = "optional_non_null")]
     pub visibility: Option<String>,
-    #[serde(default)]
+    /// Move the paste to a folder, or use `null` to make it unfiled.
+    #[serde(default, deserialize_with = "optional_nullable")]
     #[schema(minimum = 1)]
     pub folder_id: Option<Option<i64>>,
-    #[serde(default)]
+    /// Replace the expiration, or use `null` to make the paste permanent.
+    #[serde(default, deserialize_with = "optional_nullable")]
     #[schema(format = DateTime)]
     pub expires_at: Option<Option<String>>,
-    #[serde(default)]
+    /// Replace the read limit, or use `null` to make reads unlimited.
+    #[serde(default, deserialize_with = "optional_nullable")]
     #[schema(minimum = 1)]
     pub read_limit: Option<Option<i64>>,
 }
@@ -501,4 +523,58 @@ fn detect_language(content: &str) -> &'static str {
         return "python";
     }
     "plaintext"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn create_fields_may_be_omitted_but_not_null() {
+        assert!(serde_json::from_value::<CreatePasteRequest>(json!({})).is_ok());
+        for field in [
+            "title",
+            "body",
+            "visibility",
+            "folder_id",
+            "expires_at",
+            "expires_in",
+            "read_limit",
+        ] {
+            assert!(
+                serde_json::from_value::<CreatePasteRequest>(json!({(field): null})).is_err(),
+                "create field {field} accepted null"
+            );
+        }
+    }
+
+    #[test]
+    fn update_nulls_are_reserved_for_clearable_fields() {
+        for field in ["title", "body", "visibility"] {
+            assert!(
+                serde_json::from_value::<UpdatePasteRequest>(json!({(field): null})).is_err(),
+                "update field {field} accepted null"
+            );
+        }
+        let update: UpdatePasteRequest = serde_json::from_value(json!({
+            "folder_id": null,
+            "expires_at": null,
+            "read_limit": null
+        }))
+        .unwrap();
+        assert_eq!(update.folder_id, Some(None));
+        assert_eq!(update.expires_at, Some(None));
+        assert_eq!(update.read_limit, Some(None));
+    }
+
+    #[test]
+    fn empty_create_is_an_empty_text_paste() {
+        let input = serde_json::from_value::<CreatePasteRequest>(json!({}))
+            .unwrap()
+            .into_input(1_700_000_000)
+            .unwrap();
+        assert_eq!(input.content.as_deref(), Some(""));
+        assert_eq!(input.content_kind.as_deref(), Some("text"));
+    }
 }

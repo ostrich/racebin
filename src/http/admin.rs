@@ -139,8 +139,22 @@ pub(crate) async fn admin_pastes(
 #[derive(Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 struct UserUpdate {
+    #[serde(default, deserialize_with = "dto::optional_non_null")]
     enabled: Option<bool>,
+    #[serde(default, deserialize_with = "dto::optional_non_null")]
     role: Option<contract::UserRole>,
+}
+
+#[cfg(test)]
+mod user_update_tests {
+    use super::UserUpdate;
+    use serde_json::json;
+
+    #[test]
+    fn user_update_fields_may_not_be_null() {
+        assert!(serde_json::from_value::<UserUpdate>(json!({ "enabled": null })).is_err());
+        assert!(serde_json::from_value::<UserUpdate>(json!({ "role": null })).is_err());
+    }
 }
 
 #[utoipa::path(

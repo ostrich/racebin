@@ -286,7 +286,10 @@ mod tests {
                 .to_request(),
         )
         .await;
-        assert_eq!(moved.status(), StatusCode::NO_CONTENT);
+        assert_eq!(moved.status(), StatusCode::OK);
+        let moved: Value = test::read_body_json(moved).await;
+        assert_eq!(moved["pastes"][0]["id"], public.id);
+        let moved_etag = moved["pastes"][0]["etag"].as_str().unwrap().to_string();
         let owner_view = test::call_service(
             &app,
             test::TestRequest::get()
@@ -295,6 +298,10 @@ mod tests {
                 .to_request(),
         )
         .await;
+        assert_eq!(
+            owner_view.headers().get("ETag").unwrap().to_str().unwrap(),
+            moved_etag
+        );
         let owner_view: Value = test::read_body_json(owner_view).await;
         assert_eq!(owner_view["folder_id"], folder_id);
         let public_view = test::call_service(
@@ -563,6 +570,74 @@ mod tests {
             )
             .await;
             assert_eq!(rejected_query.status(), StatusCode::BAD_REQUEST);
+        }
+
+        let ambiguous_raw = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/pastes?content=query-content")
+                .insert_header(("Authorization", format!("Bearer {write_token}")))
+                .insert_header(("Content-Type", "text/plain"))
+                .set_payload("body content")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(ambiguous_raw.status(), StatusCode::BAD_REQUEST);
+
+        let markdown = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/pastes")
+                .insert_header(("Authorization", format!("Bearer {write_token}")))
+                .insert_header(("Content-Type", "text/markdown"))
+                .set_payload("# Heading")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(markdown.status(), StatusCode::CREATED);
+        let markdown: Value = test::read_body_json(markdown).await;
+        assert_eq!(markdown["body"]["format"], "text");
+        assert_eq!(markdown["body"]["language"], "markdown");
+
+        let contradictory_html = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/pastes?language=javascript")
+                .insert_header(("Authorization", format!("Bearer {write_token}")))
+                .insert_header(("Content-Type", "text/html"))
+                .set_payload("<p>HTML</p>")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(
+            contradictory_html.status(),
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+
+        for body in [
+            json!({ "title": null }),
+            json!({
+                "expires_at": "2030-01-01T00:00:00Z",
+                "expires_in": 60
+            }),
+        ] {
+            let invalid_create = test::call_service(
+                &app,
+                test::TestRequest::post()
+                    .uri("/api/v1/pastes")
+                    .insert_header(("Authorization", format!("Bearer {write_token}")))
+                    .set_json(body)
+                    .to_request(),
+            )
+            .await;
+            assert!(
+                matches!(
+                    invalid_create.status(),
+                    StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY
+                ),
+                "unexpected create status {}",
+                invalid_create.status()
+            );
         }
 
         let raw_replay = test::call_service(

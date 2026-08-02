@@ -14,6 +14,7 @@ pub mod domain_error;
 pub mod http;
 #[cfg(test)]
 mod integration_tests;
+mod limits;
 pub mod repository;
 pub mod services;
 pub mod time;

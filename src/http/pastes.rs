@@ -149,9 +149,12 @@ impl ApiPasteQuery {
         }
         if self
             .page_size
-            .is_some_and(|value| !(1..=100).contains(&value))
+            .is_some_and(|value| !(1..=crate::limits::MAX_PAGE_SIZE).contains(&value))
         {
-            return Err("page_size must be between 1 and 100".into());
+            return Err(format!(
+                "page_size must be between 1 and {}",
+                crate::limits::MAX_PAGE_SIZE
+            ));
         }
         let mine = self.owner.is_some();
         Ok(PasteQuery {
@@ -211,6 +214,43 @@ pub(super) struct FlatCreateRequest {
     #[schema(minimum = 1)]
     #[param(minimum = 1)]
     pub(super) read_limit: Option<i64>,
+}
+
+#[derive(Clone, Default, Deserialize, PartialEq, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RawCreateQuery {
+    #[param(max_length = 200)]
+    pub(super) title: Option<String>,
+    /// Syntax identifier for text/plain. text/markdown always uses markdown;
+    /// text/html does not accept a language.
+    pub(super) language: Option<String>,
+    pub(super) visibility: Option<String>,
+    #[param(minimum = 1)]
+    pub(super) folder_id: Option<i64>,
+    /// Absolute RFC 3339 expiration time. Cannot be combined with `expires_in`.
+    #[param(format = DateTime)]
+    pub(super) expires_at: Option<String>,
+    /// Positive lifetime in seconds from creation. Cannot be combined with `expires_at`.
+    #[param(minimum = 1)]
+    pub(super) expires_in: Option<i64>,
+    #[param(minimum = 1)]
+    pub(super) read_limit: Option<i64>,
+}
+
+impl From<RawCreateQuery> for FlatCreateRequest {
+    fn from(value: RawCreateQuery) -> Self {
+        Self {
+            title: value.title,
+            language: value.language,
+            visibility: value.visibility,
+            folder_id: value.folder_id,
+            expires_at: value.expires_at,
+            expires_in: value.expires_in,
+            read_limit: value.read_limit,
+            ..Self::default()
+        }
+    }
 }
 
 /// Schema-only representation of the atomic multipart create request.
@@ -357,9 +397,9 @@ pub(crate) async fn list_pastes(
     post,
     path = "/pastes",
     tag = "pastes",
-    description = "Creates a paste. Query creation fields are accepted only for text/plain, text/markdown, and text/html request bodies. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. expires_at and expires_in are mutually exclusive.",
+    description = "Creates a paste. Query metadata is accepted only for raw bodies. text/plain creates text and accepts an optional language; text/markdown creates text with language=markdown; text/html creates sanitized rich text and does not accept language. The raw request body is always the content. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. An omitted structured body creates empty text. expires_at and expires_in are mutually exclusive.",
     params(
-        FlatCreateRequest,
+        RawCreateQuery,
         ("Idempotency-Key" = Option<String>, Header, description = "Recommended unique key for safely retrying creation"),
         ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations; not used with bearer keys"),
         ("Accept" = Option<String>, Header, description = "Use text/plain to receive only the created paste URL")
@@ -400,7 +440,7 @@ pub(crate) async fn list_pastes(
 pub(crate) async fn create_paste(
     req: HttpRequest,
     services: web::Data<PasteService>,
-    query: web::Query<FlatCreateRequest>,
+    query: web::Query<RawCreateQuery>,
     payload: web::Payload,
 ) -> HttpResponse {
     let principal = match principal(&services, &req)
@@ -428,7 +468,7 @@ pub(crate) async fn create_paste(
     if matches!(
         content_type.as_str(),
         "application/json" | "application/x-www-form-urlencoded" | "multipart/form-data"
-    ) && query != FlatCreateRequest::default()
+    ) && query != RawCreateQuery::default()
     {
         return error(
             StatusCode::BAD_REQUEST,
@@ -524,6 +564,7 @@ pub(crate) async fn create_paste(
     responses(
         (status = 200, description = "Paste metadata without consuming a read", body = crate::http::dto::PasteMetadataResource,
             headers(("ETag" = String, description = "Current paste entity tag"))),
+        (status = 401, description = "Invalid bearer credential", body = crate::http::errors::ProblemDetails),
         (status = 404, description = "Paste not found or not visible", body = crate::http::errors::ProblemDetails),
         (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
     ),
@@ -601,6 +642,7 @@ pub(crate) async fn get_paste_source(
                 ("Idempotency-Replayed" = bool, description = "true when this is a replay of an earlier idempotent read")
             )),
         (status = 400, description = "Invalid idempotency key", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Invalid bearer credential", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "API key lacks paste:read", body = crate::http::errors::ProblemDetails),
         (status = 404, description = "Paste not found, unavailable, or fully consumed", body = crate::http::errors::ProblemDetails),
         (status = 406, description = "Requested representation is unavailable", body = crate::http::errors::ProblemDetails),

@@ -40,7 +40,7 @@ pub fn configure(config: &mut web::ServiceConfig) {
     config
         .app_data(
             web::JsonConfig::default()
-                .limit(2 * 1024 * 1024)
+                .limit(crate::limits::MAX_CONTENT_SIZE_BYTES)
                 .error_handler(|parse_error, _| {
                     actix_web::error::InternalError::from_response(
                         parse_error,

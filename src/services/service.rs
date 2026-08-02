@@ -53,7 +53,10 @@ impl PasteService {
     ) -> DomainResult<Page<Paste>> {
         validate_paste_query(query)?;
         let page = query.page.unwrap_or(1).max(1);
-        let page_size = query.page_size.unwrap_or(30).clamp(1, 100);
+        let page_size = query
+            .page_size
+            .unwrap_or(crate::limits::DEFAULT_PAGE_SIZE)
+            .clamp(1, crate::limits::MAX_PAGE_SIZE);
         let offset = i64::from(page - 1).saturating_mul(i64::from(page_size));
         let user_id = principal.user_id();
         let search = format!("%{}%", query.search.as_deref().unwrap_or(""));

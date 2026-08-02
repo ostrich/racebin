@@ -76,7 +76,11 @@ impl PasteService {
         }
     }
 
-    pub async fn delete_folder(&self, principal: &Principal, id: i64) -> DomainResult<bool> {
+    pub async fn delete_folder(
+        &self,
+        principal: &Principal,
+        id: i64,
+    ) -> DomainResult<Option<Vec<(String, i64)>>> {
         let owner = folder_principal(principal, "paste:write")?;
         let mut transaction = self
             .storage
@@ -84,14 +88,14 @@ impl PasteService {
             .begin()
             .await
             .map_err(DomainError::internal)?;
-        sqlx::query(
+        let revisions = sqlx::query_as::<_, (String, i64)>(
             "UPDATE pastes SET folder_id=NULL,updated_at=$3,revision=revision+1
-             WHERE folder_id=$1 AND owner_id=$2",
+             WHERE folder_id=$1 AND owner_id=$2 RETURNING id,revision",
         )
         .bind(id)
         .bind(owner)
         .bind(unix_timestamp())
-        .execute(&mut *transaction)
+        .fetch_all(&mut *transaction)
         .await
         .map_err(DomainError::internal)?;
         let deleted = sqlx::query("DELETE FROM folders WHERE id=$1 AND owner_id=$2")
@@ -103,7 +107,7 @@ impl PasteService {
             .rows_affected()
             == 1;
         transaction.commit().await.map_err(DomainError::internal)?;
-        Ok(deleted)
+        Ok(deleted.then_some(revisions))
     }
 
     pub async fn move_pastes(
@@ -111,9 +115,9 @@ impl PasteService {
         principal: &Principal,
         paste_ids: &[String],
         folder_id: Option<i64>,
-    ) -> DomainResult<()> {
+    ) -> DomainResult<Vec<(String, i64)>> {
         let owner = folder_principal(principal, "paste:write")?;
-        if paste_ids.is_empty() || paste_ids.len() > 100 {
+        if paste_ids.is_empty() || paste_ids.len() > crate::limits::MAX_BULK_PASTES {
             return Err(DomainError::validation("Select between 1 and 100 pastes"));
         }
         let unique = paste_ids.iter().collect::<HashSet<_>>();
@@ -128,24 +132,24 @@ impl PasteService {
             .begin()
             .await
             .map_err(DomainError::internal)?;
+        let mut revisions = Vec::with_capacity(paste_ids.len());
         for id in paste_ids {
-            let changed = sqlx::query(
+            let revision = sqlx::query_scalar::<_, i64>(
                 "UPDATE pastes SET folder_id=$3,updated_at=$4,revision=revision+1
-                 WHERE id=$1 AND owner_id=$2",
+                 WHERE id=$1 AND owner_id=$2 RETURNING revision",
             )
             .bind(id)
             .bind(owner)
             .bind(folder_id)
             .bind(unix_timestamp())
-            .execute(&mut *tx)
+            .fetch_optional(&mut *tx)
             .await
             .map_err(DomainError::internal)?
-            .rows_affected();
-            if changed != 1 {
-                return Err(DomainError::not_found("One or more pastes were not found"));
-            }
+            .ok_or_else(|| DomainError::not_found("One or more pastes were not found"))?;
+            revisions.push((id.clone(), revision));
         }
-        tx.commit().await.map_err(DomainError::internal)
+        tx.commit().await.map_err(DomainError::internal)?;
+        Ok(revisions)
     }
 
     pub(super) async fn validate_folder_owner(

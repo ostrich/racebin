@@ -157,7 +157,7 @@ pub(super) async fn backend_contract(repo: Repository) {
         .unwrap();
     let folder = services.create_folder(&owner, "Scripts").await.unwrap();
     assert!(services.create_folder(&owner, "scripts").await.is_err());
-    services
+    let moved = services
         .move_pastes(
             &owner,
             std::slice::from_ref(&private_paste.id),
@@ -165,6 +165,8 @@ pub(super) async fn backend_contract(repo: Repository) {
         )
         .await
         .unwrap();
+    assert_eq!(moved.len(), 1);
+    assert_eq!(moved[0].0, private_paste.id);
     assert_eq!(
         services
             .get_paste(&owner, &private_paste.id)
@@ -191,16 +193,20 @@ pub(super) async fn backend_contract(repo: Repository) {
         .await
         .unwrap();
     assert_eq!(folder_page.items.len(), 1);
-    assert!(services.delete_folder(&owner, folder.id).await.unwrap());
-    assert_eq!(
-        services
-            .get_paste(&owner, &private_paste.id)
-            .await
-            .unwrap()
-            .unwrap()
-            .folder_id,
-        None
-    );
+    let deleted = services
+        .delete_folder(&owner, folder.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(deleted.len(), 1);
+    assert_eq!(deleted[0].0, private_paste.id);
+    let unfiled_paste = services
+        .get_paste(&owner, &private_paste.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(unfiled_paste.folder_id, None);
+    assert_eq!(deleted[0].1, unfiled_paste.revision);
     assert!(services
         .get_paste(&anonymous, &public.id)
         .await

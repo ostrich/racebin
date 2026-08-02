@@ -105,21 +105,129 @@ impl Modify for Security {
         normalize_problem_media_types(openapi);
         normalize_optional_header_schemas(openapi);
         refine_component_schemas(openapi);
+        refine_parameter_schemas(openapi);
         constrain_numeric_path_ids(openapi);
         add_scope_extensions(openapi);
     }
 }
 
 fn refine_component_schemas(openapi: &mut utoipa::openapi::OpenApi) {
-    use utoipa::openapi::schema::Schema;
+    use utoipa::openapi::schema::{AdditionalProperties, OneOf, Schema, SchemaType, Type};
     use utoipa::openapi::RefOr;
 
     let Some(components) = openapi.components.as_mut() else {
         return;
     };
+    for name in [
+        "CreatePasteRequest",
+        "FlatCreateRequest",
+        "MultipartCreateRequest",
+        "UpdatePasteRequest",
+    ] {
+        if let Some(RefOr::T(Schema::Object(schema))) = components.schemas.get_mut(name) {
+            if let Some(RefOr::T(Schema::Object(title))) = schema.properties.get_mut("title") {
+                title.max_length = Some(crate::limits::MAX_TITLE_CHARACTERS);
+            }
+        }
+    }
+    if let Some(RefOr::T(Schema::Object(schema))) = components.schemas.get_mut("Pagination") {
+        if let Some(RefOr::T(Schema::Object(page_size))) = schema.properties.get_mut("page_size") {
+            page_size.maximum = Some(crate::limits::MAX_PAGE_SIZE.into());
+        }
+    }
     for name in ["UpdatePasteRequest", "UserUpdate"] {
         if let Some(RefOr::T(Schema::Object(schema))) = components.schemas.get_mut(name) {
             schema.min_properties = Some(1);
+        }
+    }
+    for (name, properties) in [
+        (
+            "CreatePasteRequest",
+            &[
+                "title",
+                "body",
+                "visibility",
+                "folder_id",
+                "expires_at",
+                "expires_in",
+                "read_limit",
+            ][..],
+        ),
+        (
+            "FlatCreateRequest",
+            &[
+                "title",
+                "format",
+                "content",
+                "language",
+                "visibility",
+                "folder_id",
+                "expires_at",
+                "expires_in",
+                "read_limit",
+            ][..],
+        ),
+        (
+            "MultipartCreateRequest",
+            &[
+                "title",
+                "format",
+                "content",
+                "language",
+                "visibility",
+                "folder_id",
+                "expires_at",
+                "expires_in",
+                "read_limit",
+            ][..],
+        ),
+        ("UpdatePasteRequest", &["title", "body", "visibility"][..]),
+        ("UserUpdate", &["enabled", "role"][..]),
+    ] {
+        let Some(RefOr::T(Schema::Object(schema))) = components.schemas.get_mut(name) else {
+            continue;
+        };
+        for property in properties {
+            if let Some(value) = schema.properties.get_mut(*property) {
+                remove_null(value);
+            }
+        }
+    }
+    for name in [
+        "CreatePasteRequest",
+        "FlatCreateRequest",
+        "MultipartCreateRequest",
+    ] {
+        let Some(RefOr::T(Schema::Object(schema))) = components.schemas.get_mut(name) else {
+            continue;
+        };
+        schema.additional_properties = Some(Box::new(AdditionalProperties::FreeForm(false)));
+        let mut neither = schema.clone();
+        neither.properties.remove("expires_at");
+        neither.properties.remove("expires_in");
+        let mut absolute = schema.clone();
+        absolute.properties.remove("expires_in");
+        absolute.required.push("expires_at".into());
+        let mut relative = schema.clone();
+        relative.properties.remove("expires_at");
+        relative.required.push("expires_in".into());
+        *components.schemas.get_mut(name).unwrap() = RefOr::T(Schema::OneOf(OneOf {
+            items: vec![
+                RefOr::T(Schema::Object(neither)),
+                RefOr::T(Schema::Object(absolute)),
+                RefOr::T(Schema::Object(relative)),
+            ],
+            ..OneOf::default()
+        }));
+    }
+    for name in [
+        "AttachmentUploadRequest",
+        "BrowserSessionResponse",
+        "BearerSessionResponse",
+        "AnonymousSessionResponse",
+    ] {
+        if let Some(RefOr::T(Schema::Object(schema))) = components.schemas.get_mut(name) {
+            schema.additional_properties = Some(Box::new(AdditionalProperties::FreeForm(false)));
         }
     }
     for (name, authenticated) in [
@@ -136,6 +244,98 @@ fn refine_component_schemas(openapi: &mut utoipa::openapi::OpenApi) {
             continue;
         };
         authenticated_schema.enum_values = Some(vec![serde_json::json!(authenticated)]);
+    }
+
+    fn remove_null(value: &mut RefOr<Schema>) {
+        let RefOr::T(schema) = value else {
+            return;
+        };
+        match schema {
+            Schema::Object(object) => {
+                if let SchemaType::Array(types) = &mut object.schema_type {
+                    types.retain(|value| *value != Type::Null);
+                    if types.len() == 1 {
+                        object.schema_type = SchemaType::Type(types[0].clone());
+                    }
+                }
+            }
+            Schema::OneOf(one_of) => {
+                one_of.items.retain(|item| {
+                    !matches!(item, RefOr::T(Schema::Object(object)) if object.schema_type == SchemaType::Type(Type::Null))
+                });
+                if one_of.items.len() == 1 {
+                    *value = one_of.items[0].clone();
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn refine_parameter_schemas(openapi: &mut utoipa::openapi::OpenApi) {
+    use utoipa::openapi::schema::Schema;
+    use utoipa::openapi::RefOr;
+
+    let enum_schemas = openapi
+        .components
+        .as_ref()
+        .map(|components| {
+            ["PasteSort", "SortDirection"]
+                .into_iter()
+                .filter_map(|name| {
+                    components
+                        .schemas
+                        .get(name)
+                        .and_then(|schema| match schema {
+                            RefOr::T(schema) => Some((name, schema.clone())),
+                            RefOr::Ref(_) => None,
+                        })
+                })
+                .collect::<std::collections::HashMap<_, _>>()
+        })
+        .unwrap_or_default();
+    for item in openapi.paths.paths.values_mut() {
+        for operation in [
+            &mut item.get,
+            &mut item.post,
+            &mut item.patch,
+            &mut item.delete,
+            &mut item.put,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            for parameter in operation.parameters.iter_mut().flatten() {
+                match parameter.name.as_str() {
+                    "page_size" => {
+                        if let Some(RefOr::T(Schema::Object(schema))) = parameter.schema.as_mut() {
+                            schema.maximum = Some(crate::limits::MAX_PAGE_SIZE.into());
+                            schema.default = Some(crate::limits::DEFAULT_PAGE_SIZE.into());
+                        }
+                    }
+                    "title" => {
+                        if let Some(RefOr::T(Schema::Object(schema))) = parameter.schema.as_mut() {
+                            schema.max_length = Some(crate::limits::MAX_TITLE_CHARACTERS);
+                        }
+                    }
+                    "sort" | "direction" => {
+                        let (component, default) = if parameter.name == "sort" {
+                            ("PasteSort", "created")
+                        } else {
+                            ("SortDirection", "desc")
+                        };
+                        if let Some(schema) = enum_schemas.get(component) {
+                            let mut schema = schema.clone();
+                            if let Schema::Object(object) = &mut schema {
+                                object.default = Some(default.into());
+                            }
+                            parameter.schema = Some(RefOr::T(schema));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
     }
 }
 
@@ -335,6 +535,7 @@ struct Capabilities {
     scopes: Vec<ScopeDescription>,
     max_title_characters: usize,
     max_content_size_bytes: usize,
+    #[schema(minimum = 1)]
     max_page_size: u32,
     minimum_password_characters: usize,
 }
@@ -498,7 +699,7 @@ async fn get_capabilities() -> impl Responder {
         api_base_url,
         plain_home_enabled: ARGS.plain_home,
         max_attachment_size_bytes: ARGS.max_attachment_size_mb * 1024 * 1024,
-        max_attachments_per_paste: 32,
+        max_attachments_per_paste: crate::limits::MAX_ATTACHMENTS_PER_PASTE,
         attachments_enabled: ARGS.attachments_enabled,
         qr_codes_enabled: ARGS.qr_codes,
         formats: ["text", "rich_text"],
@@ -547,9 +748,9 @@ async fn get_capabilities() -> impl Responder {
                 description: "Manage API keys, subject to ownership and delegation rules",
             },
         ],
-        max_title_characters: 200,
-        max_content_size_bytes: 2 * 1024 * 1024,
-        max_page_size: 100,
+        max_title_characters: crate::limits::MAX_TITLE_CHARACTERS,
+        max_content_size_bytes: crate::limits::MAX_CONTENT_SIZE_BYTES,
+        max_page_size: crate::limits::MAX_PAGE_SIZE,
         minimum_password_characters: 12,
     })
 }
@@ -950,8 +1151,19 @@ mod tests {
                 "{path} must describe a raw binary body, not a JSON number array"
             );
         }
-        for schema in ["AttachmentUploadRequest", "MultipartCreateRequest"] {
-            let file = &value["components"]["schemas"][schema]["properties"]["file"];
+        let schemas = &value["components"]["schemas"];
+        let upload = &schemas["AttachmentUploadRequest"];
+        assert_eq!(upload["additionalProperties"], false);
+        let file = &upload["properties"]["file"];
+        assert_eq!(file["type"], "array");
+        assert_eq!(file["minItems"], 1);
+        assert_eq!(file["items"], serde_json::json!({}));
+        for variant in schemas["MultipartCreateRequest"]["oneOf"]
+            .as_array()
+            .unwrap()
+        {
+            assert_eq!(variant["additionalProperties"], false);
+            let file = &variant["properties"]["file"];
             assert_eq!(file["type"], "array");
             assert_eq!(file["minItems"], 1);
             assert_eq!(file["items"], serde_json::json!({}));
@@ -980,8 +1192,14 @@ mod tests {
         assert_eq!(parameter("page")["schema"]["minimum"], 1);
         assert_eq!(parameter("page")["schema"]["default"], 1);
         assert_eq!(parameter("page_size")["schema"]["minimum"], 1);
-        assert_eq!(parameter("page_size")["schema"]["maximum"], 100);
-        assert_eq!(parameter("page_size")["schema"]["default"], 30);
+        assert_eq!(
+            parameter("page_size")["schema"]["maximum"],
+            crate::limits::MAX_PAGE_SIZE
+        );
+        assert_eq!(
+            parameter("page_size")["schema"]["default"],
+            crate::limits::DEFAULT_PAGE_SIZE
+        );
         assert_eq!(parameter("created_after")["schema"]["format"], "date-time");
         assert_eq!(parameter("created_before")["schema"]["format"], "date-time");
         for name in [
@@ -1017,6 +1235,10 @@ mod tests {
             value["components"]["schemas"]["SortDirection"]["enum"],
             serde_json::json!(["asc", "desc"])
         );
+        for name in ["sort", "direction"] {
+            assert!(parameter(name)["schema"]["oneOf"].is_null());
+            assert!(parameter(name)["schema"]["enum"].is_array());
+        }
     }
 
     #[test]
@@ -1050,6 +1272,18 @@ mod tests {
 
     #[test]
     fn identity_and_resource_schemas_exclude_impossible_states() {
+        fn permits_null(schema: &serde_json::Value) -> bool {
+            schema["type"] == "null"
+                || schema["type"]
+                    .as_array()
+                    .is_some_and(|types| types.iter().any(|value| value == "null"))
+                || ["oneOf", "anyOf", "allOf"].into_iter().any(|keyword| {
+                    schema[keyword]
+                        .as_array()
+                        .is_some_and(|items| items.iter().any(permits_null))
+                })
+        }
+
         let value = serde_json::to_value(ApiDoc::openapi()).unwrap();
         let schemas = &value["components"]["schemas"];
         assert_eq!(
@@ -1075,6 +1309,23 @@ mod tests {
         assert!(schemas["PasteResource"]["allOf"].as_array().is_some());
         assert_eq!(schemas["UpdatePasteRequest"]["minProperties"], 1);
         assert_eq!(schemas["UserUpdate"]["minProperties"], 1);
+        for schema in [
+            "BrowserSessionResponse",
+            "BearerSessionResponse",
+            "AnonymousSessionResponse",
+        ] {
+            assert_eq!(schemas[schema]["additionalProperties"], false);
+        }
+        for property in ["title", "body", "visibility"] {
+            assert!(!permits_null(
+                &schemas["UpdatePasteRequest"]["properties"][property]
+            ));
+        }
+        for property in ["enabled", "role"] {
+            assert!(!permits_null(
+                &schemas["UserUpdate"]["properties"][property]
+            ));
+        }
         assert!(schemas["ProblemDetails"]["properties"]["errors"].is_null());
         assert_eq!(
             schemas["UserResource"]["properties"]["role"]["$ref"],
@@ -1084,6 +1335,77 @@ mod tests {
             schemas["InvitationResource"]["properties"]["status"]["$ref"],
             "#/components/schemas/InvitationStatus"
         );
+    }
+
+    #[test]
+    fn creation_contract_has_unambiguous_content_and_expiration_inputs() {
+        let value = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let operation = &value["paths"]["/pastes"]["post"];
+        let parameters = operation["parameters"].as_array().unwrap();
+        assert!(!parameters
+            .iter()
+            .any(|parameter| matches!(parameter["name"].as_str(), Some("content" | "format"))));
+        for name in [
+            "CreatePasteRequest",
+            "FlatCreateRequest",
+            "MultipartCreateRequest",
+        ] {
+            let variants = value["components"]["schemas"][name]["oneOf"]
+                .as_array()
+                .unwrap();
+            assert_eq!(variants.len(), 3);
+            assert!(variants.iter().all(|variant| {
+                !(variant["properties"]["expires_at"].is_object()
+                    && variant["properties"]["expires_in"].is_object())
+            }));
+            assert!(variants
+                .iter()
+                .all(|variant| variant["additionalProperties"] == false));
+            assert!(variants.iter().all(|variant| {
+                variant["properties"]["title"]["maxLength"] == crate::limits::MAX_TITLE_CHARACTERS
+            }));
+        }
+        let description = operation["description"].as_str().unwrap();
+        for phrase in [
+            "text/plain creates text",
+            "text/markdown creates text with language=markdown",
+            "text/html creates sanitized rich text",
+            "raw request body is always the content",
+        ] {
+            assert!(
+                description.contains(phrase),
+                "missing creation rule: {phrase}"
+            );
+        }
+    }
+
+    #[test]
+    fn anonymous_operations_document_invalid_bearer_responses() {
+        let value = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        for (method, path) in [
+            ("get", "/pastes/{paste_id}"),
+            ("post", "/pastes/{paste_id}/reads"),
+            ("get", "/pastes/{paste_id}/attachments/{attachment_id}"),
+            ("get", "/pastes/{paste_id}/archive"),
+            ("get", "/pastes/{paste_id}/qr"),
+        ] {
+            assert!(
+                value["paths"][path][method]["responses"]["401"].is_object(),
+                "{method} {path} does not document invalid bearer credentials"
+            );
+        }
+    }
+
+    #[test]
+    fn folder_mutations_return_replacement_entity_tags() {
+        let value = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        for (method, path) in [("patch", "/pastes"), ("delete", "/folders/{folder_id}")] {
+            assert_eq!(
+                value["paths"][path][method]["responses"]["200"]["content"]["application/json"]
+                    ["schema"]["$ref"],
+                "#/components/schemas/PasteRevisionResponse"
+            );
+        }
     }
 
     #[test]
@@ -1182,6 +1504,7 @@ mod tests {
         ] {
             assert!(properties.contains_key(field), "missing capability {field}");
         }
+        assert_eq!(properties["max_page_size"]["minimum"], 1);
 
         let public_url = url::Url::parse("https://example.com/racebin/").unwrap();
         let (web, api) = canonical_base_urls(Some(&public_url));

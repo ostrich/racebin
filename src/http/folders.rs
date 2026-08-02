@@ -124,7 +124,7 @@ pub(crate) async fn rename_folder(
     params(("folder_id" = i64, Path, description = "Folder ID"),
         ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
     responses(
-        (status = 204, description = "Folder deleted; its pastes become unfiled"),
+        (status = 200, description = "Folder deleted; its pastes become unfiled with replacement entity tags", body = crate::http::contract::PasteRevisionResponse),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "Insufficient permission or CSRF failure", body = crate::http::errors::ProblemDetails),
         (status = 404, description = "Folder not found", body = crate::http::errors::ProblemDetails),
@@ -146,8 +146,8 @@ pub(crate) async fn delete_folder(
         Err(response) => return response,
     };
     match services.delete_folder(&value, *folder_id).await {
-        Ok(true) => HttpResponse::NoContent().finish(),
-        Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "Folder not found"),
+        Ok(Some(revisions)) => HttpResponse::Ok().json(revision_response(revisions)),
+        Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Folder not found"),
         Err(value) => domain_error(value),
     }
 }
@@ -157,7 +157,7 @@ pub(crate) async fn delete_folder(
     params(("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
     request_body = MovePastesInput,
     responses(
-        (status = 204, description = "Pastes moved"),
+        (status = 200, description = "Pastes moved with replacement entity tags", body = crate::http::contract::PasteRevisionResponse),
         (status = 400, description = "Invalid paste or folder selection", body = crate::http::errors::ProblemDetails),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "Insufficient permission or CSRF failure", body = crate::http::errors::ProblemDetails),
@@ -183,7 +183,19 @@ pub(crate) async fn move_pastes(
         .move_pastes(&value, &body.ids, body.folder_id)
         .await
     {
-        Ok(()) => HttpResponse::NoContent().finish(),
+        Ok(revisions) => HttpResponse::Ok().json(revision_response(revisions)),
         Err(value) => domain_error(value),
+    }
+}
+
+fn revision_response(revisions: Vec<(String, i64)>) -> contract::PasteRevisionResponse {
+    contract::PasteRevisionResponse {
+        pastes: revisions
+            .into_iter()
+            .map(|(id, revision)| contract::PasteRevisionResource {
+                etag: dto::etag_revision(&id, revision),
+                id,
+            })
+            .collect(),
     }
 }

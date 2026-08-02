@@ -119,7 +119,7 @@ pub(super) fn validate_input(input: &PasteInput, now: i64) -> DomainResult<()> {
     if input
         .title
         .as_deref()
-        .is_some_and(|value| value.chars().count() > 200)
+        .is_some_and(|value| value.chars().count() > crate::limits::MAX_TITLE_CHARACTERS)
     {
         return Err(DomainError::validation("Title exceeds 200 characters"));
     }

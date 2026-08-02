@@ -1,4 +1,4 @@
-use super::pastes::{FlatCreateRequest, StagedFile};
+use super::pastes::{FlatCreateRequest, RawCreateQuery, StagedFile};
 use super::*;
 use crate::http::dto::CreatePasteRequest;
 use sha2::{Digest, Sha256};
@@ -6,13 +6,13 @@ use std::collections::HashMap;
 
 pub(super) async fn parse_non_multipart(
     content_type: &str,
-    query: FlatCreateRequest,
+    query: RawCreateQuery,
     mut payload: web::Payload,
 ) -> Result<CreatePasteRequest, HttpResponse> {
-    let bytes = read_body(&mut payload, 2 * 1024 * 1024).await?;
+    let bytes = read_body(&mut payload, crate::limits::MAX_CONTENT_SIZE_BYTES).await?;
     match content_type {
         "application/json" => {
-            if query != FlatCreateRequest::default() {
+            if query != RawCreateQuery::default() {
                 return Err(error(
                     StatusCode::BAD_REQUEST,
                     "invalid_query",
@@ -34,7 +34,7 @@ pub(super) async fn parse_non_multipart(
         "text/plain" | "text/markdown" | "text/html" => {
             let content = String::from_utf8(bytes.to_vec())
                 .map_err(|_| error(StatusCode::BAD_REQUEST, "invalid_text", "Text input must be UTF-8"))?;
-            let mut query = query;
+            let mut query = FlatCreateRequest::from(query);
             query.content = Some(content);
             query.format = Some(if content_type == "text/html" {
                 "rich_text"
@@ -103,7 +103,7 @@ pub(super) async fn parse_multipart(
                     "File parts must use the field name file",
                 ));
             }
-            if files.len() >= 32 {
+            if files.len() >= crate::limits::MAX_ATTACHMENTS_PER_PASTE {
                 return Err(error(
                     StatusCode::PAYLOAD_TOO_LARGE,
                     "too_many_attachments",
@@ -181,7 +181,7 @@ pub(super) async fn parse_multipart(
                     format!("Multipart field appears more than once: {name}"),
                 ));
             }
-            let bytes = read_field(&mut field, 2 * 1024 * 1024).await?;
+            let bytes = read_field(&mut field, crate::limits::MAX_CONTENT_SIZE_BYTES).await?;
             let value = String::from_utf8(bytes).map_err(|_| {
                 error(
                     StatusCode::BAD_REQUEST,
