@@ -18,18 +18,34 @@
   import Link from "./components/Link.svelte";
   import Shell from "./components/Shell.svelte";
   import {
-    deferRouteReady,
-    hasUnsavedChanges,
-    initializeRouter,
     locationState,
-    navigate,
-    setDiscardPrompt
-  } from "./router";
+    navigationReady,
+    setDiscardPrompt,
+    startNavigation
+  } from "./navigation";
+  import type { RouteLocation } from "./navigation";
   import { loadSession } from "./session";
   import { appState } from "./state";
 
   let discardDialog: ConfirmDialog;
   let startupError = $state("");
+
+  function accessPolicy(location: RouteLocation): string | null {
+    const user = $appState.session.user;
+    const authenticated = Boolean(user);
+    if (user?.password_change_required && location.route.name !== "password") {
+      return "/account/password";
+    }
+    const protectedRoute = [
+      "new-paste", "my-pastes", "edit-paste", "account", "password", "help"
+    ].includes(location.route.name);
+    if (!authenticated && protectedRoute) return "/login";
+    if (authenticated && location.route.name === "login") return "/pastes";
+    const adminRoute = ["admin", "admin-pastes", "admin-users", "admin-user"]
+      .includes(location.route.name);
+    if (user?.role !== "admin" && adminRoute) return "/";
+    return null;
+  }
 
   onMount(() => {
     setDiscardPrompt(() => discardDialog.ask({
@@ -38,32 +54,20 @@
       confirmLabel: "Discard changes",
       dangerous: true
     }));
-    const stopRouter = initializeRouter();
-    const startupReady = deferRouteReady();
-    const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (!hasUnsavedChanges()) return;
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", beforeUnload);
+    let stopNavigation: (() => void) | undefined;
     void loadSession()
       .then(async () => {
-        const user = $appState.session.user;
-        if (user?.password_change_required && location.pathname !== "/account/password") {
-          await navigate("/account/password", { replace: true });
-        }
+        stopNavigation = await startNavigation({
+          accessPolicy,
+          siteName: () => $appState.config.site_name
+        });
       })
       .catch(error => { startupError = error instanceof Error ? error.message : "Unable to start Racebin"; })
-      .finally(startupReady);
-    return () => {
-      stopRouter();
-      window.removeEventListener("beforeunload", beforeUnload);
-    };
+    return () => stopNavigation?.();
   });
 
   let routeKey = $derived($locationState.path);
   let authenticated = $derived(Boolean($appState.session.user));
-  let administrator = $derived($appState.session.user?.role === "admin");
   let plainAnonymousHome = $derived(
     $appState.ready
       && $appState.config.plain_home_enabled
@@ -71,25 +75,13 @@
       && $locationState.route.name === "home"
   );
   let minimalShell = $derived(!$appState.ready || plainAnonymousHome);
-  $effect(() => {
-    if (!$appState.ready) return;
-    const route = $locationState.route;
-    const protectedRoute = [
-      "new-paste", "my-pastes", "edit-paste", "account", "password", "help"
-    ].includes(route.name);
-    if (!authenticated && protectedRoute) void navigate("/login", { replace: true });
-    else if (authenticated && route.name === "login") void navigate("/pastes", { replace: true });
-    else if (!administrator && ["admin", "admin-pastes", "admin-users", "admin-user"].includes(route.name)) {
-      void navigate("/", { replace: true });
-    }
-  });
 </script>
 
 <ConfirmDialog bind:this={discardDialog}/>
 <Shell minimal={minimalShell}>
   {#if startupError}
     <section class="empty"><h1>Unable to load Racebin</h1><p>{startupError}</p></section>
-  {:else if !$appState.ready}
+  {:else if !$appState.ready || !$navigationReady}
     <p class="muted">Loading Racebin…</p>
   {:else}
     {#key routeKey}
@@ -105,29 +97,29 @@
       {:else if route.name === "explore"}
         <PasteListPage mine={false} query={$locationState.query}/>
       {:else if route.name === "login"}
-        {#if authenticated}<PasteListPage mine query={new URLSearchParams()}/>{:else}<LoginPage/>{/if}
+        <LoginPage/>
       {:else if route.name === "new-paste"}
-        {#if authenticated}<PasteFormPage/>{:else}<LoginPage/>{/if}
+        <PasteFormPage/>
       {:else if route.name === "my-pastes"}
-        {#if authenticated}<PasteListPage mine query={$locationState.query}/>{:else}<LoginPage/>{/if}
+        <PasteListPage mine query={$locationState.query}/>
       {:else if route.name === "paste"}
         <PasteViewPage pasteId={route.pasteId}/>
       {:else if route.name === "edit-paste"}
-        {#if authenticated}<PasteFormPage pasteId={route.pasteId}/>{:else}<LoginPage/>{/if}
+        <PasteFormPage pasteId={route.pasteId}/>
       {:else if route.name === "account"}
-        {#if authenticated}<AccountPage/>{:else}<LoginPage/>{/if}
+        <AccountPage/>
       {:else if route.name === "password"}
-        {#if authenticated}<PasswordPage/>{:else}<LoginPage/>{/if}
+        <PasswordPage/>
       {:else if route.name === "admin"}
-        {#if administrator}<AdminPage/>{:else}<section class="empty"><h1>Access denied</h1><Link class="button" href="/">Return home</Link></section>{/if}
+        <AdminPage/>
       {:else if route.name === "admin-pastes"}
-        {#if administrator}<AdminPastesPage query={$locationState.query}/>{:else}<section class="empty"><h1>Access denied</h1><Link class="button" href="/">Return home</Link></section>{/if}
+        <AdminPastesPage query={$locationState.query}/>
       {:else if route.name === "admin-users"}
-        {#if administrator}<AdminUsersPage/>{:else}<section class="empty"><h1>Access denied</h1><Link class="button" href="/">Return home</Link></section>{/if}
+        <AdminUsersPage/>
       {:else if route.name === "admin-user"}
-        {#if administrator}<AdminUserPage userId={route.userId}/>{:else}<section class="empty"><h1>Access denied</h1><Link class="button" href="/">Return home</Link></section>{/if}
+        <AdminUserPage userId={route.userId}/>
       {:else if route.name === "help"}
-        {#if authenticated}<HelpPage/>{:else}<LoginPage/>{/if}
+        <HelpPage/>
       {:else if route.name === "password-reset"}
         <PasswordResetPage token={route.token}/>
       {:else if route.name === "invitation"}

@@ -5,7 +5,7 @@
   import Link from "../components/Link.svelte";
   import { formatByteSize, formatDate } from "../format";
   import { showNotice } from "../notices";
-  import { deferRouteReady } from "../router";
+  import { holdNavigation } from "../navigation";
   import type { AdminUser } from "../types";
 
   let users = $state<AdminUser[]>([]);
@@ -14,6 +14,7 @@
   let status = $state("");
   let sort = $state("username");
   let error = $state("");
+  const initialLoadReady = holdNavigation();
   let filtered = $derived(users.filter(user =>
     (!search || user.username.toLowerCase().includes(search.toLowerCase())) &&
     (!role || user.role === role) &&
@@ -27,11 +28,10 @@
   }));
 
   onMount(() => {
-    const ready = deferRouteReady();
     void requestApi<AdminUser[]>("/admin/users")
       .then(value => { users = value; })
       .catch(reason => { error = reason instanceof Error ? reason.message : "Unable to load users"; })
-      .finally(ready);
+      .finally(initialLoadReady);
   });
 
   async function createInvitation(): Promise<void> {

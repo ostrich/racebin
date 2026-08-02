@@ -2,7 +2,7 @@
   import { requestApi } from "../api";
   import { appState } from "../state";
   import { replaceSession } from "../session";
-  import { confirmDiscardChanges, guardUnsavedChanges, navigate } from "../router";
+  import { clearUnsavedChangesGuard, confirmDiscardChanges, navigate } from "../navigation";
   import { notice } from "../notices";
   import Icon from "./Icon.svelte";
   import Link from "./Link.svelte";
@@ -17,7 +17,7 @@
 
   async function logout(): Promise<void> {
     if (!(await confirmDiscardChanges())) return;
-    guardUnsavedChanges();
+    clearUnsavedChangesGuard();
     await requestApi("/session", { method: "DELETE" });
     replaceSession({ authenticated: false });
     await navigate("/");

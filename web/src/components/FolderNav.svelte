@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { FolderOverview } from "../types";
-  import { navigate } from "../router";
+  import { navigate } from "../navigation";
   import { setFolderSidebarCollapsed, uiPreferences } from "../uiPreferences";
   import Icon from "./Icon.svelte";
   import Link from "./Link.svelte";

@@ -9,7 +9,7 @@
   import { pasteDisplayTitle } from "../format";
   import { normalizeLanguage } from "../highlighting";
   import { showNotice } from "../notices";
-  import { deferRouteReady, guardUnsavedChanges, navigate } from "../router";
+  import { clearUnsavedChangesGuard, guardUnsavedChanges, holdNavigation, navigate } from "../navigation";
   import { appState } from "../state";
   import type { Folder, FolderOverview, Paste, RichTextDocument } from "../types";
 
@@ -41,7 +41,7 @@
   let editorHeight = $state(410);
   let baseline = $state("");
   let initialized = $state(false);
-  const initialLoadReady = deferRouteReady();
+  const initialLoadReady = holdNavigation();
   const drafts = new Map<ContentKind, string>();
   let canOrganize = $derived(!paste || paste.owner_id === $appState.session.user?.id);
 
@@ -107,7 +107,7 @@
 
   $effect(() => {
     guardUnsavedChanges(() => dirty);
-    return () => guardUnsavedChanges();
+    return () => clearUnsavedChangesGuard();
   });
 
   function initialize(source?: Paste): void {
@@ -278,7 +278,7 @@
         }
       }
       initialized = false;
-      guardUnsavedChanges();
+      clearUnsavedChangesGuard();
       await navigate(`/pastes/${created.id}`);
     } catch (reason) {
       showNotice(reason instanceof Error ? reason.message : "Unable to save paste", "error");
@@ -294,7 +294,7 @@
         method: "DELETE", headers: { "If-Match": paste?._etag ?? "*" }
       });
       initialized = false;
-      guardUnsavedChanges();
+      clearUnsavedChangesGuard();
       await navigate("/pastes");
     } catch (reason) {
       showNotice(reason instanceof Error ? reason.message : "Unable to delete paste", "error");

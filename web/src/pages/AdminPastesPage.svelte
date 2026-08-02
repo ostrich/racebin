@@ -7,7 +7,7 @@
   import { formatByteSize, formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
   import { showNotice } from "../notices";
   import { cachedQuery, loadQuery } from "../queryCache";
-  import { deferRouteReady } from "../router";
+  import { holdNavigation } from "../navigation";
   import type { Page, Paste, User } from "../types";
 
   let { query }: { query: URLSearchParams } = $props();
@@ -41,12 +41,12 @@
   let error = $state("");
   let ownerNames = $derived(new Map(users.map(user => [user.id, user.username])));
   let loadGeneration = 0;
-  let initialRouteReady: (() => void) | null = deferRouteReady();
+  let initialRouteReady: (() => void) | null = holdNavigation();
 
   $effect(() => {
     const requestedQuery = new URLSearchParams(query);
     const generation = ++loadGeneration;
-    const routeReady = initialRouteReady ?? deferRouteReady();
+    const routeReady = initialRouteReady ?? holdNavigation();
     initialRouteReady = null;
     loading = true;
     const requestedPastePath = pastePath(requestedQuery);

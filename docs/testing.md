@@ -19,9 +19,12 @@ npm test
 npm run build
 ```
 
-Vitest covers route, formatting, and Svelte component behavior in jsdom.
-Playwright runs critical navigation, editor, highlighting, and dirty-form
-workflows in Chromium against deterministic API fixtures.
+Vitest covers route parsing, navigation transactions, pre-commit access
+redirects, readiness holds, superseded navigation, history state, dirty-form
+guards, formatting, and Svelte component behavior in jsdom. Playwright runs
+critical back/forward scroll restoration, cached and overlapping list loads,
+access redirects, editor, highlighting, and dirty-form workflows in Chromium
+against deterministic API fixtures.
 
 The compiled-stack smoke test uses a temporary SQLite database and data
 directory, starts the actual Racebin binary with its embedded production

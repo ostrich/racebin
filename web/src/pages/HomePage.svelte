@@ -4,12 +4,12 @@
   import Link from "../components/Link.svelte";
   import PasteRows from "../components/PasteRows.svelte";
   import { showNotice } from "../notices";
-  import { deferRouteReady } from "../router";
+  import { holdNavigation } from "../navigation";
   import { appState } from "../state";
   import type { Page, Paste } from "../types";
 
   let page = $state<Page<Paste> | null>(null);
-  const initialLoadReady = deferRouteReady();
+  const initialLoadReady = holdNavigation();
 
   onMount(() => {
     void requestApi<Page<Paste>>("/pastes?visibility=public&page_size=8")

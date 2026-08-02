@@ -1,7 +1,7 @@
 <script lang="ts">
   import { requestApi } from "../api";
   import { showNotice } from "../notices";
-  import { navigate } from "../router";
+  import { navigate } from "../navigation";
   import { loadSession } from "../session";
 
   let { token }: { token: string } = $props();

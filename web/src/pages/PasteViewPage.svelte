@@ -7,7 +7,7 @@
   import Link from "../components/Link.svelte";
   import { formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
   import { showNotice } from "../notices";
-  import { deferRouteReady } from "../router";
+  import { holdNavigation } from "../navigation";
   import { appState } from "../state";
   import type { Paste } from "../types";
 
@@ -16,7 +16,7 @@
   let error = $state("");
   let wrapLines = $state(false);
   let horizontalOverflow = $state(false);
-  const initialLoadReady = deferRouteReady();
+  const initialLoadReady = holdNavigation();
   let own = $derived(Boolean(
     paste && $appState.session.user &&
     ($appState.session.user.id === paste.owner_id || $appState.session.user.role === "admin")

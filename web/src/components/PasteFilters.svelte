@@ -1,7 +1,7 @@
 <script lang="ts">
   import { formatByteSize } from "../format";
   import { languageOptions } from "../highlighting";
-  import { navigate } from "../router";
+  import { navigate } from "../navigation";
   import Icon from "./Icon.svelte";
   import Link from "./Link.svelte";
 

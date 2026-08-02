@@ -5,10 +5,11 @@
   import Link from "../components/Link.svelte";
   import { formatByteSize, formatDate } from "../format";
   import { showNotice } from "../notices";
-  import { deferRouteReady } from "../router";
+  import { holdNavigation } from "../navigation";
   import type { AdminUser } from "../types";
 
   let { userId }: { userId: number } = $props();
+  const initialLoadReady = holdNavigation();
   let user = $state<AdminUser | null>(null);
   let role = $state<"user" | "admin">("user");
   let error = $state("");
@@ -18,7 +19,7 @@
     user = await requestApi<AdminUser>(`/admin/users/${userId}`);
     role = user.role;
   }
-  onMount(() => { const ready = deferRouteReady(); void load().catch(reason => { error = reason instanceof Error ? reason.message : "Unable to load user"; }).finally(ready); });
+  onMount(() => { void load().catch(reason => { error = reason instanceof Error ? reason.message : "Unable to load user"; }).finally(initialLoadReady); });
 
   async function patch(values: { role?: string; enabled?: boolean }): Promise<void> {
     if (!user) return;

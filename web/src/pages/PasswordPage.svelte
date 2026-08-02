@@ -2,14 +2,14 @@
   import { requestApi } from "../api";
   import Link from "../components/Link.svelte";
   import { showNotice } from "../notices";
-  import { guardUnsavedChanges, navigate } from "../router";
+  import { clearUnsavedChangesGuard, guardUnsavedChanges, navigate } from "../navigation";
   import { replaceSession } from "../session";
 
   let submitting = $state(false);
   let dirty = $state(false);
   $effect(() => {
     guardUnsavedChanges(() => dirty);
-    return () => guardUnsavedChanges();
+    return () => clearUnsavedChangesGuard();
   });
 
   async function submit(event: SubmitEvent): Promise<void> {
@@ -24,7 +24,7 @@
         })
       });
       dirty = false;
-      guardUnsavedChanges();
+      clearUnsavedChangesGuard();
       replaceSession({ authenticated: false });
       await navigate("/login");
     } catch (error) {

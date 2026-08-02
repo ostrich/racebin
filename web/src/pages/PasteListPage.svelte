@@ -8,7 +8,7 @@
   import PasteRows from "../components/PasteRows.svelte";
   import { showNotice } from "../notices";
   import { cachedQuery, loadQuery } from "../queryCache";
-  import { deferRouteReady, navigate } from "../router";
+  import { holdNavigation, navigate } from "../navigation";
   import type { FolderOverview, Page, Paste } from "../types";
   import { setPasteListView, uiPreferences } from "../uiPreferences";
 
@@ -70,7 +70,7 @@
   let currentFolderName = $derived(unfiled ? "Uncategorized"
     : currentFolderId ? folderNames.get(currentFolderId) ?? "Folder" : "My pastes");
   let loadGeneration = 0;
-  let initialRouteReady: (() => void) | null = deferRouteReady();
+  let initialRouteReady: (() => void) | null = holdNavigation();
 
   $effect(() => {
     if (!selectAllCheckbox || !page) return;
@@ -81,7 +81,7 @@
     reloadToken;
     const requestedQuery = new URLSearchParams(query);
     const generation = ++loadGeneration;
-    const routeReady = initialRouteReady ?? deferRouteReady();
+    const routeReady = initialRouteReady ?? holdNavigation();
     initialRouteReady = null;
     loading = true;
     const paths = requestPaths(requestedQuery);

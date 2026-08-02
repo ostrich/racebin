@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { navigate } from "../router";
+  import { navigate } from "../navigation";
 
   let {
     href,
@@ -14,12 +14,17 @@
   } = $props();
 
   function activate(event: MouseEvent): void {
+    const anchor = event.currentTarget as HTMLAnchorElement;
     if (
+      event.defaultPrevented ||
       event.button !== 0 ||
       event.metaKey ||
       event.ctrlKey ||
       event.shiftKey ||
-      event.altKey
+      event.altKey ||
+      Boolean(anchor.target && anchor.target !== "_self") ||
+      anchor.hasAttribute("download") ||
+      new URL(anchor.href, location.href).origin !== location.origin
     ) return;
     event.preventDefault();
     void navigate(href);

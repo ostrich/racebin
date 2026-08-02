@@ -250,23 +250,47 @@ external or replicated automatically.
 The browser interface is a Svelte 5 single-page application in `web/src`.
 TypeScript is used for application code and component scripts.
 
-Racebin does not use SvelteKit. Its small client router in `web/src/router.ts`
-owns:
+Racebin does not use SvelteKit. It has a deliberately application-specific
+navigation runtime under `web/src/navigation`. The implementation is divided
+by responsibility:
 
-- route parsing and History API navigation;
-- back/forward scroll restoration;
-- explicit route-readiness coordination for asynchronously rendered pages;
-  and
-- unsaved-change guards for internal navigation and browser unloads.
+- `routes.ts` defines route parsing and page titles;
+- `guards.ts` owns the active form's unsaved-change guard and the common
+  discard prompt used by links, back/forward navigation, logout, and browser
+  unloads;
+- `scroll.ts` owns Racebin's namespaced History API state and scroll
+  positions; and
+- `runtime.ts` executes navigation transactions, access-policy redirects,
+  page readiness, history updates, title updates, focus, and scroll
+  restoration in a fixed order.
+
+A navigation is resolved before it is published. Authentication,
+administrator access, and forced-password-change redirects therefore happen
+before a protected page can mount. Once the destination is published, a page
+may call `holdNavigation()` while its initial data or lazy component loads.
+The transaction restores scroll and completes only after all holds are
+released and Svelte has rendered. Holds and asynchronous policy decisions are
+transaction-scoped, so stale work cannot complete or overwrite a newer
+navigation.
+
+Each browser history entry carries its own navigation index and scroll
+position without replacing unrelated `history.state` fields. Internal
+push/replace navigation starts at the top and moves focus to the page heading;
+back/forward navigation restores the saved position without stealing focus.
 
 `App.svelte` is the frontend composition root. It loads the current session,
-applies route-level access control, and chooses the page component.
+provides the route access policy, and chooses the page component.
 `Shell.svelte` owns the shared navigation and page frame. Pages compose
 reusable controls from `web/src/components`.
 
 Application-wide session and configuration state lives in a small Svelte
 store. `requestApi` is the common API client and automatically adds JSON
-headers and the current session's CSRF token to mutations.
+headers and the current session's CSRF token to mutations. The query cache is
+kept separate from navigation: it deduplicates and retains resource reads,
+invalidates them after mutations, and lets list pages render cached data while
+revalidating. Page request generations prevent an older response from
+replacing a newer query, while navigation readiness determines only when the
+new page is structurally ready for focus and scroll restoration.
 
 Notable browser-side technologies are:
 
@@ -426,6 +450,7 @@ src/
   services/             paste domain model, validation, conversion, and service
 web/
   src/components/       reusable Svelte controls
+  src/navigation/       routes, guards, history/scroll, and navigation runtime
   src/pages/            route-level Svelte components
   e2e/                  Playwright browser workflows
   dist/                 compiled frontend embedded by Cargo

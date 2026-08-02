@@ -5,14 +5,14 @@
   import Link from "../components/Link.svelte";
   import { formatDate } from "../format";
   import { showNotice } from "../notices";
-  import { deferRouteReady } from "../router";
+  import { holdNavigation } from "../navigation";
   import type { ApiKey } from "../types";
 
   const scopes = ["paste:read", "paste:write", "paste:delete", "paste:list"];
   let keys = $state<ApiKey[]>([]);
   let loading = $state(true);
   let submitting = $state(false);
-  const initialLoadReady = deferRouteReady();
+  const initialLoadReady = holdNavigation();
 
   async function load(): Promise<void> {
     loading = true;
