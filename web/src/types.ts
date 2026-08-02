@@ -17,8 +17,11 @@ export type AdminUser = User & {
   active_api_key_count: number;
 };
 
-export type Session = { authenticated: boolean; user?: User; csrf_token?: string };
-export type Attachment = { id: number; filename: string; size_bytes: number; url?: string };
+export type Session =
+  | { authenticated: false; user?: never; api_key?: never; csrf_token?: never }
+  | { authenticated: true; user: User; csrf_token: string }
+  | { authenticated: true; api_key: { id: number; name: string; scopes: string[] }; user?: never; csrf_token?: never };
+export type Attachment = { id: number; filename: string; size_bytes: number; url: string };
 export type RichTextDocument = Record<string, unknown> | string;
 
 export type PasteBody =
@@ -51,7 +54,7 @@ export type WirePasteResource = WirePasteBase & {
   read_url: string;
   source_url?: string;
   archive_url?: string;
-  body?: PasteBody;
+  body: PasteBody;
   attachments: WireAttachment[];
 };
 
@@ -117,8 +120,25 @@ export type ApiKey = {
 
 export type Config = {
   site_name: string;
+  server_version: string;
+  api_version: string;
+  web_base_url?: string;
+  api_base_url?: string;
   plain_home_enabled: boolean;
   max_attachment_size_bytes: number;
+  max_attachments_per_paste: number;
   attachments_enabled: boolean;
   qr_codes_enabled: boolean;
+  formats: Array<"text" | "rich_text">;
+  visibility_modes: Array<"public" | "unlisted" | "private">;
+  authentication_methods: string[];
+  paste_create_media_types: string[];
+  attachment_upload_media_types: string[];
+  scopes: Array<{ id: string; description: string }>;
+  max_title_characters: number;
+  max_content_size_bytes: number;
+  max_page_size: number;
+  minimum_password_characters: number;
 };
+
+export type Language = { id: string; label: string; aliases: string[] };

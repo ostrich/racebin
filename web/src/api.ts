@@ -10,8 +10,21 @@ import type {
   WirePasteSummary
 } from "./types";
 
+export type ApiResult<T> = {
+  data: T;
+  etag: string | null;
+  readToken: string | null;
+  idempotencyReplayed: boolean;
+};
+
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    public code?: string,
+    public errors?: Record<string, string[]>,
+    public retryAfter?: string
+  ) {
     super(message);
   }
 }
@@ -21,11 +34,16 @@ interface ApiRequestInit extends RequestInit {
 }
 
 export async function requestApi<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
+  return (await requestApiResult<T>(path, init)).data;
+}
+
+export async function requestApiResult<T>(path: string, init: ApiRequestInit = {}): Promise<ApiResult<T>> {
   const {
     invalidateQueries = Boolean(init.method && init.method !== "GET"),
     ...requestInit
   } = init;
   const headers = new Headers(requestInit.headers);
+  if (!headers.has("Accept")) headers.set("Accept", "application/json");
   if (requestInit.body && !(requestInit.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
@@ -33,17 +51,31 @@ export async function requestApi<T>(path: string, init: ApiRequestInit = {}): Pr
   if (session.csrf_token && requestInit.method && requestInit.method !== "GET") {
     headers.set("X-CSRF-Token", session.csrf_token);
   }
-  const response = await fetch(`/api/v1${path}`, { ...requestInit, headers });
+  const response = await fetch(`/api/v1${path}`, { credentials: "same-origin", ...requestInit, headers });
   if (!response.ok) {
     const body = await response
       .json()
-      .catch(() => ({ detail: response.statusText }));
-    throw new ApiError(response.status, body.detail ?? body.error?.message ?? response.statusText);
+      .catch(() => ({ detail: response.statusText })) as {
+        detail?: string; code?: string; errors?: Record<string, string[]>;
+        error?: { message?: string };
+      };
+    throw new ApiError(
+      response.status,
+      body.detail ?? body.error?.message ?? response.statusText,
+      body.code,
+      body.errors,
+      response.headers.get("Retry-After") ?? undefined
+    );
   }
   if (invalidateQueries) clearQueryCache();
-  if (response.status === 204) return undefined as T;
-  const data = await response.json();
-  return normalizePayload(data, response.headers.get("ETag")) as T;
+  const etag = response.headers.get("ETag");
+  const value = response.status === 204 ? undefined : await response.json();
+  return {
+    data: normalizePayload(value, etag) as T,
+    etag,
+    readToken: response.headers.get("Read-Token"),
+    idempotencyReplayed: response.headers.get("Idempotency-Replayed") === "true"
+  };
 }
 
 function unixTimestamp(value: string | null | undefined): number | null {

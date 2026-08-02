@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { languageOptions, normalizeLanguage } from "../highlighting";
+  import { availableLanguageOptions, normalizeLanguage } from "../highlighting";
+  import { appState } from "../state";
 
   let {
     value = $bindable(),
@@ -13,7 +14,8 @@
   let open = $state(false);
   let query = $state("");
   let active = $state(-1);
-  let filtered = $derived(languageOptions.filter(language => {
+  let options = $derived(availableLanguageOptions($appState.languages));
+  let filtered = $derived(options.filter(language => {
     const term = query.trim().toLowerCase();
     return !term || [language.id, language.label, ...(language.aliases ?? [])]
       .join(" ").toLowerCase().includes(term);

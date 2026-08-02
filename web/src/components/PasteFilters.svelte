@@ -1,6 +1,7 @@
 <script lang="ts">
   import { formatByteSize } from "../format";
-  import { languageOptions } from "../highlighting";
+  import { availableLanguageOptions } from "../highlighting";
+  import { appState } from "../state";
   import { navigate } from "../navigation";
   import Icon from "./Icon.svelte";
   import Link from "./Link.svelte";
@@ -14,6 +15,7 @@
     mode: "mine" | "explore" | "admin";
     ownerNames?: Map<number, string>;
   } = $props();
+  let languageOptions = $derived(availableLanguageOptions($appState.languages));
 
   const labels: Record<string, string> = {
     content_kind: "Format", language: "Language", visibility: "Visibility",
@@ -196,12 +198,13 @@
       onsubmit={(event) => { event.preventDefault(); void submitFilters(event); }}>
       <div class="advanced-filter-grid">
         <label><span>Format</span><select name="content_kind" value={params.get("content_kind") ?? ""}>
-          <option value="">Any</option><option value="text">Text</option><option value="rich_text">Rich text</option>
+          <option value="">Any</option>
+          {#each $appState.config.formats as format}<option value={format}>{format === "rich_text" ? "Rich text" : "Text"}</option>{/each}
         </select></label>
         {#if mode !== "explore"}
           <label><span>Visibility</span><select name="visibility" value={params.get("visibility") ?? ""}>
-            <option value="">Any</option><option value="public">Public</option>
-            <option value="unlisted">Unlisted</option><option value="private">Private</option>
+            <option value="">Any</option>
+            {#each $appState.config.visibility_modes as visibility}<option value={visibility}>{visibility.charAt(0).toUpperCase() + visibility.slice(1)}</option>{/each}
           </select></label>
         {/if}
         <label><span>Attachments</span><select name="has_attachments" value={params.get("has_attachments") ?? ""}>

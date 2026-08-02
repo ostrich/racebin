@@ -1,15 +1,14 @@
 import { requestApi } from "./api";
 import { appState } from "./state";
-import type { Config, Session } from "./types";
+import type { Config, Language, Session } from "./types";
 
 export async function loadSession(): Promise<void> {
-  const [session, config] = await Promise.all([
-    requestApi<Session>("/session").catch(
-      (): Session => ({ authenticated: false })
-    ),
-    requestApi<Config>("/capabilities")
+  const [session, config, languages] = await Promise.all([
+    requestApi<Session>("/session"),
+    requestApi<Config>("/capabilities"),
+    requestApi<Language[]>("/languages")
   ]);
-  appState.set({ session, config, ready: true });
+  appState.set({ session, config, languages, ready: true });
 }
 
 export function replaceSession(session: Session): void {

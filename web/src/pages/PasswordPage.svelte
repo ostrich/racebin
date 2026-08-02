@@ -4,6 +4,7 @@
   import { showNotice } from "../notices";
   import { clearUnsavedChangesGuard, guardUnsavedChanges, navigate } from "../navigation";
   import { replaceSession } from "../session";
+  import { appState } from "../state";
 
   let submitting = $state(false);
   let dirty = $state(false);
@@ -39,7 +40,7 @@
   onsubmit={(event) => { event.preventDefault(); void submit(event); }}>
   <p class="eyebrow">Security</p><h1>Change password</h1>
   <label><span>Current password</span><input type="password" name="current_password" autocomplete="current-password" required/></label>
-  <label><span>New password</span><input type="password" name="new_password" minlength="12" autocomplete="new-password" required/></label>
+  <label><span>New password</span><input type="password" name="new_password" minlength={$appState.config.minimum_password_characters} autocomplete="new-password" required/></label>
   <div class="actions">
     <button class="button primary" type="submit" disabled={submitting}>{submitting ? "Updating…" : "Update password"}</button>
     <Link class="button" href="/account">Cancel</Link>

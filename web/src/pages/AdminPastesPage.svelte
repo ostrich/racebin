@@ -8,6 +8,7 @@
   import { showNotice } from "../notices";
   import { cachedQuery, loadQuery } from "../queryCache";
   import { holdNavigation } from "../navigation";
+  import { appState } from "../state";
   import type { Page, Paste, User } from "../types";
 
   let { query }: { query: URLSearchParams } = $props();
@@ -27,7 +28,7 @@
         params.set(key, new Date(Number(value) * 1000).toISOString());
       }
     }
-    params.set("page_size", "100");
+    params.set("page_size", String($appState.config.max_page_size));
     return `/admin/pastes?${params}`;
   }
 
@@ -100,14 +101,17 @@
   }
 
   async function copy(paste: Paste): Promise<void> {
-    await navigator.clipboard.writeText(`${location.origin}/pastes/${paste.id}`);
+    await navigator.clipboard.writeText(new URL(paste.url ?? `/pastes/${paste.id}`, location.origin).href);
     showNotice("Link copied.");
   }
 
   async function remove(paste: Paste): Promise<void> {
     if (!confirm("Delete this paste permanently?")) return;
     try {
-      await requestApi(`/pastes/${encodeURIComponent(paste.id)}`, { method: "DELETE" });
+      await requestApi(`/pastes/${encodeURIComponent(paste.id)}`, {
+        method: "DELETE",
+        headers: { "If-Match": paste._etag ?? "*" }
+      });
       if (page) page = { ...page, items: page.items.filter(item => item.id !== paste.id), total_items: page.total_items - 1 };
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Request failed", "error");

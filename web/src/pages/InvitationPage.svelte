@@ -3,6 +3,7 @@
   import { showNotice } from "../notices";
   import { navigate } from "../navigation";
   import { loadSession } from "../session";
+  import { appState } from "../state";
 
   let { token }: { token: string } = $props();
   let submitting = $state(false);
@@ -31,6 +32,6 @@
 <section class="auth"><form onsubmit={(event) => { event.preventDefault(); void submit(event); }}>
   <p class="eyebrow">Invitation</p><h1>Create your account</h1>
   <label><span>Username</span><input name="username" autocomplete="username" required/></label>
-  <label><span>Password</span><input type="password" name="password" minlength="12" autocomplete="new-password" required/></label>
+  <label><span>Password</span><input type="password" name="password" minlength={$appState.config.minimum_password_characters} autocomplete="new-password" required/></label>
   <button class="button primary" type="submit" disabled={submitting}>{submitting ? "Creating…" : "Create account"}</button>
 </form></section>

@@ -42,14 +42,17 @@
   }
 
   async function copyLink(paste: Paste): Promise<void> {
-    await navigator.clipboard.writeText(`${location.origin}/pastes/${paste.id}`);
+    await navigator.clipboard.writeText(new URL(paste.url ?? `/pastes/${paste.id}`, location.origin).href);
     showNotice("Link copied.");
   }
 
   async function remove(paste: Paste): Promise<void> {
     if (!confirm("Delete this paste permanently?")) return;
     try {
-      await requestApi(`/pastes/${encodeURIComponent(paste.id)}`, { method: "DELETE" });
+      await requestApi(`/pastes/${encodeURIComponent(paste.id)}`, {
+        method: "DELETE",
+        headers: { "If-Match": paste._etag ?? "*" }
+      });
       visible = visible.filter(candidate => candidate.id !== paste.id);
       showNotice("Paste deleted.");
     } catch (error) {

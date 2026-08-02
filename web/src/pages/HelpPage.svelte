@@ -1,34 +1,35 @@
 <script lang="ts">
   import Link from "../components/Link.svelte";
   import { showNotice } from "../notices";
+  import { appState } from "../state";
 
-  const origin = location.origin;
+  let apiBase = $derived($appState.config.api_base_url ?? `${location.origin}/api/v1`);
   const command = (...lines: string[]) => lines.join("\n");
-  const examples = [
+  let examples = $derived([
     ["Create a paste", command(
-      `curl -X POST "${origin}/api/v1/pastes" \\`,
+      `curl -X POST "${apiBase}/pastes" \\`,
       `  -H "Authorization: Bearer $RACEBIN_API_KEY" \\`,
       `  -H "Content-Type: application/json" \\`,
       `  -d '{"title":"Example","body":{"format":"text","content":"Hello","language":"plaintext"},"visibility":"unlisted"}'`
     )],
-    ["List your pastes", command(`curl "${origin}/api/v1/pastes?owner=me" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`)],
-    ["Read a paste", command(`curl -X POST "${origin}/api/v1/pastes/PASTE_ID/reads" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`, `  -H "Idempotency-Key: $(uuidgen)"`)],
+    ["List your pastes", command(`curl "${apiBase}/pastes?owner=me" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`)],
+    ["Read a paste", command(`curl -X POST "${apiBase}/pastes/PASTE_ID/reads" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`, `  -H "Idempotency-Key: $(uuidgen)"`)],
     ["Update a paste", command(
-      `curl -X PATCH "${origin}/api/v1/pastes/PASTE_ID" \\`,
+      `curl -X PATCH "${apiBase}/pastes/PASTE_ID" \\`,
       `  -H "Authorization: Bearer $RACEBIN_API_KEY" \\`,
       `  -H "If-Match: *" \\`,
       `  -H "Content-Type: application/json" \\`,
       `  -d '{"title":"Updated title","visibility":"public"}'`
     )],
-    ["Read plain text", command(`curl -X POST "${origin}/api/v1/pastes/PASTE_ID/reads" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`, `  -H "Accept: text/plain"`)],
+    ["Read plain text", command(`curl -X POST "${apiBase}/pastes/PASTE_ID/reads" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY"`, `  -H "Accept: text/plain"`)],
     ["Upload an attachment", command(
-      `curl -X POST "${origin}/api/v1/pastes/PASTE_ID/attachments" \\`,
+      `curl -X POST "${apiBase}/pastes/PASTE_ID/attachments" \\`,
       `  -H "Authorization: Bearer $RACEBIN_API_KEY" \\`,
       `  -H "If-Match: *" \\`,
       `  -F "file=@./example.txt"`
     )],
-    ["Delete a paste", command(`curl -X DELETE "${origin}/api/v1/pastes/PASTE_ID" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY" \\`, `  -H "If-Match: *"`)]
-  ] as const;
+    ["Delete a paste", command(`curl -X DELETE "${apiBase}/pastes/PASTE_ID" \\`, `  -H "Authorization: Bearer $RACEBIN_API_KEY" \\`, `  -H "If-Match: *"`)]
+  ] as const);
 
   async function copy(value: string): Promise<void> {
     await navigator.clipboard.writeText(value);
@@ -39,7 +40,7 @@
 <section class="help-page">
   <div class="page-heading">
     <div><p class="eyebrow">Help</p><h1>Using Racebin</h1></div>
-    <a class="button" href="/api/v1/openapi.json">OpenAPI JSON</a>
+    <a class="button" href={`${apiBase}/openapi.json`}>OpenAPI JSON</a>
   </div>
   <div class="help-layout">
     <aside class="panel help-index sticky-sidebar" aria-label="Help topics">
@@ -65,10 +66,9 @@
       <section class="panel" id="scopes">
         <h2>Key privileges</h2>
         <dl class="scope-list">
-          <div><dt><code>paste:read</code></dt><dd>Read pastes available to your account.</dd></div>
-          <div><dt><code>paste:list</code></dt><dd>List and search pastes.</dd></div>
-          <div><dt><code>paste:write</code></dt><dd>Create and update pastes, and manage folders and attachments.</dd></div>
-          <div><dt><code>paste:delete</code></dt><dd>Delete pastes.</dd></div>
+          {#each $appState.config.scopes as scope}
+            <div><dt><code>{scope.id}</code></dt><dd>{scope.description}</dd></div>
+          {/each}
         </dl>
       </section>
       <section class="panel" id="basics">

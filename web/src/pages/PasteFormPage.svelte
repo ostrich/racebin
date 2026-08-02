@@ -211,6 +211,20 @@
       showNotice("Choose a supported language.", "error");
       return;
     }
+    const submittedContent = contentKind === "rich_text" ? richHtml : content;
+    if (new TextEncoder().encode(submittedContent).length > $appState.config.max_content_size_bytes) {
+      showNotice(`Content exceeds the ${Math.floor($appState.config.max_content_size_bytes / 1024)} KiB server limit.`, "error");
+      return;
+    }
+    const selected = [...(files?.files ?? [])];
+    if (selected.length + (paste?.attachments.length ?? 0) > $appState.config.max_attachments_per_paste) {
+      showNotice(`A paste can have at most ${$appState.config.max_attachments_per_paste} attachments.`, "error");
+      return;
+    }
+    if (selected.reduce((size, file) => size + file.size, 0) > $appState.config.max_attachment_size_bytes) {
+      showNotice("Selected attachments exceed the server upload limit.", "error");
+      return;
+    }
     submitting = true;
     let created: Paste | undefined;
     try {
@@ -226,7 +240,6 @@
         read_limit: readLimit ? Number(readLimit) : null,
         ...(canOrganize ? { folder_id: folderId ? Number(folderId) : null } : {})
       };
-      const selected = [...(files?.files ?? [])];
       if (pasteId) {
         created = await requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}`, {
           method: "PATCH",
@@ -311,7 +324,7 @@
   <section class="editor">
     <div class="page-heading"><div><p class="eyebrow">{paste ? "Edit" : "Create"}</p><h1>{paste ? pasteDisplayTitle(paste) : "New paste"}</h1></div></div>
     <form onsubmit={(event) => { event.preventDefault(); void submit(); }}>
-      <label class="title-field"><span>Title</span><input bind:value={title} maxlength="200" placeholder="Optional title"/></label>
+      <label class="title-field"><span>Title</span><input bind:value={title} maxlength={$appState.config.max_title_characters} placeholder="Optional title"/></label>
       {#if contentKind === "rich_text"}
         <div class="content-field"><span>Content</span>
           <div class="content-editor content-editor-rich" style={`height:${editorHeight}px`}
@@ -326,13 +339,13 @@
         <div class="content-field"><span>Content</span>
           <div class="content-editor content-editor-text" style={`height:${editorHeight}px`}
             use:trackEditorResize>
-            <CodeEditor bind:value={content} bind:language/>
+            <CodeEditor bind:value={content} bind:language maxLength={$appState.config.max_content_size_bytes}/>
           </div>
         </div>
       {/if}
       <div class:without-folder={!canOrganize} class="form-grid">
         <label class="type-field"><span>Type</span><select value={contentKind} disabled={switching} onchange={changeKind}>
-          <option value="text">Text</option><option value="rich_text">Rich text</option>
+          {#each $appState.config.formats as format}<option value={format}>{format === "rich_text" ? "Rich text" : "Text"}</option>{/each}
         </select></label>
         <LanguagePicker bind:value={language} disabled={contentKind !== "text"}/>
         {#if canOrganize}
@@ -342,7 +355,7 @@
           </select></label>
         {/if}
         <label class="visibility-field"><span>Visibility</span><select bind:value={visibility}>
-          <option value="public">public</option><option value="unlisted">unlisted</option><option value="private">private</option>
+          {#each $appState.config.visibility_modes as mode}<option value={mode}>{mode}</option>{/each}
         </select></label>
         <label class="expiration-mode-field"><span>Expiration</span><select value={expirationMode} onchange={changeExpirationMode}>
           <option value="never">Never</option><option value="1h">1 hour</option>
@@ -361,14 +374,14 @@
       </div>
       {#if paste?.attachments.length}
         <div class="existing-attachments"><span>Current attachments</span>
-          <AttachmentList pasteId={paste.id} attachments={paste.attachments} canDelete editing
-            ondelete={(attachment) => { if (paste) paste.attachments = paste.attachments.filter(item => item.id !== attachment.id); }}/>
+          <AttachmentList pasteId={paste.id} attachments={paste.attachments} canDelete editing etag={paste._etag}
+            ondelete={(attachment, etag) => { if (paste) paste = { ...paste, _etag: etag ?? paste._etag, attachments: paste.attachments.filter(item => item.id !== attachment.id) }; }}/>
           <small>Deleting an existing attachment takes effect immediately, even if you cancel editing.</small>
         </div>
       {/if}
       {#if $appState.config.attachments_enabled}
         <label><span>Add attachments</span><input bind:this={files} type="file" multiple onchange={selectedFiles}/>
-          <small>Combined upload limit: {Math.floor($appState.config.max_attachment_size_bytes / 1024 / 1024)} MiB</small></label>
+          <small>Up to {$appState.config.max_attachments_per_paste} files; combined upload limit: {Math.floor($appState.config.max_attachment_size_bytes / 1024 / 1024)} MiB</small></label>
       {/if}
       <div class="actions">
         <button class="button primary" type="submit" disabled={submitting || switching}>{submitting ? "Saving…" : paste ? "Save changes" : "Create paste"}</button>

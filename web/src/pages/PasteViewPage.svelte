@@ -18,8 +18,7 @@
   let horizontalOverflow = $state(false);
   const initialLoadReady = holdNavigation();
   let own = $derived(Boolean(
-    paste && $appState.session.user &&
-    ($appState.session.user.id === paste.owner_id || $appState.session.user.role === "admin")
+    paste?.source_url
   ));
   let showWrapOption = $derived(Boolean(
     paste?.content_kind === "text" && (horizontalOverflow || wrapLines)
@@ -63,7 +62,7 @@
           <button class="button" type="button" onclick={openRaw}>Raw</button>
           <button class="button" type="button" onclick={copyContent}><Icon name="copy"/> Copy</button>
           {#if paste.archive_url}<a class="button" href={paste.archive_url}>ZIP</a>{/if}
-          {#if $appState.config.qr_codes_enabled}<a class="button" href={`/api/v1/pastes/${encodeURIComponent(paste.id)}/qr`}>QR</a>{/if}
+          {#if $appState.config.qr_codes_enabled}<a class="button" href={`${$appState.config.api_base_url ?? "/api/v1"}/pastes/${encodeURIComponent(paste.id)}/qr`}>QR</a>{/if}
           {#if own}<Link class="button primary" href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/> Edit</Link>{/if}
         </div>
       </div>
@@ -87,8 +86,8 @@
       {/if}
       {#if paste.attachments.length}
         <section><h2>Attachments</h2>
-          <AttachmentList pasteId={paste.id} attachments={paste.attachments} canDelete={own}
-            ondelete={(attachment) => { if (paste) paste.attachments = paste.attachments.filter(item => item.id !== attachment.id); }}/>
+          <AttachmentList pasteId={paste.id} attachments={paste.attachments} canDelete={own} etag={paste._etag}
+            ondelete={(attachment, etag) => { if (paste) paste = { ...paste, _etag: etag ?? paste._etag, attachments: paste.attachments.filter(item => item.id !== attachment.id) }; }}/>
         </section>
       {/if}
       <footer class="paste-stats">

@@ -6,9 +6,12 @@
   import { formatDate } from "../format";
   import { showNotice } from "../notices";
   import { holdNavigation } from "../navigation";
+  import { appState } from "../state";
   import type { ApiKey } from "../types";
 
-  const scopes = ["paste:read", "paste:write", "paste:delete", "paste:list"];
+  let scopes = $derived($appState.config.scopes.filter(scope =>
+    $appState.session.user?.role === "admin" || !scope.id.endsWith(":manage")
+  ));
   let keys = $state<ApiKey[]>([]);
   let loading = $state(true);
   let submitting = $state(false);
@@ -109,7 +112,7 @@
       <label><span>Name</span><input name="name" required maxlength="100"/></label>
       <fieldset><legend>Scopes</legend><div class="scope-options">
         {#each scopes as scope}
-          <label class="check"><input type="checkbox" name="scopes" value={scope}/><span>{scope}</span></label>
+          <label class="check" title={scope.description}><input type="checkbox" name="scopes" value={scope.id}/><span>{scope.id}</span></label>
         {/each}
       </div></fieldset>
       <button class="button primary" type="submit" disabled={submitting}><Icon name="key-round"/> {submitting ? "Creating…" : "Create key"}</button>

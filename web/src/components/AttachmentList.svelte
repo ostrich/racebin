@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { requestApi } from "../api";
+  import { requestApiResult } from "../api";
   import { showNotice } from "../notices";
   import type { Attachment } from "../types";
   import Icon from "./Icon.svelte";
@@ -9,13 +9,15 @@
     attachments,
     canDelete = false,
     editing = false,
+    etag,
     ondelete
   }: {
     pasteId: string;
     attachments: Attachment[];
     canDelete?: boolean;
     editing?: boolean;
-    ondelete?: (attachment: Attachment) => void;
+    etag?: string;
+    ondelete?: (attachment: Attachment, etag: string | null) => void;
   } = $props();
 
   async function remove(attachment: Attachment): Promise<void> {
@@ -24,11 +26,11 @@
       : "";
     if (!confirm(`Delete this attachment permanently?${suffix}`)) return;
     try {
-      await requestApi(`/pastes/${encodeURIComponent(pasteId)}/attachments/${attachment.id}`, {
+      const result = await requestApiResult<void>(`/pastes/${encodeURIComponent(pasteId)}/attachments/${attachment.id}`, {
         method: "DELETE",
-        headers: { "If-Match": "*" }
+        headers: { "If-Match": etag ?? "*" }
       });
-      ondelete?.(attachment);
+      ondelete?.(attachment, result.etag);
       showNotice("Attachment deleted.");
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Request failed", "error");
@@ -39,7 +41,7 @@
 <div class="attachments">
   {#each attachments as attachment (attachment.id)}
     <div class="attachment-row">
-      <a href={attachment.url ?? `/api/v1/pastes/${encodeURIComponent(pasteId)}/attachments/${attachment.id}`}>
+      <a href={attachment.url}>
         <Icon name="file-text"/>
         <span>{attachment.filename}</span>
         <small>{attachment.size_bytes.toLocaleString()} bytes</small>

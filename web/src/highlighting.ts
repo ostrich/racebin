@@ -180,6 +180,23 @@ export const languageOptions: readonly LanguageOption[] = [
   { id: "yaml", label: "YAML", aliases: ["yml"] }
 ];
 
+export function availableLanguageOptions(
+  discovered: readonly LanguageOption[]
+): readonly LanguageOption[] {
+  if (!discovered.length) return languageOptions;
+  const byId = new Map(languageOptions.map(language => [language.id, language]));
+  for (const language of discovered) {
+    byId.set(language.id, { ...byId.get(language.id), ...language });
+  }
+  return [...byId.values()].sort((left, right) => {
+    if (left.id === "plaintext") return -1;
+    if (right.id === "plaintext") return 1;
+    if (left.id === "auto") return -1;
+    if (right.id === "auto") return 1;
+    return left.label.localeCompare(right.label);
+  });
+}
+
 const aliases = new Map<string, string>();
 for (const language of languageOptions) {
   aliases.set(language.id, language.id);
