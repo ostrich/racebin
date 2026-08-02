@@ -311,7 +311,8 @@ test("failed edit attachment upload preserves the saved revision and retry state
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ ...paste, title: "Saved title", _etag: "\"paste-sample-paste-2\"" })
+        headers: { ETag: '"paste-sample-paste-2"' },
+        body: JSON.stringify({ ...paste, title: "Saved title" })
       });
     }
     if (pathname.endsWith("/attachments") && request.method() === "POST") {
