@@ -92,3 +92,29 @@ test("standard form controls use the shared control height", async ({
     );
   expect(new Set(heights)).toEqual(new Set([40]));
 });
+
+test("paste editor uses the page width without stretching metadata controls", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/pastes/new");
+
+  const geometry = await page.locator("main, .editor, .form-grid > *").evaluateAll((elements, mainSelector) =>
+    elements.map(element => {
+      const box = element.getBoundingClientRect();
+      const style = element.matches(mainSelector) ? getComputedStyle(element) : null;
+      return {
+        left: box.left,
+        right: box.right,
+        width: box.width,
+        paddingLeft: style ? Number.parseFloat(style.paddingLeft) : 0,
+        paddingRight: style ? Number.parseFloat(style.paddingRight) : 0
+      };
+    }), "main"
+  );
+  const [main, editor, ...controls] = geometry;
+
+  expect(editor.left).toBe(main.left + main.paddingLeft);
+  expect(editor.right).toBe(main.right - main.paddingRight);
+  expect(controls.slice(0, 4).map(control => control.width)).toEqual([200, 230, 260, 170]);
+  expect(controls[4]?.left).toBe(controls[0]?.left);
+  expect(controls[5]?.left).toBe(controls[1]?.left);
+});
