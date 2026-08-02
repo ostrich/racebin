@@ -207,6 +207,9 @@ test("ordered rich-text lists can be submitted", async ({ page }) => {
   expect(body.body).toMatchObject({ format: "rich_text" });
   expect(body.body.content).toContain("<ol>");
   expect(body.body.content).toContain("<li><p>First item</p></li>");
+  expect(body).not.toHaveProperty("expires_at");
+  expect(body).not.toHaveProperty("read_limit");
+  expect(body).not.toHaveProperty("folder_id");
 });
 
 test("pasted links are normalized to the supported document contract", async ({ page }) => {

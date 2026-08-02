@@ -234,11 +234,15 @@
           ? { format: "rich_text", content: richHtml }
           : { format: "text", content, language: canonicalLanguage },
         visibility,
-        expires_at: expirationMode !== "never" && expiresAt
-          ? new Date(expiresAt).toISOString()
-          : null,
-        read_limit: readLimit ? Number(readLimit) : null,
-        ...(canOrganize ? { folder_id: folderId ? Number(folderId) : null } : {})
+        ...(pasteId || (expirationMode !== "never" && expiresAt)
+          ? { expires_at: expirationMode !== "never" && expiresAt ? new Date(expiresAt).toISOString() : null }
+          : {}),
+        ...(pasteId || readLimit
+          ? { read_limit: readLimit ? Number(readLimit) : null }
+          : {}),
+        ...(canOrganize && (pasteId || folderId)
+          ? { folder_id: folderId ? Number(folderId) : null }
+          : {})
       };
       if (pasteId) {
         created = await requestApi<Paste>(`/pastes/${encodeURIComponent(pasteId)}`, {
