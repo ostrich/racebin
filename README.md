@@ -30,7 +30,11 @@ create stays manageable from your account.
 
 ## Quick start
 
+Clone the repository and start a local instance:
+
 ```bash
+git clone https://github.com/ostrich/racebin.git
+cd racebin
 cargo run --release -- \
   --data-dir ./racebin_data \
   --bind 127.0.0.1 \
@@ -38,80 +42,38 @@ cargo run --release -- \
   --insecure-cookie
 ```
 
-Create the first administrator:
+Open [http://127.0.0.1:7042](http://127.0.0.1:7042) to explore Racebin. The
+repository includes a prebuilt browser application, so the initial local run
+requires only Rust. Node.js is required when modifying the frontend.
+
+To create an administrator, stop Racebin and run:
 
 ```bash
-racebin account create admin --admin --data-dir ./racebin_data
+cargo run --release -- account create admin --admin \
+  --data-dir ./racebin_data
 ```
 
-The account command prompts for a password. Passwords must contain at least 12
-characters.
+The account command prompts for a password of at least 12 characters. Start
+Racebin again with the first command and sign in. This direct HTTP setup is for
+local evaluation only.
 
-To use PostgreSQL, set a database URL while keeping `data-dir` for uploaded
-attachments:
+For source builds, systemd installation, complete configuration, PostgreSQL,
+Nginx and Caddy reverse proxies, TLS, upgrades, and troubleshooting, see the
+**[production setup guide](docs/setup.md)**.
 
-```bash
-RACEBIN_DATABASE_URL='postgresql://racebin:password@localhost/racebin' \
-RACEBIN_DATA_DIR=/var/lib/racebin \
-racebin
-```
-
-## Configuration
-
-All settings have equivalent `RACEBIN_*` environment variables.
-
-| Option | Default |
-| --- | --- |
-| `--bind` | `0.0.0.0` |
-| `--port` | `7042` |
-| `--threads` | `2` |
-| `--data-dir` | `racebin_data` |
-| `--database-url` | `sqlite://<data-dir>/database.sqlite` |
-| `--trusted-proxies` | unset; comma-separated proxy IPs allowed to supply the client address |
-| `--site-name` | `Racebin` |
-| `--plain-home` | disabled; show a login-only anonymous homepage when enabled |
-| `--attachments` | `true` |
-| `--max-attachment-size-mb` | `2048` |
-| `--qr-codes` | disabled |
-| `--public-url` | unset; required for QR output and absolute externally shared URLs |
-| `--insecure-cookie` | disabled; use only for local HTTP |
-
-See the [architecture overview](docs/architecture.md),
-[database guide](docs/database.md), [account guide](docs/accounts.md),
-[API guide](docs/api.md), and [testing guide](docs/testing.md). The running
-server also exposes generated OpenAPI documentation at `/api/v1/openapi.json`.
-Signed-in users can open Help in the site navigation for API-key setup,
-privilege descriptions, and commands tailored to the current installation.
-
-When running without the packaged systemd unit, create the data directory with
-mode `0700` and run Racebin with a `0077` umask. The included unit applies both
-settings automatically. TLS deployments should add HSTS at the HTTPS reverse
-proxy after confirming the site is available exclusively over HTTPS.
+Additional references cover the [architecture](docs/architecture.md),
+[databases](docs/database.md), [accounts](docs/accounts.md),
+[HTTP API](docs/api.md), and [testing](docs/testing.md). The running server also
+exposes generated OpenAPI documentation at `/api/v1/openapi.json`. Signed-in
+users can open Help for API-key setup and installation-specific examples.
 
 ## Databases
 
-Startup selects the database from `--database-url` or
-`RACEBIN_DATABASE_URL` and runs the migrations for that backend. SQLite URLs
-and both `postgres://` and `postgresql://` URLs are supported. The data
-directory continues to hold uploaded attachments when PostgreSQL is used, so
-database backups alone are not sufficient for installations with attachments.
-
-To move an existing SQLite installation to an empty PostgreSQL database, stop
-Racebin and run:
-
-```bash
-racebin database copy \
-  --from 'sqlite:///var/lib/racebin/database.sqlite' \
-  --to 'postgresql://racebin:password@localhost/racebin' \
-  --data-dir /var/lib/racebin
-```
-
-The command migrates the destination schema, verifies that it contains no
-application data, copies all records while preserving IDs and credentials,
-checks attachment references and row counts, resets PostgreSQL identity
-sequences, and commits the destination transaction only after verification.
-Racebin must remain stopped for the duration of the copy. See
-[docs/database.md](docs/database.md) for setup, backup, and migration details.
+SQLite is the default; PostgreSQL is optional. Startup selects the configured
+backend and applies its migrations. Uploaded attachments remain in the data
+directory with either backend, so database-only backups are incomplete. See
+the [database guide](docs/database.md) for setup, backup, restore, and the
+transactional SQLite-to-PostgreSQL copy command.
 
 ## Development
 

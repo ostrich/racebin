@@ -403,19 +403,9 @@ Racebin system service
         +-- local attachment data directory
 ```
 
-The reverse proxy terminates TLS and forwards requests to Racebin. It should
-set HTTP Strict Transport Security after HTTPS is established. Secure cookies
-are the default; `--insecure-cookie` exists only for local HTTP development.
-Set `--public-url` to the canonical external origin when Racebin generates
-links for other users. Without it, link fields are relative, so an untrusted
-request `Host` header can never become part of a generated URL.
-
-Racebin uses the direct peer address for authentication limits. Forwarded
-client addresses are accepted only when the immediate proxy IP is listed in
-`--trusted-proxies`/`RACEBIN_TRUSTED_PROXIES`; do not configure an address that
-untrusted clients can connect through while choosing arbitrary forwarding
-headers. Login failures are bounded independently by normalized account and
-client address, and invitation redemption is bounded by client address.
+The reverse proxy terminates TLS and forwards requests without rewriting paths.
+Racebin remains a single service even when it uses PostgreSQL; attachments
+continue to live in the configured data directory.
 
 The repository includes a systemd unit and example environment file under
 `packaging/`, plus an Arch `PKGBUILD`. They are packaging examples rather
@@ -425,6 +415,10 @@ Running multiple Racebin replicas would require shared attachment storage and
 careful review of operations that currently rely on a process-local write
 lock. The supported simple deployment is one Racebin process with multiple
 Actix workers.
+
+See the [setup guide](setup.md) for build and installation instructions,
+configuration, systemd, Nginx and Caddy examples, trusted-proxy behavior, TLS,
+upgrades, and troubleshooting.
 
 ## Testing strategy
 
