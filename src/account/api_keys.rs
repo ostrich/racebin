@@ -46,9 +46,10 @@ pub fn normalize_scopes(scopes: &[String]) -> Result<Vec<String>, &'static str> 
         if !VALID_SCOPES.contains(&scope) {
             return Err("Unknown API key scope");
         }
-        if !normalized.iter().any(|candidate| candidate == scope) {
-            normalized.push(scope.to_string());
+        if normalized.iter().any(|candidate| candidate == scope) {
+            return Err("API key scopes must be unique");
         }
+        normalized.push(scope.to_string());
     }
     if normalized.is_empty() {
         return Err("Select at least one API key scope");
@@ -277,8 +278,9 @@ mod tests {
             "paste:read".to_string(),
             "paste:write".to_string(),
         ];
+        assert!(normalize_scopes(&scopes).is_err());
         assert_eq!(
-            normalize_scopes(&scopes).unwrap(),
+            normalize_scopes(&["paste:write".to_string(), "paste:read".to_string()]).unwrap(),
             vec!["paste:read", "paste:write"]
         );
         assert!(normalize_scopes(&["unknown".to_string()]).is_err());

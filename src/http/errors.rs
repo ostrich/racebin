@@ -11,8 +11,6 @@ pub(crate) struct ProblemDetails {
     pub title: String,
     pub status: u16,
     pub detail: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub errors: Option<serde_json::Value>,
 }
 
 pub(super) fn error(
@@ -32,7 +30,6 @@ pub(super) fn error(
             title,
             status: status.as_u16(),
             detail: message.to_string(),
-            errors: None,
         })
 }
 

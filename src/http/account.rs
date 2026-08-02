@@ -25,28 +25,28 @@ pub(crate) async fn get_session(
     services: web::Data<PasteService>,
 ) -> HttpResponse {
     match principal(&services, &req).await {
-        Ok(Principal::Session(session)) => HttpResponse::Ok().json(contract::SessionResponse {
-            authenticated: true,
-            user: Some(session.user.into()),
-            api_key: None,
-            csrf_token: Some(session.csrf_token),
-        }),
-        Ok(Principal::ApiKey(key)) => HttpResponse::Ok().json(contract::SessionResponse {
-            authenticated: true,
-            user: None,
-            api_key: Some(contract::ApiKeyIdentity {
-                id: key.id,
-                name: key.name,
-                scopes: key.scopes,
+        Ok(Principal::Session(session)) => HttpResponse::Ok().json(
+            contract::SessionResponse::Browser(contract::BrowserSessionResponse {
+                authenticated: true,
+                user: session.user.into(),
+                csrf_token: session.csrf_token,
             }),
-            csrf_token: None,
-        }),
-        Ok(Principal::Anonymous) => HttpResponse::Ok().json(contract::SessionResponse {
-            authenticated: false,
-            user: None,
-            api_key: None,
-            csrf_token: None,
-        }),
+        ),
+        Ok(Principal::ApiKey(key)) => HttpResponse::Ok().json(contract::SessionResponse::Bearer(
+            contract::BearerSessionResponse {
+                authenticated: true,
+                api_key: contract::ApiKeyIdentity {
+                    id: key.id,
+                    name: key.name,
+                    scopes: key.scopes,
+                },
+            },
+        )),
+        Ok(Principal::Anonymous) => HttpResponse::Ok().json(contract::SessionResponse::Anonymous(
+            contract::AnonymousSessionResponse {
+                authenticated: false,
+            },
+        )),
         Err(response) => response,
     }
 }

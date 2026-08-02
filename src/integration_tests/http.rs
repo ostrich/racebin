@@ -182,6 +182,15 @@ mod tests {
             b"downloadable"
         );
 
+        let invalid_page_size = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/v1/pastes?page_size=0")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(invalid_page_size.status(), StatusCode::BAD_REQUEST);
+
         for (id, expected) in [
             (&public.id, StatusCode::OK),
             (&unlisted.id, StatusCode::OK),
@@ -328,6 +337,18 @@ mod tests {
         )
         .await;
         assert_eq!(expired.status(), StatusCode::BAD_REQUEST);
+        let empty_update = test::call_service(
+            &app,
+            test::TestRequest::patch()
+                .uri(&format!("/api/v1/pastes/{}", owner.id))
+                .cookie(cookie.clone())
+                .insert_header(("X-CSRF-Token", csrf.as_str()))
+                .insert_header(("If-Match", "*"))
+                .set_json(json!({}))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(empty_update.status(), StatusCode::UNPROCESSABLE_ENTITY);
         let paste_count_after: i64 = sqlx::query_scalar("SELECT count(*) FROM pastes")
             .fetch_one(repository.pool())
             .await

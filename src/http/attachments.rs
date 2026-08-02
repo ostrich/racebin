@@ -66,7 +66,7 @@ struct ReadGrantQuery {
 #[derive(utoipa::ToSchema)]
 #[allow(dead_code)]
 struct AttachmentUploadRequest {
-    #[schema(content_media_type = "application/octet-stream")]
+    #[schema(value_type = Vec<Value>, min_items = 1)]
     file: Vec<String>,
 }
 
@@ -272,7 +272,7 @@ pub(crate) async fn upload_attachments(
     params(("paste_id" = String, Path, description = "Paste ID"),
         ("attachment_id" = i64, Path, description = "Attachment ID"), ReadGrantQuery),
     responses(
-        (status = 200, description = "Attachment bytes", body = Vec<u8>, content_type = "application/octet-stream",
+        (status = 200, description = "Attachment bytes", content_type = "application/octet-stream",
             headers(("Content-Disposition" = String, description = "Attachment filename"))),
         (status = 404, description = "Attachment not found, not visible, or grant invalid", body = crate::http::errors::ProblemDetails),
         (status = 500, description = "Attachment data unavailable", body = crate::http::errors::ProblemDetails)
@@ -391,7 +391,7 @@ pub(crate) async fn delete_attachment(
     get, path = "/pastes/{paste_id}/archive", tag = "attachments",
     params(("paste_id" = String, Path, description = "Paste ID"), ReadGrantQuery),
     responses(
-        (status = 200, description = "ZIP containing paste text and attachments", body = Vec<u8>, content_type = "application/zip",
+        (status = 200, description = "ZIP containing paste text and attachments", content_type = "application/zip",
             headers(("Content-Disposition" = String, description = "Archive filename"))),
         (status = 404, description = "Paste not found, not visible, or grant invalid", body = crate::http::errors::ProblemDetails),
         (status = 413, description = "Archive input exceeds 64 MiB", body = crate::http::errors::ProblemDetails),
@@ -489,7 +489,7 @@ async fn paste_for_download(
     get, path = "/pastes/{paste_id}/qr", tag = "attachments",
     params(("paste_id" = String, Path, description = "Paste ID")),
     responses(
-        (status = 200, description = "PNG QR code for the public paste URL", body = Vec<u8>, content_type = "image/png"),
+        (status = 200, description = "PNG QR code for the public paste URL", content_type = "image/png"),
         (status = 404, description = "Paste not found, not visible, or QR disabled", body = crate::http::errors::ProblemDetails),
         (status = 500, description = "QR generation failed", body = crate::http::errors::ProblemDetails)
     ),

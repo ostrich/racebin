@@ -24,11 +24,13 @@ automation clients should prefer bearer keys rather than emulating browser
 cookies.
 
 API keys have explicit scopes. The complete, machine-readable scope requirement
-for each operation is exposed as `x-racebin-scopes` in OpenAPI. Discovery also
-returns the supported scope catalog. The user-facing scopes are `paste:read`,
-`paste:write`, `paste:delete`, `paste:list`, and `api_key:manage`; administrative
-keys can additionally use `paste:manage`, `user:manage`, and
-`invitation:manage`.
+for an ordinary owner API key is exposed as `x-racebin-scopes` in OpenAPI.
+Ownership requirements and administrative alternatives are separate from that
+list; operations with nontrivial alternatives expose
+`x-racebin-authorization`. Discovery also returns the supported scope catalog.
+The user-facing scopes are `paste:read`, `paste:write`, `paste:delete`,
+`paste:list`, and `api_key:manage`; administrative keys can additionally use
+`paste:manage`, `user:manage`, and `invitation:manage`.
 
 Errors use `application/problem+json` with `type`, `title`, `status`, and
 `detail` fields.
@@ -188,6 +190,25 @@ mutation.
 - `created_after`, `created_before`, `expiration`, and `read_limit`
 - `min_reads`, `max_reads`, `min_size_bytes`, and `max_size_bytes`
 - `sort` and `direction`
+
+Pages are one-based. `page` defaults to `1`; `page_size` defaults to `30` and
+must be between `1` and `100`. Results default to `sort=created&direction=desc`.
+Valid sort fields are `created`, `title`, `reads`, `expires`, and `size`, and
+direction is `asc` or `desc`.
+
+`q` performs a case-insensitive search over paste ID, title, content, language,
+and attachment filename; administrative listings also search owner usernames.
+`owner` currently accepts `me`. Folder filters require `owner=me`, and
+`folder_id` cannot be combined with `unfiled=true`. Creation-time and numeric
+range endpoints are inclusive. `expiration` accepts `never` or `scheduled`, and
+`read_limit` accepts `unlimited` or `limited`. Minimum values cannot exceed
+their corresponding maximum values.
+
+Metadata reads return `PasteMetadataResource`, which deliberately has no body.
+Creating, updating, consuming, or retrieving source content returns
+`PasteResource`, where `body` is required. This distinction lets generated
+clients represent an intentionally omitted body without treating it as an
+arbitrary missing field.
 
 Folder endpoints are `GET/POST /folders` and `PATCH/DELETE /folders/{id}`. Move
 owned pastes as a collection operation:

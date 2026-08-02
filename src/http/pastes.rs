@@ -22,33 +22,138 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
 pub(super) struct ApiPasteQuery {
+    /// One-based result page. Defaults to 1.
+    #[param(minimum = 1, default = 1)]
     page: Option<u32>,
+    /// Results per page. Defaults to 30; the maximum is 100.
+    #[param(minimum = 1, maximum = 100, default = 30)]
     page_size: Option<u32>,
+    /// Case-insensitive search across paste ID, title, content, language, and attachment filename. Administrative listings also search owner usernames.
     q: Option<String>,
+    /// Visibility identifier advertised by `/capabilities`.
     visibility: Option<String>,
-    owner: Option<String>,
+    /// Restrict results to resources owned by the authenticated user.
+    owner: Option<OwnerFilter>,
+    /// Positive folder ID. Requires `owner=me` and cannot be combined with `unfiled=true`.
+    #[param(minimum = 1)]
     folder_id: Option<i64>,
+    /// Restrict results to pastes without a folder. Requires `owner=me` when true and cannot be combined with `folder_id`.
     unfiled: Option<bool>,
+    /// Content format identifier advertised by `/capabilities`.
     format: Option<String>,
+    /// Syntax identifier advertised by `/languages`.
     language: Option<String>,
+    /// Restrict results according to whether at least one attachment exists.
     has_attachments: Option<bool>,
+    /// Inclusive lower bound on creation time, expressed as RFC 3339.
+    #[param(format = DateTime)]
     created_after: Option<String>,
+    /// Inclusive upper bound on creation time, expressed as RFC 3339.
+    #[param(format = DateTime)]
     created_before: Option<String>,
-    expiration: Option<String>,
+    /// Restrict results by whether expiration is scheduled.
+    expiration: Option<ExpirationFilter>,
+    /// Inclusive minimum read count.
+    #[param(minimum = 0)]
     min_reads: Option<i64>,
+    /// Inclusive maximum read count.
+    #[param(minimum = 0)]
     max_reads: Option<i64>,
+    /// Inclusive minimum total size in bytes, including attachments.
+    #[param(minimum = 0)]
     min_size_bytes: Option<i64>,
+    /// Inclusive maximum total size in bytes, including attachments.
+    #[param(minimum = 0)]
     max_size_bytes: Option<i64>,
-    read_limit: Option<String>,
-    sort: Option<String>,
-    direction: Option<String>,
+    /// Restrict results according to whether a read limit is configured.
+    read_limit: Option<ReadLimitFilter>,
+    /// Field used to order results. Defaults to `created`.
+    #[param(default = "created")]
+    sort: Option<PasteSort>,
+    /// Sort direction. Defaults to `desc`.
+    #[param(default = "desc")]
+    direction: Option<SortDirection>,
 }
+
+#[derive(Clone, Deserialize, PartialEq, utoipa::ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum OwnerFilter {
+    Me,
+}
+
+#[derive(Clone, Deserialize, PartialEq, utoipa::ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ExpirationFilter {
+    Never,
+    Scheduled,
+}
+
+#[derive(Clone, Deserialize, PartialEq, utoipa::ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ReadLimitFilter {
+    Unlimited,
+    Limited,
+}
+
+#[derive(Clone, Deserialize, PartialEq, utoipa::ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum PasteSort {
+    Created,
+    Title,
+    Reads,
+    Expires,
+    Size,
+}
+
+#[derive(Clone, Deserialize, PartialEq, utoipa::ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum SortDirection {
+    Asc,
+    Desc,
+}
+
+macro_rules! filter_as_str {
+    ($type:ty, {$($variant:path => $value:literal),+ $(,)?}) => {
+        impl $type {
+            fn as_str(&self) -> &'static str {
+                match self { $($variant => $value),+ }
+            }
+        }
+    };
+}
+
+filter_as_str!(ExpirationFilter, {
+    ExpirationFilter::Never => "never",
+    ExpirationFilter::Scheduled => "scheduled",
+});
+filter_as_str!(ReadLimitFilter, {
+    ReadLimitFilter::Unlimited => "unlimited",
+    ReadLimitFilter::Limited => "limited",
+});
+filter_as_str!(PasteSort, {
+    PasteSort::Created => "created",
+    PasteSort::Title => "title",
+    PasteSort::Reads => "reads",
+    PasteSort::Expires => "expires",
+    PasteSort::Size => "size",
+});
+filter_as_str!(SortDirection, {
+    SortDirection::Asc => "asc",
+    SortDirection::Desc => "desc",
+});
 
 impl ApiPasteQuery {
     pub(super) fn into_internal(self) -> Result<PasteQuery, String> {
-        if self.owner.as_deref().is_some_and(|owner| owner != "me") {
-            return Err("owner must be me when supplied".into());
+        if self.page == Some(0) {
+            return Err("page must be at least 1".into());
         }
+        if self
+            .page_size
+            .is_some_and(|value| !(1..=100).contains(&value))
+        {
+            return Err("page_size must be between 1 and 100".into());
+        }
+        let mine = self.owner.is_some();
         Ok(PasteQuery {
             page: self.page,
             page_size: self.page_size,
@@ -57,7 +162,7 @@ impl ApiPasteQuery {
             owner_id: None,
             folder_id: self.folder_id,
             unfiled: self.unfiled,
-            mine: Some(self.owner.as_deref() == Some("me")),
+            mine: Some(mine),
             content_kind: self.format,
             language: self.language,
             has_attachments: self.has_attachments,
@@ -69,14 +174,14 @@ impl ApiPasteQuery {
                 .created_before
                 .map(|value| dto::parse_timestamp(&value))
                 .transpose()?,
-            expiration: self.expiration,
+            expiration: self.expiration.map(|value| value.as_str().into()),
             min_reads: self.min_reads,
             max_reads: self.max_reads,
             min_size_bytes: self.min_size_bytes,
             max_size_bytes: self.max_size_bytes,
-            read_limit: self.read_limit,
-            sort: self.sort,
-            direction: self.direction,
+            read_limit: self.read_limit.map(|value| value.as_str().into()),
+            sort: self.sort.map(|value| value.as_str().into()),
+            direction: self.direction.map(|value| value.as_str().into()),
         })
     }
 }
@@ -85,15 +190,21 @@ impl ApiPasteQuery {
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
 pub(super) struct FlatCreateRequest {
+    #[schema(max_length = 200)]
     pub(super) title: Option<String>,
     pub(super) format: Option<String>,
     pub(super) content: Option<String>,
     pub(super) language: Option<String>,
     pub(super) visibility: Option<String>,
+    #[schema(minimum = 1)]
     pub(super) folder_id: Option<i64>,
+    /// Absolute RFC 3339 expiration time. Cannot be combined with `expires_in`.
     #[schema(format = DateTime)]
     pub(super) expires_at: Option<String>,
+    /// Positive lifetime in seconds from creation. Cannot be combined with `expires_at`.
+    #[schema(minimum = 1)]
     pub(super) expires_in: Option<i64>,
+    #[schema(minimum = 1)]
     pub(super) read_limit: Option<i64>,
 }
 
@@ -101,17 +212,23 @@ pub(super) struct FlatCreateRequest {
 #[derive(utoipa::ToSchema)]
 #[allow(dead_code)]
 struct MultipartCreateRequest {
+    #[schema(max_length = 200)]
     title: Option<String>,
     format: Option<String>,
     content: Option<String>,
     language: Option<String>,
     visibility: Option<String>,
+    #[schema(minimum = 1)]
     folder_id: Option<i64>,
+    /// Absolute RFC 3339 expiration time. Cannot be combined with `expires_in`.
     #[schema(format = DateTime)]
     expires_at: Option<String>,
+    /// Positive lifetime in seconds from creation. Cannot be combined with `expires_at`.
+    #[schema(minimum = 1)]
     expires_in: Option<i64>,
+    #[schema(minimum = 1)]
     read_limit: Option<i64>,
-    #[schema(content_media_type = "application/octet-stream")]
+    #[schema(value_type = Vec<Value>, min_items = 1)]
     file: Vec<String>,
 }
 
@@ -235,6 +352,7 @@ pub(crate) async fn list_pastes(
     post,
     path = "/pastes",
     tag = "pastes",
+    description = "Creates a paste. Query creation fields are accepted only for text/plain, text/markdown, and text/html request bodies. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. expires_at and expires_in are mutually exclusive.",
     params(
         FlatCreateRequest,
         ("Idempotency-Key" = Option<String>, Header, description = "Recommended unique key for safely retrying creation"),
@@ -261,7 +379,7 @@ pub(crate) async fn list_pastes(
             headers(
                 ("Location" = String, description = "Absolute URL of the created paste"),
                 ("ETag" = String, description = "Current paste entity tag"),
-                ("Idempotency-Replayed" = String, description = "true when this is a replay of an earlier idempotent creation")
+                ("Idempotency-Replayed" = bool, description = "true when this is a replay of an earlier idempotent creation")
             )),
         (status = 400, description = "Malformed request or idempotency key", body = crate::http::errors::ProblemDetails),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
@@ -371,17 +489,17 @@ pub(crate) async fn create_paste(
         }
     }
     let tag = dto::etag(&paste);
-    let resource = dto::resource(&req, &principal, paste, true, None);
+    let resource = dto::resource(&req, &principal, paste, None);
     let mut response = if accepts(&req, "text/plain") {
         HttpResponse::Created()
             .content_type("text/plain; charset=utf-8")
-            .body(resource.url.clone())
+            .body(resource.metadata.url.clone())
     } else {
         HttpResponse::Created().json(resource.clone())
     };
     response.headers_mut().insert(
         header::LOCATION,
-        header::HeaderValue::from_str(&resource.url).unwrap(),
+        header::HeaderValue::from_str(&resource.metadata.url).unwrap(),
     );
     response
         .headers_mut()
@@ -399,7 +517,7 @@ pub(crate) async fn create_paste(
     get, path = "/pastes/{paste_id}", tag = "pastes",
     params(("paste_id" = String, Path, description = "Paste ID")),
     responses(
-        (status = 200, description = "Paste metadata without consuming a read", body = crate::http::dto::PasteResource,
+        (status = 200, description = "Paste metadata without consuming a read", body = crate::http::dto::PasteMetadataResource,
             headers(("ETag" = String, description = "Current paste entity tag"))),
         (status = 404, description = "Paste not found or not visible", body = crate::http::errors::ProblemDetails),
         (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
@@ -475,7 +593,7 @@ pub(crate) async fn get_paste_source(
             headers(
                 ("ETag" = String, description = "Current paste entity tag"),
                 ("Read-Token" = String, description = "Short-lived attachment-download grant issued when a limited read consumes the paste's final permitted read"),
-                ("Idempotency-Replayed" = String, description = "true when this is a replay of an earlier idempotent read")
+                ("Idempotency-Replayed" = bool, description = "true when this is a replay of an earlier idempotent read")
             )),
         (status = 400, description = "Invalid idempotency key", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "API key lacks paste:read", body = crate::http::errors::ProblemDetails),
@@ -529,7 +647,7 @@ pub(crate) async fn read_paste(
     responses(
         (status = 200, description = "Paste updated", body = crate::http::dto::PasteResource,
             headers(("ETag" = String, description = "New paste entity tag"))),
-        (status = 400, description = "Invalid update", body = crate::http::errors::ProblemDetails),
+        (status = 422, description = "Invalid update", body = crate::http::errors::ProblemDetails),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "Not permitted to update this paste", body = crate::http::errors::ProblemDetails),
         (status = 404, description = "Paste not found", body = crate::http::errors::ProblemDetails),
@@ -711,9 +829,15 @@ fn resource_response(
     grant: Option<&str>,
 ) -> HttpResponse {
     let tag = dto::etag(&paste);
-    HttpResponse::Ok()
-        .insert_header((header::ETAG, tag))
-        .json(dto::resource(req, principal, paste, include_body, grant))
+    if include_body {
+        HttpResponse::Ok()
+            .insert_header((header::ETAG, tag))
+            .json(dto::resource(req, principal, paste, grant))
+    } else {
+        HttpResponse::Ok()
+            .insert_header((header::ETAG, tag))
+            .json(dto::metadata_resource(req, principal, paste, grant))
+    }
 }
 
 fn content_response(

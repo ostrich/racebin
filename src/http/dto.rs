@@ -25,19 +25,24 @@ pub(crate) enum BodyInput {
 #[serde(deny_unknown_fields)]
 pub(crate) struct CreatePasteRequest {
     #[serde(default)]
+    #[schema(max_length = 200)]
     pub title: Option<String>,
     #[serde(default)]
     pub body: Option<BodyInput>,
     #[serde(default)]
     pub visibility: Option<String>,
     #[serde(default)]
+    #[schema(minimum = 1)]
     pub folder_id: Option<i64>,
     #[serde(default)]
     #[schema(format = DateTime)]
     pub expires_at: Option<String>,
     #[serde(default)]
+    /// Positive lifetime in seconds from the time of creation. Cannot be combined with `expires_at`.
+    #[schema(minimum = 1)]
     pub expires_in: Option<i64>,
     #[serde(default)]
+    #[schema(minimum = 1)]
     pub read_limit: Option<i64>,
 }
 
@@ -45,17 +50,20 @@ pub(crate) struct CreatePasteRequest {
 #[serde(deny_unknown_fields)]
 pub(crate) struct UpdatePasteRequest {
     #[serde(default)]
+    #[schema(max_length = 200)]
     pub title: Option<String>,
     #[serde(default)]
     pub body: Option<BodyInput>,
     #[serde(default)]
     pub visibility: Option<String>,
     #[serde(default)]
+    #[schema(minimum = 1)]
     pub folder_id: Option<Option<i64>>,
     #[serde(default)]
     #[schema(format = DateTime)]
     pub expires_at: Option<Option<String>>,
     #[serde(default)]
+    #[schema(minimum = 1)]
     pub read_limit: Option<Option<i64>>,
 }
 
@@ -77,32 +85,40 @@ pub(crate) enum BodyOutput {
 
 #[derive(Clone, Debug, Serialize, ToSchema)]
 pub(crate) struct AttachmentResource {
+    #[schema(minimum = 1)]
     pub id: i64,
     pub filename: String,
+    #[schema(minimum = 0)]
     pub size_bytes: i64,
+    #[schema(format = "uri-reference")]
     pub url: String,
 }
 
 #[derive(Clone, Debug, Serialize, ToSchema)]
-pub(crate) struct PasteResource {
+pub(crate) struct PasteMetadataResource {
     pub id: String,
+    #[schema(format = "uri-reference")]
     pub url: String,
+    #[schema(format = "uri-reference")]
     pub api_url: String,
+    #[schema(format = "uri-reference")]
     pub read_url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(format = "uri-reference")]
     pub archive_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(format = "uri-reference")]
     pub source_url: Option<String>,
     pub title: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub body: Option<BodyOutput>,
     pub format: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
     pub visibility: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(minimum = 1)]
     pub owner_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(minimum = 1)]
     pub folder_id: Option<i64>,
     #[schema(format = DateTime)]
     pub created_at: String,
@@ -112,24 +128,38 @@ pub(crate) struct PasteResource {
     pub expires_at: Option<String>,
     #[schema(format = DateTime)]
     pub last_read_at: Option<String>,
+    #[schema(minimum = 0)]
     pub read_count: i64,
+    #[schema(minimum = 1)]
     pub read_limit: Option<i64>,
+    #[schema(minimum = 0)]
     pub attachment_count: i64,
+    #[schema(minimum = 0)]
     pub size_bytes: i64,
     pub attachments: Vec<AttachmentResource>,
 }
 
 #[derive(Clone, Debug, Serialize, ToSchema)]
+pub(crate) struct PasteResource {
+    #[serde(flatten)]
+    pub metadata: PasteMetadataResource,
+    pub body: BodyOutput,
+}
+
+#[derive(Clone, Debug, Serialize, ToSchema)]
 pub(crate) struct PasteSummary {
     pub id: String,
+    #[schema(format = "uri-reference")]
     pub url: String,
     pub title: String,
     pub format: String,
     pub language: Option<String>,
     pub visibility: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(minimum = 1)]
     pub owner_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(minimum = 1)]
     pub folder_id: Option<i64>,
     #[schema(format = DateTime)]
     pub created_at: String,
@@ -139,9 +169,13 @@ pub(crate) struct PasteSummary {
     pub expires_at: Option<String>,
     #[schema(format = DateTime)]
     pub last_read_at: Option<String>,
+    #[schema(minimum = 0)]
     pub read_count: i64,
+    #[schema(minimum = 1)]
     pub read_limit: Option<i64>,
+    #[schema(minimum = 0)]
     pub attachment_count: i64,
+    #[schema(minimum = 0)]
     pub size_bytes: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub excerpt: Option<String>,
@@ -149,8 +183,11 @@ pub(crate) struct PasteSummary {
 
 #[derive(Clone, Debug, Serialize, ToSchema)]
 pub(crate) struct Pagination {
+    #[schema(minimum = 1)]
     pub page: u32,
+    #[schema(minimum = 1, maximum = 100)]
     pub page_size: u32,
+    #[schema(minimum = 0)]
     pub total_items: i64,
     pub total_pages: u32,
 }
@@ -190,6 +227,15 @@ impl CreatePasteRequest {
 
 impl UpdatePasteRequest {
     pub fn into_input(self) -> Result<PasteInput, String> {
+        if self.title.is_none()
+            && self.body.is_none()
+            && self.visibility.is_none()
+            && self.folder_id.is_none()
+            && self.expires_at.is_none()
+            && self.read_limit.is_none()
+        {
+            return Err("Update must contain at least one field".into());
+        }
         let (content, document, content_kind, language) = match self.body {
             Some(body) => {
                 let (content, document, format, language) = body_into_internal(Some(body))?;
@@ -241,31 +287,13 @@ fn body_into_internal(
     }
 }
 
-pub(crate) fn resource(
+pub(crate) fn metadata_resource(
     request: &HttpRequest,
     principal: &Principal,
     paste: Paste,
-    include_body: bool,
     grant_token: Option<&str>,
-) -> PasteResource {
+) -> PasteMetadataResource {
     let own = principal.can("paste:manage") || principal.user_id() == paste.owner_id;
-    let body = include_body.then(|| {
-        if paste.content_kind == "rich_text" {
-            BodyOutput::RichText {
-                content: paste
-                    .document
-                    .as_ref()
-                    .map(document_to_html)
-                    .unwrap_or_default(),
-                plain_text: paste.content.clone(),
-            }
-        } else {
-            BodyOutput::Text {
-                content: paste.content.clone(),
-                language: paste.language.clone(),
-            }
-        }
-    });
     let attachment_count = paste.attachments.len() as i64;
     let attachments = paste
         .attachments
@@ -279,7 +307,7 @@ pub(crate) fn resource(
             None => base,
         }
     });
-    PasteResource {
+    PasteMetadataResource {
         id: paste.id.clone(),
         url: absolute(request, &format!("/pastes/{}", paste.id)),
         api_url: absolute(request, &format!("/api/v1/pastes/{}", paste.id)),
@@ -287,7 +315,6 @@ pub(crate) fn resource(
         archive_url,
         source_url: own.then(|| absolute(request, &format!("/api/v1/pastes/{}/source", paste.id))),
         title: paste.title,
-        body,
         format: paste.content_kind.clone(),
         language: (paste.content_kind == "text").then_some(paste.language),
         visibility: paste.visibility,
@@ -302,6 +329,33 @@ pub(crate) fn resource(
         attachment_count,
         size_bytes: paste.size_bytes,
         attachments,
+    }
+}
+
+pub(crate) fn resource(
+    request: &HttpRequest,
+    principal: &Principal,
+    paste: Paste,
+    grant_token: Option<&str>,
+) -> PasteResource {
+    let body = if paste.content_kind == "rich_text" {
+        BodyOutput::RichText {
+            content: paste
+                .document
+                .as_ref()
+                .map(document_to_html)
+                .unwrap_or_default(),
+            plain_text: paste.content.clone(),
+        }
+    } else {
+        BodyOutput::Text {
+            content: paste.content.clone(),
+            language: paste.language.clone(),
+        }
+    };
+    PasteResource {
+        metadata: metadata_resource(request, principal, paste, grant_token),
+        body,
     }
 }
 

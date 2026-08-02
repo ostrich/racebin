@@ -140,14 +140,7 @@ pub(crate) async fn admin_pastes(
 #[serde(deny_unknown_fields)]
 struct UserUpdate {
     enabled: Option<bool>,
-    role: Option<UserRole>,
-}
-
-#[derive(Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "lowercase")]
-enum UserRole {
-    User,
-    Admin,
+    role: Option<contract::UserRole>,
 }
 
 #[utoipa::path(
@@ -171,6 +164,13 @@ pub(crate) async fn admin_update_user(
     id: web::Path<i64>,
     body: web::Json<UserUpdate>,
 ) -> HttpResponse {
+    if body.enabled.is_none() && body.role.is_none() {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "invalid_update",
+            "Update must contain at least one field",
+        );
+    }
     let value = match principal(&services, &req)
         .await
         .and_then(|p| require_mutation(&services, &req, p))
@@ -184,7 +184,7 @@ pub(crate) async fn admin_update_user(
     let admin = body
         .role
         .as_ref()
-        .map(|role| matches!(role, UserRole::Admin));
+        .map(|role| matches!(role, contract::UserRole::Admin));
     let result = accounts::update_user(&services.storage, *id, body.enabled, admin).await;
     match result {
         Ok(()) => HttpResponse::NoContent().finish(),

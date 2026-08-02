@@ -9,7 +9,9 @@ struct FolderInput {
 #[derive(Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 struct MovePastesInput {
+    #[schema(value_type = std::collections::HashSet<String>, min_items = 1, max_items = 100)]
     ids: Vec<String>,
+    #[schema(minimum = 1)]
     folder_id: Option<i64>,
 }
 

@@ -37,7 +37,9 @@ pub(crate) async fn list_keys(req: HttpRequest, services: web::Data<PasteService
 #[derive(Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 struct KeyInput {
+    #[schema(min_length = 1, max_length = 100)]
     name: String,
+    #[schema(value_type = std::collections::HashSet<String>, min_items = 1)]
     scopes: Vec<String>,
 }
 
