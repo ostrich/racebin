@@ -264,7 +264,9 @@ pub(crate) async fn upload_attachments(
     };
     HttpResponse::Created()
         .insert_header((header::ETAG, super::dto::etag(&current)))
-        .json(contract::AttachmentUploadResponse { items: attachments })
+        .json(contract::AttachmentUploadResponse {
+            items: attachments.into_iter().map(Into::into).collect(),
+        })
 }
 
 #[utoipa::path(

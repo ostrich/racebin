@@ -284,5 +284,24 @@ impl InvitationResource {
 #[derive(Serialize, ToSchema)]
 pub(crate) struct AttachmentUploadResponse {
     #[schema(min_items = 1)]
-    pub items: Vec<Attachment>,
+    pub items: Vec<AttachmentUploadItem>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub(crate) struct AttachmentUploadItem {
+    #[schema(minimum = 1)]
+    pub id: i64,
+    pub filename: String,
+    #[schema(minimum = 0)]
+    pub size_bytes: i64,
+}
+
+impl From<Attachment> for AttachmentUploadItem {
+    fn from(attachment: Attachment) -> Self {
+        Self {
+            id: attachment.id,
+            filename: attachment.filename,
+            size_bytes: attachment.size_bytes,
+        }
+    }
 }

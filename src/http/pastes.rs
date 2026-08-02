@@ -191,20 +191,25 @@ impl ApiPasteQuery {
 #[serde(deny_unknown_fields)]
 pub(super) struct FlatCreateRequest {
     #[schema(max_length = 200)]
+    #[param(max_length = 200)]
     pub(super) title: Option<String>,
     pub(super) format: Option<String>,
     pub(super) content: Option<String>,
     pub(super) language: Option<String>,
     pub(super) visibility: Option<String>,
     #[schema(minimum = 1)]
+    #[param(minimum = 1)]
     pub(super) folder_id: Option<i64>,
     /// Absolute RFC 3339 expiration time. Cannot be combined with `expires_in`.
     #[schema(format = DateTime)]
+    #[param(format = DateTime)]
     pub(super) expires_at: Option<String>,
     /// Positive lifetime in seconds from creation. Cannot be combined with `expires_at`.
     #[schema(minimum = 1)]
+    #[param(minimum = 1)]
     pub(super) expires_in: Option<i64>,
     #[schema(minimum = 1)]
+    #[param(minimum = 1)]
     pub(super) read_limit: Option<i64>,
 }
 

@@ -956,6 +956,13 @@ mod tests {
             assert_eq!(file["minItems"], 1);
             assert_eq!(file["items"], serde_json::json!({}));
         }
+        let uploaded_items =
+            &value["components"]["schemas"]["AttachmentUploadResponse"]["properties"]["items"];
+        assert_eq!(uploaded_items["minItems"], 1);
+        assert_eq!(
+            uploaded_items["items"]["$ref"],
+            "#/components/schemas/AttachmentUploadItem"
+        );
     }
 
     #[test]
@@ -1009,6 +1016,35 @@ mod tests {
         assert_eq!(
             value["components"]["schemas"]["SortDirection"]["enum"],
             serde_json::json!(["asc", "desc"])
+        );
+    }
+
+    #[test]
+    fn creation_parameters_express_time_and_collection_constraints() {
+        let value = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let parameters = value["paths"]["/pastes"]["post"]["parameters"]
+            .as_array()
+            .unwrap();
+        let parameter = |name: &str| {
+            parameters
+                .iter()
+                .find(|parameter| parameter["name"] == name)
+                .unwrap_or_else(|| panic!("missing creation parameter {name}"))
+        };
+        assert_eq!(parameter("expires_at")["schema"]["format"], "date-time");
+        assert_eq!(parameter("expires_in")["schema"]["minimum"], 1);
+        assert_eq!(parameter("read_limit")["schema"]["minimum"], 1);
+        assert!(value["paths"]["/pastes"]["post"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("mutually exclusive"));
+        assert_eq!(
+            value["components"]["schemas"]["MovePastesInput"]["properties"]["ids"]["uniqueItems"],
+            true
+        );
+        assert_eq!(
+            value["components"]["schemas"]["KeyInput"]["properties"]["scopes"]["uniqueItems"],
+            true
         );
     }
 
