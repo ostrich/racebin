@@ -26,9 +26,12 @@ critical back/forward scroll restoration, cached and overlapping list loads,
 access redirects, editor, highlighting, and dirty-form workflows in Chromium
 against deterministic API fixtures.
 
-The compiled-stack smoke test uses a temporary SQLite database and data
+The disposable real-stack suite uses a temporary SQLite database and data
 directory, starts the actual Racebin binary with its embedded production
-frontend, and drives login plus paste creation through a browser:
+frontend, and drives browser login and paste creation. It also calls the real
+HTTP boundary to cover session cookies, CSRF rejection, bearer scopes,
+idempotent creation, conditional updates, problem responses, multipart
+attachments, and final-read download grants:
 
 ```bash
 npm run build
@@ -39,6 +42,19 @@ npm run test:real
 
 The harness removes its temporary account, database, and attachments when the
 server exits; it never opens the configured development or production database.
+
+Contract generation and frontend-boundary checks can be run independently:
+
+```bash
+cd web
+npm run check:api
+npm run check:api-boundary
+```
+
+The first command regenerates the normalized OpenAPI snapshot and TypeScript
+wire types into a temporary directory and compares them with the committed
+artifacts. The second rejects direct browser network calls and obsolete generic
+request interfaces outside the approved API layer.
 
 Playwright also protects the shared UI geometry in two complementary ways:
 

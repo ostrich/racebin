@@ -292,13 +292,24 @@ provides the route access policy, and chooses the page component.
 reusable controls from `web/src/components`.
 
 Application-wide session and configuration state lives in a small Svelte
-store. `requestApi` is the common API client and automatically adds JSON
-headers and the current session's CSRF token to mutations. The query cache is
-kept separate from navigation: it deduplicates and retains resource reads,
-invalidates them after mutations, and lets list pages render cached data while
-revalidating. Page request generations prevent an older response from
-replacing a newer query, while navigation readiness determines only when the
-new page is structurally ready for focus and scroll restoration.
+store. The browser API boundary is divided into generated wire types,
+normalization, named resource operations, and one private transport under
+`web/src/api`. The transport alone performs network requests and owns JSON and
+multipart serialization, CSRF, conditional and idempotency headers, protocol
+response headers, problem-details errors, and query invalidation. Pages call
+named operations and do not construct API paths or wire requests.
+
+The committed, normalized OpenAPI snapshot is generated from the Rust routing
+contract, and the TypeScript wire types are generated from that snapshot. CI
+regenerates both artifacts, rejects stale output, and rejects direct frontend
+network access outside the transport. This makes an API change a coordinated
+change to the runtime, contract, generated types, resource client, and tests.
+
+The query cache is kept separate from navigation: it deduplicates and retains
+resource reads, invalidates them after mutations, and lets list pages render
+cached data while revalidating. Page request generations prevent an older
+response from replacing a newer query, while navigation readiness determines
+only when the new page is structurally ready for focus and scroll restoration.
 
 Notable browser-side technologies are:
 
@@ -435,7 +446,9 @@ Tests are organized around architectural boundaries:
   ownership, administration, and files;
 - Vitest covers frontend routing, formatting, and components; and
 - Playwright covers critical browser workflows with deterministic API
-  fixtures.
+  fixtures and exercises authentication, CSRF, API-key scopes, idempotency,
+  ETags, multipart uploads, and final-read grants through a disposable real
+  server.
 
 PostgreSQL tests require a dedicated disposable database and reset its
 `public` schema. See [testing.md](testing.md) for commands and safety details.
@@ -451,6 +464,7 @@ src/
   repository/           database-copy implementation and repository tests
   services/             paste domain model, validation, conversion, and service
 web/
+  src/api/              generated wire types, transport, normalization, and named resources
   src/components/       reusable Svelte controls
   src/navigation/       routes, guards, history/scroll, and navigation runtime
   src/pages/            route-level Svelte components
@@ -475,6 +489,8 @@ Use the existing boundaries when extending Racebin:
 - Add backend contract coverage for storage behavior shared by both
   databases.
 - Add HTTP tests for authorization and error semantics.
+- Update the OpenAPI contract and regenerate its snapshot and TypeScript wire
+  types for every API change; frontend callers go through a named API resource.
 - Add Playwright coverage when behavior depends on real browser layout,
   navigation, editing, or file interaction.
 - Rebuild `web/dist` before compiling a production binary after frontend
