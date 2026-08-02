@@ -150,35 +150,7 @@ fn add_scope_extensions(openapi: &mut utoipa::openapi::OpenApi) {
         .into_iter()
         .flatten()
         {
-            let scopes: &[&str] = match operation.operation_id.as_deref().unwrap_or("") {
-                "list_pastes" => &["paste:list"],
-                "get_paste" | "get_paste_source" | "read_paste" => &["paste:read"],
-                "create_paste"
-                | "update_paste"
-                | "convert_paste_content"
-                | "upload_attachments"
-                | "list_folders"
-                | "create_folder"
-                | "rename_folder"
-                | "delete_folder"
-                | "move_pastes" => &["paste:write"],
-                "delete_paste" | "delete_attachment" => &["paste:delete"],
-                "list_keys" | "create_key" | "update_key" | "delete_key" => &["api_key:manage"],
-                "admin_pastes" => &["paste:manage"],
-                "admin_users"
-                | "admin_user"
-                | "admin_update_user"
-                | "admin_create_password_reset"
-                | "admin_revoke_user_sessions" => &["user:manage"],
-                "admin_invitations" | "admin_create_invitation" | "admin_revoke_invitation" => {
-                    &["invitation:manage"]
-                }
-                "admin_keys"
-                | "admin_update_key"
-                | "admin_delete_key"
-                | "admin_revoke_user_keys" => &["api_key:manage"],
-                _ => &[],
-            };
+            let scopes = operation_scopes(operation.operation_id.as_deref().unwrap_or(""));
             if !scopes.is_empty() {
                 operation.extensions = Some(Extensions::from_iter([(
                     "x-racebin-scopes",
@@ -186,6 +158,38 @@ fn add_scope_extensions(openapi: &mut utoipa::openapi::OpenApi) {
                 )]));
             }
         }
+    }
+}
+
+fn operation_scopes(operation_id: &str) -> &'static [&'static str] {
+    match operation_id {
+        "list_pastes" | "list_folders" => &["paste:list"],
+        "get_paste" | "get_paste_source" | "read_paste" | "get_attachment" | "get_archive"
+        | "get_qr" => &["paste:read"],
+        "create_paste"
+        | "update_paste"
+        | "convert_paste_content"
+        | "upload_attachments"
+        | "create_folder"
+        | "rename_folder"
+        | "delete_folder"
+        | "move_pastes"
+        | "delete_attachment" => &["paste:write"],
+        "delete_paste" => &["paste:delete"],
+        "list_keys" | "create_key" | "update_key" | "delete_key" => &["api_key:manage"],
+        "admin_pastes" => &["paste:manage"],
+        "admin_users"
+        | "admin_user"
+        | "admin_update_user"
+        | "admin_create_password_reset"
+        | "admin_revoke_user_sessions" => &["user:manage"],
+        "admin_invitations" | "admin_create_invitation" | "admin_revoke_invitation" => {
+            &["invitation:manage"]
+        }
+        "admin_keys" | "admin_update_key" | "admin_delete_key" | "admin_revoke_user_keys" => {
+            &["api_key:manage"]
+        }
+        _ => &[],
     }
 }
 
@@ -400,7 +404,7 @@ async fn get_capabilities() -> impl Responder {
             },
             ScopeDescription {
                 id: "paste:delete",
-                description: "Delete pastes and attachments",
+                description: "Delete owned pastes",
             },
             ScopeDescription {
                 id: "paste:list",
@@ -780,6 +784,83 @@ mod tests {
         }
         assert!(operation("post", "/pastes")["x-racebin-scopes"].is_array());
         assert!(operation("get", "/admin/users")["x-racebin-scopes"].is_array());
+    }
+
+    #[test]
+    fn every_operation_advertises_its_authoritative_api_key_scopes() {
+        let value = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        for (path, item) in value["paths"].as_object().unwrap() {
+            for method in ["get", "post", "patch", "delete", "put"] {
+                let Some(operation) = item.get(method) else {
+                    continue;
+                };
+                let operation_id = operation["operationId"].as_str().unwrap();
+                let expected = operation_scopes(operation_id);
+                let actual = operation["x-racebin-scopes"]
+                    .as_array()
+                    .map(|scopes| {
+                        scopes
+                            .iter()
+                            .map(|scope| scope.as_str().unwrap())
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                assert_eq!(
+                    actual, expected,
+                    "incorrect API-key scopes for {method} {path} ({operation_id})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_timestamp_schema_uses_rfc3339_date_time_strings() {
+        fn contains_date_time(schema: &serde_json::Value) -> bool {
+            schema["format"].as_str() == Some("date-time")
+                || schema
+                    .as_object()
+                    .into_iter()
+                    .flat_map(|object| object.values())
+                    .any(contains_date_time)
+                || schema
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .any(contains_date_time)
+        }
+
+        let value = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let schemas = value["components"]["schemas"].as_object().unwrap();
+        let mut timestamps = 0;
+        for (schema_name, schema) in schemas {
+            let Some(properties) = schema["properties"].as_object() else {
+                continue;
+            };
+            for (property_name, property) in properties {
+                if property_name.ends_with("_at") {
+                    timestamps += 1;
+                    assert!(
+                        contains_date_time(property),
+                        "{schema_name}.{property_name} is not an RFC 3339 date-time string"
+                    );
+                }
+            }
+        }
+        assert!(timestamps > 0, "no timestamp properties were checked");
+    }
+
+    #[test]
+    fn rich_text_sanitization_is_part_of_the_generated_contract() {
+        let value = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        for schema_name in ["BodyInput", "BodyOutput"] {
+            let schema = serde_json::to_string(&value["components"]["schemas"][schema_name])
+                .unwrap()
+                .to_ascii_lowercase();
+            assert!(
+                schema.contains("sanitiz") && schema.contains("html"),
+                "{schema_name} does not explain the rich-text sanitization contract"
+            );
+        }
     }
 
     #[test]

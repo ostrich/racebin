@@ -1,5 +1,4 @@
 use rand::{distributions::Alphanumeric, Rng};
-use serde::Serialize;
 use sha2::{Digest, Sha256};
 use sqlx::{Any, Row};
 
@@ -18,7 +17,7 @@ pub const VALID_SCOPES: &[&str] = &[
     "api_key:manage",
 ];
 
-#[derive(Clone, Debug, Serialize, utoipa::ToSchema)]
+#[derive(Clone, Debug)]
 pub struct ApiKey {
     pub id: i64,
     pub user_id: Option<i64>,

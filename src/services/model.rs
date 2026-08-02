@@ -119,7 +119,7 @@ pub struct PasteQuery {
     pub direction: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, FromRow, utoipa::ToSchema)]
+#[derive(Clone, Debug, Serialize, FromRow)]
 pub struct Folder {
     pub id: i64,
     #[serde(skip)]
@@ -129,7 +129,7 @@ pub struct Folder {
     pub paste_count: i64,
 }
 
-#[derive(Clone, Debug, Serialize, utoipa::ToSchema)]
+#[derive(Clone, Debug, Serialize)]
 pub struct FolderOverview {
     pub items: Vec<Folder>,
     pub total_count: i64,

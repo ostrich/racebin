@@ -20,7 +20,7 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
 #[utoipa::path(
     get, path = "/admin/users", tag = "administration",
     responses(
-        (status = 200, description = "Administrative user summaries", body = [crate::account::AdminUser]),
+        (status = 200, description = "Administrative user summaries", body = [crate::http::contract::AdminUserResource]),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "Administrator with user:manage required", body = crate::http::errors::ProblemDetails),
         (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
@@ -39,7 +39,12 @@ pub(crate) async fn admin_users(
         return r;
     }
     match accounts::list_admin_users(&services.storage).await {
-        Ok(users) => HttpResponse::Ok().json(users),
+        Ok(users) => HttpResponse::Ok().json(
+            users
+                .into_iter()
+                .map(contract::AdminUserResource::from)
+                .collect::<Vec<_>>(),
+        ),
         Err(e) => domain_error(e),
     }
 }
@@ -48,7 +53,7 @@ pub(crate) async fn admin_users(
     get, path = "/admin/users/{id}", tag = "administration",
     params(("id" = i64, Path, description = "User ID")),
     responses(
-        (status = 200, description = "Administrative user detail", body = crate::account::AdminUser),
+        (status = 200, description = "Administrative user detail", body = crate::http::contract::AdminUserResource),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "Administrator with user:manage required", body = crate::http::errors::ProblemDetails),
         (status = 404, description = "User not found", body = crate::http::errors::ProblemDetails),
@@ -69,7 +74,7 @@ pub(crate) async fn admin_user(
         return response;
     }
     match accounts::admin_user(&services.storage, *id).await {
-        Ok(Some(user)) => HttpResponse::Ok().json(user),
+        Ok(Some(user)) => HttpResponse::Ok().json(contract::AdminUserResource::from(user)),
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "User not found"),
         Err(error) => domain_error(error),
     }
@@ -333,14 +338,7 @@ pub(crate) async fn admin_invitations(
                     } else {
                         None
                     };
-                    contract::InvitationResource {
-                        id: i.id,
-                        token_prefix: i.token_prefix,
-                        expires_at: i.expires_at,
-                        status: status.to_string(),
-                        url,
-                        redeemed_by_username: i.redeemed_by_username,
-                    }
+                    contract::InvitationResource::from_invitation(i, url, status)
                 })
                 .collect::<Vec<_>>(),
         ),
@@ -423,7 +421,7 @@ pub(crate) async fn admin_revoke_invitation(
 #[utoipa::path(
     get, path = "/admin/api-keys", tag = "administration",
     responses(
-        (status = 200, description = "All API keys", body = [crate::account::api_keys::ApiKey]),
+        (status = 200, description = "All API keys", body = [crate::http::contract::ApiKeyResource]),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "Administrator with api_key:manage required", body = crate::http::errors::ProblemDetails),
         (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
@@ -442,7 +440,11 @@ pub(crate) async fn admin_keys(
         return r;
     }
     match api_keys::list(&services.storage).await {
-        Ok(v) => HttpResponse::Ok().json(v),
+        Ok(v) => HttpResponse::Ok().json(
+            v.into_iter()
+                .map(contract::ApiKeyResource::from)
+                .collect::<Vec<_>>(),
+        ),
         Err(e) => domain_error(e),
     }
 }

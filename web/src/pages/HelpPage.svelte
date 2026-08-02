@@ -67,8 +67,8 @@
         <dl class="scope-list">
           <div><dt><code>paste:read</code></dt><dd>Read pastes available to your account.</dd></div>
           <div><dt><code>paste:list</code></dt><dd>List and search pastes.</dd></div>
-          <div><dt><code>paste:write</code></dt><dd>Create and update pastes and attachments.</dd></div>
-          <div><dt><code>paste:delete</code></dt><dd>Delete pastes and attachments.</dd></div>
+          <div><dt><code>paste:write</code></dt><dd>Create and update pastes, and manage folders and attachments.</dd></div>
+          <div><dt><code>paste:delete</code></dt><dd>Delete pastes.</dd></div>
         </dl>
       </section>
       <section class="panel" id="basics">

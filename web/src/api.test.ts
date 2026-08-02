@@ -36,4 +36,22 @@ describe("API wire mapping", () => {
     expect(paste).not.toHaveProperty("format");
     expect(paste).not.toHaveProperty("body");
   });
+
+  it("normalizes RFC 3339 timestamps in non-paste resources", () => {
+    const response = {
+      key: {
+        id: 4,
+        created_at: "2023-11-14T22:13:20Z",
+        last_used_at: null
+      },
+      invitations: [
+        { id: 7, expires_at: "2027-01-15T08:00:00Z" }
+      ]
+    };
+
+    expect(normalizePayload(response)).toEqual({
+      key: { id: 4, created_at: 1_700_000_000, last_used_at: null },
+      invitations: [{ id: 7, expires_at: 1_800_000_000 }]
+    });
+  });
 });

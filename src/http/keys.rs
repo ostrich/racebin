@@ -11,7 +11,7 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
 #[utoipa::path(
     get, path = "/account/api-keys", tag = "api keys",
     responses(
-        (status = 200, description = "API keys owned by the authenticated user", body = [crate::account::api_keys::ApiKey]),
+        (status = 200, description = "API keys owned by the authenticated user", body = [crate::http::contract::ApiKeyResource]),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "Insufficient permission", body = crate::http::errors::ProblemDetails),
         (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
@@ -25,7 +25,11 @@ pub(crate) async fn list_keys(req: HttpRequest, services: web::Data<PasteService
         Err(r) => return r,
     };
     match services.list_api_keys(&value).await {
-        Ok(v) => HttpResponse::Ok().json(v),
+        Ok(v) => HttpResponse::Ok().json(
+            v.into_iter()
+                .map(contract::ApiKeyResource::from)
+                .collect::<Vec<_>>(),
+        ),
         Err(e) => domain_error(e),
     }
 }
@@ -67,9 +71,10 @@ pub(crate) async fn create_key(
         .create_api_key(&value, &body.name, &body.scopes)
         .await
     {
-        Ok((key, token)) => {
-            HttpResponse::Created().json(contract::ApiKeyCreatedResponse { key, token })
-        }
+        Ok((key, token)) => HttpResponse::Created().json(contract::ApiKeyCreatedResponse {
+            key: key.into(),
+            token,
+        }),
         Err(e) => domain_error(e),
     }
 }

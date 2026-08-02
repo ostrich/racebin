@@ -25,7 +25,7 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
 #[utoipa::path(
     get, path = "/folders", tag = "folders",
     responses(
-        (status = 200, description = "The authenticated user's folders and counts", body = crate::services::FolderOverview),
+        (status = 200, description = "The authenticated user's folders and counts", body = crate::http::contract::FolderOverviewResource),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "API key lacks paste:list", body = crate::http::errors::ProblemDetails),
         (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
@@ -42,7 +42,7 @@ pub(crate) async fn list_folders(
         Err(response) => return response,
     };
     match services.list_folders(&value).await {
-        Ok(folders) => HttpResponse::Ok().json(folders),
+        Ok(folders) => HttpResponse::Ok().json(contract::FolderOverviewResource::from(folders)),
         Err(value) => domain_error(value),
     }
 }
@@ -52,7 +52,7 @@ pub(crate) async fn list_folders(
     params(("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
     request_body = FolderInput,
     responses(
-        (status = 201, description = "Folder created", body = crate::services::Folder),
+        (status = 201, description = "Folder created", body = crate::http::contract::FolderResource),
         (status = 400, description = "Invalid folder name", body = crate::http::errors::ProblemDetails),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "API key lacks paste:write or CSRF failed", body = crate::http::errors::ProblemDetails),
@@ -75,7 +75,7 @@ pub(crate) async fn create_folder(
         Err(response) => return response,
     };
     match services.create_folder(&value, &body.name).await {
-        Ok(folder) => HttpResponse::Created().json(folder),
+        Ok(folder) => HttpResponse::Created().json(contract::FolderResource::from(folder)),
         Err(value) => domain_error(value),
     }
 }
@@ -86,7 +86,7 @@ pub(crate) async fn create_folder(
         ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
     request_body = FolderInput,
     responses(
-        (status = 200, description = "Folder renamed", body = crate::services::Folder),
+        (status = 200, description = "Folder renamed", body = crate::http::contract::FolderResource),
         (status = 400, description = "Invalid folder name", body = crate::http::errors::ProblemDetails),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "Insufficient permission or CSRF failure", body = crate::http::errors::ProblemDetails),
@@ -111,7 +111,7 @@ pub(crate) async fn rename_folder(
         Err(response) => return response,
     };
     match services.rename_folder(&value, *folder_id, &body.name).await {
-        Ok(Some(folder)) => HttpResponse::Ok().json(folder),
+        Ok(Some(folder)) => HttpResponse::Ok().json(contract::FolderResource::from(folder)),
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Folder not found"),
         Err(value) => domain_error(value),
     }

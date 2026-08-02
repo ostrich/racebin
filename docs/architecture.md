@@ -132,6 +132,8 @@ code-generated contract is exposed at
 Unknown API routes return JSON errors. Known browser routes receive the SPA
 entry document, while unknown non-API paths return a 404. This explicit
 allowlist prevents the SPA fallback from disguising arbitrary missing paths.
+Those browser routes are an implementation detail of the bundled client rather
+than part of the public HTTP API contract.
 
 See [api.md](api.md) for the endpoint contract.
 
@@ -144,6 +146,12 @@ Racebin supports two authentication mechanisms:
   `X-CSRF-Token` header for mutations.
 - API clients use bearer tokens. Each API key has an explicit set of scopes,
   and bearer-authenticated requests do not use browser CSRF protection.
+
+Racebin does not emit CORS headers and assumes its browser client is served from
+the same origin. Cross-origin browser access, when deliberately required, is an
+operator-owned reverse-proxy policy. Session cookies are HTTP-only,
+`SameSite=Lax`, scoped to `/`, and secure except in explicit insecure-cookie
+development mode.
 
 Passwords are hashed with Argon2id. Session, invitation, and API-key secrets
 are random values, and their hashes are used for authentication. Session and

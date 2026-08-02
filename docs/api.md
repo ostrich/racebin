@@ -17,6 +17,12 @@ Browser sessions use the session cookie and `X-CSRF-Token`. API clients should
 use bearer authentication and do not send CSRF tokens. Creating a paste requires
 authentication.
 
+The browser session cookie is HTTP-only, uses path `/` and `SameSite=Lax`, and
+is marked `Secure` unless the explicitly unsafe development option is enabled.
+Persistent sessions additionally receive a 30-day cookie lifetime. Native and
+automation clients should prefer bearer keys rather than emulating browser
+cookies.
+
 API keys have explicit scopes. The complete, machine-readable scope requirement
 for each operation is exposed as `x-racebin-scopes` in OpenAPI. Discovery also
 returns the supported scope catalog. The user-facing scopes are `paste:read`,
@@ -26,6 +32,21 @@ keys can additionally use `paste:manage`, `user:manage`, and
 
 Errors use `application/problem+json` with `type`, `title`, `status`, and
 `detail` fields.
+
+## Origins and browser routes
+
+Racebin's built-in deployment model is same-origin: it does not emit CORS
+headers. A browser application hosted on another origin therefore needs an
+operator-controlled reverse proxy policy. Enabling credentialed cross-origin
+requests is a deployment security decision and is intentionally not enabled by
+Racebin itself. CORS does not restrict native, command-line, or server-side API
+clients.
+
+The OpenAPI document covers `/api/v1` resources only. Human-facing routes such
+as `/pastes/{id}`, `/login`, and `/help` belong to the bundled web application
+and are not stable API operations. The server uses an explicit SPA route
+allowlist; unknown web and API routes return 404 rather than silently rendering
+the application shell.
 
 ## Discovery
 
@@ -71,6 +92,12 @@ Rich text uses sanitized HTML on the wire:
 {"body":{"format":"rich_text","content":"<h1>Scene</h1><p>Text</p>"}}
 ```
 
+Racebin normalizes supported rich-text markup and removes active content,
+unsafe URLs, and unsupported attributes before storage. Returned rich-text HTML
+is the sanitized representation and is not guaranteed to be byte-for-byte
+identical to the submitted HTML. This guarantee is also included in the
+OpenAPI rich-text schemas.
+
 Racebin also accepts `text/plain`, `text/markdown`, `text/html`, URL-encoded
 forms, and multipart forms at the same endpoint. Raw uploads can put metadata in
 the query string, which makes a generic uploader configuration straightforward:
@@ -104,6 +131,11 @@ curl -X POST https://example.com/api/v1/pastes \
 
 `expires_at` is RFC 3339. `expires_in` is a positive number of seconds. They
 cannot be combined.
+
+All timestamps returned by the public API use RFC 3339 strings, including
+paste, folder, invitation, API-key, and administrative-account timestamps.
+Unix timestamps remain an internal storage detail and are never exposed by the
+supported wire contract.
 
 ## Read a paste
 

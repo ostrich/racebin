@@ -91,6 +91,7 @@ pub(super) struct FlatCreateRequest {
     pub(super) language: Option<String>,
     pub(super) visibility: Option<String>,
     pub(super) folder_id: Option<i64>,
+    #[schema(format = DateTime)]
     pub(super) expires_at: Option<String>,
     pub(super) expires_in: Option<i64>,
     pub(super) read_limit: Option<i64>,
@@ -106,6 +107,7 @@ struct MultipartCreateRequest {
     language: Option<String>,
     visibility: Option<String>,
     folder_id: Option<i64>,
+    #[schema(format = DateTime)]
     expires_at: Option<String>,
     expires_in: Option<i64>,
     read_limit: Option<i64>,
@@ -645,11 +647,19 @@ pub(crate) async fn convert_paste_content(
     services: web::Data<PasteService>,
     body: web::Json<ConversionInput>,
 ) -> HttpResponse {
-    if let Err(response) = principal(&services, &req)
+    let principal = match principal(&services, &req)
         .await
         .and_then(|principal| require_mutation(&services, &req, principal))
     {
-        return response;
+        Ok(principal) => principal,
+        Err(response) => return response,
+    };
+    if matches!(principal, Principal::ApiKey(_)) && !principal.can("paste:write") {
+        return error(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "Missing paste:write permission",
+        );
     }
     let result = match (&body.source, body.target_format.as_str()) {
         (BodyInput::Text { content, .. }, "rich_text") => Ok(BodyInput::RichText {

@@ -122,5 +122,12 @@ export function normalizePayload(value: unknown, etag?: string | null): unknown 
       } : {})
     };
   }
-  return { ...object };
+  const normalized = Object.fromEntries(
+    Object.entries(object).map(([key, item]) => [key, normalizePayload(item)])
+  );
+  for (const key of ["created_at", "last_login_at", "last_used_at", "expires_at"]) {
+    const timestamp = normalized[key];
+    if (typeof timestamp === "string") normalized[key] = unixTimestamp(timestamp);
+  }
+  return normalized;
 }

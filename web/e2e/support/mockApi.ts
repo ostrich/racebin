@@ -1,5 +1,9 @@
 import type { Page, Route } from "@playwright/test";
 
+const createdAt = "2023-11-14T22:13:20Z";
+const joinedAt = "2023-07-22T04:26:40Z";
+const expiresAt = "2027-01-15T08:00:00Z";
+
 const config = {
   site_name: "Racebin",
   plain_home_enabled: false,
@@ -13,8 +17,8 @@ const user = {
   role: "admin",
   enabled: true,
   password_change_required: false,
-  created_at: 1_690_000_000,
-  last_login_at: 1_700_000_000,
+  created_at: joinedAt,
+  last_login_at: createdAt,
   paste_count: 3,
   storage_bytes: 4096,
   active_session_count: 1,
@@ -42,8 +46,8 @@ export const paste = {
 };
 const folderOverview = {
   items: [
-    { id: 5, name: "Scripts", created_at: 1_700_000_000, paste_count: 1 },
-    { id: 7, name: "sample-folder", created_at: 1_700_000_000, paste_count: 18 }
+    { id: 5, name: "Scripts", created_at: createdAt, paste_count: 1 },
+    { id: 7, name: "sample-folder", created_at: createdAt, paste_count: 18 }
   ],
   total_count: 19,
   unfiled_count: 0
@@ -86,7 +90,7 @@ export async function mockApi(
     if (url.pathname === "/api/v1/folders") {
       if (route.request().method() === "POST") {
         const body = route.request().postDataJSON() as { name: string };
-        const folder = { id: 6, name: body.name, created_at: 1_700_000_001, paste_count: 0 };
+        const folder = { id: 6, name: body.name, created_at: "2023-11-14T22:13:21Z", paste_count: 0 };
         folders.items.push(folder);
         return json(route, folder, 201);
       }
@@ -118,7 +122,7 @@ export async function mockApi(
       return json(route, [{
         id: 4, user_id: 1, name: "Automation", token_prefix: "abcd",
         scopes: ["paste:read", "paste:write"], enabled: true,
-        created_at: 1_700_000_000, last_used_at: null
+        created_at: createdAt, last_used_at: null
       }]);
     }
     if (url.pathname === "/api/v1/admin/users") return json(route, [user]);
@@ -152,11 +156,11 @@ export async function mockApi(
       }
       return json(route, [
         {
-          id: 4, token_prefix: "active", expires_at: 1_800_000_000,
+          id: 4, token_prefix: "active", expires_at: expiresAt,
           status: "Active", url: "/invitations/active-token", redeemed_by_username: null
         },
         {
-          id: 3, token_prefix: "invite", expires_at: 1_800_000_000,
+          id: 3, token_prefix: "invite", expires_at: expiresAt,
           status: "Redeemed", url: null, redeemed_by_username: "reader"
         }
       ]);
@@ -164,7 +168,7 @@ export async function mockApi(
     if (url.pathname === "/api/v1/admin/api-keys") return json(route, [{
       id: 4, user_id: 1, name: "Automation", token_prefix: "abcd",
       scopes: ["paste:read", "paste:write"], enabled: true,
-      created_at: 1_700_000_000, last_used_at: null
+      created_at: createdAt, last_used_at: null
     }]);
     if (url.pathname === "/api/v1/pastes") {
       if (route.request().method() === "POST") return json(route, paste, 201);

@@ -3,7 +3,6 @@ use argon2::password_hash::{
 };
 use argon2::Argon2;
 use rand::{distributions::Alphanumeric, Rng};
-use serde::Serialize;
 use sha2::{Digest, Sha256};
 use sqlx::any::AnyRow;
 use sqlx::{FromRow, Row};
@@ -35,7 +34,7 @@ pub struct User {
     pub password_change_required: bool,
 }
 
-#[derive(Clone, Debug, Serialize, utoipa::ToSchema)]
+#[derive(Clone, Debug)]
 pub struct AdminUser {
     pub id: i64,
     pub username: String,

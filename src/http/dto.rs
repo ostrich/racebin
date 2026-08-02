@@ -7,12 +7,16 @@ use utoipa::ToSchema;
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
 #[serde(tag = "format", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum BodyInput {
+    /// Plain text. Racebin stores the content as text and never interprets it as HTML.
     Text {
         content: String,
         #[serde(default)]
         language: Option<String>,
     },
+    /// Rich-text HTML. Racebin sanitizes and normalizes the supported markup,
+    /// removing active content, unsafe URLs, and unsupported attributes before storage.
     RichText {
+        /// HTML input; the stored and returned representation may differ after sanitization.
         content: String,
     },
 }
@@ -29,6 +33,7 @@ pub(crate) struct CreatePasteRequest {
     #[serde(default)]
     pub folder_id: Option<i64>,
     #[serde(default)]
+    #[schema(format = DateTime)]
     pub expires_at: Option<String>,
     #[serde(default)]
     pub expires_in: Option<i64>,
@@ -48,6 +53,7 @@ pub(crate) struct UpdatePasteRequest {
     #[serde(default)]
     pub folder_id: Option<Option<i64>>,
     #[serde(default)]
+    #[schema(format = DateTime)]
     pub expires_at: Option<Option<String>>,
     #[serde(default)]
     pub read_limit: Option<Option<i64>>,
@@ -56,8 +62,17 @@ pub(crate) struct UpdatePasteRequest {
 #[derive(Clone, Debug, Serialize, ToSchema)]
 #[serde(tag = "format", rename_all = "snake_case")]
 pub(crate) enum BodyOutput {
+    /// Plain text that is safe to render as text, not HTML.
     Text { content: String, language: String },
-    RichText { content: String, plain_text: String },
+    /// Racebin-sanitized rich-text HTML plus its plain-text projection. The HTML
+    /// contains no supported active-content constructs, but clients must still
+    /// render it according to their own platform's secure HTML practices.
+    RichText {
+        /// Sanitized and normalized HTML.
+        content: String,
+        /// Plain-text projection of the rich-text document.
+        plain_text: String,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, ToSchema)]
@@ -89,9 +104,13 @@ pub(crate) struct PasteResource {
     pub owner_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub folder_id: Option<i64>,
+    #[schema(format = DateTime)]
     pub created_at: String,
+    #[schema(format = DateTime)]
     pub updated_at: String,
+    #[schema(format = DateTime)]
     pub expires_at: Option<String>,
+    #[schema(format = DateTime)]
     pub last_read_at: Option<String>,
     pub read_count: i64,
     pub read_limit: Option<i64>,
@@ -112,9 +131,13 @@ pub(crate) struct PasteSummary {
     pub owner_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub folder_id: Option<i64>,
+    #[schema(format = DateTime)]
     pub created_at: String,
+    #[schema(format = DateTime)]
     pub updated_at: String,
+    #[schema(format = DateTime)]
     pub expires_at: Option<String>,
+    #[schema(format = DateTime)]
     pub last_read_at: Option<String>,
     pub read_count: i64,
     pub read_limit: Option<i64>,

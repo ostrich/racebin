@@ -206,6 +206,7 @@ mod tests {
         .await;
         assert_eq!(created_folder.status(), StatusCode::CREATED);
         let created_folder: Value = test::read_body_json(created_folder).await;
+        assert!(created_folder["created_at"].as_str().is_some());
         let folder_id = created_folder["id"].as_i64().unwrap();
         let moved = test::call_service(
             &app,
@@ -587,6 +588,45 @@ mod tests {
         )
         .await;
         assert_eq!(write_folder_list_denied.status(), StatusCode::FORBIDDEN);
+        let (_, list_token) =
+            api_keys::create(&repository, Some(1), "list", &["paste:list".to_string()])
+                .await
+                .unwrap();
+        let list_folder_allowed = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/v1/folders")
+                .insert_header(("Authorization", format!("Bearer {list_token}")))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(list_folder_allowed.status(), StatusCode::OK);
+        let read_conversion_denied = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/content-conversions")
+                .insert_header(("Authorization", format!("Bearer {read_token}")))
+                .set_json(json!({
+                    "source":{"format":"text","content":"example"},
+                    "target_format":"rich_text"
+                }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(read_conversion_denied.status(), StatusCode::FORBIDDEN);
+        let write_conversion_allowed = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/content-conversions")
+                .insert_header(("Authorization", format!("Bearer {write_token}")))
+                .set_json(json!({
+                    "source":{"format":"text","content":"example"},
+                    "target_format":"rich_text"
+                }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(write_conversion_allowed.status(), StatusCode::OK);
         let cross_owner_write = test::call_service(
             &app,
             test::TestRequest::patch()
@@ -705,6 +745,8 @@ mod tests {
         )
         .await;
         assert_eq!(delegation_allowed.status(), StatusCode::CREATED);
+        let delegation_allowed: Value = test::read_body_json(delegation_allowed).await;
+        assert!(delegation_allowed["key"]["created_at"].as_str().is_some());
         let delegation_denied = test::call_service(
             &app,
             test::TestRequest::post()
@@ -867,6 +909,37 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("attacker.example"));
+        let invitation_list = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/v1/admin/invitations")
+                .insert_header(("Authorization", format!("Bearer {invitation_token}")))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(invitation_list.status(), StatusCode::OK);
+        let invitation_list: Value = test::read_body_json(invitation_list).await;
+        assert!(invitation_list[0]["expires_at"].as_str().is_some());
+
+        let (_, user_admin_token) = api_keys::create(
+            &repository,
+            Some(1),
+            "user timestamp",
+            &["user:manage".to_string()],
+        )
+        .await
+        .unwrap();
+        let admin_users = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/v1/admin/users")
+                .insert_header(("Authorization", format!("Bearer {user_admin_token}")))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(admin_users.status(), StatusCode::OK);
+        let admin_users: Value = test::read_body_json(admin_users).await;
+        assert!(admin_users[0]["created_at"].as_str().is_some());
 
         for _ in 0..5 {
             let failed_login = test::call_service(
