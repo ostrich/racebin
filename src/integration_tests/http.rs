@@ -115,6 +115,29 @@ mod tests {
             .create_paste(&other_principal, &input("other owner", "private"))
             .await
             .unwrap();
+        let mut final_read_input = input("final read", "unlisted");
+        final_read_input.read_limit = Some(Some(1));
+        let final_read = services
+            .create_paste(&principal, &final_read_input)
+            .await
+            .unwrap();
+        let final_read_directory = data_dir.join("attachments").join(&final_read.id);
+        std::fs::create_dir_all(&final_read_directory).unwrap();
+        std::fs::write(
+            final_read_directory.join("final-read-file"),
+            b"downloadable",
+        )
+        .unwrap();
+        let final_read_attachment = services
+            .add_attachments(
+                &principal,
+                &final_read.id,
+                &[("download.txt".into(), "final-read-file".into(), 12)],
+                Some(1),
+            )
+            .await
+            .unwrap()
+            .remove(0);
 
         let app = test::init_service(
             App::new()
@@ -122,6 +145,42 @@ mod tests {
                 .configure(configure),
         )
         .await;
+
+        let consumed = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri(&format!("/api/v1/pastes/{}/reads", final_read.id))
+                .insert_header(("Accept", "text/plain"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(consumed.status(), StatusCode::OK);
+        let grant = consumed
+            .headers()
+            .get("Read-Token")
+            .expect("final read returns an attachment grant")
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert_eq!(
+            test::read_body(consumed).await.as_ref(),
+            b"final read content"
+        );
+        let granted_download = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!(
+                    "/api/v1/pastes/{}/attachments/{}?read_token={grant}",
+                    final_read.id, final_read_attachment.id
+                ))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(granted_download.status(), StatusCode::OK);
+        assert_eq!(
+            test::read_body(granted_download).await.as_ref(),
+            b"downloadable"
+        );
 
         for (id, expected) in [
             (&public.id, StatusCode::OK),
@@ -463,6 +522,27 @@ mod tests {
         assert!(raw_created.headers().contains_key("ETag"));
         let raw_url = String::from_utf8(test::read_body(raw_created).await.to_vec()).unwrap();
         assert!(raw_url.starts_with("/pastes/"));
+
+        for (content_type, body) in [
+            (
+                "application/json",
+                r#"{"body":{"format":"text","content":"body"}}"#,
+            ),
+            ("application/x-www-form-urlencoded", "content=body"),
+            ("multipart/form-data; boundary=empty", "--empty--\r\n"),
+        ] {
+            let rejected_query = test::call_service(
+                &app,
+                test::TestRequest::post()
+                    .uri("/api/v1/pastes?title=query-title")
+                    .insert_header(("Authorization", format!("Bearer {write_token}")))
+                    .insert_header(("Content-Type", content_type))
+                    .set_payload(body)
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(rejected_query.status(), StatusCode::BAD_REQUEST);
+        }
 
         let raw_replay = test::call_service(
             &app,
@@ -872,6 +952,7 @@ mod tests {
         )
         .await;
         assert_eq!(deleted.status(), StatusCode::NO_CONTENT);
+        assert!(deleted.headers().contains_key("ETag"));
         let missing = test::call_service(
             &app,
             test::TestRequest::get()

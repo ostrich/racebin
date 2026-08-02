@@ -342,7 +342,8 @@ pub(crate) async fn get_attachment(
         ("If-Match" = String, Header, description = "Current ETag or *"),
         ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
     responses(
-        (status = 204, description = "Attachment deleted"),
+        (status = 204, description = "Attachment deleted",
+            headers(("ETag" = String, description = "New paste entity tag"))),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "Not permitted to update this paste", body = crate::http::errors::ProblemDetails),
         (status = 404, description = "Paste or attachment not found", body = crate::http::errors::ProblemDetails),
@@ -378,8 +379,10 @@ pub(crate) async fn delete_attachment(
         .delete_attachment(&value, &paste_id, attachment_id, expected_revision)
         .await
     {
-        Ok(true) => HttpResponse::NoContent().finish(),
-        Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "Attachment not found"),
+        Ok(Some(revision)) => HttpResponse::NoContent()
+            .insert_header((header::ETAG, dto::etag_revision(&paste_id, revision)))
+            .finish(),
+        Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Attachment not found"),
         Err(value) => domain_error(value),
     }
 }

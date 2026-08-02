@@ -143,7 +143,7 @@ impl PasteService {
         id: &str,
         attachment_id: i64,
         expected_revision: Option<i64>,
-    ) -> DomainResult<bool> {
+    ) -> DomainResult<Option<i64>> {
         let paste = self
             .find_paste(id)
             .await?
@@ -154,7 +154,7 @@ impl PasteService {
             .into_iter()
             .find(|attachment| attachment.id == attachment_id);
         let Some(attachment) = attachment else {
-            return Ok(false);
+            return Ok(None);
         };
         if attachment.storage_key.starts_with('.')
             || std::path::Path::new(&attachment.storage_key)
@@ -189,37 +189,37 @@ impl PasteService {
                 .map_err(DomainError::internal)?
                 .rows_affected();
             if affected == 1 {
-                let changed = sqlx::query(
+                let revision = sqlx::query_scalar::<_, i64>(
                     "UPDATE pastes SET updated_at=$2,revision=revision+1
-                     WHERE id=$1 AND ($3 IS NULL OR revision=$3)",
+                     WHERE id=$1 AND ($3 IS NULL OR revision=$3)
+                     RETURNING revision",
                 )
                 .bind(&paste.id)
                 .bind(unix_timestamp())
                 .bind(expected_revision)
-                .execute(&mut *transaction)
+                .fetch_optional(&mut *transaction)
                 .await
                 .map_err(DomainError::internal)?
-                .rows_affected();
-                if changed == 0 {
-                    return Err(DomainError::precondition("Paste revision changed"));
-                }
+                .ok_or_else(|| DomainError::precondition("Paste revision changed"))?;
+                transaction.commit().await.map_err(DomainError::internal)?;
+                return Ok::<Option<i64>, DomainError>(Some(revision));
             }
             transaction.commit().await.map_err(DomainError::internal)?;
-            Ok::<u64, DomainError>(affected)
+            Ok::<Option<i64>, DomainError>(None)
         }
         .await;
         match result {
-            Ok(1) => {
+            Ok(Some(revision)) => {
                 if existed {
                     let _ = std::fs::remove_file(staged);
                 }
-                Ok(true)
+                Ok(Some(revision))
             }
-            Ok(_) => {
+            Ok(None) => {
                 if existed {
                     let _ = std::fs::rename(staged, path);
                 }
-                Ok(false)
+                Ok(None)
             }
             Err(error) => {
                 if existed {

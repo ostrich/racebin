@@ -355,7 +355,11 @@ fn attachment_resource(
 }
 
 pub(crate) fn etag(paste: &Paste) -> String {
-    format!("\"paste-{}-{}\"", paste.id, paste.revision)
+    etag_revision(&paste.id, paste.revision)
+}
+
+pub(crate) fn etag_revision(paste_id: &str, revision: i64) -> String {
+    format!("\"paste-{paste_id}-{revision}\"")
 }
 
 pub(crate) fn absolute(_request: &HttpRequest, path: &str) -> String {

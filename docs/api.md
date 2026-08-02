@@ -99,8 +99,11 @@ identical to the submitted HTML. This guarantee is also included in the
 OpenAPI rich-text schemas.
 
 Racebin also accepts `text/plain`, `text/markdown`, `text/html`, URL-encoded
-forms, and multipart forms at the same endpoint. Raw uploads can put metadata in
-the query string, which makes a generic uploader configuration straightforward:
+forms, and multipart forms at the same endpoint. Creation query parameters are
+accepted only with the three raw text media types; JSON, URL-encoded, and
+multipart requests must carry all creation fields in their body. Raw uploads
+can put metadata in the query string, which makes a generic uploader
+configuration straightforward:
 
 ```sh
 curl -X POST \
@@ -146,9 +149,11 @@ It deliberately does not consume a limited paste.
 `Idempotency-Key` when retrying. Owners and administrators receive a
 `source_url`; retrieving that URL does not consume a read.
 
-For a final permitted read, the response can include attachment and archive URLs
-with a short-lived `read_token`. That capability remains valid for 15 minutes so
-the reader can download the files after receiving the paste.
+For a final permitted read, Racebin returns a short-lived attachment grant in
+the `Read-Token` response header. JSON responses also include that grant in each
+attachment URL and the archive URL. The header makes the grant available to
+clients requesting `text/plain` or `text/html` as well. It remains valid for 15
+minutes so the reader can download files after receiving the paste.
 
 ## Update and delete
 
@@ -167,6 +172,11 @@ curl -X PATCH https://example.com/api/v1/pastes/PASTE_ID \
 Use `DELETE /api/v1/pastes/{id}` with the same conditional header. `If-Match: *`
 is available when the caller explicitly accepts overwriting the current
 revision.
+
+Attachment uploads and deletions return the paste's new `ETag`. Bulk folder
+moves intentionally do not accept or return individual paste ETags; clients
+must refetch moved paste resources before making a subsequent conditional
+mutation.
 
 ## Lists and folders
 

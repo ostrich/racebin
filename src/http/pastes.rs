@@ -301,10 +301,22 @@ pub(crate) async fn create_paste(
         .unwrap_or("")
         .trim()
         .to_ascii_lowercase();
+    let query = query.into_inner();
+    if matches!(
+        content_type.as_str(),
+        "application/json" | "application/x-www-form-urlencoded" | "multipart/form-data"
+    ) && query != FlatCreateRequest::default()
+    {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "invalid_query",
+            "Creation query parameters are accepted only with text/plain, text/markdown, or text/html bodies",
+        );
+    }
     let parsed = if content_type == "multipart/form-data" {
         parse_multipart(&req, payload, &services).await
     } else {
-        parse_non_multipart(&content_type, query.into_inner(), payload)
+        parse_non_multipart(&content_type, query, payload)
             .await
             .map(|request| (request, Vec::new()))
     };
@@ -462,6 +474,7 @@ pub(crate) async fn get_paste_source(
             ),
             headers(
                 ("ETag" = String, description = "Current paste entity tag"),
+                ("Read-Token" = String, description = "Short-lived attachment-download grant issued when a limited read consumes the paste's final permitted read"),
                 ("Idempotency-Replayed" = String, description = "true when this is a replay of an earlier idempotent read")
             )),
         (status = 400, description = "Invalid idempotency key", body = crate::http::errors::ProblemDetails),
@@ -710,13 +723,12 @@ fn content_response(
     grant: Option<&str>,
 ) -> HttpResponse {
     let tag = dto::etag(&paste);
-    if accepts(req, "text/plain") {
-        return HttpResponse::Ok()
+    let mut response = if accepts(req, "text/plain") {
+        HttpResponse::Ok()
             .insert_header((header::ETAG, tag))
             .content_type("text/plain; charset=utf-8")
-            .body(paste.content);
-    }
-    if accepts(req, "text/html") {
+            .body(paste.content)
+    } else if accepts(req, "text/html") {
         if paste.content_kind != "rich_text" {
             return error(
                 StatusCode::NOT_ACCEPTABLE,
@@ -724,7 +736,7 @@ fn content_response(
                 "HTML is available only for rich-text pastes",
             );
         }
-        return HttpResponse::Ok()
+        HttpResponse::Ok()
             .insert_header((header::ETAG, tag))
             .content_type("text/html; charset=utf-8")
             .body(
@@ -733,9 +745,17 @@ fn content_response(
                     .as_ref()
                     .map(crate::services::document_to_html)
                     .unwrap_or_default(),
-            );
+            )
+    } else {
+        resource_response(req, principal, paste, true, grant)
+    };
+    if let Some(grant) = grant {
+        response.headers_mut().insert(
+            header::HeaderName::from_static("read-token"),
+            header::HeaderValue::from_str(grant).expect("generated read token is a valid header"),
+        );
     }
-    resource_response(req, principal, paste, true, grant)
+    response
 }
 
 fn accepts(req: &HttpRequest, mime: &str) -> bool {
