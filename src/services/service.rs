@@ -163,7 +163,7 @@ impl PasteService {
             .bind(unfiled)
             .fetch_one(self.storage.pool())
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(DomainError::internal)?;
         let items = sqlx::query_as::<_, Paste>(&format!(
             "SELECT id,owner_id,folder_id,title,substr(content,1,500) AS content,NULL AS document_json,
                     content_kind,language,visibility,created_at,updated_at,revision,consumed_at,
@@ -196,7 +196,7 @@ impl PasteService {
         .bind(offset)
         .fetch_all(self.storage.pool())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::internal)?;
         Ok(Page {
             items: items
                 .into_iter()
@@ -234,7 +234,7 @@ impl PasteService {
         .bind(unix_timestamp())
         .fetch_optional(self.storage.pool())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::internal)?;
         if let Some(value) = &mut paste {
             value.attachments = self.load_attachments(&value.id).await?;
             value.attachment_count = value.attachments.len() as i64;
@@ -255,7 +255,7 @@ impl PasteService {
             .pool()
             .begin()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(DomainError::internal)?;
         let now = unix_timestamp();
         let key_hash = idempotency_key.map(hash_token);
         if let Some(key_hash) = key_hash.as_deref() {
@@ -267,14 +267,14 @@ impl PasteService {
             .bind(now)
             .fetch_optional(&mut *tx)
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(DomainError::internal)?;
             if replay.is_some() {
                 let Some(mut paste) = load_paste_for_read(&mut tx, principal, id).await? else {
                     return Ok(None);
                 };
                 let grant_token = create_read_grant(&mut tx, &paste, now).await?;
                 paste = redact_folder(principal, paste, false);
-                tx.commit().await.map_err(|error| error.to_string())?;
+                tx.commit().await.map_err(DomainError::internal)?;
                 return Ok(Some(PasteRead {
                     paste,
                     grant_token,
@@ -296,7 +296,7 @@ impl PasteService {
         .bind(now)
         .fetch_optional(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::internal)?;
         let Some(mut paste) = paste.take().filter(|paste| can_read(principal, paste)) else {
             return Ok(None);
         };
@@ -314,7 +314,7 @@ impl PasteService {
                 .bind(now)
                 .execute(&mut *tx)
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(DomainError::internal)?;
         } else {
             sqlx::query("UPDATE pastes SET read_count=$2,last_read_at=$3,updated_at=$3,revision=revision+1 WHERE id=$1")
                 .bind(&paste.id)
@@ -322,7 +322,7 @@ impl PasteService {
                 .bind(now)
                 .execute(&mut *tx)
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(DomainError::internal)?;
         }
         if let Some(key_hash) = key_hash.as_deref() {
             sqlx::query(
@@ -333,10 +333,10 @@ impl PasteService {
             .bind(now + 900)
             .execute(&mut *tx)
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(DomainError::internal)?;
         }
         let grant_token = create_read_grant(&mut tx, &paste, now).await?;
-        tx.commit().await.map_err(|e| e.to_string())?;
+        tx.commit().await.map_err(DomainError::internal)?;
         paste.read_count = next_reads;
         paste.last_read_at = Some(now);
         paste.updated_at = paste.last_read_at.unwrap_or(paste.updated_at);
@@ -358,7 +358,7 @@ impl PasteService {
         .bind(unix_timestamp())
         .fetch_optional(self.storage.pool())
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(DomainError::internal)?;
         Ok(found.is_some())
     }
 
@@ -374,7 +374,7 @@ impl PasteService {
         .bind(id)
         .fetch_optional(self.storage.pool())
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(DomainError::internal)?;
         if let Some(paste) = &mut paste {
             paste.attachments = self.load_attachments(id).await?;
             paste.attachment_count = paste.attachments.len() as i64;
@@ -448,7 +448,7 @@ impl PasteService {
         .bind(input.read_limit.flatten())
         .execute(self.storage.pool())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::internal)?;
         self.get_paste(principal, &id)
             .await?
             .ok_or_else(|| DomainError::internal("Paste creation failed"))
@@ -482,7 +482,7 @@ impl PasteService {
         .bind(now)
         .execute(self.storage.pool())
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(DomainError::internal)?;
         if let Some(paste) = self
             .existing_idempotent_create(owner, &key_hash, request_hash)
             .await?
@@ -508,7 +508,7 @@ impl PasteService {
             .pool()
             .begin()
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(DomainError::internal)?;
         sqlx::query(
             "INSERT INTO pastes(id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,
                                 created_at,updated_at,revision,expires_at,last_read_at,read_count,read_limit)
@@ -532,7 +532,7 @@ impl PasteService {
         .bind(input.read_limit.flatten())
         .execute(&mut *tx)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(DomainError::internal)?;
         let idempotency_insert = sqlx::query(
             "INSERT INTO idempotency_records(user_id,operation,key_hash,request_hash,paste_id,created_at,expires_at)
              VALUES($1,'create_paste',$2,$3,$4,$5,$6)",
@@ -546,18 +546,16 @@ impl PasteService {
         .execute(&mut *tx)
         .await;
         if let Err(error) = idempotency_insert {
-            tx.rollback()
-                .await
-                .map_err(|rollback| rollback.to_string())?;
+            tx.rollback().await.map_err(DomainError::internal)?;
             if let Some(paste) = self
                 .existing_idempotent_create(owner, &key_hash, request_hash)
                 .await?
             {
                 return Ok((paste, true));
             }
-            return Err(error.to_string().into());
+            return Err(DomainError::internal(error));
         }
-        tx.commit().await.map_err(|error| error.to_string())?;
+        tx.commit().await.map_err(DomainError::internal)?;
         let paste = self
             .find_paste(&id)
             .await?
@@ -580,22 +578,19 @@ impl PasteService {
         .bind(unix_timestamp())
         .fetch_optional(self.storage.pool())
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(DomainError::internal)?;
         let Some(row) = existing else {
             return Ok(None);
         };
         use sqlx::Row;
-        let stored_hash: String = row
-            .try_get("request_hash")
-            .map_err(|error| error.to_string())?;
+        let stored_hash: String = row.try_get("request_hash").map_err(DomainError::internal)?;
         if stored_hash != request_hash {
             return Err(DomainError::conflict(
                 "idempotency_conflict",
                 "Idempotency key was already used with a different request",
             ));
         }
-        let paste_id: Option<String> =
-            row.try_get("paste_id").map_err(|error| error.to_string())?;
+        let paste_id: Option<String> = row.try_get("paste_id").map_err(DomainError::internal)?;
         let paste_id = paste_id.ok_or_else(|| {
             DomainError::conflict(
                 "idempotency_resource_gone",
@@ -622,7 +617,7 @@ impl PasteService {
         let owner = principal
             .user_id()
             .ok_or_else(|| DomainError::forbidden("Authentication required"))?;
-        Ok(sqlx::query(
+        sqlx::query(
             "DELETE FROM idempotency_records
              WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2",
         )
@@ -631,7 +626,7 @@ impl PasteService {
         .execute(self.storage.pool())
         .await
         .map(|_| ())
-        .map_err(|error| error.to_string())?)
+        .map_err(DomainError::internal)
     }
 
     pub async fn update_paste(
@@ -701,7 +696,7 @@ impl PasteService {
         .bind(expected_revision)
         .execute(self.storage.pool())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::internal)?;
         if result.rows_affected() == 0 {
             return Err(DomainError::precondition("Paste revision changed"));
         }
@@ -742,7 +737,8 @@ pub(super) fn validate_folder_name(name: &str) -> DomainResult<&str> {
     Ok(name)
 }
 
-pub(super) fn folder_database_error(error: String) -> DomainError {
+pub(super) fn folder_database_error(error: impl std::fmt::Display) -> DomainError {
+    let error = error.to_string();
     if error.to_ascii_lowercase().contains("unique") {
         DomainError::conflict("folder_exists", "A folder with that name already exists")
     } else {
@@ -772,8 +768,7 @@ fn normalized_content(
         let content = validate_document(document).map_err(|error| {
             DomainError::validation(format!("Rich-text document is invalid: {error}"))
         })?;
-        let document_json = serde_json::to_string(document)
-            .map_err(|error| DomainError::internal(error.to_string()))?;
+        let document_json = serde_json::to_string(document).map_err(DomainError::internal)?;
         Ok((content, Some(document_json)))
     } else {
         if document.is_some() {
@@ -802,7 +797,7 @@ async fn load_paste_for_read(
     .bind(id)
     .fetch_optional(&mut **transaction)
     .await
-    .map_err(|error| error.to_string())?;
+    .map_err(DomainError::internal)?;
     let Some(mut paste) = paste.take().filter(|paste| can_read(principal, paste)) else {
         return Ok(None);
     };
@@ -827,7 +822,7 @@ async fn create_read_grant(
         .bind(now + 900)
         .execute(&mut **transaction)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(DomainError::internal)?;
     Ok(Some(token))
 }
 
@@ -835,14 +830,14 @@ async fn load_attachments_from<'e, E>(executor: E, paste_id: &str) -> DomainResu
 where
     E: Executor<'e, Database = Any>,
 {
-    Ok(sqlx::query_as::<_, Attachment>(
+    sqlx::query_as::<_, Attachment>(
         "SELECT id,sort_order,filename,storage_key,size_bytes FROM attachments
          WHERE paste_id=$1 ORDER BY sort_order",
     )
     .bind(paste_id)
     .fetch_all(executor)
     .await
-    .map_err(|e| e.to_string())?)
+    .map_err(DomainError::internal)
 }
 
 fn paste_size(paste: &Paste) -> i64 {

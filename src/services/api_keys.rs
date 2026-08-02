@@ -17,7 +17,7 @@ impl PasteService {
         &self,
         principal: &Principal,
     ) -> DomainResult<Vec<api_keys::ApiKey>> {
-        Ok(api_keys::list_for_user(&self.storage, self.key_owner(principal)?).await?)
+        api_keys::list_for_user(&self.storage, self.key_owner(principal)?).await
     }
 
     pub async fn create_api_key(
@@ -47,7 +47,7 @@ impl PasteService {
                 "Only administrators can grant administrative scopes",
             ));
         }
-        Ok(api_keys::create(&self.storage, Some(owner), name, &scopes).await?)
+        api_keys::create(&self.storage, Some(owner), name, &scopes).await
     }
 
     pub async fn set_api_key_enabled(
@@ -56,13 +56,10 @@ impl PasteService {
         id: i64,
         enabled: bool,
     ) -> DomainResult<bool> {
-        Ok(
-            api_keys::set_enabled_for_user(&self.storage, id, self.key_owner(principal)?, enabled)
-                .await?,
-        )
+        api_keys::set_enabled_for_user(&self.storage, id, self.key_owner(principal)?, enabled).await
     }
 
     pub async fn delete_api_key(&self, principal: &Principal, id: i64) -> DomainResult<bool> {
-        Ok(api_keys::delete_for_user(&self.storage, id, self.key_owner(principal)?).await?)
+        api_keys::delete_for_user(&self.storage, id, self.key_owner(principal)?).await
     }
 }

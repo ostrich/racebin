@@ -32,7 +32,7 @@ pub(crate) async fn admin_users(
     }
     match accounts::list_admin_users(&services.storage).await {
         Ok(users) => HttpResponse::Ok().json(users),
-        Err(e) => internal(e),
+        Err(e) => domain_error(e),
     }
 }
 
@@ -53,7 +53,7 @@ pub(crate) async fn admin_user(
     match accounts::admin_user(&services.storage, *id).await {
         Ok(Some(user)) => HttpResponse::Ok().json(user),
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "User not found"),
-        Err(message) => internal(message),
+        Err(error) => domain_error(error),
     }
 }
 
@@ -171,7 +171,7 @@ pub(crate) async fn admin_revoke_user_sessions(
     match accounts::revoke_sessions(&services.storage, *id).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "User not found"),
-        Err(message) => internal(message),
+        Err(error) => domain_error(error),
     }
 }
 
@@ -195,10 +195,10 @@ pub(crate) async fn admin_revoke_user_keys(
     match accounts::admin_user(&services.storage, *id).await {
         Ok(Some(_)) => match api_keys::delete_all_for_user(&services.storage, *id).await {
             Ok(_) => HttpResponse::NoContent().finish(),
-            Err(message) => internal(message),
+            Err(error) => domain_error(error),
         },
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "User not found"),
-        Err(message) => internal(message),
+        Err(error) => domain_error(error),
     }
 }
 
@@ -239,7 +239,7 @@ pub(crate) async fn admin_invitations(
                 })
                 .collect::<Vec<_>>(),
         ),
-        Err(e) => internal(e),
+        Err(e) => domain_error(e),
     }
 }
 
@@ -267,7 +267,7 @@ pub(crate) async fn admin_create_invitation(
             "token": token,
             "url": super::dto::absolute(&req, &format!("/invitations/{token}"))
         })),
-        Err(e) => internal(e),
+        Err(e) => domain_error(e),
     }
 }
 
@@ -291,7 +291,7 @@ pub(crate) async fn admin_revoke_invitation(
     match accounts::revoke_invitation(&services.storage, *id).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "Invitation not found"),
-        Err(e) => internal(e),
+        Err(e) => domain_error(e),
     }
 }
 
@@ -310,7 +310,7 @@ pub(crate) async fn admin_keys(
     }
     match api_keys::list(&services.storage).await {
         Ok(v) => HttpResponse::Ok().json(v),
-        Err(e) => internal(e),
+        Err(e) => domain_error(e),
     }
 }
 
@@ -335,7 +335,7 @@ pub(crate) async fn admin_update_key(
     match api_keys::set_enabled(&services.storage, *id, body.enabled).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "API key not found"),
-        Err(e) => internal(e),
+        Err(e) => domain_error(e),
     }
 }
 
@@ -359,6 +359,6 @@ pub(crate) async fn admin_delete_key(
     match api_keys::delete(&services.storage, *id).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => error(StatusCode::NOT_FOUND, "not_found", "API key not found"),
-        Err(e) => internal(e),
+        Err(e) => domain_error(e),
     }
 }

@@ -182,7 +182,7 @@ pub async fn verify_user(
     repo: &Repository,
     username: &str,
     password: &str,
-) -> Result<Option<User>, String> {
+) -> DomainResult<Option<User>> {
     #[derive(FromRow)]
     struct UserPassword {
         id: i64,
@@ -199,7 +199,7 @@ pub async fn verify_user(
     .bind(username)
     .fetch_optional(repo.pool())
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(DomainError::from)?;
     let encoded = row
         .as_ref()
         .map(|value| value.password_hash.as_str())
@@ -224,18 +224,18 @@ pub async fn create_session(
     repo: &Repository,
     user_id: i64,
     remember: bool,
-) -> Result<(String, String, i64), String> {
+) -> DomainResult<(String, String, i64)> {
     let token = random_token(64);
     let csrf = random_token(48);
     let created_at = unix_timestamp();
     let expires_at = created_at + if remember { 30 * 86400 } else { 12 * 3600 };
-    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
+    let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
     sqlx::query("DELETE FROM sessions WHERE user_id=$1 AND expires_at<=$2")
         .bind(user_id)
         .bind(created_at)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
     sqlx::query(
         "INSERT INTO sessions(user_id,token_hash,csrf_token,created_at,expires_at,last_used_at)
          VALUES($1,$2,$3,$4,$5,$4)",
@@ -247,13 +247,13 @@ pub async fn create_session(
     .bind(expires_at)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(DomainError::from)?;
     sqlx::query("UPDATE users SET last_login_at=$2 WHERE id=$1")
         .bind(user_id)
         .bind(created_at)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
     sqlx::query(
         "DELETE FROM sessions WHERE user_id=$1 AND id NOT IN (
            SELECT id FROM sessions WHERE user_id=$1
@@ -263,12 +263,12 @@ pub async fn create_session(
     .bind(user_id)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    tx.commit().await.map_err(|e| e.to_string())?;
+    .map_err(DomainError::from)?;
+    tx.commit().await.map_err(DomainError::from)?;
     Ok((token, csrf, expires_at))
 }
 
-pub async fn session_user(repo: &Repository, token: &str) -> Result<Option<SessionUser>, String> {
+pub async fn session_user(repo: &Repository, token: &str) -> DomainResult<Option<SessionUser>> {
     #[derive(FromRow)]
     struct SessionRow {
         id: i64,
@@ -289,7 +289,7 @@ pub async fn session_user(repo: &Repository, token: &str) -> Result<Option<Sessi
     .bind(unix_timestamp())
     .fetch_optional(repo.pool())
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(DomainError::from)?;
     if let Some(value) = &row {
         let current = unix_timestamp();
         let _ =
@@ -311,23 +311,23 @@ pub async fn session_user(repo: &Repository, token: &str) -> Result<Option<Sessi
     }))
 }
 
-pub async fn delete_session(repo: &Repository, token: &str) -> Result<(), String> {
+pub async fn delete_session(repo: &Repository, token: &str) -> DomainResult<()> {
     sqlx::query("DELETE FROM sessions WHERE token_hash=$1")
         .bind(hash(token))
         .execute(repo.pool())
         .await
         .map(|_| ())
-        .map_err(|e| e.to_string())
+        .map_err(DomainError::from)
 }
 
-pub async fn list_users(repo: &Repository) -> Result<Vec<User>, String> {
+pub async fn list_users(repo: &Repository) -> DomainResult<Vec<User>> {
     sqlx::query_as(
         "SELECT id,username,role,enabled,password_change_required
          FROM users ORDER BY username",
     )
     .fetch_all(repo.pool())
     .await
-    .map_err(|e| e.to_string())
+    .map_err(DomainError::from)
 }
 
 #[cfg(test)]

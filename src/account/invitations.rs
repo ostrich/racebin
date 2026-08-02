@@ -1,9 +1,6 @@
 use super::*;
 
-pub async fn create_invitation(
-    repo: &Repository,
-    created_by_user_id: i64,
-) -> Result<String, String> {
+pub async fn create_invitation(repo: &Repository, created_by_user_id: i64) -> DomainResult<String> {
     let token = random_token(64);
     sqlx::query(
         "INSERT INTO invitations(token_hash,token,created_by_user_id,expires_at) VALUES($1,$2,$3,$4)",
@@ -14,11 +11,11 @@ pub async fn create_invitation(
     .bind(unix_timestamp() + 86400)
     .execute(repo.pool())
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(DomainError::from)?;
     Ok(token)
 }
 
-pub async fn list_invitations(repo: &Repository) -> Result<Vec<Invitation>, String> {
+pub async fn list_invitations(repo: &Repository) -> DomainResult<Vec<Invitation>> {
     sqlx::query_as(
         "SELECT i.id,COALESCE(substr(i.token,1,10),substr(i.token_hash,1,10)) AS token_prefix,
                 i.token,i.expires_at,i.redeemed,
@@ -29,16 +26,16 @@ pub async fn list_invitations(repo: &Repository) -> Result<Vec<Invitation>, Stri
     )
     .fetch_all(repo.pool())
     .await
-    .map_err(|e| e.to_string())
+    .map_err(DomainError::from)
 }
 
-pub async fn revoke_invitation(repo: &Repository, id: i64) -> Result<bool, String> {
+pub async fn revoke_invitation(repo: &Repository, id: i64) -> DomainResult<bool> {
     sqlx::query("UPDATE invitations SET revoked=1,token=NULL WHERE id=$1 AND redeemed=0")
         .bind(id)
         .execute(repo.pool())
         .await
         .map(|result| result.rows_affected() == 1)
-        .map_err(|e| e.to_string())
+        .map_err(DomainError::from)
 }
 
 pub async fn redeem_invitation(
@@ -58,7 +55,7 @@ pub async fn redeem_invitation(
     .bind(unix_timestamp())
     .fetch_optional(repo.pool())
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(DomainError::from)?;
     if active.is_none() {
         return Err(DomainError::validation_code(
             "invalid_invitation",
@@ -66,7 +63,7 @@ pub async fn redeem_invitation(
         ));
     }
     let encoded = password_hash(password)?;
-    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
+    let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
     let lock = if repo.kind() == DatabaseKind::Postgres {
         " FOR UPDATE"
     } else {
@@ -80,7 +77,7 @@ pub async fn redeem_invitation(
     .bind(unix_timestamp())
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(DomainError::from)?;
     let invitation_id = invitation_id.ok_or_else(|| {
         DomainError::validation_code("invalid_invitation", "Invitation is invalid or expired")
     })?;
@@ -93,14 +90,14 @@ pub async fn redeem_invitation(
     .bind(unix_timestamp())
     .fetch_one(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(DomainError::from)?;
     sqlx::query("UPDATE invitations SET redeemed=1,redeemed_by_user_id=$2,token=NULL WHERE id=$1")
         .bind(invitation_id)
         .bind(id)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
-    tx.commit().await.map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
+    tx.commit().await.map_err(DomainError::from)?;
     Ok(User {
         id,
         username,

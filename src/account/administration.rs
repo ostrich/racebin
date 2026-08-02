@@ -17,7 +17,7 @@ fn admin_user_query(repo: &Repository) -> String {
     )
 }
 
-pub async fn list_admin_users(repo: &Repository) -> Result<Vec<AdminUser>, String> {
+pub async fn list_admin_users(repo: &Repository) -> DomainResult<Vec<AdminUser>> {
     sqlx::query_as(&format!(
         "{} ORDER BY lower(u.username)",
         admin_user_query(repo)
@@ -25,16 +25,16 @@ pub async fn list_admin_users(repo: &Repository) -> Result<Vec<AdminUser>, Strin
     .bind(unix_timestamp())
     .fetch_all(repo.pool())
     .await
-    .map_err(|e| e.to_string())
+    .map_err(DomainError::from)
 }
 
-pub async fn admin_user(repo: &Repository, id: i64) -> Result<Option<AdminUser>, String> {
+pub async fn admin_user(repo: &Repository, id: i64) -> DomainResult<Option<AdminUser>> {
     sqlx::query_as(&format!("{} WHERE u.id=$2", admin_user_query(repo)))
         .bind(unix_timestamp())
         .bind(id)
         .fetch_optional(repo.pool())
         .await
-        .map_err(|e| e.to_string())
+        .map_err(DomainError::from)
 }
 
 pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> DomainResult<()> {
@@ -52,7 +52,7 @@ pub async fn update_user(
     admin: Option<bool>,
 ) -> DomainResult<()> {
     let _write_guard = repo.lock_writes().await;
-    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
+    let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
     let lock = if repo.kind() == DatabaseKind::Postgres {
         " FOR UPDATE"
     } else {
@@ -63,7 +63,7 @@ pub async fn update_user(
             .bind(id)
             .fetch_optional(&mut *tx)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(DomainError::from)?;
     let (current_role, currently_enabled) =
         target.ok_or_else(|| DomainError::not_found("User not found"))?;
     let final_enabled = enabled.unwrap_or(currently_enabled != 0);
@@ -73,7 +73,7 @@ pub async fn update_user(
             sqlx::query_scalar("SELECT count(*) FROM users WHERE role='admin' AND enabled=1")
                 .fetch_one(&mut *tx)
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(DomainError::from)?;
         if admins <= 1 {
             return Err(DomainError::validation_code(
                 "last_administrator",
@@ -91,7 +91,7 @@ pub async fn update_user(
         .bind(if final_admin { "admin" } else { "user" })
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
     if result.rows_affected() == 0 {
         return Err(DomainError::not_found("User not found"));
     }
@@ -100,12 +100,12 @@ pub async fn update_user(
             .bind(id)
             .execute(&mut *tx)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(DomainError::from)?;
         sqlx::query("DELETE FROM password_reset_tokens WHERE user_id=$1")
             .bind(id)
             .execute(&mut *tx)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(DomainError::from)?;
     }
     if !final_admin {
         sqlx::query(
@@ -118,7 +118,7 @@ pub async fn update_user(
         .bind(id)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
     }
     tx.commit().await.map_err(DomainError::from)
 }
@@ -130,24 +130,24 @@ pub async fn set_password(
     force: bool,
 ) -> DomainResult<()> {
     let encoded = password_hash(password)?;
-    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
+    let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
     sqlx::query("UPDATE users SET password_hash=$2,password_change_required=$3 WHERE id=$1")
         .bind(id)
         .bind(encoded)
         .bind(i64::from(force))
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
     sqlx::query("DELETE FROM sessions WHERE user_id=$1")
         .bind(id)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
     sqlx::query("DELETE FROM password_reset_tokens WHERE user_id=$1")
         .bind(id)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
     tx.commit().await.map_err(DomainError::from)
 }
 
@@ -159,12 +159,12 @@ pub async fn create_password_reset(
     let _write_guard = repo.lock_writes().await;
     let token = random_token(64);
     let now = unix_timestamp();
-    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
+    let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
     let enabled: Option<i64> = sqlx::query_scalar("SELECT enabled FROM users WHERE id=$1")
         .bind(user_id)
         .fetch_optional(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
     match enabled {
         None => return Err(DomainError::not_found("User not found")),
         Some(0) => {
@@ -179,7 +179,7 @@ pub async fn create_password_reset(
         .bind(user_id)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
     sqlx::query(
         "INSERT INTO password_reset_tokens(user_id,token_hash,created_by_user_id,created_at,expires_at)
          VALUES($1,$2,$3,$4,$5)",
@@ -191,8 +191,8 @@ pub async fn create_password_reset(
     .bind(now + 3600)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
-    tx.commit().await.map_err(|e| e.to_string())?;
+    .map_err(DomainError::from)?;
+    tx.commit().await.map_err(DomainError::from)?;
     Ok(token)
 }
 
@@ -206,7 +206,7 @@ pub async fn reset_password(repo: &Repository, token: &str, password: &str) -> D
     .bind(unix_timestamp())
     .fetch_optional(repo.pool())
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(DomainError::from)?;
     if valid.is_none() {
         return Err(DomainError::validation_code(
             "invalid_password_reset",
@@ -215,7 +215,7 @@ pub async fn reset_password(repo: &Repository, token: &str, password: &str) -> D
     }
     let encoded = password_hash(password)?;
     let _write_guard = repo.lock_writes().await;
-    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
+    let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
     let lock = if repo.kind() == DatabaseKind::Postgres {
         " FOR UPDATE"
     } else {
@@ -229,7 +229,7 @@ pub async fn reset_password(repo: &Repository, token: &str, password: &str) -> D
     .bind(unix_timestamp())
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(DomainError::from)?;
     let user_id = user_id.ok_or_else(|| {
         DomainError::validation_code(
             "invalid_password_reset",
@@ -241,26 +241,26 @@ pub async fn reset_password(repo: &Repository, token: &str, password: &str) -> D
         .bind(encoded)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
     sqlx::query("DELETE FROM sessions WHERE user_id=$1")
         .bind(user_id)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
     sqlx::query("DELETE FROM password_reset_tokens WHERE user_id=$1")
         .bind(user_id)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
     tx.commit().await.map_err(DomainError::from)
 }
 
-pub async fn revoke_sessions(repo: &Repository, user_id: i64) -> Result<bool, String> {
+pub async fn revoke_sessions(repo: &Repository, user_id: i64) -> DomainResult<bool> {
     let exists: Option<i64> = sqlx::query_scalar("SELECT id FROM users WHERE id=$1")
         .bind(user_id)
         .fetch_optional(repo.pool())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
     if exists.is_none() {
         return Ok(false);
     }
@@ -269,5 +269,5 @@ pub async fn revoke_sessions(repo: &Repository, user_id: i64) -> Result<bool, St
         .execute(repo.pool())
         .await
         .map(|_| true)
-        .map_err(|e| e.to_string())
+        .map_err(DomainError::from)
 }

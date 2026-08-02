@@ -52,7 +52,7 @@ pub(crate) async fn login(
     let retry_after =
         match accounts::login_retry_after(&services.storage, &body.username, &client).await {
             Ok(value) => value,
-            Err(error) => return internal(error),
+            Err(error) => return domain_error(error),
         };
     if let Some(retry_after) = retry_after {
         let mut response = error(
@@ -71,7 +71,7 @@ pub(crate) async fn login(
             if let Err(error) =
                 accounts::clear_login_failures(&services.storage, &body.username).await
             {
-                return internal(error);
+                return domain_error(error);
             }
             match accounts::create_session(&services.storage, user.id, body.remember.unwrap_or(false)).await {
                 Ok((token, csrf, _)) => HttpResponse::Ok()
@@ -80,14 +80,14 @@ pub(crate) async fn login(
                         body.remember.unwrap_or(false),
                     ))
                     .json(json!({"user": {"id": user.id, "username": user.username, "role": user.role}, "csrf_token": csrf})),
-                Err(e) => internal(e),
+                Err(e) => domain_error(e),
             }
         }
         Ok(None) => {
             if let Err(error) =
                 accounts::record_login_failure(&services.storage, &body.username, &client).await
             {
-                return internal(error);
+                return domain_error(error);
             }
             error(
                 StatusCode::UNAUTHORIZED,
@@ -95,7 +95,7 @@ pub(crate) async fn login(
                 "Invalid username or password",
             )
         }
-        Err(e) => internal(e),
+        Err(e) => domain_error(e),
     }
 }
 
@@ -118,7 +118,7 @@ pub(crate) async fn logout(req: HttpRequest, services: web::Data<PasteService>) 
     }
     if let Some(cookie) = req.cookie(accounts::SESSION_COOKIE) {
         if let Err(e) = accounts::delete_session(&services.storage, cookie.value()).await {
-            return internal(e);
+            return domain_error(e);
         }
     }
     HttpResponse::NoContent()
@@ -176,7 +176,7 @@ pub(crate) async fn change_password(
                 .map(|_| true)
         }
         Ok(None) => Ok(false),
-        Err(error) => Err(crate::services::DomainError::internal(error)),
+        Err(error) => Err(error),
     };
     match result {
         Ok(true) => HttpResponse::NoContent().finish(),
@@ -213,7 +213,7 @@ pub(crate) async fn reset_password(
     let client = auth::client_address(&req);
     let retry_after = match accounts::password_reset_retry_after(&services.storage, &client).await {
         Ok(value) => value,
-        Err(error) => return internal(error),
+        Err(error) => return domain_error(error),
     };
     if let Some(retry_after) = retry_after {
         let mut response = error(
@@ -233,7 +233,7 @@ pub(crate) async fn reset_password(
             if let Err(error) =
                 accounts::record_password_reset_failure(&services.storage, &client).await
             {
-                return internal(error);
+                return domain_error(error);
             }
             domain_error(value)
         }
@@ -251,7 +251,7 @@ pub(crate) async fn redeem_invitation(
     let client = auth::client_address(&req);
     let retry_after = match accounts::invitation_retry_after(&services.storage, &client).await {
         Ok(value) => value,
-        Err(error) => return internal(error),
+        Err(error) => return domain_error(error),
     };
     if let Some(retry_after) = retry_after {
         let mut response = error(
@@ -273,11 +273,11 @@ pub(crate) async fn redeem_invitation(
             Ok((session, csrf, _)) => HttpResponse::Created()
                 .cookie(cookies::session_cookie(session, false))
                 .json(json!({"user": {"id": user.id, "username": user.username, "role": user.role}, "csrf_token": csrf})),
-            Err(e) => internal(e),
+            Err(e) => domain_error(e),
         },
         Err(value) => {
             if let Err(error) = accounts::record_invitation_failure(&services.storage, &client).await {
-                return internal(error);
+                return domain_error(error);
             }
             domain_error(value)
         }

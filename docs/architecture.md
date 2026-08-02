@@ -96,6 +96,21 @@ belong in the repository layer.
 browser session, or API key. This keeps authorization decisions close to the
 operations they protect.
 
+### Error boundaries
+
+Domain services and account operations return `DomainResult<T>`. A
+`DomainError` retains its category, stable API code, and safe client-facing
+message until the HTTP layer converts it to a problem-details response.
+Transport handlers must use the common `domain_error` conversion rather than
+reconstructing a status or code from an error string.
+
+Raw string errors are limited to boundaries where they are the natural local
+representation, including request parsing, rich-text parsing, operator CLI
+commands, and repository startup or copy operations. Callers classify those
+errors explicitly when they enter the domain layer. There is deliberately no
+implicit `String` to `DomainError` conversion, so accidentally discarding a
+typed error is a compile-time failure.
+
 ## HTTP and API design
 
 All application endpoints live below `/api/v1`. Routes are grouped by

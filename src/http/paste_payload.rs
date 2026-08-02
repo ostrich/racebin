@@ -247,7 +247,8 @@ pub(super) async fn promote_created_files(
             &services.storage.data_dir,
             &paste.id,
             &file.storage_key,
-        )?;
+        )
+        .map_err(crate::services::DomainError::internal)?;
         if let Err(error) = tokio::fs::rename(&file.temporary, &destination).await {
             for path in promoted {
                 let _ = tokio::fs::remove_file(path).await;

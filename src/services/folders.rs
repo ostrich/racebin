@@ -16,7 +16,7 @@ impl PasteService {
         .bind(owner)
         .fetch_all(self.storage.pool())
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(DomainError::internal)?;
         let (total_count, unfiled_count): (i64, i64) = sqlx::query_as(
             "SELECT count(*),coalesce(sum(CASE WHEN folder_id IS NULL THEN 1 ELSE 0 END),0)
              FROM pastes WHERE owner_id=$1",
@@ -24,7 +24,7 @@ impl PasteService {
         .bind(owner)
         .fetch_one(self.storage.pool())
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(DomainError::internal)?;
         Ok(FolderOverview {
             items,
             total_count,
@@ -45,7 +45,7 @@ impl PasteService {
         .bind(unix_timestamp())
         .fetch_one(self.storage.pool())
         .await
-        .map_err(|error| folder_database_error(error.to_string()))?;
+        .map_err(folder_database_error)?;
         self.folder_by_id(owner, id)
             .await?
             .ok_or_else(|| DomainError::internal("Folder creation failed"))
@@ -67,7 +67,7 @@ impl PasteService {
                 .bind(folder_name_key(name))
                 .execute(self.storage.pool())
                 .await
-                .map_err(|error| folder_database_error(error.to_string()))?
+                .map_err(folder_database_error)?
                 .rows_affected();
         if changed == 0 {
             Ok(None)
@@ -83,7 +83,7 @@ impl PasteService {
             .pool()
             .begin()
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(DomainError::internal)?;
         sqlx::query(
             "UPDATE pastes SET folder_id=NULL,updated_at=$3,revision=revision+1
              WHERE folder_id=$1 AND owner_id=$2",
@@ -93,19 +93,16 @@ impl PasteService {
         .bind(unix_timestamp())
         .execute(&mut *transaction)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(DomainError::internal)?;
         let deleted = sqlx::query("DELETE FROM folders WHERE id=$1 AND owner_id=$2")
             .bind(id)
             .bind(owner)
             .execute(&mut *transaction)
             .await
-            .map_err(|error| error.to_string())?
+            .map_err(DomainError::internal)?
             .rows_affected()
             == 1;
-        transaction
-            .commit()
-            .await
-            .map_err(|error| error.to_string())?;
+        transaction.commit().await.map_err(DomainError::internal)?;
         Ok(deleted)
     }
 
@@ -130,7 +127,7 @@ impl PasteService {
             .pool()
             .begin()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(DomainError::internal)?;
         for id in paste_ids {
             let changed = sqlx::query(
                 "UPDATE pastes SET folder_id=$3,updated_at=$4,revision=revision+1
@@ -142,13 +139,13 @@ impl PasteService {
             .bind(unix_timestamp())
             .execute(&mut *tx)
             .await
-            .map_err(|e| e.to_string())?
+            .map_err(DomainError::internal)?
             .rows_affected();
             if changed != 1 {
                 return Err(DomainError::not_found("One or more pastes were not found"));
             }
         }
-        Ok(tx.commit().await.map_err(|e| e.to_string())?)
+        tx.commit().await.map_err(DomainError::internal)
     }
 
     pub(super) async fn validate_folder_owner(
@@ -166,7 +163,7 @@ impl PasteService {
     }
 
     pub(super) async fn folder_by_id(&self, owner: i64, id: i64) -> DomainResult<Option<Folder>> {
-        Ok(sqlx::query_as(
+        sqlx::query_as(
             "SELECT f.id,f.owner_id,f.name,f.created_at,
                     (SELECT count(*) FROM pastes p WHERE p.folder_id=f.id) AS paste_count
              FROM folders f WHERE f.id=$1 AND f.owner_id=$2",
@@ -175,6 +172,6 @@ impl PasteService {
         .bind(owner)
         .fetch_optional(self.storage.pool())
         .await
-        .map_err(|error| error.to_string())?)
+        .map_err(DomainError::internal)
     }
 }

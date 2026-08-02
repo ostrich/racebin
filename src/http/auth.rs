@@ -46,15 +46,13 @@ async fn resolve_principal(
             DomainError::unauthorized("invalid_token", "Invalid authorization scheme")
         })?;
         return api_keys::authenticate(&services.storage, value)
-            .await
-            .map_err(DomainError::internal)?
+            .await?
             .map(Principal::ApiKey)
             .ok_or_else(|| DomainError::unauthorized("invalid_token", "Invalid bearer token"));
     }
     let session = match request.cookie(accounts::SESSION_COOKIE) {
         Some(cookie) => accounts::session_user(&services.storage, cookie.value())
-            .await
-            .map_err(DomainError::internal)?
+            .await?
             .map(Principal::Session)
             .unwrap_or(Principal::Anonymous),
         None => Principal::Anonymous,

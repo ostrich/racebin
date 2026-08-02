@@ -2,17 +2,14 @@ use super::*;
 
 const ATTEMPT_WINDOW_SECONDS: i64 = 900;
 
-async fn retry_after(
-    repo: &Repository,
-    keys: &[(&str, String, i64)],
-) -> Result<Option<u64>, String> {
+async fn retry_after(repo: &Repository, keys: &[(&str, String, i64)]) -> DomainResult<Option<u64>> {
     let now = unix_timestamp();
     let cutoff = now - ATTEMPT_WINDOW_SECONDS;
     sqlx::query("DELETE FROM auth_attempts WHERE occurred_at<=$1")
         .bind(cutoff)
         .execute(repo.pool())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
     let mut retry = None;
     for (kind, subject, limit) in keys {
         let (count, first): (i64, Option<i64>) = sqlx::query_as(
@@ -24,7 +21,7 @@ async fn retry_after(
         .bind(cutoff)
         .fetch_one(repo.pool())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::from)?;
         if count >= *limit {
             let seconds = (first.unwrap_or(now) + ATTEMPT_WINDOW_SECONDS - now).max(1) as u64;
             retry = Some(retry.map_or(seconds, |current: u64| current.max(seconds)));
@@ -37,7 +34,7 @@ pub async fn login_retry_after(
     repo: &Repository,
     username: &str,
     client: &str,
-) -> Result<Option<u64>, String> {
+) -> DomainResult<Option<u64>> {
     retry_after(
         repo,
         &[
@@ -52,9 +49,9 @@ pub async fn record_login_failure(
     repo: &Repository,
     username: &str,
     client: &str,
-) -> Result<(), String> {
+) -> DomainResult<()> {
     let now = unix_timestamp();
-    let mut tx = repo.pool().begin().await.map_err(|e| e.to_string())?;
+    let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
     for (kind, subject) in [
         ("login_account", username.to_ascii_lowercase()),
         ("login_address", client.to_string()),
@@ -65,28 +62,25 @@ pub async fn record_login_failure(
             .bind(now)
             .execute(&mut *tx)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(DomainError::from)?;
     }
-    tx.commit().await.map_err(|e| e.to_string())
+    tx.commit().await.map_err(DomainError::from)
 }
 
-pub async fn clear_login_failures(repo: &Repository, username: &str) -> Result<(), String> {
+pub async fn clear_login_failures(repo: &Repository, username: &str) -> DomainResult<()> {
     sqlx::query("DELETE FROM auth_attempts WHERE kind='login_account' AND subject=$1")
         .bind(username.to_ascii_lowercase())
         .execute(repo.pool())
         .await
         .map(|_| ())
-        .map_err(|e| e.to_string())
+        .map_err(DomainError::from)
 }
 
-pub async fn invitation_retry_after(
-    repo: &Repository,
-    client: &str,
-) -> Result<Option<u64>, String> {
+pub async fn invitation_retry_after(repo: &Repository, client: &str) -> DomainResult<Option<u64>> {
     retry_after(repo, &[("invitation_address", client.to_string(), 20)]).await
 }
 
-pub async fn record_invitation_failure(repo: &Repository, client: &str) -> Result<(), String> {
+pub async fn record_invitation_failure(repo: &Repository, client: &str) -> DomainResult<()> {
     sqlx::query(
         "INSERT INTO auth_attempts(kind,subject,occurred_at)
          VALUES('invitation_address',$1,$2)",
@@ -96,17 +90,17 @@ pub async fn record_invitation_failure(repo: &Repository, client: &str) -> Resul
     .execute(repo.pool())
     .await
     .map(|_| ())
-    .map_err(|e| e.to_string())
+    .map_err(DomainError::from)
 }
 
 pub async fn password_reset_retry_after(
     repo: &Repository,
     client: &str,
-) -> Result<Option<u64>, String> {
+) -> DomainResult<Option<u64>> {
     retry_after(repo, &[("password_reset_address", client.to_string(), 20)]).await
 }
 
-pub async fn record_password_reset_failure(repo: &Repository, client: &str) -> Result<(), String> {
+pub async fn record_password_reset_failure(repo: &Repository, client: &str) -> DomainResult<()> {
     sqlx::query(
         "INSERT INTO auth_attempts(kind,subject,occurred_at)
          VALUES('password_reset_address',$1,$2)",
@@ -116,5 +110,5 @@ pub async fn record_password_reset_failure(repo: &Repository, client: &str) -> R
     .execute(repo.pool())
     .await
     .map(|_| ())
-    .map_err(|e| e.to_string())
+    .map_err(DomainError::from)
 }

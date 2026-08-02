@@ -74,7 +74,10 @@ pub(crate) async fn run_if_requested() -> Result<bool, String> {
             println!("created {role} account {username}");
         }
         "list" => {
-            for user in accounts::list_users(&repository).await? {
+            for user in accounts::list_users(&repository)
+                .await
+                .map_err(|error| error.to_string())?
+            {
                 println!(
                     "{}\t{}\t{}",
                     user.username,

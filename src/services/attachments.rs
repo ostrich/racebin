@@ -24,7 +24,7 @@ impl PasteService {
             .join(format!(".delete-{}", Uuid::new_v4()));
         let had_directory = directory.exists();
         if had_directory {
-            std::fs::rename(&directory, &staged).map_err(|e| e.to_string())?;
+            std::fs::rename(&directory, &staged).map_err(DomainError::internal)?;
         }
         match sqlx::query("DELETE FROM pastes WHERE id=$1 AND ($2 IS NULL OR revision=$2)")
             .bind(id)
@@ -52,7 +52,7 @@ impl PasteService {
                 if had_directory {
                     let _ = std::fs::rename(staged, directory);
                 }
-                Err(error.to_string().into())
+                Err(DomainError::internal(error))
             }
         }
     }
@@ -88,14 +88,14 @@ impl PasteService {
             .pool()
             .begin()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(DomainError::internal)?;
         let starting_sort_order: i64 = sqlx::query_scalar(
             "SELECT coalesce(max(sort_order)+1,0) FROM attachments WHERE paste_id=$1",
         )
         .bind(&paste.id)
         .fetch_one(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(DomainError::internal)?;
         let mut attachments = Vec::with_capacity(inputs.len());
         for (offset, (filename, storage_key, size_bytes)) in inputs.iter().enumerate() {
             let sort_order = starting_sort_order + offset as i64;
@@ -110,7 +110,7 @@ impl PasteService {
             .bind(size_bytes)
             .fetch_one(&mut *tx)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(DomainError::internal)?;
             attachments.push(Attachment {
                 id,
                 sort_order,
@@ -128,12 +128,12 @@ impl PasteService {
         .bind(expected_revision)
         .execute(&mut *tx)
         .await
-        .map_err(|error| error.to_string())?
+        .map_err(DomainError::internal)?
         .rows_affected();
         if changed == 0 {
             return Err(DomainError::precondition("Paste revision changed"));
         }
-        tx.commit().await.map_err(|e| e.to_string())?;
+        tx.commit().await.map_err(DomainError::internal)?;
         Ok(attachments)
     }
 
@@ -173,20 +173,20 @@ impl PasteService {
         let staged = path.with_file_name(format!(".delete-{}", Uuid::new_v4()));
         let existed = path.exists();
         if existed {
-            std::fs::rename(&path, &staged).map_err(|e| e.to_string())?;
+            std::fs::rename(&path, &staged).map_err(DomainError::internal)?;
         }
         let mut transaction = self
             .storage
             .pool()
             .begin()
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(DomainError::internal)?;
         let result = async {
             let affected = sqlx::query("DELETE FROM attachments WHERE id=$1")
                 .bind(attachment_id)
                 .execute(&mut *transaction)
                 .await
-                .map_err(|error| error.to_string())?
+                .map_err(DomainError::internal)?
                 .rows_affected();
             if affected == 1 {
                 let changed = sqlx::query(
@@ -198,16 +198,13 @@ impl PasteService {
                 .bind(expected_revision)
                 .execute(&mut *transaction)
                 .await
-                .map_err(|error| error.to_string())?
+                .map_err(DomainError::internal)?
                 .rows_affected();
                 if changed == 0 {
                     return Err(DomainError::precondition("Paste revision changed"));
                 }
             }
-            transaction
-                .commit()
-                .await
-                .map_err(|error| error.to_string())?;
+            transaction.commit().await.map_err(DomainError::internal)?;
             Ok::<u64, DomainError>(affected)
         }
         .await;

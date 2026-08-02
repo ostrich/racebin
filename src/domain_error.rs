@@ -53,8 +53,8 @@ impl DomainError {
     pub fn precondition(message: impl Into<String>) -> Self {
         Self::new(ErrorKind::Precondition, "precondition_failed", message)
     }
-    pub fn internal(message: impl Into<String>) -> Self {
-        Self::new(ErrorKind::Internal, "internal_error", message)
+    pub fn internal(error: impl Display) -> Self {
+        Self::new(ErrorKind::Internal, "internal_error", error.to_string())
     }
 }
 
@@ -65,19 +65,9 @@ impl Display for DomainError {
 }
 
 impl std::error::Error for DomainError {}
-impl From<String> for DomainError {
-    fn from(message: String) -> Self {
-        Self::internal(message)
-    }
-}
-impl From<&str> for DomainError {
-    fn from(message: &str) -> Self {
-        Self::internal(message)
-    }
-}
 impl From<sqlx::Error> for DomainError {
     fn from(error: sqlx::Error) -> Self {
-        Self::internal(error.to_string())
+        Self::internal(error)
     }
 }
 

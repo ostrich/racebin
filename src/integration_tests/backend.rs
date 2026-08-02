@@ -1,4 +1,5 @@
 use super::*;
+use crate::services::ErrorKind;
 
 pub(super) async fn backend_contract(repo: Repository) {
     insert_user(&repo, 1, "administrator", "admin").await;
@@ -97,6 +98,11 @@ pub(super) async fn backend_contract(repo: Repository) {
     assert_eq!(invited.username, "invited-user");
 
     let scopes = vec!["paste:read".to_string(), "paste:list".to_string()];
+    let invalid_key = api_keys::create(&repo, Some(2), "", &scopes)
+        .await
+        .unwrap_err();
+    assert_eq!(invalid_key.kind, ErrorKind::Validation);
+    assert_eq!(invalid_key.code, "invalid_api_key_name");
     let (key, token) = api_keys::create(&repo, Some(2), "contract key", &scopes)
         .await
         .unwrap();

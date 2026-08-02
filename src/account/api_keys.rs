@@ -3,6 +3,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use sqlx::{Any, Row};
 
+use crate::domain_error::{DomainError, DomainResult};
 use crate::repository::Repository;
 use crate::time::unix_timestamp;
 
@@ -60,33 +61,27 @@ pub fn normalize_scopes(scopes: &[String]) -> Result<Vec<String>, &'static str> 
 async fn scopes_for(
     executor: impl sqlx::Executor<'_, Database = Any>,
     api_key_id: i64,
-) -> Result<Vec<String>, String> {
+) -> DomainResult<Vec<String>> {
     sqlx::query_scalar("SELECT scope FROM api_key_scopes WHERE api_key_id=$1 ORDER BY scope")
         .bind(api_key_id)
         .fetch_all(executor)
         .await
-        .map_err(|error| error.to_string())
+        .map_err(DomainError::from)
 }
 
-async fn from_row(repo: &Repository, row: sqlx::any::AnyRow) -> Result<ApiKey, String> {
-    let id = row.try_get("id").map_err(|error| error.to_string())?;
+async fn from_row(repo: &Repository, row: sqlx::any::AnyRow) -> DomainResult<ApiKey> {
+    let id = row.try_get("id").map_err(DomainError::from)?;
     Ok(ApiKey {
         id,
-        user_id: row.try_get("user_id").map_err(|error| error.to_string())?,
-        name: row.try_get("name").map_err(|error| error.to_string())?,
-        token_prefix: row
-            .try_get("token_prefix")
-            .map_err(|error| error.to_string())?,
+        user_id: row.try_get("user_id").map_err(DomainError::from)?,
+        name: row.try_get("name").map_err(DomainError::from)?,
+        token_prefix: row.try_get("token_prefix").map_err(DomainError::from)?,
         scopes: scopes_for(repo.pool(), id).await?,
-        created_at: row
-            .try_get("created_at")
-            .map_err(|error| error.to_string())?,
-        last_used_at: row
-            .try_get("last_used_at")
-            .map_err(|error| error.to_string())?,
+        created_at: row.try_get("created_at").map_err(DomainError::from)?,
+        last_used_at: row.try_get("last_used_at").map_err(DomainError::from)?,
         enabled: row
             .try_get::<i64, _>("enabled")
-            .map_err(|error| error.to_string())?
+            .map_err(DomainError::from)?
             != 0,
     })
 }
@@ -96,12 +91,16 @@ pub async fn create(
     user_id: Option<i64>,
     name: &str,
     scopes: &[String],
-) -> Result<(ApiKey, String), String> {
+) -> DomainResult<(ApiKey, String)> {
     let name = name.trim();
     if name.is_empty() || name.chars().count() > 100 {
-        return Err("Key name must contain 1 to 100 characters".to_string());
+        return Err(DomainError::validation_code(
+            "invalid_api_key_name",
+            "Key name must contain 1 to 100 characters",
+        ));
     }
-    let scopes = normalize_scopes(scopes).map_err(str::to_string)?;
+    let scopes = normalize_scopes(scopes)
+        .map_err(|message| DomainError::validation_code("invalid_api_key_scopes", message))?;
     let secret: String = rand::thread_rng()
         .sample_iter(&Alphanumeric)
         .take(48)
@@ -114,11 +113,7 @@ pub async fn create(
         .collect();
     let token = format!("rbk_{token_prefix}_{secret}");
     let created_at = unix_timestamp();
-    let mut transaction = repo
-        .pool()
-        .begin()
-        .await
-        .map_err(|error| error.to_string())?;
+    let mut transaction = repo.pool().begin().await.map_err(DomainError::from)?;
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO api_keys(user_id,name,token_prefix,token_hash,created_at)
          VALUES($1,$2,$3,$4,$5) RETURNING id",
@@ -130,19 +125,16 @@ pub async fn create(
     .bind(created_at)
     .fetch_one(&mut *transaction)
     .await
-    .map_err(|error| error.to_string())?;
+    .map_err(DomainError::from)?;
     for scope in &scopes {
         sqlx::query("INSERT INTO api_key_scopes(api_key_id,scope) VALUES($1,$2)")
             .bind(id)
             .bind(scope)
             .execute(&mut *transaction)
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(DomainError::from)?;
     }
-    transaction
-        .commit()
-        .await
-        .map_err(|error| error.to_string())?;
+    transaction.commit().await.map_err(DomainError::from)?;
     Ok((
         ApiKey {
             id,
@@ -158,7 +150,7 @@ pub async fn create(
     ))
 }
 
-pub async fn authenticate(repo: &Repository, token: &str) -> Result<Option<ApiKey>, String> {
+pub async fn authenticate(repo: &Repository, token: &str) -> DomainResult<Option<ApiKey>> {
     if !token.starts_with("rbk_") {
         return Ok(None);
     }
@@ -171,7 +163,7 @@ pub async fn authenticate(repo: &Repository, token: &str) -> Result<Option<ApiKe
     .bind(token_hash(token))
     .fetch_optional(repo.pool())
     .await
-    .map_err(|error| error.to_string())?;
+    .map_err(DomainError::from)?;
     let Some(row) = row else {
         return Ok(None);
     };
@@ -184,11 +176,11 @@ pub async fn authenticate(repo: &Repository, token: &str) -> Result<Option<ApiKe
     .bind(unix_timestamp())
     .execute(repo.pool())
     .await
-    .map_err(|error| error.to_string())?;
+    .map_err(DomainError::from)?;
     Ok(Some(key))
 }
 
-async fn list_where(repo: &Repository, user_id: Option<i64>) -> Result<Vec<ApiKey>, String> {
+async fn list_where(repo: &Repository, user_id: Option<i64>) -> DomainResult<Vec<ApiKey>> {
     let rows = if let Some(user_id) = user_id {
         sqlx::query(
             "SELECT id,user_id,name,token_prefix,created_at,last_used_at,enabled
@@ -205,7 +197,7 @@ async fn list_where(repo: &Repository, user_id: Option<i64>) -> Result<Vec<ApiKe
         .fetch_all(repo.pool())
         .await
     }
-    .map_err(|error| error.to_string())?;
+    .map_err(DomainError::from)?;
     let mut keys = Vec::with_capacity(rows.len());
     for row in rows {
         keys.push(from_row(repo, row).await?);
@@ -213,11 +205,11 @@ async fn list_where(repo: &Repository, user_id: Option<i64>) -> Result<Vec<ApiKe
     Ok(keys)
 }
 
-pub async fn list(repo: &Repository) -> Result<Vec<ApiKey>, String> {
+pub async fn list(repo: &Repository) -> DomainResult<Vec<ApiKey>> {
     list_where(repo, None).await
 }
 
-pub async fn list_for_user(repo: &Repository, user_id: i64) -> Result<Vec<ApiKey>, String> {
+pub async fn list_for_user(repo: &Repository, user_id: i64) -> DomainResult<Vec<ApiKey>> {
     list_where(repo, Some(user_id)).await
 }
 
@@ -226,7 +218,7 @@ pub async fn set_enabled_for_user(
     id: i64,
     user_id: i64,
     enabled: bool,
-) -> Result<bool, String> {
+) -> DomainResult<bool> {
     sqlx::query("UPDATE api_keys SET enabled=$3 WHERE id=$1 AND user_id=$2")
         .bind(id)
         .bind(user_id)
@@ -234,45 +226,45 @@ pub async fn set_enabled_for_user(
         .execute(repo.pool())
         .await
         .map(|result| result.rows_affected() == 1)
-        .map_err(|error| error.to_string())
+        .map_err(DomainError::from)
 }
 
-pub async fn delete_for_user(repo: &Repository, id: i64, user_id: i64) -> Result<bool, String> {
+pub async fn delete_for_user(repo: &Repository, id: i64, user_id: i64) -> DomainResult<bool> {
     sqlx::query("DELETE FROM api_keys WHERE id=$1 AND user_id=$2")
         .bind(id)
         .bind(user_id)
         .execute(repo.pool())
         .await
         .map(|result| result.rows_affected() == 1)
-        .map_err(|error| error.to_string())
+        .map_err(DomainError::from)
 }
 
-pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> Result<bool, String> {
+pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> DomainResult<bool> {
     sqlx::query("UPDATE api_keys SET enabled=$2 WHERE id=$1")
         .bind(id)
         .bind(i64::from(enabled))
         .execute(repo.pool())
         .await
         .map(|result| result.rows_affected() == 1)
-        .map_err(|error| error.to_string())
+        .map_err(DomainError::from)
 }
 
-pub async fn delete(repo: &Repository, id: i64) -> Result<bool, String> {
+pub async fn delete(repo: &Repository, id: i64) -> DomainResult<bool> {
     sqlx::query("DELETE FROM api_keys WHERE id=$1")
         .bind(id)
         .execute(repo.pool())
         .await
         .map(|result| result.rows_affected() == 1)
-        .map_err(|error| error.to_string())
+        .map_err(DomainError::from)
 }
 
-pub async fn delete_all_for_user(repo: &Repository, user_id: i64) -> Result<u64, String> {
+pub async fn delete_all_for_user(repo: &Repository, user_id: i64) -> DomainResult<u64> {
     sqlx::query("DELETE FROM api_keys WHERE user_id=$1")
         .bind(user_id)
         .execute(repo.pool())
         .await
         .map(|result| result.rows_affected())
-        .map_err(|error| error.to_string())
+        .map_err(DomainError::from)
 }
 
 #[cfg(test)]
