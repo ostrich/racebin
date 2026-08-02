@@ -257,6 +257,49 @@ test("edit page shows current attachments", async ({ page }) => {
   await expect(page.getByText(/takes effect immediately/)).toBeVisible();
 });
 
+test("attachment deletion carries the returned revision into the next edit", async ({ page }) => {
+  await mockApi(page, true);
+  let deleteMatch = "";
+  let patchMatch = "";
+  await page.route("**/api/v1/pastes/sample-paste**", async route => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.endsWith("/source") && request.method() === "GET") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: { ETag: '"paste-sample-paste-1"' },
+        body: JSON.stringify(paste)
+      });
+    }
+    if (pathname.endsWith("/attachments/7") && request.method() === "DELETE") {
+      deleteMatch = request.headers()["if-match"] ?? "";
+      return route.fulfill({ status: 204, headers: { ETag: '"paste-sample-paste-2"' } });
+    }
+    if (pathname === "/api/v1/pastes/sample-paste" && request.method() === "PATCH") {
+      patchMatch = request.headers()["if-match"] ?? "";
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: { ETag: '"paste-sample-paste-3"' },
+        body: JSON.stringify({ ...paste, attachments: [], attachment_count: 0 })
+      });
+    }
+    return route.fallback();
+  });
+
+  await page.goto("/pastes/sample-paste/edit");
+  page.once("dialog", dialog => dialog.accept());
+  await page.getByRole("button", { name: "Delete example.txt" }).click();
+  await expect(page.getByRole("link", { name: /example.txt/ })).toBeHidden();
+  await page.getByLabel("Title").fill("Updated after attachment removal");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect.poll(() => [deleteMatch, patchMatch]).toEqual([
+    '"paste-sample-paste-1"',
+    '"paste-sample-paste-2"'
+  ]);
+});
+
 test("failed edit attachment upload preserves the saved revision and retry state", async ({ page }) => {
   await mockApi(page, true);
   const patchHeaders: string[] = [];

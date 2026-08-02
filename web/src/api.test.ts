@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { normalizePayload } from "./api";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ApiError, normalizePayload, requestApi, requestApiResult } from "./api";
 import type { Paste, WirePasteResource } from "./types";
 
 describe("API wire mapping", () => {
+  afterEach(() => vi.unstubAllGlobals());
   it("creates an internal paste without mutating or retaining duplicate wire fields", () => {
     const wire: WirePasteResource = {
       id: "example-paste",
@@ -52,6 +53,44 @@ describe("API wire mapping", () => {
     expect(normalizePayload(response)).toEqual({
       key: { id: 4, created_at: 1_700_000_000, last_used_at: null },
       invitations: [{ id: 7, expires_at: 1_800_000_000 }]
+    });
+  });
+
+  it("exposes mutation protocol headers to callers", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, {
+      status: 204,
+      headers: {
+        ETag: "\"paste-example-paste-2\"",
+        "Read-Token": "grant",
+        "Idempotency-Replayed": "true"
+      }
+    })));
+
+    const result = await requestApiResult<void>("/pastes/example-paste", { method: "DELETE" });
+    expect(result).toEqual({
+      data: undefined,
+      etag: "\"paste-example-paste-2\"",
+      readToken: "grant",
+      idempotencyReplayed: true
+    });
+  });
+
+  it("preserves structured API errors and retry guidance", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      code: "validation_failed",
+      detail: "Request is invalid",
+      errors: { title: ["Title is too long"] }
+    }), {
+      status: 422,
+      headers: { "Content-Type": "application/problem+json", "Retry-After": "3" }
+    })));
+
+    const error = await requestApi("/pastes").catch(reason => reason) as ApiError;
+    expect(error).toMatchObject({
+      status: 422,
+      code: "validation_failed",
+      errors: { title: ["Title is too long"] },
+      retryAfter: "3"
     });
   });
 });

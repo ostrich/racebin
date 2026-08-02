@@ -6,11 +6,35 @@ const expiresAt = "2027-01-15T08:00:00Z";
 
 const config = {
   site_name: "Racebin",
+  server_version: "0.1.0",
+  api_version: "v1",
+  web_base_url: "http://127.0.0.1:4173",
+  api_base_url: "http://127.0.0.1:4173/api/v1",
   plain_home_enabled: false,
   max_attachment_size_bytes: 20 * 1024 * 1024,
+  max_attachments_per_paste: 32,
   attachments_enabled: true,
-  qr_codes_enabled: false
+  qr_codes_enabled: false,
+  formats: ["text", "rich_text"],
+  visibility_modes: ["public", "unlisted", "private"],
+  authentication_methods: ["browser_session", "bearer_api_key"],
+  paste_create_media_types: ["application/json", "multipart/form-data"],
+  attachment_upload_media_types: ["multipart/form-data"],
+  scopes: [
+    { id: "paste:read", description: "Read paste content available to the key owner" },
+    { id: "paste:write", description: "Create and update pastes, folders, and attachments" },
+    { id: "paste:delete", description: "Delete owned pastes" },
+    { id: "paste:list", description: "List and search non-public pastes and folders" }
+  ],
+  max_title_characters: 200,
+  max_content_size_bytes: 2 * 1024 * 1024,
+  max_page_size: 100,
+  minimum_password_characters: 12
 };
+const languages = [
+  { id: "plaintext", label: "Plain text", aliases: ["text", "txt"] },
+  { id: "javascript", label: "JavaScript", aliases: ["js", "jsx"] }
+];
 const user = {
   id: 1,
   username: "test-admin",
@@ -27,22 +51,38 @@ const user = {
 };
 export const paste = {
   id: "sample-paste",
+  url: "/pastes/sample-paste",
+  api_url: "/api/v1/pastes/sample-paste",
+  read_url: "/api/v1/pastes/sample-paste/reads",
+  source_url: "/api/v1/pastes/sample-paste/source",
   owner_id: 1,
   folder_id: null,
   title: "JavaScript example",
   content: "const answer = 42;\nconsole.log(answer);",
   document: null,
   content_kind: "text",
+  format: "text" as const,
+  body: {
+    format: "text" as const,
+    content: "const answer = 42;\nconsole.log(answer);",
+    language: "javascript"
+  },
   language: "javascript",
   visibility: "unlisted",
-  created_at: 1_700_000_000,
+  created_at: createdAt,
+  updated_at: createdAt,
   expires_at: null,
   last_read_at: null,
   read_count: 2,
   read_limit: null,
   attachment_count: 1,
   size_bytes: 1064,
-  attachments: [{ id: 7, filename: "example.txt", size_bytes: 1024 }]
+  attachments: [{
+    id: 7,
+    filename: "example.txt",
+    size_bytes: 1024,
+    url: "/api/v1/pastes/sample-paste/attachments/7"
+  }]
 };
 const folderOverview = {
   items: [
@@ -53,11 +93,48 @@ const folderOverview = {
   unfiled_count: 0
 };
 
+function wireMockValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(wireMockValue);
+  if (!value || typeof value !== "object") return value;
+  const object = value as Record<string, unknown>;
+  if (typeof object.id === "string" && typeof object.content_kind === "string") {
+    const id = object.id;
+    const richText = object.content_kind === "rich_text";
+    return {
+      ...object,
+      url: `/pastes/${id}`,
+      api_url: `/api/v1/pastes/${id}`,
+      read_url: `/api/v1/pastes/${id}/reads`,
+      source_url: `/api/v1/pastes/${id}/source`,
+      format: object.content_kind,
+      body: richText
+        ? { format: "rich_text", content: object.document ?? "", plain_text: object.content ?? "" }
+        : { format: "text", content: object.content ?? "", language: object.language ?? "plaintext" },
+      created_at: typeof object.created_at === "number"
+        ? new Date(object.created_at * 1000).toISOString()
+        : object.created_at,
+      updated_at: typeof object.updated_at === "number"
+        ? new Date(object.updated_at * 1000).toISOString()
+        : object.updated_at ?? object.created_at,
+      attachments: Array.isArray(object.attachments)
+        ? object.attachments.map(item => {
+            const attachment = item as Record<string, unknown>;
+            return {
+              ...attachment,
+              url: attachment.url ?? `/api/v1/pastes/${id}/attachments/${attachment.id}`
+            };
+          })
+        : []
+    };
+  }
+  return Object.fromEntries(Object.entries(object).map(([key, item]) => [key, wireMockValue(item)]));
+}
+
 async function json(route: Route, value: unknown, status = 200): Promise<void> {
   await route.fulfill({
     status,
     contentType: "application/json",
-    body: JSON.stringify(value)
+    body: JSON.stringify(wireMockValue(value))
   });
 }
 
@@ -87,6 +164,7 @@ export async function mockApi(
     if (url.pathname === "/api/v1/capabilities") {
       return json(route, { ...config, plain_home_enabled: options.plainHome ?? false });
     }
+    if (url.pathname === "/api/v1/languages") return json(route, languages);
     if (url.pathname === "/api/v1/folders") {
       if (route.request().method() === "POST") {
         const body = route.request().postDataJSON() as { name: string };
