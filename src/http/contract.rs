@@ -35,6 +35,7 @@ pub(crate) struct ApiRootResponse {
 #[derive(Serialize, ToSchema)]
 pub(crate) struct PasteRevisionResource {
     pub id: String,
+    /// Opaque entity-tag value to send verbatim in `If-Match`, including any quotes.
     pub etag: String,
 }
 

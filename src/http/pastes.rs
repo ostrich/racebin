@@ -329,7 +329,7 @@ impl Drop for StagedFile {
     responses(
         (status = 200, description = "Paginated paste summaries", body = PastePage),
         (status = 400, description = "Invalid filter", body = crate::http::errors::ProblemDetails),
-        (status = 401, description = "Authentication required for owner=me", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Authentication required for owner=me, or bearer credential invalid", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "API key lacks paste:list", body = crate::http::errors::ProblemDetails),
         (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
     ),
@@ -397,12 +397,11 @@ pub(crate) async fn list_pastes(
     post,
     path = "/pastes",
     tag = "pastes",
-    description = "Creates a paste. Query metadata is accepted only for raw bodies. text/plain creates text and accepts an optional language; text/markdown creates text with language=markdown; text/html creates sanitized rich text and does not accept language. The raw request body is always the content. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. An omitted structured body creates empty text. expires_at and expires_in are mutually exclusive.",
+    description = "Creates a paste. Query metadata is accepted only for raw bodies. text/plain creates text and accepts an optional language; text/markdown creates text with language=markdown; text/html creates sanitized rich text and does not accept language. The raw request body is always the content. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. An omitted structured body creates empty text. expires_at and expires_in are mutually exclusive. Clients may request text/plain instead of JSON to receive only the created paste URL.",
     params(
         RawCreateQuery,
         ("Idempotency-Key" = Option<String>, Header, description = "Recommended unique key for safely retrying creation"),
-        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations; not used with bearer keys"),
-        ("Accept" = Option<String>, Header, description = "Use text/plain to receive only the created paste URL")
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations; not used with bearer keys")
     ),
     request_body(
         description = "Canonical JSON, raw text/HTML, URL-encoded form, or multipart paste payload",
@@ -589,8 +588,8 @@ pub(crate) async fn get_paste(
 
 #[utoipa::path(
     get, path = "/pastes/{paste_id}/source", tag = "pastes",
-    params(("paste_id" = String, Path, description = "Paste ID"),
-        ("Accept" = Option<String>, Header, description = "application/json, text/plain, or text/html for rich text")),
+    description = "Returns JSON by default. Clients may instead negotiate text/plain, or text/html for rich-text pastes.",
+    params(("paste_id" = String, Path, description = "Paste ID")),
     responses(
         (status = 200, description = "Non-consuming owner or administrator source",
             content(
@@ -626,9 +625,9 @@ pub(crate) async fn get_paste_source(
 
 #[utoipa::path(
     post, path = "/pastes/{paste_id}/reads", tag = "pastes",
+    description = "Consumes a permitted read and returns JSON by default. Clients may instead negotiate text/plain, or text/html for rich-text pastes.",
     params(("paste_id" = String, Path, description = "Paste ID"),
-        ("Idempotency-Key" = Option<String>, Header, description = "Recommended key for safely retrying a consuming read"),
-        ("Accept" = Option<String>, Header, description = "application/json, text/plain, or text/html for rich text")),
+        ("Idempotency-Key" = Option<String>, Header, description = "Recommended key for safely retrying a consuming read")),
     responses(
         (status = 200, description = "Paste content; this may consume a limited read",
             content(

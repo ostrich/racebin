@@ -130,6 +130,14 @@ fn refine_component_schemas(openapi: &mut utoipa::openapi::OpenApi) {
             }
         }
     }
+    if let Some(RefOr::T(Schema::OneOf(body))) = components.schemas.get_mut("BodyInput") {
+        for branch in &mut body.items {
+            if let RefOr::T(Schema::Object(schema)) = branch {
+                schema.additional_properties =
+                    Some(Box::new(AdditionalProperties::FreeForm(false)));
+            }
+        }
+    }
     if let Some(RefOr::T(Schema::Object(schema))) = components.schemas.get_mut("Pagination") {
         if let Some(RefOr::T(Schema::Object(page_size))) = schema.properties.get_mut("page_size") {
             page_size.maximum = Some(crate::limits::MAX_PAGE_SIZE.into());
@@ -336,6 +344,10 @@ fn refine_parameter_schemas(openapi: &mut utoipa::openapi::OpenApi) {
                 }
             }
         }
+    }
+    if let Some(components) = openapi.components.as_mut() {
+        components.schemas.remove("PasteSort");
+        components.schemas.remove("SortDirection");
     }
 }
 
@@ -1228,17 +1240,15 @@ mod tests {
             serde_json::json!(["unlimited", "limited"])
         );
         assert_eq!(
-            value["components"]["schemas"]["PasteSort"]["enum"],
+            parameter("sort")["schema"]["enum"],
             serde_json::json!(["created", "title", "reads", "expires", "size"])
         );
         assert_eq!(
-            value["components"]["schemas"]["SortDirection"]["enum"],
+            parameter("direction")["schema"]["enum"],
             serde_json::json!(["asc", "desc"])
         );
-        for name in ["sort", "direction"] {
-            assert!(parameter(name)["schema"]["oneOf"].is_null());
-            assert!(parameter(name)["schema"]["enum"].is_array());
-        }
+        assert!(value["components"]["schemas"]["PasteSort"].is_null());
+        assert!(value["components"]["schemas"]["SortDirection"].is_null());
     }
 
     #[test]
@@ -1327,6 +1337,18 @@ mod tests {
             ));
         }
         assert!(schemas["ProblemDetails"]["properties"]["errors"].is_null());
+        assert_eq!(
+            schemas["ProblemDetails"]["properties"]["type"]["format"],
+            "uri-reference"
+        );
+        assert_eq!(
+            schemas["ProblemDetails"]["properties"]["status"]["minimum"],
+            100
+        );
+        assert_eq!(
+            schemas["ProblemDetails"]["properties"]["status"]["maximum"],
+            599
+        );
         assert_eq!(
             schemas["UserResource"]["properties"]["role"]["$ref"],
             "#/components/schemas/UserRole"
@@ -1417,6 +1439,7 @@ mod tests {
                     continue;
                 };
                 for parameter in operation["parameters"].as_array().into_iter().flatten() {
+                    assert_ne!(parameter["name"], "Accept");
                     if parameter["in"] == "header" && parameter["required"] == false {
                         let types = &parameter["schema"]["type"];
                         assert_ne!(types, &serde_json::json!(["string", "null"]), "optional header {method} {path} must be absent or a string, never JSON null");
@@ -1486,6 +1509,22 @@ mod tests {
                 "{schema_name} does not explain the rich-text sanitization contract"
             );
         }
+    }
+
+    #[test]
+    fn body_inputs_and_revision_etags_are_precise() {
+        let value = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let branches = value["components"]["schemas"]["BodyInput"]["oneOf"]
+            .as_array()
+            .unwrap();
+        assert_eq!(branches.len(), 2);
+        assert!(branches
+            .iter()
+            .all(|branch| branch["additionalProperties"] == false));
+        let etag = &value["components"]["schemas"]["PasteRevisionResource"]["properties"]["etag"];
+        assert!(etag["description"]
+            .as_str()
+            .is_some_and(|description| description.contains("verbatim in `If-Match`")));
     }
 
     #[test]

@@ -7,8 +7,10 @@ use utoipa::ToSchema;
 #[derive(Debug, Serialize, ToSchema)]
 pub(crate) struct ProblemDetails {
     #[serde(rename = "type")]
+    #[schema(format = "uri-reference")]
     pub problem_type: String,
     pub title: String,
+    #[schema(minimum = 100, maximum = 599)]
     pub status: u16,
     pub detail: String,
 }
