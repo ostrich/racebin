@@ -387,6 +387,7 @@ nav svg,
 .help-index { display: grid; gap: var(--space-2); min-width: 0; max-width: 100%; }
 .help-index a { color: inherit; text-decoration: none; font-weight: 600; }
 .help-content { display: grid; gap: var(--space-4); min-width: 0; }
+.help-content > [id] { scroll-margin-top: var(--sticky-page-top); }
 .help-content pre { overflow-x: auto; max-width: 100%; padding: var(--space-3); background: var(--color-surface-subtle); border: 1px solid var(--line); }
 .help-examples { display: grid; gap: var(--space-3); }
 .help-examples article { min-width: 0; }

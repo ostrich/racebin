@@ -21,6 +21,7 @@ export type RouteLocation = {
   route: Route;
   path: string;
   query: URLSearchParams;
+  hash: string;
 };
 
 export function parseRoute(path: string): Route {
@@ -48,8 +49,8 @@ export function parseRoute(path: string): Route {
   return { name: "not-found" };
 }
 
-export function parseLocation(path: string, search = ""): RouteLocation {
-  return { route: parseRoute(path), path, query: new URLSearchParams(search) };
+export function parseLocation(path: string, search = "", hash = ""): RouteLocation {
+  return { route: parseRoute(path), path, query: new URLSearchParams(search), hash };
 }
 
 export function routeTitle(route: Route): string {

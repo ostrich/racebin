@@ -43,7 +43,7 @@
   </div>
   <div class="help-layout">
     <aside class="panel help-index sticky-sidebar" aria-label="Help topics">
-      <a href="#api-keys">API keys</a><a href="#examples">Examples</a><a href="#scopes">Scopes</a><a href="#basics">Site basics</a>
+      <Link href="#api-keys">API keys</Link><Link href="#examples">Examples</Link><Link href="#scopes">Scopes</Link><Link href="#basics">Site basics</Link>
     </aside>
     <div class="help-content">
       <section class="panel" id="api-keys">

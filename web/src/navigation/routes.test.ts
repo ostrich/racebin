@@ -15,6 +15,8 @@ describe("routes", () => {
     expect(location.route).toEqual({ name: "my-pastes" });
     expect(location.query.get("folder_id")).toBe("7");
     expect(location.query.get("sort")).toBe("title");
+    expect(location.hash).toBe("");
+    expect(parseLocation("/help", "", "#scopes").hash).toBe("#scopes");
   });
 
   it("provides a title for every route", () => {

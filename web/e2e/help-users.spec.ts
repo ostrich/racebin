@@ -42,6 +42,11 @@ test("help navigation aligns with its content and clears the sticky header", asy
   }));
   expect(stickyPosition.actual).toBe(stickyPosition.expected);
   expect(stickyPosition.actual).toBeGreaterThan(stickyPosition.headerBottom);
+
+  await page.getByRole("link", { name: "Scopes" }).click();
+  await expect(page).toHaveURL(/\/help#scopes$/);
+  await expect(page.locator("#scopes")).toBeInViewport();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(1_000);
 });
 
 test("anonymous visitors are sent from help to login", async ({ page }) => {
