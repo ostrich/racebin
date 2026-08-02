@@ -51,7 +51,7 @@ impl PasteService {
         query: &PasteQuery,
         admin: bool,
     ) -> DomainResult<Page<Paste>> {
-        validate_paste_query(query).map_err(DomainError::validation)?;
+        validate_paste_query(query)?;
         let page = query.page.unwrap_or(1).max(1);
         let page_size = query.page_size.unwrap_or(30).clamp(1, 100);
         let offset = i64::from(page - 1).saturating_mul(i64::from(page_size));

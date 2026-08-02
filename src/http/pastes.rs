@@ -160,8 +160,8 @@ pub(crate) async fn list_pastes(
             "Authentication required for owner=me",
         );
     }
-    if let Err(message) = crate::services::validate_paste_query(&query) {
-        return error(StatusCode::BAD_REQUEST, "invalid_query", message);
+    if let Err(error) = crate::services::validate_paste_query(&query) {
+        return domain_error(error);
     }
     let wants_private =
         query.mine.unwrap_or(false) || query.visibility.as_deref() != Some("public");
