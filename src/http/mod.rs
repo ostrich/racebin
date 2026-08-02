@@ -26,7 +26,7 @@ mod dto;
 mod errors;
 mod folders;
 mod keys;
-mod meta;
+pub(crate) mod meta;
 mod paste_payload;
 mod pastes;
 

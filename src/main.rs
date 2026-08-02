@@ -21,6 +21,14 @@ pub mod time;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    match cli::openapi::run_if_requested() {
+        Ok(true) => return Ok(()),
+        Ok(false) => {}
+        Err(error) => {
+            eprintln!("OpenAPI command failed: {error}");
+            return Err(std::io::Error::other(error));
+        }
+    }
     match cli::database::run_if_requested().await {
         Ok(true) => return Ok(()),
         Ok(false) => {}

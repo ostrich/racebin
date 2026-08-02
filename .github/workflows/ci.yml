@@ -27,8 +27,12 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
       - name: Install frontend dependencies
         run: npm ci
+        working-directory: web
+      - name: Verify API contract and generated types
+        run: npm run check:api
         working-directory: web
       - name: Build embedded frontend
         run: npm run build
@@ -43,7 +47,6 @@ jobs:
       - name: Run functional frontend tests
         run: npm run test:unit && npm run test:e2e
         working-directory: web
-      - uses: dtolnay/rust-toolchain@stable
       - name: Build the application stack
         run: cargo build --locked
       - name: Smoke-test the compiled frontend and disposable backend

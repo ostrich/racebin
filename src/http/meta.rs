@@ -83,6 +83,10 @@ use utoipa::{Modify, OpenApi};
 )]
 struct ApiDoc;
 
+pub(crate) fn openapi_document() -> utoipa::openapi::OpenApi {
+    ApiDoc::openapi()
+}
+
 struct Security;
 
 impl Modify for Security {
@@ -696,7 +700,7 @@ async fn api_root() -> impl Responder {
 )]
 #[get("/openapi.json")]
 async fn get_openapi() -> impl Responder {
-    HttpResponse::Ok().json(ApiDoc::openapi())
+    HttpResponse::Ok().json(openapi_document())
 }
 
 #[utoipa::path(get, path = "/capabilities", tag = "discovery", responses((status = 200, description = "Runtime features, limits, and authorization scopes", body = Capabilities)), security(()))]
