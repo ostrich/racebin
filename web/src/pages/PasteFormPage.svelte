@@ -87,10 +87,19 @@
     }
   }
 
+  function richTextIsEmpty(value: string): boolean {
+    if (!value.trim()) return true;
+    const text = new DOMParser().parseFromString(value, "text/html").body.textContent ?? "";
+    return !text.replaceAll("\u00a0", " ").trim();
+  }
+
   function snapshot(selectedAttachments = attachmentSelection): string {
+    const effectiveKind = contentKind === "rich_text" && richTextIsEmpty(richHtml)
+      ? "text"
+      : contentKind;
     return JSON.stringify({
-      title, content, richHtml: contentKind === "rich_text" ? richHtml : null,
-      contentKind, folderId, language: contentKind === "text" ? language : null,
+      title, content, richHtml: effectiveKind === "rich_text" ? richHtml : null,
+      contentKind: effectiveKind, folderId, language: effectiveKind === "text" ? language : null,
       visibility, expirationMode, expiresAt, readLimit, attachmentSelection: selectedAttachments
     });
   }
@@ -341,9 +350,13 @@
           <option value="1w">1 week</option><option value="30d">30 days</option>
           <option value="1y">1 year</option><option value="custom">Custom…</option>
         </select></label>
-        <label class="expiration-time-field"><span>Date and time</span><input type="datetime-local"
-          bind:value={expiresAt} disabled={expirationMode === "never"} required={expirationMode !== "never"}
-          oninput={customizeExpiration}/></label>
+        <label class="expiration-time-field"><span>Date and time</span>
+          {#if expirationMode === "never"}
+            <input type="text" value="Not applicable" disabled/>
+          {:else}
+            <input type="datetime-local" bind:value={expiresAt} required oninput={customizeExpiration}/>
+          {/if}
+        </label>
         <label class="read-limit-field"><span>Read limit</span><input type="number" min="1" bind:value={readLimit} placeholder="Unlimited"/></label>
       </div>
       {#if paste?.attachments.length}

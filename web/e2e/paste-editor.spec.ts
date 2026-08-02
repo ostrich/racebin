@@ -10,6 +10,17 @@ test("untouched paste form navigates without a discard prompt", async ({ page })
   await expect(page.getByRole("heading", { name: "My pastes" })).toBeVisible();
 });
 
+test("switching an empty paste to rich text does not create unsaved content", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("rich_text");
+  await expect(page.locator(".rich-text-editor")).toBeVisible();
+
+  await page.getByRole("link", { name: "My pastes" }).click();
+  await expect(page).toHaveURL(/\/pastes$/);
+  await expect(page.getByRole("heading", { name: "Discard unsaved changes?" })).toHaveCount(0);
+});
+
 test("expiration presets populate a stable, customizable date control", async ({ page }) => {
   await mockApi(page, true);
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -20,7 +31,7 @@ test("expiration presets populate a stable, customizable date control", async ({
   const readLimit = page.getByLabel("Read limit");
   await expect(expiration).toHaveValue("never");
   await expect(date).toBeDisabled();
-  await expect(date).toHaveValue("");
+  await expect(date).toHaveValue("Not applicable");
 
   await expiration.selectOption("1w");
   await expect(date).toBeEnabled();
@@ -34,7 +45,7 @@ test("expiration presets populate a stable, customizable date control", async ({
 
   await expiration.selectOption("never");
   await expect(date).toBeDisabled();
-  await expect(date).toHaveValue("");
+  await expect(date).toHaveValue("Not applicable");
   await expiration.selectOption("custom");
   await expect(date).toBeEnabled();
   await expect(date).toHaveValue("");
