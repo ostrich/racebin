@@ -19,8 +19,9 @@ test("account and admin ownership data render as structured controls", async ({ 
   expect(await page.evaluate(() => (window as Window & { __copiedText: string }).__copiedText))
     .toBe(`${origin}/invitations/active-token`);
   await page.getByRole("button", { name: "Create invitation" }).click();
-  expect(await page.evaluate(() => (window as Window & { __copiedText: string }).__copiedText))
-    .toBe(`${origin}/invitations/new-token`);
+  await expect.poll(() => page.evaluate(
+    () => (window as Window & { __copiedText: string }).__copiedText
+  )).toBe(`${origin}/invitations/new-token`);
   await page.getByRole("button", { name: /API keys/ }).click();
   await expect(page.getByText("Owner: test-admin")).toBeVisible();
   await expect(page.getByLabel("Privileges").getByText("paste:write")).toBeVisible();
