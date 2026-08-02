@@ -56,12 +56,43 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(get_qr);
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 struct ReadGrantQuery {
+    /// Short-lived token returned by the final permitted read.
     read_token: Option<String>,
 }
 
-#[utoipa::path(post, path = "/pastes/{paste_id}/attachments", tag = "attachments", params(("paste_id" = String, Path)))]
+#[derive(utoipa::ToSchema)]
+#[allow(dead_code)]
+struct AttachmentUploadRequest {
+    #[schema(content_media_type = "application/octet-stream")]
+    file: Vec<String>,
+}
+
+#[utoipa::path(
+    post, path = "/pastes/{paste_id}/attachments", tag = "attachments",
+    params(("paste_id" = String, Path, description = "Paste ID"),
+        ("If-Match" = String, Header, description = "Current ETag or *"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    request_body(content = AttachmentUploadRequest, content_type = "multipart/form-data",
+        description = "One or more repeated file parts"),
+    responses(
+        (status = 201, description = "Attachments uploaded", body = crate::http::contract::AttachmentUploadResponse,
+            headers(("ETag" = String, description = "New paste entity tag"))),
+        (status = 400, description = "Malformed or empty upload", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Uploads disabled or insufficient permission", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "Paste not found", body = crate::http::errors::ProblemDetails),
+        (status = 409, description = "Attachment conflict", body = crate::http::errors::ProblemDetails),
+        (status = 412, description = "ETag does not match", body = crate::http::errors::ProblemDetails),
+        (status = 413, description = "Attachment limit exceeded", body = crate::http::errors::ProblemDetails),
+        (status = 422, description = "Invalid multipart field", body = crate::http::errors::ProblemDetails),
+        (status = 428, description = "If-Match is required", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[post("/pastes/{paste_id}/attachments")]
 pub(crate) async fn upload_attachments(
     req: HttpRequest,
@@ -233,10 +264,21 @@ pub(crate) async fn upload_attachments(
     };
     HttpResponse::Created()
         .insert_header((header::ETAG, super::dto::etag(&current)))
-        .json(json!({"items": attachments}))
+        .json(contract::AttachmentUploadResponse { items: attachments })
 }
 
-#[utoipa::path(get, path = "/pastes/{paste_id}/attachments/{attachment_id}", tag = "attachments", params(("paste_id" = String, Path), ("attachment_id" = i64, Path)))]
+#[utoipa::path(
+    get, path = "/pastes/{paste_id}/attachments/{attachment_id}", tag = "attachments",
+    params(("paste_id" = String, Path, description = "Paste ID"),
+        ("attachment_id" = i64, Path, description = "Attachment ID"), ReadGrantQuery),
+    responses(
+        (status = 200, description = "Attachment bytes", body = Vec<u8>, content_type = "application/octet-stream",
+            headers(("Content-Disposition" = String, description = "Attachment filename"))),
+        (status = 404, description = "Attachment not found, not visible, or grant invalid", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Attachment data unavailable", body = crate::http::errors::ProblemDetails)
+    ),
+    security((), ("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[get("/pastes/{paste_id}/attachments/{attachment_id}")]
 pub(crate) async fn get_attachment(
     req: HttpRequest,
@@ -293,7 +335,23 @@ pub(crate) async fn get_attachment(
         .into_response(&req)
 }
 
-#[utoipa::path(delete, path = "/pastes/{paste_id}/attachments/{attachment_id}", tag = "attachments", params(("paste_id" = String, Path), ("attachment_id" = i64, Path)))]
+#[utoipa::path(
+    delete, path = "/pastes/{paste_id}/attachments/{attachment_id}", tag = "attachments",
+    params(("paste_id" = String, Path, description = "Paste ID"),
+        ("attachment_id" = i64, Path, description = "Attachment ID"),
+        ("If-Match" = String, Header, description = "Current ETag or *"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    responses(
+        (status = 204, description = "Attachment deleted"),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Not permitted to update this paste", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "Paste or attachment not found", body = crate::http::errors::ProblemDetails),
+        (status = 412, description = "ETag does not match", body = crate::http::errors::ProblemDetails),
+        (status = 428, description = "If-Match is required", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[delete("/pastes/{paste_id}/attachments/{attachment_id}")]
 pub(crate) async fn delete_attachment(
     req: HttpRequest,
@@ -326,7 +384,18 @@ pub(crate) async fn delete_attachment(
     }
 }
 
-#[utoipa::path(get, path = "/pastes/{paste_id}/archive", tag = "attachments", params(("paste_id" = String, Path)))]
+#[utoipa::path(
+    get, path = "/pastes/{paste_id}/archive", tag = "attachments",
+    params(("paste_id" = String, Path, description = "Paste ID"), ReadGrantQuery),
+    responses(
+        (status = 200, description = "ZIP containing paste text and attachments", body = Vec<u8>, content_type = "application/zip",
+            headers(("Content-Disposition" = String, description = "Archive filename"))),
+        (status = 404, description = "Paste not found, not visible, or grant invalid", body = crate::http::errors::ProblemDetails),
+        (status = 413, description = "Archive input exceeds 64 MiB", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Archive could not be generated", body = crate::http::errors::ProblemDetails)
+    ),
+    security((), ("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[get("/pastes/{paste_id}/archive")]
 pub(crate) async fn get_archive(
     req: HttpRequest,
@@ -413,7 +482,16 @@ async fn paste_for_download(
     }
 }
 
-#[utoipa::path(get, path = "/pastes/{paste_id}/qr", tag = "attachments", params(("paste_id" = String, Path)))]
+#[utoipa::path(
+    get, path = "/pastes/{paste_id}/qr", tag = "attachments",
+    params(("paste_id" = String, Path, description = "Paste ID")),
+    responses(
+        (status = 200, description = "PNG QR code for the public paste URL", body = Vec<u8>, content_type = "image/png"),
+        (status = 404, description = "Paste not found, not visible, or QR disabled", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "QR generation failed", body = crate::http::errors::ProblemDetails)
+    ),
+    security((), ("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[get("/pastes/{paste_id}/qr")]
 pub(crate) async fn get_qr(
     req: HttpRequest,

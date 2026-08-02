@@ -68,7 +68,7 @@ impl<'r> FromRow<'r, AnyRow> for Paste {
     }
 }
 
-#[derive(Clone, Debug, Serialize, FromRow)]
+#[derive(Clone, Debug, Serialize, FromRow, utoipa::ToSchema)]
 pub struct Attachment {
     pub id: i64,
     #[serde(skip)]
@@ -119,7 +119,7 @@ pub struct PasteQuery {
     pub direction: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, FromRow)]
+#[derive(Clone, Debug, Serialize, FromRow, utoipa::ToSchema)]
 pub struct Folder {
     pub id: i64,
     #[serde(skip)]
@@ -129,7 +129,7 @@ pub struct Folder {
     pub paste_count: i64,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, utoipa::ToSchema)]
 pub struct FolderOverview {
     pub items: Vec<Folder>,
     pub total_count: i64,

@@ -261,7 +261,7 @@ test("query navigation retains list pages until their replacement is ready", asy
     pastePage: url => url.searchParams.has("q")
       ? { items: [filteredPaste], delay: 150 }
       : { items: [paste] },
-    adminPastePage: url => url.searchParams.has("search")
+    adminPastePage: url => url.searchParams.has("q")
       ? { items: [filteredPaste], delay: 150 }
       : { items: [paste] }
   });

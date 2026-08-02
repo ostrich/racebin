@@ -8,7 +8,16 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(delete_key);
 }
 
-#[utoipa::path(get, path = "/account/api-keys", tag = "api keys")]
+#[utoipa::path(
+    get, path = "/account/api-keys", tag = "api keys",
+    responses(
+        (status = 200, description = "API keys owned by the authenticated user", body = [crate::account::api_keys::ApiKey]),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Insufficient permission", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[get("/account/api-keys")]
 pub(crate) async fn list_keys(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
     let value = match principal(&services, &req).await.and_then(require_auth) {
@@ -28,7 +37,19 @@ struct KeyInput {
     scopes: Vec<String>,
 }
 
-#[utoipa::path(post, path = "/account/api-keys", tag = "api keys")]
+#[utoipa::path(
+    post, path = "/account/api-keys", tag = "api keys",
+    params(("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    request_body = KeyInput,
+    responses(
+        (status = 201, description = "API key created; token is returned only once", body = crate::http::contract::ApiKeyCreatedResponse),
+        (status = 400, description = "Invalid name, scopes, or delegated privileges", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Insufficient permission or CSRF failure", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[post("/account/api-keys")]
 pub(crate) async fn create_key(
     req: HttpRequest,
@@ -46,12 +67,27 @@ pub(crate) async fn create_key(
         .create_api_key(&value, &body.name, &body.scopes)
         .await
     {
-        Ok((key, token)) => HttpResponse::Created().json(json!({"key": key, "token": token})),
+        Ok((key, token)) => {
+            HttpResponse::Created().json(contract::ApiKeyCreatedResponse { key, token })
+        }
         Err(e) => domain_error(e),
     }
 }
 
-#[utoipa::path(patch, path = "/account/api-keys/{id}", tag = "api keys", params(("id" = i64, Path)))]
+#[utoipa::path(
+    patch, path = "/account/api-keys/{id}", tag = "api keys",
+    params(("id" = i64, Path, description = "API key ID"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    request_body = EnabledInput,
+    responses(
+        (status = 204, description = "API key state updated"),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Insufficient permission or CSRF failure", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "API key not found", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[patch("/account/api-keys/{id}")]
 pub(crate) async fn update_key(
     req: HttpRequest,
@@ -76,7 +112,19 @@ pub(crate) async fn update_key(
     }
 }
 
-#[utoipa::path(delete, path = "/account/api-keys/{id}", tag = "api keys", params(("id" = i64, Path)))]
+#[utoipa::path(
+    delete, path = "/account/api-keys/{id}", tag = "api keys",
+    params(("id" = i64, Path, description = "API key ID"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    responses(
+        (status = 204, description = "API key deleted"),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Insufficient permission or CSRF failure", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "API key not found", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[delete("/account/api-keys/{id}")]
 pub(crate) async fn delete_key(
     req: HttpRequest,

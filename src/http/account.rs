@@ -10,25 +10,43 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(redeem_invitation);
 }
 
-#[utoipa::path(get, path = "/session", tag = "account")]
+#[utoipa::path(
+    get, path = "/session", tag = "account",
+    responses(
+        (status = 200, description = "Current browser session, bearer-key identity, or anonymous state", body = crate::http::contract::SessionResponse),
+        (status = 401, description = "Invalid bearer credential", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security((), ("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[get("/session")]
 pub(crate) async fn get_session(
     req: HttpRequest,
     services: web::Data<PasteService>,
 ) -> HttpResponse {
     match principal(&services, &req).await {
-        Ok(Principal::Session(session)) => HttpResponse::Ok().json(json!({
-            "authenticated": true,
-            "user": {
-                "id": session.user.id, "username": session.user.username,
-                "role": session.user.role, "password_change_required": session.user.password_change_required
-            },
-            "csrf_token": session.csrf_token
-        })),
-        Ok(Principal::ApiKey(key)) => HttpResponse::Ok().json(json!({
-            "authenticated": true, "api_key": {"id": key.id, "name": key.name, "scopes": key.scopes}
-        })),
-        Ok(Principal::Anonymous) => HttpResponse::Ok().json(json!({"authenticated": false})),
+        Ok(Principal::Session(session)) => HttpResponse::Ok().json(contract::SessionResponse {
+            authenticated: true,
+            user: Some(session.user.into()),
+            api_key: None,
+            csrf_token: Some(session.csrf_token),
+        }),
+        Ok(Principal::ApiKey(key)) => HttpResponse::Ok().json(contract::SessionResponse {
+            authenticated: true,
+            user: None,
+            api_key: Some(contract::ApiKeyIdentity {
+                id: key.id,
+                name: key.name,
+                scopes: key.scopes,
+            }),
+            csrf_token: None,
+        }),
+        Ok(Principal::Anonymous) => HttpResponse::Ok().json(contract::SessionResponse {
+            authenticated: false,
+            user: None,
+            api_key: None,
+            csrf_token: None,
+        }),
         Err(response) => response,
     }
 }
@@ -41,7 +59,20 @@ struct LoginInput {
     remember: Option<bool>,
 }
 
-#[utoipa::path(post, path = "/session", tag = "account")]
+#[utoipa::path(
+    post, path = "/session", tag = "account",
+    request_body = LoginInput,
+    responses(
+        (status = 200, description = "Browser session created", body = crate::http::contract::SessionCreatedResponse,
+            headers(("Set-Cookie" = String, description = "HTTP-only Racebin session cookie"))),
+        (status = 400, description = "Malformed credentials", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Invalid credentials", body = crate::http::errors::ProblemDetails),
+        (status = 429, description = "Login rate limit exceeded", body = crate::http::errors::ProblemDetails,
+            headers(("Retry-After" = i64, description = "Seconds before another attempt"))),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(())
+)]
 #[post("/session")]
 pub(crate) async fn login(
     req: HttpRequest,
@@ -73,13 +104,22 @@ pub(crate) async fn login(
             {
                 return domain_error(error);
             }
-            match accounts::create_session(&services.storage, user.id, body.remember.unwrap_or(false)).await {
+            match accounts::create_session(
+                &services.storage,
+                user.id,
+                body.remember.unwrap_or(false),
+            )
+            .await
+            {
                 Ok((token, csrf, _)) => HttpResponse::Ok()
                     .cookie(cookies::session_cookie(
                         token,
                         body.remember.unwrap_or(false),
                     ))
-                    .json(json!({"user": {"id": user.id, "username": user.username, "role": user.role}, "csrf_token": csrf})),
+                    .json(contract::SessionCreatedResponse {
+                        user: user.into(),
+                        csrf_token: csrf,
+                    }),
                 Err(e) => domain_error(e),
             }
         }
@@ -99,7 +139,19 @@ pub(crate) async fn login(
     }
 }
 
-#[utoipa::path(delete, path = "/session", tag = "account")]
+#[utoipa::path(
+    delete, path = "/session", tag = "account",
+    params(("X-CSRF-Token" = String, Header, description = "Current browser session CSRF token")),
+    responses(
+        (status = 204, description = "Session deleted",
+            headers(("Set-Cookie" = String, description = "Expired Racebin session cookie"))),
+        (status = 400, description = "Browser session required", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "CSRF validation failed", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("sessionCookie" = []))
+)]
 #[delete("/session")]
 pub(crate) async fn logout(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
     let value = match principal(&services, &req)
@@ -141,7 +193,19 @@ struct PasswordInput {
     new_password: String,
 }
 
-#[utoipa::path(patch, path = "/account/password", tag = "account")]
+#[utoipa::path(
+    patch, path = "/account/password", tag = "account",
+    params(("X-CSRF-Token" = String, Header, description = "Current browser session CSRF token")),
+    request_body = PasswordInput,
+    responses(
+        (status = 204, description = "Password changed and existing sessions revoked"),
+        (status = 400, description = "Invalid password or browser session required", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Current password is incorrect", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "CSRF validation failed", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("sessionCookie" = []))
+)]
 #[patch("/account/password")]
 pub(crate) async fn change_password(
     req: HttpRequest,
@@ -202,7 +266,19 @@ struct PasswordResetInput {
     new_password: String,
 }
 
-#[utoipa::path(post, path = "/password-resets/{token}", tag = "account", params(("token" = String, Path)))]
+#[utoipa::path(
+    post, path = "/password-resets/{token}", tag = "account",
+    params(("token" = String, Path, description = "One-time password-reset token")),
+    request_body = PasswordResetInput,
+    responses(
+        (status = 204, description = "Password reset and existing sessions revoked"),
+        (status = 400, description = "Invalid, expired, or consumed token; or invalid password", body = crate::http::errors::ProblemDetails),
+        (status = 429, description = "Reset-attempt rate limit exceeded", body = crate::http::errors::ProblemDetails,
+            headers(("Retry-After" = i64, description = "Seconds before another attempt"))),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(())
+)]
 #[post("/password-resets/{token}")]
 pub(crate) async fn reset_password(
     req: HttpRequest,
@@ -240,7 +316,21 @@ pub(crate) async fn reset_password(
     }
 }
 
-#[utoipa::path(post, path = "/invitations/{token}/redeem", tag = "account", params(("token" = String, Path)))]
+#[utoipa::path(
+    post, path = "/invitations/{token}/redeem", tag = "account",
+    params(("token" = String, Path, description = "One-time invitation token")),
+    request_body = InvitationInput,
+    responses(
+        (status = 201, description = "Account and browser session created", body = crate::http::contract::SessionCreatedResponse,
+            headers(("Set-Cookie" = String, description = "HTTP-only Racebin session cookie"))),
+        (status = 400, description = "Invalid invitation, username, or password", body = crate::http::errors::ProblemDetails),
+        (status = 409, description = "Username already exists", body = crate::http::errors::ProblemDetails),
+        (status = 429, description = "Invitation-attempt rate limit exceeded", body = crate::http::errors::ProblemDetails,
+            headers(("Retry-After" = i64, description = "Seconds before another attempt"))),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(())
+)]
 #[post("/invitations/{token}/redeem")]
 pub(crate) async fn redeem_invitation(
     req: HttpRequest,
@@ -272,11 +362,16 @@ pub(crate) async fn redeem_invitation(
         Ok(user) => match accounts::create_session(&services.storage, user.id, false).await {
             Ok((session, csrf, _)) => HttpResponse::Created()
                 .cookie(cookies::session_cookie(session, false))
-                .json(json!({"user": {"id": user.id, "username": user.username, "role": user.role}, "csrf_token": csrf})),
+                .json(contract::SessionCreatedResponse {
+                    user: user.into(),
+                    csrf_token: csrf,
+                }),
             Err(e) => domain_error(e),
         },
         Err(value) => {
-            if let Err(error) = accounts::record_invitation_failure(&services.storage, &client).await {
+            if let Err(error) =
+                accounts::record_invitation_failure(&services.storage, &client).await
+            {
                 return domain_error(error);
             }
             domain_error(value)

@@ -35,7 +35,7 @@ pub struct User {
     pub password_change_required: bool,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, utoipa::ToSchema)]
 pub struct AdminUser {
     pub id: i64,
     pub username: String,

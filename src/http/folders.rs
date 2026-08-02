@@ -22,7 +22,16 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(move_pastes);
 }
 
-#[utoipa::path(get, path = "/folders", tag = "folders")]
+#[utoipa::path(
+    get, path = "/folders", tag = "folders",
+    responses(
+        (status = 200, description = "The authenticated user's folders and counts", body = crate::services::FolderOverview),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "API key lacks paste:list", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[get("/folders")]
 pub(crate) async fn list_folders(
     req: HttpRequest,
@@ -38,7 +47,20 @@ pub(crate) async fn list_folders(
     }
 }
 
-#[utoipa::path(post, path = "/folders", tag = "folders")]
+#[utoipa::path(
+    post, path = "/folders", tag = "folders",
+    params(("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    request_body = FolderInput,
+    responses(
+        (status = 201, description = "Folder created", body = crate::services::Folder),
+        (status = 400, description = "Invalid folder name", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "API key lacks paste:write or CSRF failed", body = crate::http::errors::ProblemDetails),
+        (status = 409, description = "Folder name already exists", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[post("/folders")]
 pub(crate) async fn create_folder(
     req: HttpRequest,
@@ -58,7 +80,22 @@ pub(crate) async fn create_folder(
     }
 }
 
-#[utoipa::path(patch, path = "/folders/{folder_id}", tag = "folders", params(("folder_id" = i64, Path)))]
+#[utoipa::path(
+    patch, path = "/folders/{folder_id}", tag = "folders",
+    params(("folder_id" = i64, Path, description = "Folder ID"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    request_body = FolderInput,
+    responses(
+        (status = 200, description = "Folder renamed", body = crate::services::Folder),
+        (status = 400, description = "Invalid folder name", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Insufficient permission or CSRF failure", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "Folder not found", body = crate::http::errors::ProblemDetails),
+        (status = 409, description = "Folder name already exists", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[patch("/folders/{folder_id}")]
 pub(crate) async fn rename_folder(
     req: HttpRequest,
@@ -80,7 +117,19 @@ pub(crate) async fn rename_folder(
     }
 }
 
-#[utoipa::path(delete, path = "/folders/{folder_id}", tag = "folders", params(("folder_id" = i64, Path)))]
+#[utoipa::path(
+    delete, path = "/folders/{folder_id}", tag = "folders",
+    params(("folder_id" = i64, Path, description = "Folder ID"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    responses(
+        (status = 204, description = "Folder deleted; its pastes become unfiled"),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Insufficient permission or CSRF failure", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "Folder not found", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[delete("/folders/{folder_id}")]
 pub(crate) async fn delete_folder(
     req: HttpRequest,
@@ -101,7 +150,20 @@ pub(crate) async fn delete_folder(
     }
 }
 
-#[utoipa::path(patch, path = "/pastes", tag = "folders")]
+#[utoipa::path(
+    patch, path = "/pastes", tag = "folders",
+    params(("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    request_body = MovePastesInput,
+    responses(
+        (status = 204, description = "Pastes moved"),
+        (status = 400, description = "Invalid paste or folder selection", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Insufficient permission or CSRF failure", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "Paste or folder not found", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[patch("/pastes")]
 pub(crate) async fn move_pastes(
     req: HttpRequest,

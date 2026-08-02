@@ -18,7 +18,7 @@ pub const VALID_SCOPES: &[&str] = &[
     "api_key:manage",
 ];
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, utoipa::ToSchema)]
 pub struct ApiKey {
     pub id: i64,
     pub user_id: Option<i64>,

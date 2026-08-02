@@ -13,6 +13,20 @@
   let { query }: { query: URLSearchParams } = $props();
   function pastePath(requestedQuery: URLSearchParams): string {
     const params = new URLSearchParams(requestedQuery);
+    if (params.has("search")) {
+      params.set("q", params.get("search") ?? "");
+      params.delete("search");
+    }
+    if (params.has("content_kind")) {
+      params.set("format", params.get("content_kind") ?? "");
+      params.delete("content_kind");
+    }
+    for (const key of ["created_after", "created_before"]) {
+      const value = params.get(key);
+      if (value && Number.isFinite(Number(value))) {
+        params.set(key, new Date(Number(value) * 1000).toISOString());
+      }
+    }
     params.set("page_size", "100");
     return `/admin/pastes?${params}`;
   }

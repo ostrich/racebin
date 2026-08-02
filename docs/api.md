@@ -17,20 +17,33 @@ Browser sessions use the session cookie and `X-CSRF-Token`. API clients should
 use bearer authentication and do not send CSRF tokens. Creating a paste requires
 authentication.
 
-API keys have explicit scopes: `paste:read`, `paste:write`, `paste:delete`, and
-`paste:list`. Administrative scopes are documented by the OpenAPI endpoint and
-the Help page.
+API keys have explicit scopes. The complete, machine-readable scope requirement
+for each operation is exposed as `x-racebin-scopes` in OpenAPI. Discovery also
+returns the supported scope catalog. The user-facing scopes are `paste:read`,
+`paste:write`, `paste:delete`, `paste:list`, and `api_key:manage`; administrative
+keys can additionally use `paste:manage`, `user:manage`, and
+`invitation:manage`.
 
 Errors use `application/problem+json` with `type`, `title`, `status`, and
 `detail` fields.
 
 ## Discovery
 
-- `GET /api/v1/capabilities` reports enabled formats, visibility modes, and
-  upload limits.
+- `GET /api/v1/capabilities` reports the server and API versions,
+  authentication methods, scopes, accepted formats and upload media types,
+  visibility modes, upload limits, and other input limits. When
+  `RACEBIN_PUBLIC_URL` is configured, it also reports canonical `web_base_url`
+  and `api_base_url` values; otherwise those fields are omitted rather than
+  inferred from untrusted request headers.
 - `GET /api/v1/languages` lists accepted syntax names and aliases.
 - `GET /healthz` reports whether the process is running.
 - `GET /readyz` reports whether the database is available.
+
+The OpenAPI document describes every supported operation, parameter, request
+media type, response status, response header, and named response schema. It is
+the authoritative contract for generated clients. Browser-only navigation and
+editor state are deliberately absent from it; the Svelte application consumes
+the same resource API as any other client.
 
 ## Create a paste
 
@@ -145,6 +158,10 @@ Content-Type: application/json
 ```
 
 Use `null` as `folder_id` to move pastes out of a folder.
+
+Administrative paste listing uses the same filters, pagination envelope, and
+paste summary representation at `GET /api/v1/admin/pastes`. Its summaries add
+owner information rather than exposing the server's internal storage model.
 
 ## Content conversion
 

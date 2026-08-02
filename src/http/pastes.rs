@@ -18,9 +18,10 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(delete_paste);
 }
 
-#[derive(Clone, Default, Deserialize, PartialEq)]
+#[derive(Clone, Default, Deserialize, PartialEq, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
-struct ApiPasteQuery {
+pub(super) struct ApiPasteQuery {
     page: Option<u32>,
     page_size: Option<u32>,
     q: Option<String>,
@@ -44,7 +45,7 @@ struct ApiPasteQuery {
 }
 
 impl ApiPasteQuery {
-    fn into_internal(self) -> Result<PasteQuery, String> {
+    pub(super) fn into_internal(self) -> Result<PasteQuery, String> {
         if self.owner.as_deref().is_some_and(|owner| owner != "me") {
             return Err("owner must be me when supplied".into());
         }
@@ -80,7 +81,8 @@ impl ApiPasteQuery {
     }
 }
 
-#[derive(Clone, Default, Deserialize, PartialEq)]
+#[derive(Clone, Default, Deserialize, PartialEq, utoipa::IntoParams, utoipa::ToSchema)]
+#[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
 pub(super) struct FlatCreateRequest {
     pub(super) title: Option<String>,
@@ -92,6 +94,23 @@ pub(super) struct FlatCreateRequest {
     pub(super) expires_at: Option<String>,
     pub(super) expires_in: Option<i64>,
     pub(super) read_limit: Option<i64>,
+}
+
+/// Schema-only representation of the atomic multipart create request.
+#[derive(utoipa::ToSchema)]
+#[allow(dead_code)]
+struct MultipartCreateRequest {
+    title: Option<String>,
+    format: Option<String>,
+    content: Option<String>,
+    language: Option<String>,
+    visibility: Option<String>,
+    folder_id: Option<i64>,
+    expires_at: Option<String>,
+    expires_in: Option<i64>,
+    read_limit: Option<i64>,
+    #[schema(content_media_type = "application/octet-stream")]
+    file: Vec<String>,
 }
 
 impl FlatCreateRequest {
@@ -138,7 +157,20 @@ impl Drop for StagedFile {
     }
 }
 
-#[utoipa::path(get, path = "/pastes", tag = "pastes", responses((status = 200, body = PastePage), (status = 400, body = crate::http::errors::ProblemDetails)))]
+#[utoipa::path(
+    get,
+    path = "/pastes",
+    tag = "pastes",
+    params(ApiPasteQuery),
+    responses(
+        (status = 200, description = "Paginated paste summaries", body = PastePage),
+        (status = 400, description = "Invalid filter", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Authentication required for owner=me", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "API key lacks paste:list", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security((), ("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[get("/pastes")]
 pub(crate) async fn list_pastes(
     req: HttpRequest,
@@ -197,7 +229,48 @@ pub(crate) async fn list_pastes(
     }
 }
 
-#[utoipa::path(post, path = "/pastes", tag = "pastes", request_body = CreatePasteRequest, responses((status = 201, body = crate::http::dto::PasteResource), (status = 422, body = crate::http::errors::ProblemDetails)), security(("bearerAuth" = []), ("sessionCookie" = [])))]
+#[utoipa::path(
+    post,
+    path = "/pastes",
+    tag = "pastes",
+    params(
+        FlatCreateRequest,
+        ("Idempotency-Key" = Option<String>, Header, description = "Recommended unique key for safely retrying creation"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations; not used with bearer keys"),
+        ("Accept" = Option<String>, Header, description = "Use text/plain to receive only the created paste URL")
+    ),
+    request_body(
+        description = "Canonical JSON, raw text/HTML, URL-encoded form, or multipart paste payload",
+        content(
+            (CreatePasteRequest = "application/json"),
+            (String = "text/plain"),
+            (String = "text/markdown"),
+            (String = "text/html"),
+            (FlatCreateRequest = "application/x-www-form-urlencoded"),
+            (MultipartCreateRequest = "multipart/form-data")
+        )
+    ),
+    responses(
+        (status = 201, description = "Paste created",
+            content(
+                (crate::http::dto::PasteResource = "application/json"),
+                (String = "text/plain")
+            ),
+            headers(
+                ("Location" = String, description = "Absolute URL of the created paste"),
+                ("ETag" = String, description = "Current paste entity tag"),
+                ("Idempotency-Replayed" = String, description = "true when this is a replay of an earlier idempotent creation")
+            )),
+        (status = 400, description = "Malformed request or idempotency key", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Insufficient permission", body = crate::http::errors::ProblemDetails),
+        (status = 409, description = "Idempotency-key conflict", body = crate::http::errors::ProblemDetails),
+        (status = 413, description = "Upload exceeds configured limits", body = crate::http::errors::ProblemDetails),
+        (status = 422, description = "Invalid paste content or metadata", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[post("/pastes")]
 pub(crate) async fn create_paste(
     req: HttpRequest,
@@ -308,7 +381,17 @@ pub(crate) async fn create_paste(
     response
 }
 
-#[utoipa::path(get, path = "/pastes/{paste_id}", tag = "pastes", params(("paste_id" = String, Path)), responses((status = 200, body = crate::http::dto::PasteResource), (status = 404, body = crate::http::errors::ProblemDetails)))]
+#[utoipa::path(
+    get, path = "/pastes/{paste_id}", tag = "pastes",
+    params(("paste_id" = String, Path, description = "Paste ID")),
+    responses(
+        (status = 200, description = "Paste metadata without consuming a read", body = crate::http::dto::PasteResource,
+            headers(("ETag" = String, description = "Current paste entity tag"))),
+        (status = 404, description = "Paste not found or not visible", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security((), ("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[get("/pastes/{paste_id}")]
 pub(crate) async fn get_paste(
     req: HttpRequest,
@@ -326,7 +409,26 @@ pub(crate) async fn get_paste(
     }
 }
 
-#[utoipa::path(get, path = "/pastes/{paste_id}/source", tag = "pastes", params(("paste_id" = String, Path)), responses((status = 200, body = crate::http::dto::PasteResource), (status = 403, body = crate::http::errors::ProblemDetails)), security(("bearerAuth" = []), ("sessionCookie" = [])))]
+#[utoipa::path(
+    get, path = "/pastes/{paste_id}/source", tag = "pastes",
+    params(("paste_id" = String, Path, description = "Paste ID"),
+        ("Accept" = Option<String>, Header, description = "application/json, text/plain, or text/html for rich text")),
+    responses(
+        (status = 200, description = "Non-consuming owner or administrator source",
+            content(
+                (crate::http::dto::PasteResource = "application/json"),
+                (String = "text/plain"),
+                (String = "text/html")
+            ),
+            headers(("ETag" = String, description = "Current paste entity tag"))),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Not the owner and lacks paste:manage", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "Paste not found", body = crate::http::errors::ProblemDetails),
+        (status = 406, description = "Requested representation is unavailable", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[get("/pastes/{paste_id}/source")]
 pub(crate) async fn get_paste_source(
     req: HttpRequest,
@@ -344,7 +446,31 @@ pub(crate) async fn get_paste_source(
     }
 }
 
-#[utoipa::path(post, path = "/pastes/{paste_id}/reads", tag = "pastes", params(("paste_id" = String, Path)), responses((status = 200, body = crate::http::dto::PasteResource), (status = 404, body = crate::http::errors::ProblemDetails)))]
+#[utoipa::path(
+    post, path = "/pastes/{paste_id}/reads", tag = "pastes",
+    params(("paste_id" = String, Path, description = "Paste ID"),
+        ("Idempotency-Key" = Option<String>, Header, description = "Recommended key for safely retrying a consuming read"),
+        ("Accept" = Option<String>, Header, description = "application/json, text/plain, or text/html for rich text")),
+    responses(
+        (status = 200, description = "Paste content; this may consume a limited read",
+            content(
+                (crate::http::dto::PasteResource = "application/json"),
+                (String = "text/plain"),
+                (String = "text/html")
+            ),
+            headers(
+                ("ETag" = String, description = "Current paste entity tag"),
+                ("Idempotency-Replayed" = String, description = "true when this is a replay of an earlier idempotent read")
+            )),
+        (status = 400, description = "Invalid idempotency key", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "API key lacks paste:read", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "Paste not found, unavailable, or fully consumed", body = crate::http::errors::ProblemDetails),
+        (status = 406, description = "Requested representation is unavailable", body = crate::http::errors::ProblemDetails),
+        (status = 409, description = "Idempotency-key conflict", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security((), ("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[post("/pastes/{paste_id}/reads")]
 pub(crate) async fn read_paste(
     req: HttpRequest,
@@ -379,7 +505,25 @@ pub(crate) async fn read_paste(
     }
 }
 
-#[utoipa::path(patch, path = "/pastes/{paste_id}", tag = "pastes", params(("paste_id" = String, Path)), request_body = UpdatePasteRequest, responses((status = 200, body = crate::http::dto::PasteResource), (status = 412, body = crate::http::errors::ProblemDetails)), security(("bearerAuth" = []), ("sessionCookie" = [])))]
+#[utoipa::path(
+    patch, path = "/pastes/{paste_id}", tag = "pastes",
+    params(("paste_id" = String, Path, description = "Paste ID"),
+        ("If-Match" = String, Header, description = "Current ETag or *"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    request_body = UpdatePasteRequest,
+    responses(
+        (status = 200, description = "Paste updated", body = crate::http::dto::PasteResource,
+            headers(("ETag" = String, description = "New paste entity tag"))),
+        (status = 400, description = "Invalid update", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Not permitted to update this paste", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "Paste not found", body = crate::http::errors::ProblemDetails),
+        (status = 412, description = "ETag does not match", body = crate::http::errors::ProblemDetails),
+        (status = 428, description = "If-Match is required", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[patch("/pastes/{paste_id}")]
 pub(crate) async fn update_paste(
     req: HttpRequest,
@@ -422,7 +566,22 @@ pub(crate) async fn update_paste(
     }
 }
 
-#[utoipa::path(delete, path = "/pastes/{paste_id}", tag = "pastes", params(("paste_id" = String, Path)), responses((status = 204), (status = 412, body = crate::http::errors::ProblemDetails)), security(("bearerAuth" = []), ("sessionCookie" = [])))]
+#[utoipa::path(
+    delete, path = "/pastes/{paste_id}", tag = "pastes",
+    params(("paste_id" = String, Path, description = "Paste ID"),
+        ("If-Match" = String, Header, description = "Current ETag or *"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    responses(
+        (status = 204, description = "Paste deleted"),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Not permitted to delete this paste", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "Paste not found", body = crate::http::errors::ProblemDetails),
+        (status = 412, description = "ETag does not match", body = crate::http::errors::ProblemDetails),
+        (status = 428, description = "If-Match is required", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[delete("/pastes/{paste_id}")]
 pub(crate) async fn delete_paste(
     req: HttpRequest,
@@ -466,7 +625,20 @@ struct ConversionOutput {
     body: BodyInput,
 }
 
-#[utoipa::path(post, path = "/content-conversions", tag = "pastes", responses((status = 200), (status = 422, body = crate::http::errors::ProblemDetails)), security(("bearerAuth" = []), ("sessionCookie" = [])))]
+#[utoipa::path(
+    post, path = "/content-conversions", tag = "pastes",
+    params(("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    request_body = ConversionInput,
+    responses(
+        (status = 200, description = "Converted content", body = ConversionOutput),
+        (status = 400, description = "Malformed request", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Insufficient permission or CSRF failure", body = crate::http::errors::ProblemDetails),
+        (status = 422, description = "Unsupported conversion", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[post("/content-conversions")]
 pub(crate) async fn convert_paste_content(
     req: HttpRequest,

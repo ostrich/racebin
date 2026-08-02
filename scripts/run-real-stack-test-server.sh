@@ -19,5 +19,6 @@ rm "$password_file"
 RACEBIN_BIND=127.0.0.1 \
 RACEBIN_PORT=4174 \
 RACEBIN_DATA_DIR="$test_data_dir" \
+RACEBIN_PUBLIC_URL=http://127.0.0.1:4174 \
 RACEBIN_INSECURE_COOKIE=true \
 ../target/debug/racebin

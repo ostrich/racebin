@@ -17,7 +17,15 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(admin_delete_key);
 }
 
-#[utoipa::path(get, path = "/admin/users", tag = "administration")]
+#[utoipa::path(
+    get, path = "/admin/users", tag = "administration",
+    responses(
+        (status = 200, description = "Administrative user summaries", body = [crate::account::AdminUser]),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Administrator with user:manage required", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ), security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[get("/admin/users")]
 pub(crate) async fn admin_users(
     req: HttpRequest,
@@ -36,7 +44,17 @@ pub(crate) async fn admin_users(
     }
 }
 
-#[utoipa::path(get, path = "/admin/users/{id}", tag = "administration", params(("id" = i64, Path)))]
+#[utoipa::path(
+    get, path = "/admin/users/{id}", tag = "administration",
+    params(("id" = i64, Path, description = "User ID")),
+    responses(
+        (status = 200, description = "Administrative user detail", body = crate::account::AdminUser),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Administrator with user:manage required", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "User not found", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ), security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[get("/admin/users/{id}")]
 pub(crate) async fn admin_user(
     req: HttpRequest,
@@ -57,12 +75,22 @@ pub(crate) async fn admin_user(
     }
 }
 
-#[utoipa::path(get, path = "/admin/pastes", tag = "administration")]
+#[utoipa::path(
+    get, path = "/admin/pastes", tag = "administration",
+    params(super::pastes::ApiPasteQuery),
+    responses(
+        (status = 200, description = "Canonical paginated paste summaries including ownership", body = crate::http::dto::PastePage),
+        (status = 400, description = "Invalid filter", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Administrator with paste:manage required", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ), security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[get("/admin/pastes")]
 pub(crate) async fn admin_pastes(
     req: HttpRequest,
     services: web::Data<PasteService>,
-    query: web::Query<PasteQuery>,
+    query: web::Query<super::pastes::ApiPasteQuery>,
 ) -> HttpResponse {
     let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(value) => value,
@@ -71,11 +99,34 @@ pub(crate) async fn admin_pastes(
     if let Err(response) = require_admin(&value, "paste:manage") {
         return response;
     }
+    let query = match query.into_inner().into_internal() {
+        Ok(query) => query,
+        Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
+    };
     if let Err(error) = crate::services::validate_paste_query(&query) {
         return domain_error(error);
     }
     match services.list_pastes(&value, &query, true).await {
-        Ok(page) => HttpResponse::Ok().json(page),
+        Ok(page) => {
+            let total_pages = if page.total_items == 0 {
+                0
+            } else {
+                (page.total_items as u64).div_ceil(u64::from(page.page_size)) as u32
+            };
+            HttpResponse::Ok().json(dto::PastePage {
+                items: page
+                    .items
+                    .into_iter()
+                    .map(|paste| dto::summary(&req, &value, paste, true))
+                    .collect(),
+                pagination: dto::Pagination {
+                    page: page.page,
+                    page_size: page.page_size,
+                    total_items: page.total_items,
+                    total_pages,
+                },
+            })
+        }
         Err(e) => domain_error(e),
     }
 }
@@ -94,7 +145,20 @@ enum UserRole {
     Admin,
 }
 
-#[utoipa::path(patch, path = "/admin/users/{id}", tag = "administration", params(("id" = i64, Path)))]
+#[utoipa::path(
+    patch, path = "/admin/users/{id}", tag = "administration",
+    params(("id" = i64, Path, description = "User ID"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    request_body = UserUpdate,
+    responses(
+        (status = 204, description = "User updated"),
+        (status = 400, description = "Invalid update or last-administrator invariant", body = crate::http::errors::ProblemDetails),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Administrator with user:manage required", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "User not found", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ), security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[patch("/admin/users/{id}")]
 pub(crate) async fn admin_update_user(
     req: HttpRequest,
@@ -123,7 +187,18 @@ pub(crate) async fn admin_update_user(
     }
 }
 
-#[utoipa::path(post, path = "/admin/users/{id}/password-reset", tag = "administration", params(("id" = i64, Path)))]
+#[utoipa::path(
+    post, path = "/admin/users/{id}/password-reset", tag = "administration",
+    params(("id" = i64, Path, description = "User ID"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    responses(
+        (status = 201, description = "One-time password-reset link created", body = crate::http::contract::LinkResponse),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Administrator with user:manage and user identity required", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "User not found", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ), security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[post("/admin/users/{id}/password-reset")]
 pub(crate) async fn admin_create_password_reset(
     req: HttpRequest,
@@ -144,14 +219,25 @@ pub(crate) async fn admin_create_password_reset(
         return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
     };
     match accounts::create_password_reset(&services.storage, *id, created_by_user_id).await {
-        Ok(token) => HttpResponse::Created().json(json!({
-            "url": super::dto::absolute(&req, &format!("/password-reset/{token}"))
-        })),
+        Ok(token) => HttpResponse::Created().json(contract::LinkResponse {
+            url: super::dto::absolute(&req, &format!("/password-reset/{token}")),
+        }),
         Err(value) => domain_error(value),
     }
 }
 
-#[utoipa::path(delete, path = "/admin/users/{id}/sessions", tag = "administration", params(("id" = i64, Path)))]
+#[utoipa::path(
+    delete, path = "/admin/users/{id}/sessions", tag = "administration",
+    params(("id" = i64, Path, description = "User ID"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    responses(
+        (status = 204, description = "All user sessions revoked"),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Administrator with user:manage required", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "User not found", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ), security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[delete("/admin/users/{id}/sessions")]
 pub(crate) async fn admin_revoke_user_sessions(
     req: HttpRequest,
@@ -175,7 +261,18 @@ pub(crate) async fn admin_revoke_user_sessions(
     }
 }
 
-#[utoipa::path(delete, path = "/admin/users/{id}/api-keys", tag = "administration", params(("id" = i64, Path)))]
+#[utoipa::path(
+    delete, path = "/admin/users/{id}/api-keys", tag = "administration",
+    params(("id" = i64, Path, description = "User ID"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    responses(
+        (status = 204, description = "All user API keys revoked"),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Administrator with api_key:manage required", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "User not found", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ), security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[delete("/admin/users/{id}/api-keys")]
 pub(crate) async fn admin_revoke_user_keys(
     req: HttpRequest,
@@ -202,7 +299,15 @@ pub(crate) async fn admin_revoke_user_keys(
     }
 }
 
-#[utoipa::path(get, path = "/admin/invitations", tag = "administration")]
+#[utoipa::path(
+    get, path = "/admin/invitations", tag = "administration",
+    responses(
+        (status = 200, description = "Invitation records", body = [crate::http::contract::InvitationResource]),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Administrator with invitation:manage required", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ), security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[get("/admin/invitations")]
 pub(crate) async fn admin_invitations(
     req: HttpRequest,
@@ -228,14 +333,14 @@ pub(crate) async fn admin_invitations(
                     } else {
                         None
                     };
-                    json!({
-                        "id":i.id,
-                        "token_prefix":i.token_prefix,
-                        "expires_at":i.expires_at,
-                        "status":status,
-                        "url":url,
-                        "redeemed_by_username":i.redeemed_by_username
-                    })
+                    contract::InvitationResource {
+                        id: i.id,
+                        token_prefix: i.token_prefix,
+                        expires_at: i.expires_at,
+                        status: status.to_string(),
+                        url,
+                        redeemed_by_username: i.redeemed_by_username,
+                    }
                 })
                 .collect::<Vec<_>>(),
         ),
@@ -243,7 +348,16 @@ pub(crate) async fn admin_invitations(
     }
 }
 
-#[utoipa::path(post, path = "/admin/invitations", tag = "administration")]
+#[utoipa::path(
+    post, path = "/admin/invitations", tag = "administration",
+    params(("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    responses(
+        (status = 201, description = "Invitation created", body = crate::http::contract::InvitationCreatedResponse),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Administrator with invitation:manage and user identity required", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ), security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[post("/admin/invitations")]
 pub(crate) async fn admin_create_invitation(
     req: HttpRequest,
@@ -263,15 +377,26 @@ pub(crate) async fn admin_create_invitation(
         return error(StatusCode::FORBIDDEN, "forbidden", "User identity required");
     };
     match accounts::create_invitation(&services.storage, user_id).await {
-        Ok(token) => HttpResponse::Created().json(json!({
-            "token": token,
-            "url": super::dto::absolute(&req, &format!("/invitations/{token}"))
-        })),
+        Ok(token) => {
+            let url = super::dto::absolute(&req, &format!("/invitations/{token}"));
+            HttpResponse::Created().json(contract::InvitationCreatedResponse { token, url })
+        }
         Err(e) => domain_error(e),
     }
 }
 
-#[utoipa::path(delete, path = "/admin/invitations/{id}", tag = "administration", params(("id" = i64, Path)))]
+#[utoipa::path(
+    delete, path = "/admin/invitations/{id}", tag = "administration",
+    params(("id" = i64, Path, description = "Invitation ID"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    responses(
+        (status = 204, description = "Invitation revoked"),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Administrator with invitation:manage required", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "Invitation not found or already redeemed", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ), security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[delete("/admin/invitations/{id}")]
 pub(crate) async fn admin_revoke_invitation(
     req: HttpRequest,
@@ -295,7 +420,15 @@ pub(crate) async fn admin_revoke_invitation(
     }
 }
 
-#[utoipa::path(get, path = "/admin/api-keys", tag = "administration")]
+#[utoipa::path(
+    get, path = "/admin/api-keys", tag = "administration",
+    responses(
+        (status = 200, description = "All API keys", body = [crate::account::api_keys::ApiKey]),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Administrator with api_key:manage required", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ), security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[get("/admin/api-keys")]
 pub(crate) async fn admin_keys(
     req: HttpRequest,
@@ -314,7 +447,19 @@ pub(crate) async fn admin_keys(
     }
 }
 
-#[utoipa::path(patch, path = "/admin/api-keys/{id}", tag = "administration", params(("id" = i64, Path)))]
+#[utoipa::path(
+    patch, path = "/admin/api-keys/{id}", tag = "administration",
+    params(("id" = i64, Path, description = "API key ID"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    request_body = EnabledInput,
+    responses(
+        (status = 204, description = "API key state updated"),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Administrator with api_key:manage required", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "API key not found", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ), security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[patch("/admin/api-keys/{id}")]
 pub(crate) async fn admin_update_key(
     req: HttpRequest,
@@ -339,7 +484,18 @@ pub(crate) async fn admin_update_key(
     }
 }
 
-#[utoipa::path(delete, path = "/admin/api-keys/{id}", tag = "administration", params(("id" = i64, Path)))]
+#[utoipa::path(
+    delete, path = "/admin/api-keys/{id}", tag = "administration",
+    params(("id" = i64, Path, description = "API key ID"),
+        ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
+    responses(
+        (status = 204, description = "API key deleted"),
+        (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Administrator with api_key:manage required", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "API key not found", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ), security(("bearerAuth" = []), ("sessionCookie" = []))
+)]
 #[delete("/admin/api-keys/{id}")]
 pub(crate) async fn admin_delete_key(
     req: HttpRequest,
