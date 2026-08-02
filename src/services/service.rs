@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use super::model::{Attachment, Page, Paste, PasteInput, PasteQuery, PasteRead};
 use super::rich_text::validate_document;
-use super::validation::{authorize_owner, can_read, validate_input, validate_query};
+use super::validation::{authorize_owner, can_read, validate_input, validate_paste_query};
 use super::{DomainError, DomainResult};
 use crate::time::unix_timestamp;
 use sha2::{Digest, Sha256};
@@ -114,7 +114,7 @@ impl PasteService {
         query: &PasteQuery,
         admin: bool,
     ) -> DomainResult<Page<Paste>> {
-        validate_query(query)?;
+        validate_paste_query(query).map_err(DomainError::validation)?;
         let page = query.page.unwrap_or(1).max(1);
         let page_size = query.page_size.unwrap_or(30).clamp(1, 100);
         let offset = i64::from(page - 1).saturating_mul(i64::from(page_size));
