@@ -169,14 +169,32 @@ nav svg,
 }
 .form-grid {
   display: grid;
-  grid-template-columns: 200px 230px 260px 170px;
+  grid-template-columns: 200px 260px 200px 170px;
   justify-content: start;
   gap: 12px;
 }
+.type-field { grid-column: 1; grid-row: 1; }
+.language-field { grid-column: 2; grid-row: 1; }
+.folder-field { grid-column: 3; grid-row: 1; }
+.visibility-field { grid-column: 4; grid-row: 1; }
+.type-field,
+.visibility-field,
+.read-limit-field { width: 140px; }
+.form-grid.without-folder .visibility-field { grid-column: 3; }
+.expiration-mode-field { grid-column: 1; grid-row: 2; }
+.expiration-time-field { grid-column: 2; grid-row: 2; }
+.read-limit-field { grid-column: 3; grid-row: 2; }
 @media (max-width: 980px) {
   .form-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+  .form-grid > * {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .type-field,
+  .visibility-field,
+  .read-limit-field { width: 100%; }
 }
 .paste-view .content {
   background: #101820;
@@ -1513,4 +1531,3 @@ nav svg,
     background: #2b353b;
   }
 }
-

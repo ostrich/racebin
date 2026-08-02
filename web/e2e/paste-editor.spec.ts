@@ -10,6 +10,36 @@ test("untouched paste form navigates without a discard prompt", async ({ page })
   await expect(page.getByRole("heading", { name: "My pastes" })).toBeVisible();
 });
 
+test("expiration presets populate a stable, customizable date control", async ({ page }) => {
+  await mockApi(page, true);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/pastes/new");
+
+  const expiration = page.getByRole("combobox", { name: "Expiration" });
+  const date = page.getByLabel("Date and time");
+  const readLimit = page.getByLabel("Read limit");
+  await expect(expiration).toHaveValue("never");
+  await expect(date).toBeDisabled();
+  await expect(date).toHaveValue("");
+
+  await expiration.selectOption("1w");
+  await expect(date).toBeEnabled();
+  await expect(date).not.toHaveValue("");
+  const [dateBox, readLimitBox] = await Promise.all([date.boundingBox(), readLimit.boundingBox()]);
+  expect(dateBox!.x + dateBox!.width).toBeLessThan(readLimitBox!.x);
+
+  await date.fill("2030-01-02T03:04");
+  await expect(expiration).toHaveValue("custom");
+  await expect(date).toHaveValue("2030-01-02T03:04");
+
+  await expiration.selectOption("never");
+  await expect(date).toBeDisabled();
+  await expect(date).toHaveValue("");
+  await expiration.selectOption("custom");
+  await expect(date).toBeEnabled();
+  await expect(date).toHaveValue("");
+});
+
 test("editing triggers the custom discard dialog and detects JavaScript", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");

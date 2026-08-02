@@ -14,6 +14,7 @@
   import type { Folder, FolderOverview, Paste, RichTextDocument } from "../types";
 
   type ContentKind = "text" | "rich_text";
+  type ExpirationMode = "never" | "1h" | "12h" | "1d" | "1w" | "30d" | "1y" | "custom";
   type Conversion = { body: { format: ContentKind; content: string; language?: string; plain_text?: string } };
 
   let { pasteId }: { pasteId?: string } = $props();
@@ -31,6 +32,7 @@
   let folders = $state<Folder[]>([]);
   let language = $state("auto");
   let visibility = $state("unlisted");
+  let expirationMode = $state<ExpirationMode>("never");
   let expiresAt = $state("");
   let readLimit = $state("");
   let attachmentSelection = $state("");
@@ -54,11 +56,42 @@
     return { destroy: () => observer.disconnect() };
   }
 
+  function localDateTime(date: Date): string {
+    const part = (value: number) => String(value).padStart(2, "0");
+    return `${date.getFullYear()}-${part(date.getMonth() + 1)}-${part(date.getDate())}`
+      + `T${part(date.getHours())}:${part(date.getMinutes())}`;
+  }
+
+  function changeExpirationMode(event: Event): void {
+    const mode = (event.currentTarget as HTMLSelectElement).value as ExpirationMode;
+    expirationMode = mode;
+    if (mode === "never" || mode === "custom") {
+      expiresAt = "";
+      return;
+    }
+
+    const expiration = new Date();
+    if (mode === "1h") expiration.setHours(expiration.getHours() + 1);
+    else if (mode === "12h") expiration.setHours(expiration.getHours() + 12);
+    else if (mode === "1d") expiration.setDate(expiration.getDate() + 1);
+    else if (mode === "1w") expiration.setDate(expiration.getDate() + 7);
+    else if (mode === "30d") expiration.setDate(expiration.getDate() + 30);
+    else expiration.setDate(expiration.getDate() + 365);
+    expiration.setSeconds(0, 0);
+    expiresAt = localDateTime(expiration);
+  }
+
+  function customizeExpiration(): void {
+    if (expirationMode !== "never" && expirationMode !== "custom") {
+      expirationMode = "custom";
+    }
+  }
+
   function snapshot(selectedAttachments = attachmentSelection): string {
     return JSON.stringify({
       title, content, richHtml: contentKind === "rich_text" ? richHtml : null,
       contentKind, folderId, language: contentKind === "text" ? language : null,
-      visibility, expiresAt, readLimit, attachmentSelection: selectedAttachments
+      visibility, expirationMode, expiresAt, readLimit, attachmentSelection: selectedAttachments
     });
   }
   let dirty = $derived(initialized && snapshot() !== baseline);
@@ -80,8 +113,9 @@
     );
     language = normalizeLanguage(source?.language ?? "auto") ?? "auto";
     visibility = source?.visibility ?? "unlisted";
+    expirationMode = source?.expires_at ? "custom" : "never";
     expiresAt = source?.expires_at
-      ? new Date(source.expires_at * 1000).toISOString().slice(0, 16)
+      ? localDateTime(new Date(source.expires_at * 1000))
       : "";
     readLimit = source?.read_limit ? String(source.read_limit) : "";
     drafts.set(contentKind, content);
@@ -177,7 +211,9 @@
           ? { format: "rich_text", content: richHtml }
           : { format: "text", content, language: canonicalLanguage },
         visibility,
-        expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
+        expires_at: expirationMode !== "never" && expiresAt
+          ? new Date(expiresAt).toISOString()
+          : null,
         read_limit: readLimit ? Number(readLimit) : null,
         ...(canOrganize ? { folder_id: folderId ? Number(folderId) : null } : {})
       };
@@ -195,7 +231,9 @@
         upload.append("content", contentKind === "rich_text" ? richHtml : content);
         if (contentKind === "text") upload.append("language", canonicalLanguage);
         upload.append("visibility", visibility);
-        if (expiresAt) upload.append("expires_at", new Date(expiresAt).toISOString());
+        if (expirationMode !== "never" && expiresAt) {
+          upload.append("expires_at", new Date(expiresAt).toISOString());
+        }
         if (readLimit) upload.append("read_limit", readLimit);
         if (canOrganize && folderId) upload.append("folder_id", folderId);
         selected.forEach(file => upload.append("file", file));
@@ -283,22 +321,30 @@
           </div>
         </div>
       {/if}
-      <div class="form-grid">
-        <label><span>Type</span><select value={contentKind} disabled={switching} onchange={changeKind}>
+      <div class:without-folder={!canOrganize} class="form-grid">
+        <label class="type-field"><span>Type</span><select value={contentKind} disabled={switching} onchange={changeKind}>
           <option value="text">Text</option><option value="rich_text">Rich text</option>
         </select></label>
         <LanguagePicker bind:value={language} disabled={contentKind !== "text"}/>
         {#if canOrganize}
-          <label><span>Folder</span><select bind:value={folderId}>
+          <label class="folder-field"><span>Folder</span><select bind:value={folderId}>
             <option value="">Uncategorized</option>
             {#each folders as folder}<option value={String(folder.id)}>{folder.name}</option>{/each}
           </select></label>
         {/if}
-        <label><span>Visibility</span><select bind:value={visibility}>
+        <label class="visibility-field"><span>Visibility</span><select bind:value={visibility}>
           <option value="public">public</option><option value="unlisted">unlisted</option><option value="private">private</option>
         </select></label>
-        <label><span>Expires</span><input type="datetime-local" bind:value={expiresAt}/></label>
-        <label><span>Read limit</span><input type="number" min="1" bind:value={readLimit} placeholder="Unlimited"/></label>
+        <label class="expiration-mode-field"><span>Expiration</span><select value={expirationMode} onchange={changeExpirationMode}>
+          <option value="never">Never</option><option value="1h">1 hour</option>
+          <option value="12h">12 hours</option><option value="1d">1 day</option>
+          <option value="1w">1 week</option><option value="30d">30 days</option>
+          <option value="1y">1 year</option><option value="custom">Custom…</option>
+        </select></label>
+        <label class="expiration-time-field"><span>Date and time</span><input type="datetime-local"
+          bind:value={expiresAt} disabled={expirationMode === "never"} required={expirationMode !== "never"}
+          oninput={customizeExpiration}/></label>
+        <label class="read-limit-field"><span>Read limit</span><input type="number" min="1" bind:value={readLimit} placeholder="Unlimited"/></label>
       </div>
       {#if paste?.attachments.length}
         <div class="existing-attachments"><span>Current attachments</span>

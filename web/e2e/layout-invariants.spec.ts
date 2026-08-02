@@ -114,7 +114,9 @@ test("paste editor uses the page width without stretching metadata controls", as
 
   expect(editor.left).toBe(main.left + main.paddingLeft);
   expect(editor.right).toBe(main.right - main.paddingRight);
-  expect(controls.slice(0, 4).map(control => control.width)).toEqual([200, 230, 260, 170]);
+  expect(controls.slice(0, 4).map(control => control.width)).toEqual([140, 260, 200, 140]);
   expect(controls[4]?.left).toBe(controls[0]?.left);
   expect(controls[5]?.left).toBe(controls[1]?.left);
+  expect(controls[6]?.left).toBe(controls[2]?.left);
+  expect(controls[6]?.width).toBe(140);
 });
