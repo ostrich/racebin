@@ -441,6 +441,18 @@ fn append_text(node: &Value, output: &mut String, list_depth: usize) {
 mod tests {
     use super::*;
     use crate::services::rich_text_import::html_to_document;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn arbitrary_html_imports_to_a_valid_serializable_document(input in ".{0,4096}") {
+            let document = html_to_document(&input).expect("HTML import should be total");
+            prop_assert!(validate_document(&document).is_ok());
+            let rendered = document_to_html(&document);
+            let reparsed = html_to_document(&rendered).expect("rendered HTML should be importable");
+            prop_assert!(validate_document(&reparsed).is_ok());
+        }
+    }
 
     #[test]
     fn text_conversion_preserves_script_line_breaks() {

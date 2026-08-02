@@ -14,54 +14,54 @@ pub static ARGS: LazyLock<Args> = LazyLock::new(|| {
 });
 
 #[derive(Parser, Debug, Clone)]
-#[clap(author, version, about, long_about = None)]
+#[command(author, version, about, long_about = None)]
 pub struct Args {
-    #[clap(short, long, env = "RACEBIN_PORT", default_value_t = 7042)]
+    #[arg(short, long, env = "RACEBIN_PORT", default_value_t = 7042)]
     pub port: u16,
 
-    #[clap(short, long, env = "RACEBIN_BIND", default_value_t = IpAddr::from([0, 0, 0, 0]))]
+    #[arg(short, long, env = "RACEBIN_BIND", default_value_t = IpAddr::from([0, 0, 0, 0]))]
     pub bind: IpAddr,
 
-    #[clap(short, long, env = "RACEBIN_THREADS", default_value_t = 2)]
+    #[arg(short, long, env = "RACEBIN_THREADS", default_value_t = 2)]
     pub threads: u8,
 
-    #[clap(long, env = "RACEBIN_DATA_DIR", default_value = "racebin_data")]
+    #[arg(long, env = "RACEBIN_DATA_DIR", default_value = "racebin_data")]
     pub data_dir: String,
 
-    #[clap(long, env = "RACEBIN_DATABASE_URL")]
+    #[arg(long, env = "RACEBIN_DATABASE_URL")]
     pub database_url: Option<String>,
 
-    #[clap(long, env = "RACEBIN_PUBLIC_URL")]
+    #[arg(long, env = "RACEBIN_PUBLIC_URL")]
     pub public_url: Option<url::Url>,
 
-    #[clap(long, env = "RACEBIN_TRUSTED_PROXIES", use_value_delimiter = true)]
+    #[arg(long, env = "RACEBIN_TRUSTED_PROXIES", value_delimiter = ',')]
     pub trusted_proxies: Vec<IpAddr>,
 
-    #[clap(long = "site-name", env = "RACEBIN_SITE_NAME")]
+    #[arg(long = "site-name", env = "RACEBIN_SITE_NAME")]
     pub site_name: Option<String>,
 
-    #[clap(long = "plain-home", env = "RACEBIN_PLAIN_HOME")]
+    #[arg(long = "plain-home", env = "RACEBIN_PLAIN_HOME")]
     pub plain_home: bool,
 
-    #[clap(
+    #[arg(
         long = "attachments",
         env = "RACEBIN_ATTACHMENTS",
-        default_value = "true",
-        parse(try_from_str)
+        default_value_t = true,
+        action = clap::ArgAction::Set
     )]
     pub attachments_enabled: bool,
 
-    #[clap(
+    #[arg(
         long = "max-attachment-size-mb",
         env = "RACEBIN_MAX_ATTACHMENT_SIZE_MB",
         default_value_t = 2048
     )]
     pub max_attachment_size_mb: usize,
 
-    #[clap(long = "qr-codes", env = "RACEBIN_QR_CODES")]
+    #[arg(long = "qr-codes", env = "RACEBIN_QR_CODES")]
     pub qr_codes: bool,
 
-    #[clap(long, env = "RACEBIN_INSECURE_COOKIE")]
+    #[arg(long, env = "RACEBIN_INSECURE_COOKIE")]
     pub insecure_cookie: bool,
 }
 
