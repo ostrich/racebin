@@ -33,7 +33,7 @@
   let contentKind = $state<ContentKind>("text");
   let folderId = $state("");
   let folders = $state<Folder[]>([]);
-  let language = $state("auto");
+  let language = $state("plaintext");
   let visibility = $state("unlisted");
   let expirationMode = $state<ExpirationMode>("never");
   let expiresAt = $state("");
@@ -123,7 +123,7 @@
     folderId = source?.folder_id ? String(source.folder_id) : (
       source ? "" : new URLSearchParams(location.search).get("folder_id") ?? ""
     );
-    language = normalizeLanguage(source?.language ?? "auto") ?? "auto";
+    language = normalizeLanguage(source?.language ?? "plaintext") ?? "plaintext";
     visibility = source?.visibility ?? "unlisted";
     expirationMode = source?.expires_at ? "custom" : "never";
     expiresAt = source?.expires_at

@@ -51,9 +51,22 @@ test("expiration presets populate a stable, customizable date control", async ({
   await expect(date).toHaveValue("");
 });
 
-test("editing triggers the custom discard dialog and detects JavaScript", async ({ page }) => {
+test("plain text is uncolored by default", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
+  const language = page.getByRole("combobox", { name: /Language/ });
+  const editor = page.getByRole("textbox", { name: "Paste content" });
+  await expect(language).toHaveValue("plaintext");
+  await editor.fill("function greet(name) { console.log(`hello ${name}`); }");
+  await expect(language).toHaveValue("plaintext");
+  await expect(page.locator(".code-editor .hljs-keyword")).toHaveCount(0);
+});
+
+test("editing triggers the custom discard dialog and explicitly enabled auto detection detects JavaScript", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: /Language/ }).click();
+  await page.getByRole("option", { name: /Auto detect/ }).click();
   const editor = page.getByRole("textbox", { name: "Paste content" });
   await editor.fill("function greet(name) { console.log(`hello ${name}`); }");
   await expect(page.getByRole("combobox", { name: /Language/ })).toHaveValue("javascript");
