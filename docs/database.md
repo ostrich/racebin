@@ -1,18 +1,20 @@
-# Databases
+# Databases and backups
 
-Racebin supports SQLite and PostgreSQL through the same application and HTTP
-interfaces. Select the backend with `--database-url` or
-`RACEBIN_DATABASE_URL`.
+Racebin supports SQLite and PostgreSQL through the same repository, domain, and
+HTTP interfaces. Select the backend with `--database-url` or
+`RACEBIN_DATABASE_URL`. Attachment bytes remain in the configured data
+directory with either backend.
 
 ## SQLite
 
-SQLite is the default. When no database URL is set, Racebin opens:
+SQLite is the default and is recommended for small installations. Without an
+explicit database URL, Racebin opens:
 
 ```text
-sqlite://<data-dir>/database.sqlite
+sqlite://<data-dir>/database.sqlite?mode=rwc
 ```
 
-For an explicit location:
+An explicit path can be configured as follows:
 
 ```bash
 racebin \
@@ -20,8 +22,11 @@ racebin \
   --data-dir /var/lib/racebin
 ```
 
-Racebin enables foreign keys, WAL mode, and a busy timeout on every pooled
-SQLite connection.
+Racebin enables foreign keys, WAL mode, and a five-second busy timeout on every
+pooled SQLite connection. It uses a process-local write lock for coordinated
+multi-step mutations. The supported deployment remains one Racebin process;
+multiple processes sharing one SQLite database are not a supported scaling
+model.
 
 ## PostgreSQL
 
@@ -33,31 +38,66 @@ RACEBIN_DATA_DIR=/var/lib/racebin \
 racebin
 ```
 
-Both `postgres://` and `postgresql://` schemes are accepted. Racebin applies
-the PostgreSQL migration set during startup. Keep credentials out of shell
-history and process arguments where possible; an environment file readable
-only by the service account is preferable.
+Both `postgres://` and `postgresql://` schemes are accepted. Racebin applies the
+PostgreSQL migration set at startup. Keep credentials out of process arguments
+and shell history where practical; a protected service environment file is
+preferable.
 
-`data-dir` remains required operational state with either backend because
-attachments are stored below `<data-dir>/attachments`. Metadata and
-authentication records live in the selected database.
+PostgreSQL stores relational metadata and authentication records only.
+`RACEBIN_DATA_DIR` is still required because attachments live below
+`<data-dir>/attachments`.
 
-Folders and paste-to-folder assignments are relational metadata. Existing
-pastes remain Uncategorized when the folder migration is first applied.
+## Migrations
 
-## Backups
+SQLite and PostgreSQL have parallel, append-only migration histories under
+`migrations/sqlite` and `migrations/postgres`. Startup, account commands, and
+database copy apply the migration set for the selected backend.
 
-For SQLite, stop Racebin and back up `database.sqlite` together with the
-complete attachment directory. Include the WAL and shared-memory files if the
-database is copied while it is open.
+SQLx records applied migration versions and checksums. Do not edit an existing
+migration after it has been applied; add a new migration instead. A checksum
+mismatch stops startup rather than silently changing an established schema.
+Take a coordinated backup before starting a newer binary because forward
+migrations are not automatically reversible by an older binary.
 
-For PostgreSQL, take a consistent PostgreSQL backup and back up `data-dir`.
-Coordinate the two backups when attachments must be restored to the exact
-same point in time.
+Racebin supports its own current schema and forward migrations from its
+committed history. It does not import unrelated or historical application
+schemas.
 
-## Copy SQLite To PostgreSQL
+## Backup and restore
 
-Stop every Racebin process that can write to the source, then run:
+The relational database and the entire attachment directory are one logical
+data set. A usable restore needs matching copies of both.
+
+### SQLite
+
+The simplest reliable procedure is:
+
+1. Stop Racebin.
+2. Copy `<data-dir>/database.sqlite` and the complete
+   `<data-dir>/attachments` tree.
+3. Preserve ownership and private permissions.
+4. Restart Racebin and check `/readyz`.
+
+If an online SQLite backup is required, use SQLite's backup API or a tool such
+as `sqlite3 .backup`; copying only the main database file while WAL mode is
+active is not a consistent backup. Coordinate the attachment snapshot with the
+database backup so newly committed metadata is not separated from its files.
+
+### PostgreSQL
+
+Take a consistent PostgreSQL backup with `pg_dump` or the site's normal backup
+system and back up the data directory. Stop writes, or use storage/database
+snapshot coordination, when an exact common point in time is required.
+
+After restoring either backend, verify database readiness and exercise a known
+attachment download. Racebin's startup cleanup removes orphaned attachment
+directories; it cannot reconstruct a file missing from a database-backed
+attachment record.
+
+## Copy SQLite to PostgreSQL
+
+The built-in copy command transfers Racebin's durable application records from
+one database to an empty destination:
 
 ```bash
 racebin database copy \
@@ -66,21 +106,27 @@ racebin database copy \
   --data-dir /var/lib/racebin
 ```
 
-The destination must contain no Racebin application rows. The command:
+Stop every Racebin process that can write to the source before running it. The
+same data directory is used before and after the copy; attachment bytes are
+verified but are not duplicated.
 
-1. Applies the appropriate migrations to both databases.
-2. Reads a consistent source snapshot.
-3. Verifies that every attachment referenced by metadata exists in
-   `data-dir`.
-4. Copies users, folders, sessions, password resets, invitations, API keys,
-   pastes, and attachment metadata
-   while preserving IDs.
-5. Resets every PostgreSQL identity sequence.
-6. Verifies table counts before committing the destination transaction.
+The command:
 
-Missing attachments, incompatible rows, a non-empty destination, or failed
-verification abort the operation. Start Racebin with the PostgreSQL URL only
-after the command succeeds.
+1. Opens both databases and applies their current migrations.
+2. Refuses a destination containing Racebin application rows.
+3. Reads a consistent source transaction.
+4. Verifies that every attachment record references a copied paste and an
+   existing file below `data-dir`.
+5. Copies users, folders, sessions, password-reset tokens, invitations, API
+   keys and scopes, pastes, and attachment metadata while preserving IDs.
+6. Resets PostgreSQL identity sequences.
+7. Verifies destination table counts before committing its transaction.
 
-Racebin supports its current migration history and forward migrations from
-that schema. It does not import unrelated or historical application schemas.
+Short-lived operational records—authentication failures, idempotency records,
+read receipts, and final-read grants—are deliberately not transferred. Missing
+attachments, incompatible rows, a non-empty destination, or failed
+verification aborts and rolls back the destination copy.
+
+After a successful copy, configure `RACEBIN_DATABASE_URL`, start Racebin, check
+`/readyz`, and verify account login plus representative paste and attachment
+access before retiring the SQLite backup.

@@ -108,7 +108,8 @@ all of its directives.
 
 Racebin accepts command-line options and equivalent `RACEBIN_*` environment
 variables. `/etc/racebin.conf` is a systemd environment file, so quote values
-containing spaces and keep it readable only by root and the service group.
+containing spaces and keep it readable only by root and the service group. Run
+`racebin --help` for the executable's current option list.
 
 | Option | Environment variable | Default |
 | --- | --- | --- |
@@ -126,6 +127,16 @@ containing spaces and keep it readable only by root and the service group.
 | `--qr-codes` | `RACEBIN_QR_CODES` | `false` |
 | `--insecure-cookie` | `RACEBIN_INSECURE_COOKIE` | `false` |
 
+`RACEBIN_ATTACHMENTS=false` disables new uploads; it does not erase existing
+attachment data or prevent authorized downloads. Racebin also enforces fixed
+limits published by `/api/v1/capabilities`: 200 title characters, 2 MiB of text
+or rich-text input, 32 attachments per paste, 100 pastes per bulk move, and a
+maximum list page size of 100. The configurable attachment limit applies to
+each file and to the combined file bytes in one multipart request.
+
+`RACEBIN_PLAIN_HOME=true` gives anonymous visitors a minimal login-oriented
+home page. It does not disable public paste URLs or `/explore`.
+
 A typical SQLite production configuration is:
 
 ```ini
@@ -141,7 +152,9 @@ RACEBIN_MAX_ATTACHMENT_SIZE_MB=2048
 
 Do not enable `RACEBIN_INSECURE_COOKIE` in an HTTPS deployment. It exists only
 for direct local HTTP development. `RACEBIN_PUBLIC_URL` supplies the canonical
-external origin for generated links and is required when QR output is enabled.
+external origin for generated invitation, reset, paste, attachment, archive,
+and QR links. Without it, canonical base URLs are omitted from capabilities;
+QR output requires it.
 
 `RACEBIN_TRUSTED_PROXIES` contains immediate proxy addresses that may supply
 `X-Forwarded-For`. Never trust a network or address through which an untrusted
@@ -183,8 +196,10 @@ curl --fail http://127.0.0.1:7042/healthz
 curl --fail http://127.0.0.1:7042/readyz
 ```
 
-`healthz` confirms that the process is serving requests. `readyz` also checks
-database availability.
+Both probes intentionally return an empty `204 No Content` response.
+`healthz` confirms that the process is serving requests. `readyz` additionally
+checks database availability. They are outside `/api/v1` so conventional
+service monitors can request `/healthz` and `/readyz` directly.
 
 ## Reverse proxy
 
@@ -194,7 +209,9 @@ Bind Racebin to loopback and expose only the reverse proxy. The proxy should:
 - replace, rather than blindly preserve, client forwarding headers;
 - allow request bodies at least as large as Racebin's configured attachment
   limit;
-- forward requests without rewriting paths; and
+- forward requests without rewriting paths;
+- permit streamed request and response bodies without imposing a shorter
+  timeout than the intended uploads; and
 - add HSTS only after the site is confirmed to work exclusively over HTTPS.
 
 Racebin does not use WebSockets. It deliberately emits no CORS policy; its
@@ -229,10 +246,9 @@ server {
 
 Set `RACEBIN_TRUSTED_PROXIES=127.0.0.1` when Nginx connects from IPv4 loopback.
 If Nginx connects over `::1`, trust that exact address as well.
-`client_max_body_size` limits the complete request, while Racebin's setting is
-per attachment. Choose a total request limit that accommodates the intended
-number of files plus multipart overhead without accepting unnecessarily large
-requests.
+`client_max_body_size` limits the complete request. Choose a proxy limit at
+least slightly above Racebin's configured attachment limit to accommodate
+multipart fields and framing, without accepting unnecessarily large requests.
 
 ### Caddy
 
@@ -280,14 +296,26 @@ Racebin applies forward database migrations during startup. Take a backup first;
 do not assume an older binary can read a schema after a migration.
 
 For SQLite, stop Racebin and back up `database.sqlite` together with the entire
-data directory. For PostgreSQL, coordinate a PostgreSQL backup with a backup of
-the data directory. See the [database guide](database.md) for complete backup,
-restore, and database-copy guidance.
+attachment tree. For PostgreSQL, coordinate a PostgreSQL backup with a backup
+of the data directory. See the [database guide](database.md) for consistent
+online-backup cautions, restore steps, and database-copy guidance.
 
-The normal log destination under systemd is journald. Racebin also performs
-hourly expiration and orphan cleanup in process, so no separate cleanup service
-is required. The supported deployment is one Racebin process; multiple replicas
-would require shared attachment storage and additional concurrency review.
+The normal log destination under systemd is journald. Access logs contain the
+client address, HTTP method, status, response size, user agent, and duration;
+they deliberately omit request targets so invitation, reset, and final-read
+tokens are not written to the access log.
+
+Racebin performs expiration and orphan cleanup at startup and hourly in process,
+so no separate cleanup service is required. It removes expired sessions and
+password-reset tokens, stale authentication/idempotency/read records, expired
+or consumed pastes after their grant window, old expired invitations, stale
+upload staging files, and orphaned attachment directories. The supported
+deployment is one Racebin process; multiple replicas would require shared
+attachment storage and additional concurrency review.
+
+Arch package upgrades may install `/etc/racebin.conf.pacnew` when the packaged
+example changes. Compare and merge it deliberately; do not replace local
+database URLs, public origins, or credentials blindly.
 
 ## Troubleshooting
 
@@ -307,6 +335,16 @@ service, and inspect `/api/v1/capabilities` for `web_base_url` and
 
 Check both `RACEBIN_MAX_ATTACHMENT_SIZE_MB` and the proxy's request-body limit.
 The proxy limit must allow multipart overhead in addition to file content.
+Racebin's text/rich-text input limit is 2 MiB and is independent of the
+attachment setting.
+
+### Racebin rejects a request before the upload completes
+
+Racebin allows 15 seconds to receive request headers and limits the server to
+1,024 simultaneous connections. Check slow clients, proxy buffering, proxy
+timeouts, and service load. Large attachment bodies are streamed once the
+request has been accepted rather than buffered completely in application
+memory.
 
 ### The service cannot open its database or attachments
 

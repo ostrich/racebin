@@ -84,7 +84,7 @@ The Rust backend is divided by responsibility:
 | Domain services | `src/services/` | Paste rules, visibility, ownership, validation, conversion, read limits, search, and transactional operations |
 | Accounts and credentials | `src/account/` | Users, passwords, sessions, invitations, API keys, and scopes |
 | Persistence | `src/repository.rs`, `src/repository/` | Backend selection, connection pooling, migrations, database copy, and shared storage primitives |
-| Operator CLI | `src/cli/` | Account administration and database-copy commands |
+| Operator CLI | `src/cli/` | Account administration, database copy, and OpenAPI export commands |
 
 HTTP handlers should remain transport adapters. Rules that must also hold for
 future transports or CLI callers belong in a service or account operation,
@@ -113,8 +113,9 @@ typed error is a compile-time failure.
 
 ## HTTP and API design
 
-All application endpoints live below `/api/v1`. Routes are grouped by
-resource:
+The supported resource API lives below `/api/v1`. Conventional liveness and
+readiness probes are also exposed as `/healthz` and `/readyz`. API routes are
+grouped by resource:
 
 - metadata and runtime configuration;
 - sessions and accounts;
@@ -126,8 +127,9 @@ resource:
 The API uses JSON for ordinary requests and responses, accepts raw text and
 forms for generic uploader compatibility, and uses multipart bodies for atomic
 paste-and-file creation. Errors use RFC 9457-style problem details. The
-code-generated contract is exposed at
-`/api/v1/openapi.json`.
+Rust-generated OpenAPI 3.1 contract is exposed at `/api/v1/openapi.json`; a
+normalized copy is committed at `openapi/openapi.json` for review and client
+generation.
 
 Unknown API routes return JSON errors. Known browser routes receive the SPA
 entry document, while unknown non-API paths return a 404. This explicit
@@ -190,6 +192,7 @@ The main relational entities are:
 | `idempotency_records` | Expiring create-request results used to make retries safe |
 | `paste_read_receipts` | Expiring replay records for idempotent read requests |
 | `paste_read_grants` | Short-lived capabilities for final-read attachment downloads |
+| `auth_attempts` | Expiring authentication-failure records used for rate limiting |
 
 Rich text is stored as a validated JSON document alongside a plain-text
 representation. The frontend uses Tiptap's ProseMirror model internally, but
@@ -327,7 +330,8 @@ creating separately deployed frontend services.
 
 ### Styling system
 
-Frontend styling is layered deliberately:
+`web/src/style.css` is the stylesheet manifest. It imports the styling layers
+in a deliberate order:
 
 1. `web/src/styles/tokens.css` defines semantic colors, spacing, control
    geometry, radii, page dimensions, sticky offsets, and stacking levels.
@@ -335,8 +339,11 @@ Frontend styling is layered deliberately:
    and accessibility utilities.
 3. `web/src/styles/primitives.css` defines reusable layout and interaction
    primitives such as stacks, clusters, headings, and buttons.
-4. `web/src/style.css` contains application-component styles that have not
-   moved into a component's scoped `<style>` block.
+4. `web/src/styles/layout.css` defines the shared shell and page compositions.
+5. `web/src/styles/rich-text.css`, `folder-responsive.css`, and
+   `paste-library.css` contain focused feature styling.
+6. `web/src/styles/responsive.css` applies the final cross-feature responsive
+   adaptations.
 
 New UI should use semantic tokens and existing primitives before adding a
 component-specific rule. Components own their internal layout; pages own only
@@ -373,18 +380,18 @@ A typical paste creation follows this path:
    authentication.
 4. `PasteService` validates content, visibility, language, expiration, read
    limits, ownership, and rich-text structure.
-5. The attachment handler streams files to staging while calculating their
-   digests and enforcing configured limits.
+5. The multipart parser streams files to staging while calculating their
+   digests and enforcing configured size, field, and attachment-count limits.
 6. SQLx records the paste, revision, idempotency result, and attachment metadata.
 7. The browser navigates to the paste view and reads it through the same
    API available to other clients.
 
-`GET /pastes/{id}` is metadata-only. `POST /pastes/{id}/reads` atomically
-updates the read count. A final read tombstones the paste instead of immediately
-deleting its row and issues a 15-minute capability for its files; cleanup later
-removes the tombstone and storage. Owner and administrator source reads do not
-consume the paste. Revisions and ETags protect update and delete operations from
-lost updates.
+`GET /api/v1/pastes/{id}` is metadata-only.
+`POST /api/v1/pastes/{id}/reads` atomically updates the read count. A final read
+tombstones the paste instead of immediately deleting its row and issues a
+15-minute capability for its files; cleanup later removes the tombstone and
+storage. Owner and administrator source reads do not consume the paste.
+Revisions and ETags protect update and delete operations from lost updates.
 
 ## Background work and cleanup
 
@@ -392,9 +399,11 @@ Racebin performs a cleanup pass at startup and then hourly. It:
 
 - deletes expired pastes;
 - deletes consumed paste tombstones after the attachment-grant window;
-- deletes expired idempotency receipts and attachment grants;
-- deletes expired sessions;
+- deletes expired idempotency records, read receipts, and attachment grants;
+- deletes expired sessions and password-reset tokens;
+- deletes stale authentication-attempt records;
 - removes old expired invitations;
+- removes stale upload-staging files; and
 - removes attachment directories belonging to deleted or unknown pastes.
 
 This is an in-process task rather than a separate worker service. If Racebin
@@ -470,11 +479,13 @@ web/
   src/pages/            route-level Svelte components
   e2e/                  Playwright browser workflows
   dist/                 compiled frontend embedded by Cargo
+openapi/                normalized generated API contract
 migrations/
   sqlite/               SQLite schema history
   postgres/             PostgreSQL schema history
 docs/                   operator, API, testing, and architecture guides
 packaging/               service configuration and package recipes
+scripts/                 reproducibility, naming, and architecture checks
 ```
 
 ## Adding or changing functionality

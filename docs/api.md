@@ -1,8 +1,9 @@
 # HTTP API
 
-Racebin exposes its supported API under `/api/v1`. The live service document is
-available at `/api/v1`, and the generated OpenAPI document is at
-`/api/v1/openapi.json`.
+Racebin exposes its supported resource API under `/api/v1`. The discovery
+document is available at `/api/v1`, and the generated OpenAPI 3.1 contract is
+at `/api/v1/openapi.json`. The API contract version is independent of the
+Racebin server release version.
 
 ## Authentication
 
@@ -33,7 +34,9 @@ The user-facing scopes are `paste:read`, `paste:write`, `paste:delete`,
 `paste:manage`, `user:manage`, and `invitation:manage`.
 
 Errors use `application/problem+json` with `type`, `title`, `status`, and
-`detail` fields.
+`detail` fields. The `type` is a stable Racebin URN suitable for programmatic
+classification; clients should not branch on the human-readable title or
+detail.
 
 ## Origins and browser routes
 
@@ -61,6 +64,10 @@ the application shell.
 - `GET /api/v1/languages` lists accepted syntax names and aliases.
 - `GET /healthz` reports whether the process is running.
 - `GET /readyz` reports whether the database is available.
+
+The same probes are represented inside the API contract as
+`GET /api/v1/health` and `GET /api/v1/readiness`. All four return an empty
+`204 No Content` response when successful.
 
 The OpenAPI document describes every supported operation, parameter, request
 media type, response status, response header, and named response schema. It is
@@ -125,12 +132,13 @@ The raw media type determines the representation: `text/plain` creates plain
 text and may use the `language` query parameter, `text/markdown` creates plain
 text with the Markdown language, and `text/html` creates sanitized rich text
 and does not accept a language. Raw requests therefore do not accept `content`
-or `format` query parameters. An empty structured request creates an empty
-plain-text paste. Create fields may be omitted but may not be JSON `null`.
+or `format` query parameters. A new paste must contain non-empty text/rich-text
+content or at least one attachment. Create fields may be omitted but may not be
+JSON `null`.
 
-Multipart creation is atomic from the caller's perspective and supports a body,
-files, or both. Text fields use the JSON field names and every attachment uses a
-repeated `file` part:
+Multipart creation is atomic from the caller's perspective and requires at
+least one file; a text or rich-text body is optional. Text fields use the JSON
+field names and every attachment uses a repeated `file` part:
 
 ```sh
 curl -X POST https://example.com/api/v1/pastes \
@@ -164,6 +172,35 @@ the `Read-Token` response header. JSON responses also include that grant in each
 attachment URL and the archive URL. The header makes the grant available to
 clients requesting `text/plain` or `text/html` as well. It remains valid for 15
 minutes so the reader can download files after receiving the paste.
+
+An idempotently replayed consuming read returns the original logical result
+without incrementing the read count again. Reusing an idempotency key for a
+different paste or request returns a conflict.
+
+## Attachments, archives, and QR output
+
+Add files to an existing owned paste with
+`POST /api/v1/pastes/{id}/attachments`. The request is multipart, every file
+uses the repeated `file` field, and `If-Match` is required:
+
+```sh
+curl -X POST https://example.com/api/v1/pastes/PASTE_ID/attachments \
+  -H 'Authorization: Bearer YOUR_API_KEY' \
+  -H 'If-Match: "paste-PASTE_ID-r1"' \
+  -F 'file=@example.txt'
+```
+
+The response contains the created attachment metadata and a replacement
+`ETag`. Attachment deletion also requires `If-Match` and returns the new ETag.
+Downloads authorize against the parent paste; a final-read `read_token` grants
+temporary access after the paste itself has been consumed.
+
+`GET /api/v1/pastes/{id}/archive` streams the paste content and all attachments
+as a ZIP archive; archive input is limited to 64 MiB.
+`GET /api/v1/pastes/{id}/qr` returns a PNG QR code when QR output is enabled
+and a canonical public URL is configured. Binary response bodies are streams,
+not JSON byte arrays. Consult OpenAPI for the precise media types, response
+headers, and authorization alternatives.
 
 ## Update and delete
 
