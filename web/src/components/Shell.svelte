@@ -24,11 +24,12 @@
     await navigate("/");
   }
 
-  const themes: Array<{ value: ColorTheme; label: string; icon: string }> = [
-    { value: "light", label: "Light theme", icon: "sun" },
-    { value: "auto", label: "Use system theme", icon: "monitor" },
-    { value: "dark", label: "Dark theme", icon: "moon" }
-  ];
+  const themes: Record<ColorTheme, { next: ColorTheme; label: string; icon: string }> = {
+    auto: { next: "dark", label: "Automatic theme", icon: "monitor" },
+    dark: { next: "light", label: "Dark theme", icon: "moon" },
+    light: { next: "auto", label: "Light theme", icon: "sun" }
+  };
+  let currentTheme = $derived(themes[$uiPreferences.colorTheme]);
 </script>
 
 <header>
@@ -46,13 +47,10 @@
       {/if}
     </nav>
     <div class="session">
-      <div class="theme-control" role="group" aria-label="Color theme">
-        {#each themes as theme}
-          <button type="button" title={theme.label} aria-label={theme.label}
-            aria-pressed={$uiPreferences.colorTheme === theme.value}
-            onclick={() => setColorTheme(theme.value)}><Icon name={theme.icon}/></button>
-        {/each}
-      </div>
+      <button class="theme-control" type="button"
+        title={`${currentTheme.label}; click for ${themes[currentTheme.next].label.toLowerCase()}`}
+        aria-label={`Color theme: ${currentTheme.label}`}
+        onclick={() => setColorTheme(currentTheme.next)}><Icon name={currentTheme.icon}/></button>
       {#if $appState.session.user}
         <Link href="/account"><Icon name="user-round"/><span>{$appState.session.user.username}</span></Link>
         <button class="icon-button" type="button" title="Log out" aria-label="Log out" onclick={logout}>
