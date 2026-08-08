@@ -71,17 +71,17 @@
     padding: 14px;
   }
 }
-@media (prefers-color-scheme: dark) {
-  .paste-meta .meta-badge {
+:root[data-color-scheme="dark"] .paste-meta .meta-badge {
     background: #2b353b;
-  }
+}
+:root[data-color-scheme="dark"] :is(
   .folder-nav .folder-collapse-button:hover,
   .folder-nav .folder-menu-button:hover,
-  .folder-nav-row .folder-menu button:hover {
+  .folder-nav-row .folder-menu button:hover
+) {
     background: #2b353b;
-  }
-  .folder-menu {
+}
+:root[data-color-scheme="dark"] .folder-menu {
     background: #192126;
     box-shadow: 0 8px 24px #0006;
-  }
 }

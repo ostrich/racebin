@@ -112,18 +112,13 @@
   margin: 5px 0 0;
 }
 .paste-list.compact > .paste-row {
-  padding-block: 11px;
-}
-.paste-list.compact .paste-main:has(> input[type="checkbox"]) {
-  align-items: center;
-}
-.paste-list.compact .paste-main > input {
-  margin-top: 0;
+  /* Keep the title baseline fixed while reclaiming space below the row. */
+  padding: 17px 4px 5px;
 }
 .paste-list.compact .paste-main-content {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: start;
   gap: var(--space-4);
 }
 .paste-list.compact .paste-main-content > p,
@@ -280,4 +275,3 @@
 .folder-nav-row .folder-menu button.danger {
   color: var(--danger);
 }
-

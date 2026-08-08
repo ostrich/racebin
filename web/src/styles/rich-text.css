@@ -136,20 +136,19 @@
   background: #f4f6f7;
   white-space: pre-wrap;
 }
-@media (prefers-color-scheme: dark) {
+:root[data-color-scheme="dark"] :is(
   .rich-text-editor,
   .rich-text-viewer,
-  .conversion-dialog {
+  .conversion-dialog
+) {
     background: #192126;
-  }
-  .rich-text-toolbar,
-  .conversion-dialog pre {
+}
+:root[data-color-scheme="dark"] :is(.rich-text-toolbar, .conversion-dialog pre) {
     background: #111619;
-  }
-  .rich-text-toolbar button {
+}
+:root[data-color-scheme="dark"] .rich-text-toolbar button {
     background: #192126;
-  }
-  .rich-text-content code {
+}
+:root[data-color-scheme="dark"] .rich-text-content code {
     background: #2b353b;
-  }
 }

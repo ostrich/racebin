@@ -13,6 +13,25 @@ test("renders the public homepage and paste viewer", async ({ page }) => {
   await expect(page.getByRole("checkbox", { name: "Wrap" })).toHaveCount(0);
 });
 
+test("color theme can follow the system or persist an explicit choice", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await mockApi(page);
+  await page.goto("/");
+  const theme = page.getByLabel("Color theme");
+  await expect(theme).toHaveValue("auto");
+  await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "light");
+
+  await theme.selectOption("dark");
+  await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
+  await page.reload();
+  await expect(theme).toHaveValue("dark");
+  await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
+
+  await theme.selectOption("auto");
+  await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "light");
+  expect(await page.evaluate(() => localStorage.getItem("racebin.colorTheme"))).toBeNull();
+});
+
 test("plain home presents only login while public routes remain available", async ({ page }) => {
   let homepagePasteRequests = 0;
   page.on("request", request => {

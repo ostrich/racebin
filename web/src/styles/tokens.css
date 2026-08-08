@@ -37,8 +37,7 @@
   --z-menu: 10;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+:root[data-color-scheme="dark"] {
     --color-canvas: #111619;
     --color-surface: #192126;
     --color-surface-subtle: #2b353b;
@@ -48,7 +47,6 @@
     --color-label: #a4adb3;
     --color-line: #343d43;
     --color-control-border: #343d43;
-  }
 }
 
 @media (max-width: 760px) {

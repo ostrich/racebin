@@ -206,7 +206,14 @@ test("compact view is persistent and preserves paste selection", async ({ page }
   const pasteCheckbox = page.getByRole("checkbox", {
     name: "Select JavaScript example"
   });
+  const rowAlignment = async () => page.locator(".paste-list .paste-row").first().evaluate(row => {
+    const title = row.querySelector(".paste-title")!.getBoundingClientRect();
+    const checkbox = row.querySelector<HTMLInputElement>(".paste-main > input[type=checkbox]")!
+      .getBoundingClientRect();
+    return { titleTop: title.top, checkboxOffset: checkbox.top - title.top };
+  });
   await expect(normal).toHaveAttribute("aria-pressed", "true");
+  const normalAlignment = await rowAlignment();
   await pasteCheckbox.check();
   await compact.click();
 
@@ -219,6 +226,9 @@ test("compact view is persistent and preserves paste selection", async ({ page }
   await expect(page.getByRole("button", { name: "Delete" })).toBeVisible();
   await expect(page.getByText("const answer = 42; console.log(answer);")).toBeHidden();
   await expect(page.getByText("1 attachment")).toBeHidden();
+  const compactAlignment = await rowAlignment();
+  expect(Math.abs(compactAlignment.titleTop - normalAlignment.titleTop)).toBeLessThan(1);
+  expect(Math.abs(compactAlignment.checkboxOffset - normalAlignment.checkboxOffset)).toBeLessThan(1);
   expect(await page.evaluate(() => localStorage.getItem("racebin.pasteListView"))).toBe("compact");
 
   await page.reload();

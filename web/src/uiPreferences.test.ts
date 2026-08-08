@@ -2,6 +2,7 @@ import { get } from "svelte/store";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   initializeUiPreferences,
+  setColorTheme,
   setFolderSidebarCollapsed,
   setPasteListView,
   uiPreferences
@@ -61,11 +62,23 @@ describe("UI preferences", () => {
 
     expect(get(uiPreferences)).toEqual({
       folderSidebarCollapsed: true,
-      pasteListView: "compact"
+      pasteListView: "compact",
+      colorTheme: "auto"
     });
     expect(storage.getItem("racebin.pasteListView")).toBe("compact");
 
     setFolderSidebarCollapsed(false, storage);
     expect(get(uiPreferences).pasteListView).toBe("compact");
+  });
+
+  it("persists explicit themes and returns to the system theme", () => {
+    setColorTheme("dark", storage);
+    expect(get(uiPreferences).colorTheme).toBe("dark");
+    expect(storage.getItem("racebin.colorTheme")).toBe("dark");
+    expect(document.documentElement.dataset.colorScheme).toBe("dark");
+
+    setColorTheme("auto", storage);
+    expect(get(uiPreferences).colorTheme).toBe("auto");
+    expect(storage.getItem("racebin.colorTheme")).toBeNull();
   });
 });

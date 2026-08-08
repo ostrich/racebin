@@ -4,6 +4,7 @@
   import { replaceSession } from "../session";
   import { clearUnsavedChangesGuard, confirmDiscardChanges, navigate } from "../navigation";
   import { notice } from "../notices";
+  import { setColorTheme, uiPreferences, type ColorTheme } from "../uiPreferences";
   import Icon from "./Icon.svelte";
   import Link from "./Link.svelte";
 
@@ -22,6 +23,10 @@
     replaceSession({ authenticated: false });
     await navigate("/");
   }
+
+  function changeTheme(event: Event): void {
+    setColorTheme((event.currentTarget as HTMLSelectElement).value as ColorTheme);
+  }
 </script>
 
 <header>
@@ -39,6 +44,14 @@
       {/if}
     </nav>
     <div class="session">
+      <label class="theme-control" title="Color theme">
+        <span class="visually-hidden">Color theme</span>
+        <select aria-label="Color theme" value={$uiPreferences.colorTheme} onchange={changeTheme}>
+          <option value="auto">Auto</option>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+      </label>
       {#if $appState.session.user}
         <Link href="/account"><Icon name="user-round"/><span>{$appState.session.user.username}</span></Link>
         <button class="icon-button" type="button" title="Log out" aria-label="Log out" onclick={logout}>

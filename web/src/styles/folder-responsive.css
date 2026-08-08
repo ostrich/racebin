@@ -48,16 +48,15 @@
     display: none;
   }
 }
-@media (prefers-color-scheme: dark) {
+:root[data-color-scheme="dark"] :is(
   .folder-nav,
   .paste-bulk-actions select,
-  .folder-mobile-select select {
+  .folder-mobile-select select
+) {
     background: #192126;
     color: #e8edf0;
-  }
-  .folder-nav nav a.current {
+}
+:root[data-color-scheme="dark"] .folder-nav nav a.current {
     background: #263b39;
     color: #dcebea;
-  }
 }
-
