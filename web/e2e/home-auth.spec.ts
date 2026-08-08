@@ -17,17 +17,18 @@ test("color theme can follow the system or persist an explicit choice", async ({
   await page.emulateMedia({ colorScheme: "light" });
   await mockApi(page);
   await page.goto("/");
-  const theme = page.getByLabel("Color theme");
-  await expect(theme).toHaveValue("auto");
+  const autoTheme = page.getByRole("button", { name: "Use system theme" });
+  const darkTheme = page.getByRole("button", { name: "Dark theme" });
+  await expect(autoTheme).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "light");
 
-  await theme.selectOption("dark");
+  await darkTheme.click();
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
   await page.reload();
-  await expect(theme).toHaveValue("dark");
+  await expect(darkTheme).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
 
-  await theme.selectOption("auto");
+  await autoTheme.click();
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "light");
   expect(await page.evaluate(() => localStorage.getItem("racebin.colorTheme"))).toBeNull();
 });

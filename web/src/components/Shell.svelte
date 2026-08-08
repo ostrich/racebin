@@ -24,9 +24,11 @@
     await navigate("/");
   }
 
-  function changeTheme(event: Event): void {
-    setColorTheme((event.currentTarget as HTMLSelectElement).value as ColorTheme);
-  }
+  const themes: Array<{ value: ColorTheme; label: string; icon: string }> = [
+    { value: "light", label: "Light theme", icon: "sun" },
+    { value: "auto", label: "Use system theme", icon: "monitor" },
+    { value: "dark", label: "Dark theme", icon: "moon" }
+  ];
 </script>
 
 <header>
@@ -44,14 +46,13 @@
       {/if}
     </nav>
     <div class="session">
-      <label class="theme-control" title="Color theme">
-        <span class="visually-hidden">Color theme</span>
-        <select aria-label="Color theme" value={$uiPreferences.colorTheme} onchange={changeTheme}>
-          <option value="auto">Auto</option>
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
-        </select>
-      </label>
+      <div class="theme-control" role="group" aria-label="Color theme">
+        {#each themes as theme}
+          <button type="button" title={theme.label} aria-label={theme.label}
+            aria-pressed={$uiPreferences.colorTheme === theme.value}
+            onclick={() => setColorTheme(theme.value)}><Icon name={theme.icon}/></button>
+        {/each}
+      </div>
       {#if $appState.session.user}
         <Link href="/account"><Icon name="user-round"/><span>{$appState.session.user.username}</span></Link>
         <button class="icon-button" type="button" title="Log out" aria-label="Log out" onclick={logout}>

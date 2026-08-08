@@ -42,17 +42,41 @@ nav a,
   align-items: center;
   gap: var(--space-1);
 }
-.theme-control select {
-  width: auto;
-  min-height: 32px;
-  padding: 4px 24px 4px 8px;
+.theme-control {
+  display: inline-flex;
+  padding: 2px;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);
+  background: var(--color-surface-subtle);
+}
+.theme-control button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+.theme-control button:hover {
+  color: var(--color-text);
+}
+.theme-control button[aria-pressed="true"] {
   background: var(--color-surface);
-  color: var(--color-label);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
+  color: var(--color-heading);
+  box-shadow: 0 1px 3px rgba(20, 30, 40, 0.18);
+}
+.theme-control button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.session .theme-control svg {
+  width: 15px;
+  height: 15px;
 }
 .session svg,
 nav svg,
