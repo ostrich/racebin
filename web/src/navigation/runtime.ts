@@ -7,6 +7,7 @@ import {
 } from "./guards";
 import { parseLocation, routeTitle, type RouteLocation } from "./routes";
 import {
+  currentScroll,
   historyIndex,
   replaceSavedScroll,
   restoreScroll,
@@ -38,10 +39,42 @@ let activeTransaction: NavigationTransaction | undefined;
 let currentIndex = 0;
 let currentPath = `${location.pathname}${location.search}${location.hash}`;
 let scrollPaused = false;
-let scrollFrame: number | undefined;
+let scrollCheckpoint: number | undefined;
+const scrollPositions = new Map<number, ScrollPosition>();
 let reversingPop = false;
 let stopRuntime: (() => void) | undefined;
 let options: RuntimeOptions = {};
+
+const scrollCheckpointDelay = 200;
+
+function cancelScrollCheckpoint(): void {
+  if (scrollCheckpoint !== undefined) window.clearTimeout(scrollCheckpoint);
+  scrollCheckpoint = undefined;
+}
+
+function rememberCurrentScroll(): ScrollPosition {
+  const position = currentScroll();
+  scrollPositions.set(currentIndex, position);
+  return position;
+}
+
+function rememberedScroll(index: number, state?: unknown): ScrollPosition {
+  return scrollPositions.get(index) ?? savedScroll(state);
+}
+
+function persistCurrentScroll(): void {
+  cancelScrollCheckpoint();
+  replaceSavedScroll(currentIndex, rememberCurrentScroll());
+}
+
+function scheduleScrollCheckpoint(): void {
+  rememberCurrentScroll();
+  cancelScrollCheckpoint();
+  scrollCheckpoint = window.setTimeout(() => {
+    scrollCheckpoint = undefined;
+    if (!scrollPaused) replaceSavedScroll(currentIndex, rememberedScroll(currentIndex));
+  }, scrollCheckpointDelay);
+}
 
 function transaction(): NavigationTransaction {
   let resolve = () => {};
@@ -164,7 +197,9 @@ async function commit(
   if (activeTransaction !== owner) return false;
   const revealedFragment = revealFragment(allowed.location.hash);
   if (!revealedFragment) restoreScroll(position);
-  replaceSavedScroll(currentIndex);
+  const settledPosition = revealedFragment ? currentScroll() : position;
+  scrollPositions.set(currentIndex, settledPosition);
+  replaceSavedScroll(currentIndex, settledPosition);
   scrollPaused = false;
   if (!revealedFragment && (kind === "push" || kind === "replace")) focusRoute();
   return true;
@@ -173,7 +208,7 @@ async function commit(
 export async function navigate(path: string, navigation: NavigationOptions = {}): Promise<boolean> {
   if (!(await confirmDiscardChanges())) return false;
   clearUnsavedChangesGuard();
-  replaceSavedScroll(currentIndex);
+  persistCurrentScroll();
   const top = { x: 0, y: 0 };
   return commit(path, navigation.replace ? "replace" : "push", top);
 }
@@ -184,22 +219,23 @@ export async function startNavigation(runtimeOptions: RuntimeOptions = {}): Prom
   history.scrollRestoration = "manual";
   currentPath = `${location.pathname}${location.search}${location.hash}`;
   currentIndex = historyIndex() ?? 0;
-  replaceSavedScroll(currentIndex);
+  scrollPositions.clear();
+  scrollPositions.set(currentIndex, savedScroll());
+  replaceSavedScroll(currentIndex, rememberedScroll(currentIndex));
 
   const stopUnloadGuard = startUnloadGuard();
   const onScroll = () => {
-    if (scrollPaused || scrollFrame !== undefined) return;
-    scrollFrame = requestAnimationFrame(() => {
-      scrollFrame = undefined;
-      if (!scrollPaused) replaceSavedScroll(currentIndex);
-    });
+    if (!scrollPaused) scheduleScrollCheckpoint();
   };
   const onPopState = (event: PopStateEvent) => {
     scrollPaused = true;
+    cancelScrollCheckpoint();
     const targetIndex = historyIndex(event.state);
     if (reversingPop) {
       reversingPop = false;
-      restoreScroll(savedScroll(event.state));
+      restoreScroll(targetIndex === undefined
+        ? savedScroll(event.state)
+        : rememberedScroll(targetIndex, event.state));
       scrollPaused = false;
       return;
     }
@@ -215,25 +251,30 @@ export async function startNavigation(runtimeOptions: RuntimeOptions = {}): Prom
         return;
       }
       clearUnsavedChangesGuard();
+      const position = targetIndex === undefined
+        ? savedScroll(event.state)
+        : rememberedScroll(targetIndex, event.state);
       if (targetIndex !== undefined) currentIndex = targetIndex;
       await commit(
         `${location.pathname}${location.search}${location.hash}`,
         "pop",
-        savedScroll(event.state),
+        position,
         event.state
       );
     })();
   };
+  const onPageHide = () => persistCurrentScroll();
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("popstate", onPopState);
+  window.addEventListener("pagehide", onPageHide);
   await commit(currentPath, "initial", savedScroll(), history.state);
 
   const stop = () => {
+    persistCurrentScroll();
     window.removeEventListener("scroll", onScroll);
     window.removeEventListener("popstate", onPopState);
+    window.removeEventListener("pagehide", onPageHide);
     stopUnloadGuard();
-    if (scrollFrame !== undefined) cancelAnimationFrame(scrollFrame);
-    scrollFrame = undefined;
     activeTransaction?.resolve();
     activeTransaction = undefined;
     clearUnsavedChangesGuard();
