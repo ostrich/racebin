@@ -79,6 +79,7 @@ mod tests {
     fn every_built_frontend_asset_is_embedded() {
         assert!(EMBEDDED_ASSET_PATHS.contains(&"app.js"));
         assert!(EMBEDDED_ASSET_PATHS.contains(&"app.css"));
+        assert!(EMBEDDED_ASSET_PATHS.contains(&"theme-init.js"));
         assert!(EMBEDDED_ASSET_PATHS.contains(&"InterVariable.woff2"));
         assert!(EMBEDDED_ASSET_PATHS.contains(&"InterVariable-Italic.woff2"));
         assert!(
