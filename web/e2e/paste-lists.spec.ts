@@ -380,5 +380,6 @@ test("paste rows preserve content width and use selective metadata badges", asyn
   expect(layout.actionsParent).toContain("paste-row-footer");
   expect(layout.badges).toBe(2);
   expect(layout.details).toBeGreaterThanOrEqual(4);
+  await expect(page.getByText("2 views")).toBeVisible();
   await expect(page.getByText("Folder: Scripts")).toBeVisible();
 });

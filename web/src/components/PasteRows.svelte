@@ -124,6 +124,7 @@
                   {/if}
                 {/if}
                 <span class="meta-detail">{formatByteSize(paste.size_bytes)}</span>
+                <span class="meta-detail">{paste.read_count} view{paste.read_count === 1 ? "" : "s"}</span>
                 <time class="meta-detail" datetime={new Date(paste.created_at * 1000).toISOString()}>{formatDate(paste.created_at)}</time>
               </div>
               <div class="row-actions">

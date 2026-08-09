@@ -136,6 +136,7 @@
             <Link class="meta-badge" href={filterUrl("visibility", paste.visibility)}>{paste.visibility}</Link>
             {#if paste.attachment_count}<Link class="meta-detail" href={filterUrl("has_attachments", "true")}>{paste.attachment_count} attachment{paste.attachment_count === 1 ? "" : "s"}</Link>{/if}
             <span class="meta-detail">{formatByteSize(paste.size_bytes)}</span>
+            <span class="meta-detail">{paste.read_count} view{paste.read_count === 1 ? "" : "s"}</span>
           </div>
           <time datetime={new Date(paste.created_at * 1000).toISOString()}>{formatDate(paste.created_at)}</time>
           <div class="row-actions">
