@@ -31,7 +31,8 @@
     min-height: 40px;
     border: 1px solid var(--line);
     border-radius: 5px;
-    background: #fff;
+    background: var(--color-surface);
+    color: var(--color-text);
     padding: 8px;
   }
   .paste-bulk-actions {
@@ -47,16 +48,4 @@
   .folder-mobile-controls {
     display: none;
   }
-}
-:root[data-color-scheme="dark"] :is(
-  .folder-nav,
-  .paste-bulk-actions select,
-  .folder-mobile-select select
-) {
-    background: #192126;
-    color: #e8edf0;
-}
-:root[data-color-scheme="dark"] .folder-nav nav a.current {
-    background: #263b39;
-    color: #dcebea;
 }

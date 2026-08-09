@@ -53,6 +53,7 @@ The main frontend commands are:
 ```bash
 cd web
 npm run check
+npm run check:css
 npm run test:unit
 npm run test:e2e
 npm run test:visual
@@ -69,8 +70,8 @@ different responsibilities:
 - Functional Playwright tests use deterministic API fixtures for editing,
   highlighting, folder/list behavior, caching, back/forward restoration,
   administration, responsive geometry, and accessibility-oriented controls.
-- Visual Playwright tests compare reviewed desktop, mobile, light, and dark
-  screenshots.
+- Visual Playwright tests compare reviewed automatic/light/dark theme matrices
+  at desktop and mobile sizes, plus focused page snapshots.
 - Layout-invariant tests express measurable requirements such as common content
   edges, stable filter boundaries, shared control heights, and no horizontal
   page overflow.
@@ -161,8 +162,9 @@ GitHub Actions runs three jobs:
 - **Rust** provisions PostgreSQL 18, checks retired naming, formatting, strict
   Clippy, and the complete SQLite/PostgreSQL suite.
 - **Frontend** verifies generated API artifacts and the API boundary, builds
-  and verifies committed `web/dist`, runs unit and functional Playwright tests,
-  builds the Rust application, and runs the disposable real-stack suite.
+  and verifies committed `web/dist`, enforces the CSS architecture, runs unit
+  and functional Playwright tests, builds the Rust application, and runs the
+  disposable real-stack suite.
 - **Visual regression** runs after the frontend job succeeds in the pinned
   Playwright container.
 

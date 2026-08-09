@@ -32,10 +32,10 @@
   let currentTheme = $derived(themes[$uiPreferences.colorTheme]);
 </script>
 
-<header>
+<header class="site-header">
   <Link class="brand" href="/">{$appState.config.site_name}</Link>
   {#if !minimal}
-    <nav>
+    <nav class="primary-nav">
       <Link href="/explore">Explore</Link>
       {#if $appState.session.user}
         <Link href="/pastes">My pastes</Link>
@@ -63,5 +63,5 @@
   {/if}
 </header>
 <main>{@render children()}</main>
-<div id="toast" class:show={$notice} class:error={$notice?.variant === "error"}
+<div class="toast" class:show={$notice} class:error={$notice?.variant === "error"}
   role="status" aria-live="polite">{$notice?.message ?? ""}</div>

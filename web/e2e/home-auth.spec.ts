@@ -11,7 +11,7 @@ test("renders the public homepage and paste viewer", async ({ page }) => {
   await expect(page.locator("code.hljs")).toContainText("const answer");
   await expect(page.getByRole("link", { name: /example.txt/ })).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "Wrap" })).toHaveCount(0);
-  await expect(page.getByText("2 views")).toBeVisible();
+  await expect(page.getByText("2 reads")).toBeVisible();
 });
 
 test("color theme can follow the system or persist an explicit choice", async ({ page }) => {
@@ -23,6 +23,14 @@ test("color theme can follow the system or persist an explicit choice", async ({
 
   await theme.click();
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
+  const primaryColors = await page.getByRole("link", { name: "Explore pastes" }).evaluate(element => {
+    const style = getComputedStyle(element);
+    return {
+      background: style.backgroundColor,
+      accent: style.borderTopColor
+    };
+  });
+  expect(primaryColors.background).toBe(primaryColors.accent);
   await page.reload();
   await expect(page.getByRole("button", { name: "Color theme: Dark theme" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");

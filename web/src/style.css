@@ -1,8 +1,11 @@
-@import "./styles/tokens.css";
-@import "./styles/base.css";
-@import "./styles/primitives.css";
-@import "./styles/layout.css";
-@import "./styles/rich-text.css";
-@import "./styles/folder-responsive.css";
-@import "./styles/paste-library.css";
-@import "./styles/responsive.css";
+@layer reset, tokens, foundations, components, utilities, overrides;
+
+@import "./styles/base.css" layer(reset);
+@import "./styles/tokens.css" layer(tokens);
+@import "./styles/primitives.css" layer(foundations);
+@import "./styles/layout.css" layer(components);
+@import "./styles/rich-text.css" layer(components);
+@import "./styles/folder-responsive.css" layer(components);
+@import "./styles/paste-library.css" layer(components);
+@import "./styles/utilities.css" layer(utilities);
+@import "./styles/responsive.css" layer(overrides);

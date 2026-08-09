@@ -6,6 +6,7 @@
   "scripts": {
     "build": "svelte-check --tsconfig ./tsconfig.json && vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "check:css": "stylelint 'src/**/*.css' && ../scripts/check-css-architecture.sh",
     "generate:api": "../scripts/generate-api-contract.sh",
     "check:api": "../scripts/check-api-contract.sh",
     "check:api-boundary": "../scripts/check-frontend-api-boundary.sh",
@@ -24,6 +25,8 @@
     "@types/node": "^24.1.0",
     "jsdom": "^26.1.0",
     "openapi-typescript": "^7.13.0",
+    "stylelint": "^17.14.1",
+    "stylelint-config-standard": "^40.0.0",
     "svelte": "^5.56.8",
     "svelte-check": "^4.3.0",
     "typescript": "^5.8.3",

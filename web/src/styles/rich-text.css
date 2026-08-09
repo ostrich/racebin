@@ -2,7 +2,7 @@
 .rich-text-viewer {
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--color-surface);
 }
 .rich-text-editor {
   min-height: 410px;
@@ -42,13 +42,13 @@
   padding: 16px;
   overflow: auto;
   border-radius: 5px;
-  background: #101820;
-  color: #eef4f5;
+  background: var(--color-code-block-surface);
+  color: var(--color-code-block-text);
 }
 .rich-text-content code {
   padding: 2px 4px;
   border-radius: 3px;
-  background: #edf0f2;
+  background: var(--color-inline-code);
 }
 .rich-text-content pre code {
   padding: 0;
@@ -67,7 +67,7 @@
   border: 1px solid var(--line);
   border-bottom: 0;
   border-radius: 6px 6px 0 0;
-  background: #f4f6f7;
+  background: var(--color-code-gutter);
   overflow-x: auto;
 }
 .rich-text-toolbar + .rich-text-editor {
@@ -83,7 +83,7 @@
   padding: 5px;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
+  background: var(--color-surface);
   color: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -122,33 +122,17 @@
   padding: 26px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: #fff;
+  background: var(--color-surface);
   color: inherit;
 }
 .conversion-dialog::backdrop {
-  background: rgba(15, 22, 26, 0.58);
+  background: var(--color-overlay);
 }
 .conversion-dialog pre {
   max-height: 45vh;
   padding: 16px;
   overflow: auto;
   border: 1px solid var(--line);
-  background: #f4f6f7;
+  background: var(--color-code-gutter);
   white-space: pre-wrap;
-}
-:root[data-color-scheme="dark"] :is(
-  .rich-text-editor,
-  .rich-text-viewer,
-  .conversion-dialog
-) {
-    background: #192126;
-}
-:root[data-color-scheme="dark"] :is(.rich-text-toolbar, .conversion-dialog pre) {
-    background: #111619;
-}
-:root[data-color-scheme="dark"] .rich-text-toolbar button {
-    background: #192126;
-}
-:root[data-color-scheme="dark"] .rich-text-content code {
-    background: #2b353b;
 }

@@ -19,6 +19,31 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+for (const theme of ["auto", "light", "dark"] as const) {
+  for (const viewport of [
+    { name: "desktop", width: 1440, height: 900 },
+    { name: "mobile", width: 390, height: 844 },
+  ]) {
+    test(`theme matrix: ${theme} ${viewport.name}`, { tag: "@visual" }, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+      await page.addInitScript(selectedTheme => {
+        if (selectedTheme === "auto") localStorage.removeItem("racebin.colorTheme");
+        else localStorage.setItem("racebin.colorTheme", selectedTheme);
+      }, theme);
+      await page.goto("/pastes");
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-color-scheme",
+        theme === "dark" ? "dark" : "light",
+      );
+      await expect(page).toHaveScreenshot(
+        `theme-${theme}-${viewport.name}.png`,
+        screenshot,
+      );
+    });
+  }
+}
+
 test("desktop paste workspace", { tag: "@visual" }, async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/pastes");

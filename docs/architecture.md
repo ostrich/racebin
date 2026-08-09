@@ -330,20 +330,25 @@ creating separately deployed frontend services.
 
 ### Styling system
 
-`web/src/style.css` is the stylesheet manifest. It imports the styling layers
-in a deliberate order:
+`web/src/style.css` is the stylesheet manifest. It declares an explicit CSS
+cascade order: `reset`, `tokens`, `foundations`, `components`, `utilities`,
+then `overrides`. Import order within a layer cannot accidentally outrank a
+later architectural layer.
 
-1. `web/src/styles/tokens.css` defines semantic colors, spacing, control
+1. `web/src/styles/base.css` supplies the reset, typography, and document
+   frame.
+2. `web/src/styles/tokens.css` defines semantic colors, spacing, control
    geometry, radii, page dimensions, sticky offsets, and stacking levels.
-2. `web/src/styles/base.css` supplies the reset, typography, document frame,
-   and accessibility utilities.
+   Dark mode changes these tokens rather than restyling individual components.
 3. `web/src/styles/primitives.css` defines reusable layout and interaction
    primitives such as stacks, clusters, headings, and buttons.
 4. `web/src/styles/layout.css` defines the shared shell and page compositions.
 5. `web/src/styles/rich-text.css`, `folder-responsive.css`, and
    `paste-library.css` contain focused feature styling.
-6. `web/src/styles/responsive.css` applies the final cross-feature responsive
-   adaptations.
+6. `web/src/styles/utilities.css` contains the small, documented set of
+   utilities allowed to override component declarations.
+7. `web/src/styles/responsive.css` applies the final cross-feature responsive
+   adaptations in the `overrides` layer.
 
 New UI should use semantic tokens and existing primitives before adding a
 component-specific rule. Components own their internal layout; pages own only
@@ -351,6 +356,14 @@ the arrangement between components. Fixed dimensions and sticky offsets must
 come from tokens when they participate in shared alignment. This keeps layout
 behavior consistent and prevents page-specific overrides from becoming a
 second design system.
+
+`npm run check:css` applies standards linting and project-specific boundaries:
+literal colors and theme selectors are confined to the token sheet,
+`!important` is confined to utilities, duplicate selectors and properties are
+rejected, and the global layer order is verified. Visual tests exercise the
+representative paste workspace in automatic, light, and dark themes at desktop
+and mobile sizes. Functional tests additionally assert semantic invariants,
+such as a primary action retaining its filled accent treatment.
 
 ## Frontend build and embedding
 
