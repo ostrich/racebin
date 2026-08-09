@@ -19,26 +19,37 @@ test("color theme can follow the system or persist an explicit choice", async ({
   await mockApi(page);
   await page.goto("/");
   const theme = page.getByRole("button", { name: "Color theme: Automatic theme" });
+  const expectButtonVariants = async () => {
+    const colors = await page.locator(".welcome .actions").evaluate(element => {
+      const [primary, secondary] = [...element.querySelectorAll<HTMLElement>(".button")];
+      const primaryStyle = getComputedStyle(primary!);
+      const secondaryStyle = getComputedStyle(secondary!);
+      return {
+        primaryBackground: primaryStyle.backgroundColor,
+        primaryBorder: primaryStyle.borderTopColor,
+        secondaryBackground: secondaryStyle.backgroundColor,
+      };
+    });
+    expect(colors.primaryBackground).toBe(colors.primaryBorder);
+    expect(colors.primaryBackground).not.toBe("rgba(0, 0, 0, 0)");
+    expect(colors.secondaryBackground).toBe("rgba(0, 0, 0, 0)");
+  };
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "light");
+  await expectButtonVariants();
 
   await theme.click();
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
-  const primaryColors = await page.getByRole("link", { name: "Explore pastes" }).evaluate(element => {
-    const style = getComputedStyle(element);
-    return {
-      background: style.backgroundColor,
-      accent: style.borderTopColor
-    };
-  });
-  expect(primaryColors.background).toBe(primaryColors.accent);
+  await expectButtonVariants();
   await page.reload();
   await expect(page.getByRole("button", { name: "Color theme: Dark theme" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
 
   await page.getByRole("button", { name: "Color theme: Dark theme" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "light");
+  await expectButtonVariants();
   await page.getByRole("button", { name: "Color theme: Light theme" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "light");
+  await expectButtonVariants();
   expect(await page.evaluate(() => localStorage.getItem("racebin.colorTheme"))).toBeNull();
 });
 
