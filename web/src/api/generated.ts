@@ -1726,6 +1726,8 @@ export interface operations {
                 sort?: "created" | "title" | "reads" | "expires" | "size";
                 /** @description Sort direction. Defaults to `desc`. */
                 direction?: "asc" | "desc";
+                /** @description Restrict results to pastes owned by this positive user ID. */
+                owner_id?: number;
             };
             header?: never;
             path?: never;

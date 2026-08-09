@@ -34,6 +34,9 @@ pub(super) struct ApiPasteQuery {
     visibility: Option<String>,
     /// Restrict results to resources owned by the authenticated user.
     owner: Option<OwnerFilter>,
+    /// Administrative owner-ID filter. Hidden from the public listing contract.
+    #[param(ignore)]
+    owner_id: Option<i64>,
     /// Positive folder ID. Requires `owner=me` and cannot be combined with `unfiled=true`.
     #[param(minimum = 1)]
     folder_id: Option<i64>,
@@ -144,6 +147,21 @@ filter_as_str!(SortDirection, {
 
 impl ApiPasteQuery {
     pub(super) fn into_internal(self) -> Result<PasteQuery, String> {
+        if self.owner_id.is_some() {
+            return Err("owner_id is available only on the administrative listing".into());
+        }
+        self.into_internal_with_owner(None)
+    }
+
+    pub(super) fn into_admin_internal(self) -> Result<PasteQuery, String> {
+        if self.owner.is_some() && self.owner_id.is_some() {
+            return Err("owner and owner_id cannot be combined".into());
+        }
+        let owner_id = self.owner_id;
+        self.into_internal_with_owner(owner_id)
+    }
+
+    fn into_internal_with_owner(self, owner_id: Option<i64>) -> Result<PasteQuery, String> {
         if self.page == Some(0) {
             return Err("page must be at least 1".into());
         }
@@ -162,7 +180,7 @@ impl ApiPasteQuery {
             page_size: self.page_size,
             search: self.q,
             visibility: self.visibility,
-            owner_id: None,
+            owner_id,
             folder_id: self.folder_id,
             unfiled: self.unfiled,
             mine: Some(mine),
@@ -186,6 +204,28 @@ impl ApiPasteQuery {
             sort: self.sort.map(|value| value.as_str().into()),
             direction: self.direction.map(|value| value.as_str().into()),
         })
+    }
+}
+
+#[cfg(test)]
+mod paste_query_tests {
+    use super::ApiPasteQuery;
+
+    #[test]
+    fn owner_id_is_accepted_only_for_administrative_listings() {
+        let admin: ApiPasteQuery = serde_urlencoded::from_str("owner_id=2&page=3").unwrap();
+        let internal = admin.into_admin_internal().unwrap();
+        assert_eq!(internal.owner_id, Some(2));
+        assert_eq!(internal.page, Some(3));
+
+        let public: ApiPasteQuery = serde_urlencoded::from_str("owner_id=2").unwrap();
+        assert!(public.into_internal().is_err());
+    }
+
+    #[test]
+    fn administrative_owner_filters_cannot_be_ambiguous() {
+        let query: ApiPasteQuery = serde_urlencoded::from_str("owner=me&owner_id=2").unwrap();
+        assert!(query.into_admin_internal().is_err());
     }
 }
 

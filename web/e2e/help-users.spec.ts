@@ -68,6 +68,10 @@ test("administrator can inspect a user and copy a recovery link", async ({ page 
   await expect.poll(() => page.evaluate(() =>
     (window as Window & { __copiedText?: string }).__copiedText
   )).toBe(`${new URL(page.url()).origin}/password-reset/sample-reset-token`);
+  await page.getByRole("link", { name: "View pastes" }).click();
+  await expect(page).toHaveURL(/\/admin\/pastes\?owner_id=1$/);
+  await expect(page.getByRole("heading", { name: "All pastes" })).toBeVisible();
+  await expect(page.getByLabel("Owner ID")).toHaveValue("1");
 });
 
 test("user administration follows shared spacing and field primitives", async ({ page }) => {

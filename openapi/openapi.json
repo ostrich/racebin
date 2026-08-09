@@ -2886,6 +2886,17 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "description": "Restrict results to pastes owned by this positive user ID.",
+            "in": "query",
+            "name": "owner_id",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
           }
         ],
         "responses": {

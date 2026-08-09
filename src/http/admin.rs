@@ -82,7 +82,7 @@ pub(crate) async fn admin_user(
 
 #[utoipa::path(
     get, path = "/admin/pastes", tag = "administration",
-    params(super::pastes::ApiPasteQuery),
+    params(super::pastes::ApiPasteQuery, AdminPasteOwnerQuery),
     responses(
         (status = 200, description = "Canonical paginated paste summaries including ownership", body = crate::http::dto::PastePage),
         (status = 400, description = "Invalid filter", body = crate::http::errors::ProblemDetails),
@@ -104,7 +104,7 @@ pub(crate) async fn admin_pastes(
     if let Err(response) = require_admin(&value, "paste:manage") {
         return response;
     }
-    let query = match query.into_inner().into_internal() {
+    let query = match query.into_inner().into_admin_internal() {
         Ok(query) => query,
         Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
     };
@@ -134,6 +134,15 @@ pub(crate) async fn admin_pastes(
         }
         Err(e) => domain_error(e),
     }
+}
+
+#[derive(utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[allow(dead_code)] // This DTO contributes the admin-only parameter to OpenAPI.
+struct AdminPasteOwnerQuery {
+    /// Restrict results to pastes owned by this positive user ID.
+    #[param(minimum = 1)]
+    owner_id: Option<i64>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]

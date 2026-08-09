@@ -15,6 +15,9 @@ pub(crate) fn validate_paste_query(query: &PasteQuery) -> DomainResult<()> {
     if query.folder_id.is_some_and(|value| value < 1) {
         return Err(invalid_query("Folder ID must be positive"));
     }
+    if query.owner_id.is_some_and(|value| value < 1) {
+        return Err(invalid_query("Owner ID must be positive"));
+    }
     if query
         .visibility
         .as_deref()
