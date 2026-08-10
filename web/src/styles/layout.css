@@ -151,24 +151,24 @@
   display: flex;
   gap: 5px;
 }
-.editor label:not(.check),
-.auth label:not(.check),
-.key-form > label:not(.check) {
+.editor :where(label:not(.check)),
+.auth :where(label:not(.check)),
+.key-form > :where(label:not(.check)) {
   display: grid;
   gap: 7px;
 }
-.editor label:not(.check) > span,
-.auth label:not(.check) > span,
-.key-form > label:not(.check) > span {
+.editor :where(label:not(.check)) > span,
+.auth :where(label:not(.check)) > span,
+.key-form > :where(label:not(.check)) > span {
   font-size: 12px;
   font-weight: 700;
   color: var(--form-label);
 }
-.editor input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.editor :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"])),
 .editor select,
 .editor textarea,
-.auth input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
-.key-form input:not([type="checkbox"]):not([type="radio"]):not([type="file"]) {
+.auth :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"])),
+.key-form :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"])) {
   border: 1px solid var(--color-control-border);
   background: var(--color-surface);
   color: var(--color-text);

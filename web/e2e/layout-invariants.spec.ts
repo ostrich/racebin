@@ -91,6 +91,10 @@ test("standard form controls use the shared control height", async ({
       elements.map((element) => element.getBoundingClientRect().height),
     );
   expect(new Set(heights)).toEqual(new Set([40]));
+  const controlTops = await page.locator(".type-field > select, .language-picker > input").evaluateAll(
+    elements => elements.map(element => element.getBoundingClientRect().top),
+  );
+  expect(controlTops[0]).toBe(controlTops[1]);
 });
 
 test("checkbox rows retain native control geometry", async ({ page }) => {
