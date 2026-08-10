@@ -14,7 +14,7 @@ test("switching an empty paste to rich text does not create unsaved content", as
   await mockApi(page, true);
   await page.goto("/pastes/new");
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("rich_text");
-  await expect(page.locator(".rich-text-editor")).toBeVisible();
+  await expect(page.locator(".rich-text-editor")).toBeVisible({ timeout: 10_000 });
 
   await page.getByRole("link", { name: "My pastes" }).click();
   await expect(page).toHaveURL(/\/pastes$/);

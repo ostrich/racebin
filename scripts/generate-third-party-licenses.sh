@@ -19,6 +19,7 @@ trap 'rm -f "$frontend_notice"' EXIT
     cat web/src/assets/fonts/LICENSE.txt
     printf '\n'
     {
+        printf '%s\n' web/node_modules/@lucide/svelte
         printf '%s\n' web/node_modules/svelte
         (cd web && npm ls --omit=dev --all --parseable) | sed '1d'
     } | sort -u | while IFS= read -r package_dir; do
@@ -33,8 +34,17 @@ trap 'rm -f "$frontend_notice"' EXIT
             fi
         done
         if [ -z "$license_file" ]; then
-            printf 'No license file found for %s\n' "$package_info" >&2
-            exit 1
+            declared_license=$(node -e \
+                'const fs=require("fs"); const p=JSON.parse(fs.readFileSync(process.argv[1]+"/package.json")); process.stdout.write(p.license || "")' \
+                "$package_dir")
+            if [ -z "$declared_license" ]; then
+                printf 'No license information found for %s\n' "$package_info" >&2
+                exit 1
+            fi
+            printf '## %s\n\n' "$package_info"
+            printf 'License: `%s` (as declared by the package metadata; the published package contains no license file).\n\n' \
+                "$declared_license"
+            continue
         fi
         printf '## %s\n\n' "$package_info"
         cat "$license_file"

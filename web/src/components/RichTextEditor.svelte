@@ -5,6 +5,7 @@
   import StarterKit from "@tiptap/starter-kit";
   import { showNotice } from "../notices";
   import Icon from "./Icon.svelte";
+  import type { IconName } from "./icons";
   import type { RichTextDocument } from "../types";
 
   let {
@@ -48,7 +49,7 @@
   const commands: Array<{
     command: string;
     label: string;
-    icon?: string;
+    icon?: IconName;
     symbol?: string;
     symbolClass?: string;
   }> = [

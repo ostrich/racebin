@@ -32,10 +32,8 @@ test("primary pages do not overflow at supported widths", async ({ page }) => {
       await page.goto(path);
       await expect
         .poll(() =>
-          page.evaluate(
-            () =>
-              document.documentElement.scrollWidth <=
-              document.documentElement.clientWidth,
+          page.locator("html").evaluate(
+            (root) => root.scrollWidth <= root.clientWidth,
           ), { message: `${path} should fit at ${viewport.width}px` }
         )
         .toBe(true);

@@ -6,6 +6,7 @@
   import { notice } from "../notices";
   import { setColorTheme, uiPreferences, type ColorTheme } from "../uiPreferences";
   import Icon from "./Icon.svelte";
+  import type { IconName } from "./icons";
   import Link from "./Link.svelte";
 
   let {
@@ -24,7 +25,7 @@
     await navigate("/");
   }
 
-  const themes: Record<ColorTheme, { next: ColorTheme; label: string; icon: string }> = {
+  const themes: Record<ColorTheme, { next: ColorTheme; label: string; icon: IconName }> = {
     auto: { next: "dark", label: "Automatic theme", icon: "monitor" },
     dark: { next: "light", label: "Dark theme", icon: "moon" },
     light: { next: "auto", label: "Light theme", icon: "sun" }
