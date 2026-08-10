@@ -6,6 +6,15 @@ export default defineConfig({
   resolve: {
     conditions: ["browser"]
   },
+  // RichTextEditor is loaded on demand, so Vite cannot discover these dependencies
+  // during its initial source scan. Pre-bundle them to prevent a first-use reload.
+  optimizeDeps: {
+    include: [
+      "@tiptap/core",
+      "@tiptap/extension-text-align",
+      "@tiptap/starter-kit"
+    ]
+  },
   build: {
     rollupOptions: {
       output: {
