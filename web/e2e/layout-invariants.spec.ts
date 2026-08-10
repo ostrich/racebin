@@ -93,6 +93,25 @@ test("standard form controls use the shared control height", async ({
   expect(new Set(heights)).toEqual(new Set([40]));
 });
 
+test("checkbox rows retain native control geometry", async ({ page }) => {
+  await mockApi(page, false);
+  await page.goto("/login");
+  const remember = page.getByRole("checkbox", { name: "Keep me signed in" });
+  await expect(remember).toBeVisible();
+  const geometry = await remember.evaluate(input => {
+    const control = input.getBoundingClientRect();
+    const label = input.closest("label")!;
+    return {
+      display: getComputedStyle(label).display,
+      width: control.width,
+      height: control.height,
+    };
+  });
+  expect(geometry.display).toBe("flex");
+  expect(geometry.width).toBeLessThanOrEqual(20);
+  expect(geometry.height).toBeLessThanOrEqual(20);
+});
+
 test("paste editor uses the page width without stretching metadata controls", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/pastes/new");
