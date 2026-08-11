@@ -400,7 +400,9 @@ A typical paste creation follows this path:
    API available to other clients.
 
 `GET /api/v1/pastes/{id}` is metadata-only.
-`POST /api/v1/pastes/{id}/reads` atomically updates the read count. A final read
+`POST /api/v1/pastes/{id}/reads` atomically updates the read count. Authenticated
+browser-session owners are exempt when viewing their own pastes, so routine
+owner previews do not affect analytics or consume read limits. A final read
 tombstones the paste instead of immediately deleting its row and issues a
 15-minute capability for its files; cleanup later removes the tombstone and
 storage. Owner and administrator source reads do not consume the paste.

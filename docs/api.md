@@ -163,6 +163,12 @@ supported wire contract.
 `GET /api/v1/pastes/{id}` returns metadata without incrementing the read count.
 It deliberately does not consume a limited paste.
 
+`POST /api/v1/pastes/{id}/reads` normally increments the read count and applies
+the paste's read limit. When the paste owner is authenticated through a browser
+session, viewing their own paste is non-consuming: it does not change the read
+count, last-read timestamp, revision, or read-limit state. API-key reads retain
+normal API read semantics.
+
 `POST /api/v1/pastes/{id}/reads` performs a read and returns content. Send an
 `Idempotency-Key` when retrying. Owners and administrators receive a
 `source_url`; retrieving that URL does not consume a read.

@@ -35,6 +35,10 @@ impl Principal {
         matches!(self, Self::Session(session) if session.user.is_admin())
     }
 
+    fn is_session_owner(&self, owner_id: Option<i64>) -> bool {
+        matches!(self, Self::Session(session) if Some(session.user.id) == owner_id)
+    }
+
     pub fn can(&self, scope: &str) -> bool {
         self.is_admin() || matches!(self, Self::ApiKey(key) if key.has_scope(scope))
     }
@@ -275,6 +279,15 @@ impl PasteService {
                 let Some(mut paste) = load_paste_for_read(&mut tx, principal, id).await? else {
                     return Ok(None);
                 };
+                if principal.is_session_owner(paste.owner_id) {
+                    paste = redact_folder(principal, paste, false);
+                    tx.commit().await.map_err(DomainError::internal)?;
+                    return Ok(Some(PasteRead {
+                        paste,
+                        grant_token: None,
+                        replayed: false,
+                    }));
+                }
                 let grant_token = create_read_grant(&mut tx, &paste, now).await?;
                 paste = redact_folder(principal, paste, false);
                 tx.commit().await.map_err(DomainError::internal)?;
@@ -310,6 +323,14 @@ impl PasteService {
         paste.attachments = load_attachments_from(&mut *tx, &paste.id).await?;
         paste.attachment_count = paste.attachments.len() as i64;
         paste.size_bytes = paste_size(&paste);
+        if principal.is_session_owner(paste.owner_id) {
+            tx.commit().await.map_err(DomainError::internal)?;
+            return Ok(Some(PasteRead {
+                paste: redact_folder(principal, paste, false),
+                grant_token: None,
+                replayed: false,
+            }));
+        }
         if consumed {
             sqlx::query("UPDATE pastes SET read_count=$2,last_read_at=$3,consumed_at=$3,updated_at=$3,revision=revision+1 WHERE id=$1")
                 .bind(&paste.id)
@@ -913,7 +934,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn read_limit_is_committed_with_the_consuming_read() {
+    async fn owner_session_reads_do_not_increment_or_consume() {
         let path = std::env::temp_dir().join(format!("racebin-limited-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&path).unwrap();
         let url = format!(
@@ -932,7 +953,7 @@ mod tests {
         sqlx::query(
             "INSERT INTO pastes(id,owner_id,title,content,content_kind,language,visibility,
              created_at,read_count,read_limit)
-             VALUES('limited',7,'','secret','text','plaintext','private',0,0,1)",
+             VALUES('limited',7,'','secret','text','plaintext','unlisted',0,0,1)",
         )
         .execute(repository.pool())
         .await
@@ -948,12 +969,31 @@ mod tests {
             csrf_token: "csrf".to_string(),
         });
         let services = PasteService::new(repository.clone());
-        let consumed = services
+        let owner_read = services
             .read_paste(&principal, "limited", None)
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(consumed.paste.content, "secret");
+        assert_eq!(owner_read.paste.content, "secret");
+        assert_eq!(owner_read.paste.read_count, 0);
+        assert_eq!(owner_read.paste.last_read_at, None);
+        assert_eq!(owner_read.paste.revision, 1);
+        assert_eq!(owner_read.grant_token, None);
+        let unchanged: (i64, Option<i64>, i64, Option<i64>) = sqlx::query_as(
+            "SELECT read_count,last_read_at,revision,consumed_at FROM pastes WHERE id=$1",
+        )
+        .bind("limited")
+        .fetch_one(repository.pool())
+        .await
+        .unwrap();
+        assert_eq!(unchanged, (0, None, 1, None));
+
+        let consumed = services
+            .read_paste(&Principal::Anonymous, "limited", None)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(consumed.paste.read_count, 1);
         let remaining: i64 =
             sqlx::query_scalar("SELECT count(*) FROM pastes WHERE id=$1 AND consumed_at IS NULL")
                 .bind("limited")

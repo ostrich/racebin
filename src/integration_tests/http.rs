@@ -5,7 +5,7 @@ mod tests {
     use crate::http::configure;
     use crate::repository::Repository;
     use crate::services::{PasteInput, PasteService, Principal};
-    use actix_web::{http::StatusCode, test, web, App};
+    use actix_web::{cookie::Cookie, http::StatusCode, test, web, App};
     use serde_json::{json, Value};
     use std::path::Path;
 
@@ -121,6 +121,15 @@ mod tests {
             .create_paste(&principal, &final_read_input)
             .await
             .unwrap();
+        let mut owner_preview_input = input("owner preview", "unlisted");
+        owner_preview_input.read_limit = Some(Some(1));
+        let owner_preview = services
+            .create_paste(&principal, &owner_preview_input)
+            .await
+            .unwrap();
+        let (owner_session, _, _) = accounts::create_session(&repository, 1, false)
+            .await
+            .unwrap();
         let final_read_directory = data_dir.join("attachments").join(&final_read.id);
         std::fs::create_dir_all(&final_read_directory).unwrap();
         std::fs::write(
@@ -145,6 +154,24 @@ mod tests {
                 .configure(configure),
         )
         .await;
+
+        let owner_response = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri(&format!("/api/v1/pastes/{}/reads", owner_preview.id))
+                .cookie(Cookie::new(accounts::SESSION_COOKIE, owner_session))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(owner_response.status(), StatusCode::OK);
+        let owner_state: (i64, Option<i64>, i64, Option<i64>) = sqlx::query_as(
+            "SELECT read_count,last_read_at,revision,consumed_at FROM pastes WHERE id=$1",
+        )
+        .bind(&owner_preview.id)
+        .fetch_one(repository.pool())
+        .await
+        .unwrap();
+        assert_eq!(owner_state, (0, None, 1, None));
 
         let consumed = test::call_service(
             &app,
