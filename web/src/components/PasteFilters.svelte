@@ -20,9 +20,9 @@
   const labels: Record<string, string> = {
     content_kind: "Format", language: "Language", visibility: "Visibility",
     has_attachments: "Attachments", owner_id: "Owner", created_after: "Created after",
-    created_before: "Created before", expiration: "Expiration", min_reads: "Minimum reads",
-    max_reads: "Maximum reads", min_size_bytes: "Minimum size",
-    max_size_bytes: "Maximum size", read_limit: "Read limit"
+    created_before: "Created before", expiration: "Expiration", min_reads: "Minimum views",
+    max_reads: "Maximum views", min_size_bytes: "Minimum size",
+    max_size_bytes: "Maximum size", read_limit: "View limit"
   };
   const filterKeys = Object.keys(labels);
   const sortChoices = [
@@ -30,8 +30,8 @@
     { label: "Oldest", sort: "created", direction: "asc" },
     { label: "Title A–Z", sort: "title", direction: "asc" },
     { label: "Title Z–A", sort: "title", direction: "desc" },
-    { label: "Most read", sort: "reads", direction: "desc" },
-    { label: "Least read", sort: "reads", direction: "asc" },
+    { label: "Most viewed", sort: "reads", direction: "desc" },
+    { label: "Least viewed", sort: "reads", direction: "asc" },
     { label: "Largest", sort: "size", direction: "desc" },
     { label: "Smallest", sort: "size", direction: "asc" },
     { label: "Expires soonest", sort: "expires", direction: "asc" },
@@ -225,13 +225,13 @@
         <label><span>Expiration</span><select name="expiration" value={params.get("expiration") ?? ""}>
           <option value="">Any</option><option value="never">Never</option><option value="scheduled">Scheduled</option>
         </select></label>
-        <label><span>Minimum reads</span><input type="number" min="0" name="min_reads" value={params.get("min_reads") ?? ""}/></label>
-        <label><span>Maximum reads</span><input type="number" min="0" name="max_reads" value={params.get("max_reads") ?? ""}/></label>
+        <label><span>Minimum views</span><input type="number" min="0" name="min_reads" value={params.get("min_reads") ?? ""}/></label>
+        <label><span>Maximum views</span><input type="number" min="0" name="max_reads" value={params.get("max_reads") ?? ""}/></label>
         <label><span>Minimum size (KiB)</span><input type="number" min="0" step="0.1" name="min_size_kib"
           value={params.get("min_size_bytes") ? Number(params.get("min_size_bytes")) / 1024 : ""}/></label>
         <label><span>Maximum size (KiB)</span><input type="number" min="0" step="0.1" name="max_size_kib"
           value={params.get("max_size_bytes") ? Number(params.get("max_size_bytes")) / 1024 : ""}/></label>
-        <label><span>Read limit</span><select name="read_limit" value={params.get("read_limit") ?? ""}>
+        <label><span>View limit</span><select name="read_limit" value={params.get("read_limit") ?? ""}>
           <option value="">Any</option><option value="unlimited">Unlimited</option><option value="limited">Limited</option>
         </select></label>
       </div>

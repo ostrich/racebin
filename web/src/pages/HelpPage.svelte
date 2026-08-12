@@ -82,7 +82,7 @@
               <li>Open <Link href="/pastes/new">New paste</Link> and add an optional title.</li>
               <li>Choose <strong>Text</strong> for code and plain text, or <strong>Rich text</strong> for headings, lists, links, and other document formatting.</li>
               <li>For text, leave the language as <strong>Plaintext</strong> for no highlighting, choose <strong>Auto</strong> to detect it, or select a language yourself.</li>
-              <li>Choose who can open it, and optionally set a folder, expiration, read limit, or attachments.</li>
+              <li>Choose who can open it, and optionally set a folder, expiration, view limit, or attachments.</li>
               <li>Select <strong>Create paste</strong>, then copy its page URL to share it.</li>
             </ol>
           </section>
@@ -98,8 +98,8 @@
 
           <section>
             <h3>Control how long it remains available</h3>
-            <p><strong>Expiration</strong> removes a paste after the selected date and time. <strong>Read limit</strong> removes it after the specified number of reads. Leave either setting at its default for no limit.</p>
-            <p>When you are signed in and open your own paste in the browser, that visit does not increase its read count or consume a limited read.</p>
+            <p><strong>Expiration</strong> removes a paste after the selected date and time. <strong>View limit</strong> removes it after the specified number of views. Leave either setting at its default for no limit.</p>
+            <p>When you are signed in and open your own paste in the browser, that visit does not increase its view count or consume a limited view.</p>
           </section>
 
           <section>

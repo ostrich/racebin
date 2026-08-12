@@ -28,7 +28,7 @@ test("expiration presets populate a stable, customizable date control", async ({
 
   const expiration = page.getByRole("combobox", { name: "Expiration" });
   const date = page.getByLabel("Date and time");
-  const readLimit = page.getByLabel("Read limit");
+  const readLimit = page.getByLabel("View limit");
   await expect(expiration).toHaveValue("never");
   await expect(date).toBeDisabled();
   await expect(date).toHaveValue("Not applicable");

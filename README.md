@@ -16,7 +16,7 @@ create stays manageable from your account.
 - Add multiple files, download them individually, or bundle a paste and its
   attachments as a ZIP archive.
 - Choose public, unlisted, or private visibility.
-- Set an expiration time or limit how many times a paste can be read.
+- Set an expiration time or limit how many times a paste can be viewed.
 - Search, edit, and manage your pastes from one account.
 - Organize saved pastes in private folders and move them in bulk.
 

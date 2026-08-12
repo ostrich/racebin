@@ -89,7 +89,7 @@
       <footer class="paste-stats">
         <span>Created {formatDate(paste.created_at)}</span>
         <span>Expires {formatDate(paste.expires_at)}</span>
-        <span>{paste.read_count} reads</span>
+        <span>{paste.read_count} view{paste.read_count === 1 ? "" : "s"}</span>
       </footer>
   </article>
 {:else if error}

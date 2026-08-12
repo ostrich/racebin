@@ -348,7 +348,7 @@
             <input type="datetime-local" bind:value={expiresAt} required oninput={customizeExpiration}/>
           {/if}
         </label>
-        <label class="read-limit-field"><span>Read limit</span><input type="number" min="1" bind:value={readLimit} placeholder="Unlimited"/></label>
+        <label class="read-limit-field"><span>View limit</span><input type="number" min="1" bind:value={readLimit} placeholder="Unlimited"/></label>
       </div>
       {#if paste?.attachments.length}
         <div class="existing-attachments"><span>Current attachments</span>
