@@ -41,6 +41,22 @@ test("primary pages do not overflow at supported widths", async ({ page }) => {
   }
 });
 
+test("long paste identifiers do not displace mobile navigation", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/pastes/tiger-monkey");
+  const heading = page.getByRole("heading", { level: 1 });
+  await heading.evaluate(element => {
+    element.textContent = "f7f7113f74ab4a59baaac0ba";
+  });
+
+  await expect.poll(() => page.locator("html").evaluate(root =>
+    root.scrollWidth <= root.clientWidth
+  )).toBe(true);
+  await expect.poll(() => page.locator(".primary-nav").evaluate(nav =>
+    Math.abs(nav.getBoundingClientRect().bottom - window.innerHeight)
+  )).toBeLessThan(1);
+});
+
 test("workspace sections share a common content edge", async ({ page }) => {
   await page.goto("/pastes");
   const edges = await page.locator(".paste-workspace-main").evaluate((main) => {
