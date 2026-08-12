@@ -1,6 +1,42 @@
 import { expect, test } from "@playwright/test";
 import { mockApi, paste } from "./support/mockApi";
 
+test("paste view offers a print action and a paper-safe layout", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.print = () => Object.assign(window, { __printed: true });
+  });
+  await mockApi(page, false);
+  await page.goto("/pastes/sample-paste");
+  await page.getByRole("button", { name: "Print" }).click();
+  await expect.poll(() => page.evaluate(() =>
+    Boolean((window as Window & { __printed?: boolean }).__printed)
+  )).toBe(true);
+
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator(".site-header")).toBeHidden();
+  await expect(page.locator(".paste-view .page-heading .actions")).toBeHidden();
+  await expect(page.locator(".paste-code-shell")).toBeHidden();
+  const printLayout = await page.locator(".paste-print-code").evaluate(viewer => {
+    const lines = [...viewer.querySelectorAll<HTMLElement>(".paste-print-line")];
+    const number = lines[0]!.querySelector<HTMLElement>("span")!;
+    const content = lines[0]!.querySelector<HTMLElement>("code")!;
+    return {
+      displayed: getComputedStyle(viewer).display,
+      lineCount: lines.length,
+      contentWrap: getComputedStyle(content).whiteSpace,
+      contentOverflowWrap: getComputedStyle(content).overflowWrap,
+      numberSelectable: getComputedStyle(number).userSelect
+    };
+  });
+  expect(printLayout).toEqual({
+    displayed: "block",
+    lineCount: 2,
+    contentWrap: "pre-wrap",
+    contentOverflowWrap: "anywhere",
+    numberSelectable: "none"
+  });
+});
+
 test("wide paste offers synchronized sticky scrolling and aligned wrapped lines", async ({ page }) => {
   const content = Array.from(
     { length: 60 },

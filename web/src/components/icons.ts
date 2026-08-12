@@ -21,6 +21,7 @@ import PanelLeftClose from "@lucide/svelte/icons/panel-left-close";
 import PanelLeftOpen from "@lucide/svelte/icons/panel-left-open";
 import PenLine from "@lucide/svelte/icons/pen-line";
 import Plus from "@lucide/svelte/icons/plus";
+import Printer from "@lucide/svelte/icons/printer";
 import Quote from "@lucide/svelte/icons/quote";
 import Redo2 from "@lucide/svelte/icons/redo-2";
 import Search from "@lucide/svelte/icons/search";
@@ -59,6 +60,7 @@ export const icons = {
   "panel-left-close": PanelLeftClose,
   "panel-left-open": PanelLeftOpen,
   plus: Plus,
+  printer: Printer,
   quote: Quote,
   "redo-2": Redo2,
   search: Search,

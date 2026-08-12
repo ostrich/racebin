@@ -9,3 +9,4 @@
 @import "./styles/paste-library.css" layer(components);
 @import "./styles/utilities.css" layer(utilities);
 @import "./styles/responsive.css" layer(overrides);
+@import "./styles/print.css" layer(overrides);

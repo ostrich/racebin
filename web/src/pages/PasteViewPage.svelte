@@ -57,6 +57,7 @@
         <div class="actions">
           <button class="button" type="button" onclick={openRaw}>Raw</button>
           <button class="button" type="button" onclick={copyContent}><Icon name="copy"/> Copy</button>
+          <button class="button" type="button" onclick={() => window.print()}><Icon name="printer"/> Print</button>
           {#if paste.archive_url}<a class="button" href={paste.archive_url}>ZIP</a>{/if}
           {#if $appState.config.qr_codes_enabled}<a class="button" href={pasteQrUrl($appState.config.api_base_url ?? "/api/v1", paste.id)}>QR</a>{/if}
           {#if own}<Link class="button primary" href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/> Edit</Link>{/if}
@@ -79,6 +80,11 @@
         <CodeViewer code={paste.content} language={paste.language} wrap={wrapLines}
           onready={initialLoadReady}
           onoverflowchange={(overflowing) => { horizontalOverflow = overflowing; }}/>
+        <div class="paste-print-code" aria-hidden="true">
+          {#each paste.content.split("\n") as line, index}
+            <div class="paste-print-line"><span>{index + 1}</span><code>{line || " "}</code></div>
+          {/each}
+        </div>
       {/if}
       {#if paste.attachments.length}
         <section><h2>Attachments</h2>
