@@ -80,6 +80,8 @@ mod tests {
         assert!(EMBEDDED_ASSET_PATHS.contains(&"app.js"));
         assert!(EMBEDDED_ASSET_PATHS.contains(&"app.css"));
         assert!(EMBEDDED_ASSET_PATHS.contains(&"theme-init.js"));
+        assert!(EMBEDDED_ASSET_PATHS.contains(&"favicon-32x32.png"));
+        assert!(EMBEDDED_ASSET_PATHS.contains(&"apple-touch-icon.png"));
         assert!(EMBEDDED_ASSET_PATHS.contains(&"InterVariable.woff2"));
         assert!(EMBEDDED_ASSET_PATHS.contains(&"InterVariable-Italic.woff2"));
         assert!(
