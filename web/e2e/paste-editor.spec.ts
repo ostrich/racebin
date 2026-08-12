@@ -145,6 +145,10 @@ test("resizing the text editor grows the complete editor and is retained across 
 test("empty rich-text conversion skips preview and disables language", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
+  const language = page.getByRole("combobox", { name: /Language/ });
+  await language.click();
+  await page.getByRole("option", { name: /JavaScript/ }).click();
+  await expect(language).toHaveValue("javascript");
   const textEditorHeight = await page.locator(".content-editor").evaluate(
     element => element.getBoundingClientRect().height
   );
@@ -153,7 +157,8 @@ test("empty rich-text conversion skips preview and disables language", async ({ 
   );
   await page.locator(".form-grid select").first().selectOption("rich_text");
   await expect(page.getByRole("heading", { name: /Convert to/ })).toHaveCount(0);
-  await expect(page.getByRole("combobox", { name: /Language/ })).toBeDisabled();
+  await expect(language).toBeDisabled();
+  await expect(language).toHaveValue("Not applicable");
   await expect(page.locator(".rich-text-editor")).toBeVisible();
   const richTextEditorHeight = await page.locator(".content-editor").evaluate(
     element => element.getBoundingClientRect().height
@@ -163,6 +168,10 @@ test("empty rich-text conversion skips preview and disables language", async ({ 
   );
   expect(richTextEditorHeight).toBe(textEditorHeight);
   expect(richTextControlsTop).toBe(textControlsTop);
+  await page.locator(".form-grid select").first().selectOption("text");
+  await page.getByRole("button", { name: "Convert" }).click();
+  await expect(language).toBeEnabled();
+  await expect(language).toHaveValue("javascript");
 });
 
 test("paste form labels share the same dark-mode color", async ({ page }) => {

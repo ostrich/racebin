@@ -71,7 +71,7 @@
   <label for="language-input">Language <small>Type to filter languages.</small></label>
   <div class="language-picker">
     <input bind:this={input} id="language-input" name="language" {disabled}
-      value={value} autocomplete="off" role="combobox" aria-autocomplete="list"
+      value={disabled ? "Not applicable" : value} autocomplete="off" role="combobox" aria-autocomplete="list"
       aria-expanded={open} aria-controls="language-options-menu" placeholder="Type or choose"
       onfocus={show} oninput={filter} onblur={blur} onkeydown={keydown}/>
     {#if open}
