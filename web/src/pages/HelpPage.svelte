@@ -73,7 +73,56 @@
       </section>
       <section class="panel" id="basics">
         <h2>Site basics</h2>
-        <p><Link href="/pastes/new">New</Link> creates a text or rich-text paste. <Link href="/pastes">My pastes</Link> lets you search, organize, move, and edit what you have saved. Public pastes appear in Explore; unlisted pastes are available only to people with the link; private pastes require your account.</p>
+        <p>Racebin keeps text, formatted documents, and attachments together under one shareable link. You need an account to create and manage pastes, but the people you share with usually do not.</p>
+
+        <div class="help-basics">
+          <section>
+            <h3>Create a paste</h3>
+            <ol>
+              <li>Open <Link href="/pastes/new">New paste</Link> and add an optional title.</li>
+              <li>Choose <strong>Text</strong> for code and plain text, or <strong>Rich text</strong> for headings, lists, links, and other document formatting.</li>
+              <li>For text, leave the language as <strong>Plaintext</strong> for no highlighting, choose <strong>Auto</strong> to detect it, or select a language yourself.</li>
+              <li>Choose who can open it, and optionally set a folder, expiration, read limit, or attachments.</li>
+              <li>Select <strong>Create paste</strong>, then copy its page URL to share it.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h3>Choose the right visibility</h3>
+            <dl class="help-definitions">
+              <div><dt>Public</dt><dd>Anyone can open it, and it can appear in <Link href="/explore">Explore</Link>.</dd></div>
+              <div><dt>Unlisted</dt><dd>Anyone with the URL can open it, but it does not appear in Explore. The URL is access, not a password.</dd></div>
+              <div><dt>Private</dt><dd>Only you can open it through the site. Site administrators can still manage stored content.</dd></div>
+            </dl>
+          </section>
+
+          <section>
+            <h3>Control how long it remains available</h3>
+            <p><strong>Expiration</strong> removes a paste after the selected date and time. <strong>Read limit</strong> removes it after the specified number of reads. Leave either setting at its default for no limit.</p>
+            <p>When you are signed in and open your own paste in the browser, that visit does not increase its read count or consume a limited read.</p>
+          </section>
+
+          <section>
+            <h3>View and share</h3>
+            <ul>
+              <li><strong>Copy</strong> copies the paste content; <strong>Raw</strong> opens it without the page interface.</li>
+              <li>Long code displays a horizontal scrollbar. Use <strong>Wrap</strong> when it appears to fit long lines to the viewer.</li>
+              {#if $appState.config.attachments_enabled}<li>Attachments can be downloaded separately or together with the paste as a ZIP archive.</li>{/if}
+              {#if $appState.config.qr_codes_enabled}<li><strong>QR</strong> creates a scannable link to the paste.</li>{/if}
+            </ul>
+          </section>
+
+          <section>
+            <h3>Organize and manage</h3>
+            <p><Link href="/pastes">My pastes</Link> is your working library. Search its contents and metadata, filter and sort the list, switch between normal and compact views, and use folders to group related items.</p>
+            <p>Select one or more pastes to move them together. Open a paste to edit or delete it. Deleting an existing attachment while editing takes effect immediately, even if you later cancel the rest of the edit.</p>
+          </section>
+
+          <aside class="help-note">
+            <h3>Before sharing sensitive information</h3>
+            <p>Check the visibility, expiration, and attached files. Remove passwords, private keys, access tokens, and other secrets; an unlisted URL can still be forwarded to someone else.</p>
+          </aside>
+        </div>
       </section>
     </div>
   </div>

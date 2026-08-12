@@ -427,6 +427,15 @@
 .scope-list { display: grid; gap: var(--space-2); margin: 0; }
 .scope-list div { display: grid; grid-template-columns: 140px 1fr; gap: var(--space-3); }
 .scope-list dd { margin: 0; color: var(--muted); }
+.help-basics { display: grid; gap: var(--space-5); margin-top: var(--space-4); }
+.help-basics > section { display: grid; gap: var(--space-2); }
+.help-basics h3, .help-basics p, .help-basics ol, .help-basics ul { margin: 0; }
+.help-basics ol, .help-basics ul { display: grid; gap: var(--space-2); padding-left: var(--space-5); }
+.help-definitions { display: grid; gap: var(--space-2); margin: 0; }
+.help-definitions > div { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: var(--space-3); }
+.help-definitions dt { font-weight: 700; }
+.help-definitions dd { margin: 0; }
+.help-note { display: grid; gap: var(--space-2); padding: var(--space-3); border-left: 3px solid var(--accent); background: var(--color-surface-subtle); }
 .auth-card { max-width: 480px; margin: var(--space-6) auto; }
 .auth-card .stack { display: grid; gap: var(--space-3); }
 .form-error { color: var(--danger); }
@@ -459,7 +468,7 @@
 }
 @media (max-width: 520px) {
   .admin-user-filters, .admin-user-metrics, .admin-user-panels { grid-template-columns: 1fr; }
-  .scope-list div { grid-template-columns: 1fr; gap: var(--space-1); }
+  .scope-list div, .help-definitions > div { grid-template-columns: 1fr; gap: var(--space-1); }
 }
 .empty {
   text-align: center;

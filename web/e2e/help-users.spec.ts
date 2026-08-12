@@ -21,6 +21,18 @@ test("signed-in help explains API keys using the current installation", async ({
     .toContain(`${new URL(page.url()).origin}/api/v1/pastes`);
 });
 
+test("site basics explains creation, visibility, limits, and management", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/help#basics");
+  const basics = page.locator("#basics");
+  await expect(basics.getByRole("heading", { name: "Create a paste" })).toBeVisible();
+  await expect(basics.locator("dt", { hasText: "Public" })).toBeVisible();
+  await expect(basics.getByText("The URL is access, not a password.")).toBeVisible();
+  await expect(basics.getByRole("heading", { name: "Control how long it remains available" })).toBeVisible();
+  await expect(basics.getByRole("heading", { name: "Organize and manage" })).toBeVisible();
+  await expect(basics.getByRole("heading", { name: "Before sharing sensitive information" })).toBeVisible();
+});
+
 test("help navigation aligns with its content and clears the sticky header", async ({ page }) => {
   await mockApi(page, true);
   await page.setViewportSize({ width: 1440, height: 700 });
