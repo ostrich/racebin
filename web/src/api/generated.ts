@@ -469,6 +469,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pastes/{paste_id}/raw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns a paste's native content without the Racebin interface. Ordinary visible pastes have stable, non-consuming raw URLs. A read-limited paste requires owner access or the short-lived read_token returned by POST /pastes/{paste_id}/reads, preventing crawlers and link previews from consuming a read. */
+        get: operations["get_paste_raw"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pastes/{paste_id}/reads": {
         parameters: {
             query?: never;
@@ -914,6 +931,8 @@ export interface components {
             last_read_at?: string | null;
             /** Format: int64 */
             owner_id?: number | null;
+            /** Format: uri-reference */
+            raw_url?: string | null;
             /** Format: int64 */
             read_count: number;
             /** Format: int64 */
@@ -3576,6 +3595,71 @@ export interface operations {
             };
         };
     };
+    get_paste_raw: {
+        parameters: {
+            query?: {
+                /** @description Short-lived grant returned by a deliberate read of a read-limited paste. */
+                read_token?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Paste ID */
+                paste_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plain text, or sanitized HTML for a rich-text paste */
+            200: {
+                headers: {
+                    /** @description Current paste entity tag */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                    "text/plain": string;
+                };
+            };
+            /** @description Invalid bearer credential */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description API key lacks paste:read */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Paste not found, not visible, or read grant invalid */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     read_paste: {
         parameters: {
             query?: never;
@@ -3598,7 +3682,7 @@ export interface operations {
                     ETag?: string;
                     /** @description true when this is a replay of an earlier idempotent read */
                     "Idempotency-Replayed"?: boolean;
-                    /** @description Short-lived attachment-download grant issued when a limited read consumes the paste's final permitted read */
+                    /** @description Short-lived grant for raw content and attachment downloads after a deliberate read of a read-limited paste */
                     "Read-Token"?: string;
                     [name: string]: unknown;
                 };

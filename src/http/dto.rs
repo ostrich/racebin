@@ -127,6 +127,9 @@ pub(crate) struct PasteMetadataResource {
     pub read_url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(format = "uri-reference")]
+    pub raw_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(format = "uri-reference")]
     pub archive_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(format = "uri-reference")]
@@ -329,11 +332,18 @@ pub(crate) fn metadata_resource(
             None => base,
         }
     });
+    let raw_base = absolute(request, &format!("/api/v1/pastes/{}/raw", paste.id));
+    let raw_url = if own || paste.read_limit.is_none() {
+        Some(raw_base)
+    } else {
+        grant_token.map(|token| format!("{raw_base}?read_token={token}"))
+    };
     PasteMetadataResource {
         id: paste.id.clone(),
         url: absolute(request, &format!("/pastes/{}", paste.id)),
         api_url: absolute(request, &format!("/api/v1/pastes/{}", paste.id)),
         read_url: absolute(request, &format!("/api/v1/pastes/{}/reads", paste.id)),
+        raw_url,
         archive_url,
         source_url: own.then(|| absolute(request, &format!("/api/v1/pastes/{}/source", paste.id))),
         title: paste.title,

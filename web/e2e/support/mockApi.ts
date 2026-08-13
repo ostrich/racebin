@@ -54,6 +54,7 @@ export const paste = {
   url: "/pastes/sample-paste",
   api_url: "/api/v1/pastes/sample-paste",
   read_url: "/api/v1/pastes/sample-paste/reads",
+  raw_url: "/api/v1/pastes/sample-paste/raw",
   source_url: "/api/v1/pastes/sample-paste/source",
   owner_id: 1,
   folder_id: null,
@@ -105,6 +106,7 @@ function wireMockValue(value: unknown): unknown {
       url: `/pastes/${id}`,
       api_url: `/api/v1/pastes/${id}`,
       read_url: `/api/v1/pastes/${id}/reads`,
+      raw_url: `/api/v1/pastes/${id}/raw`,
       source_url: `/api/v1/pastes/${id}/source`,
       format: object.content_kind,
       body: richText

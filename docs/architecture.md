@@ -191,7 +191,7 @@ The main relational entities are:
 | `attachments` | Ordered attachment metadata owned by a paste |
 | `idempotency_records` | Expiring create-request results used to make retries safe |
 | `paste_read_receipts` | Expiring replay records for idempotent read requests |
-| `paste_read_grants` | Short-lived capabilities for final-read attachment downloads |
+| `paste_read_grants` | Short-lived capabilities for raw content and attachment downloads after limited reads |
 | `auth_attempts` | Expiring authentication-failure records used for rate limiting |
 
 Rich text is stored as a validated JSON document alongside a plain-text
@@ -414,7 +414,7 @@ Racebin performs a cleanup pass at startup and then hourly. It:
 
 - deletes expired pastes;
 - deletes consumed paste tombstones after the attachment-grant window;
-- deletes expired idempotency records, read receipts, and attachment grants;
+- deletes expired idempotency records, read receipts, and follow-up read grants;
 - deletes expired sessions and password-reset tokens;
 - deletes stale authentication-attempt records;
 - removes old expired invitations;

@@ -13,6 +13,7 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(convert_paste_content)
         .service(read_paste)
         .service(get_paste)
+        .service(get_paste_raw)
         .service(get_paste_source)
         .service(update_paste)
         .service(delete_paste);
@@ -663,6 +664,64 @@ pub(crate) async fn get_paste_source(
     }
 }
 
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+struct RawPasteQuery {
+    /// Short-lived grant returned by a deliberate read of a read-limited paste.
+    read_token: Option<String>,
+}
+
+#[utoipa::path(
+    get, path = "/pastes/{paste_id}/raw", tag = "pastes",
+    description = "Returns a paste's native content without the Racebin interface. Ordinary visible pastes have stable, non-consuming raw URLs. A read-limited paste requires owner access or the short-lived read_token returned by POST /pastes/{paste_id}/reads, preventing crawlers and link previews from consuming a read.",
+    params(("paste_id" = String, Path, description = "Paste ID"), RawPasteQuery),
+    responses(
+        (status = 200, description = "Plain text, or sanitized HTML for a rich-text paste",
+            content((String = "text/plain"), (String = "text/html")),
+            headers(("ETag" = String, description = "Current paste entity tag"))),
+        (status = 401, description = "Invalid bearer credential", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "API key lacks paste:read", body = crate::http::errors::ProblemDetails),
+        (status = 404, description = "Paste not found, not visible, or read grant invalid", body = crate::http::errors::ProblemDetails),
+        (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
+    ),
+    security((), ("bearerAuth" = []), ("sessionCookie" = []))
+)]
+#[get("/pastes/{paste_id}/raw")]
+pub(crate) async fn get_paste_raw(
+    req: HttpRequest,
+    services: web::Data<PasteService>,
+    paste_id: web::Path<String>,
+    query: web::Query<RawPasteQuery>,
+) -> HttpResponse {
+    let principal = match principal(&services, &req).await {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let paste_id = paste_id.into_inner();
+    let paste = match services.get_paste(&principal, &paste_id).await {
+        Ok(Some(paste))
+            if paste.read_limit.is_none()
+                || principal.is_admin()
+                || principal.user_id() == paste.owner_id =>
+        {
+            Some(paste)
+        }
+        Ok(_) => match query.read_token.as_deref() {
+            Some(token) => match services.get_paste_with_grant(&paste_id, token).await {
+                Ok(paste) => paste,
+                Err(value) => return domain_error(value),
+            },
+            None => None,
+        },
+        Err(value) => return domain_error(value),
+    };
+    match paste {
+        Some(paste) => raw_content_response(paste),
+        None => error(StatusCode::NOT_FOUND, "not_found", "Paste not found"),
+    }
+}
+
 #[utoipa::path(
     post, path = "/pastes/{paste_id}/reads", tag = "pastes",
     description = "Consumes a permitted read and returns JSON by default. A browser-session owner reading their own paste does not increment its read count or consume its read limit. Clients may instead negotiate text/plain, or text/html for rich-text pastes.",
@@ -677,7 +736,7 @@ pub(crate) async fn get_paste_source(
             ),
             headers(
                 ("ETag" = String, description = "Current paste entity tag"),
-                ("Read-Token" = String, description = "Short-lived attachment-download grant issued when a limited read consumes the paste's final permitted read"),
+                ("Read-Token" = String, description = "Short-lived grant for raw content and attachment downloads after a deliberate read of a read-limited paste"),
                 ("Idempotency-Replayed" = bool, description = "true when this is a replay of an earlier idempotent read")
             )),
         (status = 400, description = "Invalid idempotency key", body = crate::http::errors::ProblemDetails),
@@ -966,6 +1025,31 @@ fn content_response(
         );
     }
     response
+}
+
+fn raw_content_response(paste: crate::services::Paste) -> HttpResponse {
+    let tag = dto::etag(&paste);
+    if paste.content_kind == "rich_text" {
+        HttpResponse::Ok()
+            .insert_header((header::ETAG, tag))
+            .insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"))
+            .insert_header(("X-Content-Type-Options", "nosniff"))
+            .insert_header(("Referrer-Policy", "no-referrer"))
+            .body(
+                paste
+                    .document
+                    .as_ref()
+                    .map(crate::services::document_to_html)
+                    .unwrap_or_default(),
+            )
+    } else {
+        HttpResponse::Ok()
+            .insert_header((header::ETAG, tag))
+            .insert_header((header::CONTENT_TYPE, "text/plain; charset=utf-8"))
+            .insert_header(("X-Content-Type-Options", "nosniff"))
+            .insert_header(("Referrer-Policy", "no-referrer"))
+            .body(paste.content)
+    }
 }
 
 fn accepts(req: &HttpRequest, mime: &str) -> bool {

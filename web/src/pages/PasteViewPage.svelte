@@ -47,13 +47,6 @@
     showNotice("Paste copied.");
   }
 
-  function openRaw(): void {
-    if (!paste) return;
-    const url = URL.createObjectURL(new Blob([paste.content], { type: "text/plain;charset=utf-8" }));
-    window.open(url, "_blank", "noopener,noreferrer");
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  }
-
   async function printPaste(): Promise<void> {
     if (!paste || preparingPrint) return;
     preparingPrint = true;
@@ -83,7 +76,7 @@
           </p>
         </div>
         <div class="actions">
-          <button class="button" type="button" onclick={openRaw}>Raw</button>
+          {#if paste.raw_url}<a class="button" href={paste.raw_url} target="_blank" rel="noopener noreferrer">Raw</a>{/if}
           <button class="button" type="button" onclick={copyContent}><Icon name="copy"/> Copy</button>
           <button class="button" type="button" disabled={preparingPrint} onclick={printPaste}><Icon name="printer"/> {preparingPrint ? "Preparing…" : "Print"}</button>
           {#if paste.archive_url}<a class="button" href={paste.archive_url}>ZIP</a>{/if}

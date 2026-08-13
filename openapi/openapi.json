@@ -1343,6 +1343,13 @@
               "null"
             ]
           },
+          "raw_url": {
+            "format": "uri-reference",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "read_count": {
             "format": "int64",
             "minimum": 0,
@@ -5769,6 +5776,112 @@
         ]
       }
     },
+    "/pastes/{paste_id}/raw": {
+      "get": {
+        "description": "Returns a paste's native content without the Racebin interface. Ordinary visible pastes have stable, non-consuming raw URLs. A read-limited paste requires owner access or the short-lived read_token returned by POST /pastes/{paste_id}/reads, preventing crawlers and link previews from consuming a read.",
+        "operationId": "get_paste_raw",
+        "parameters": [
+          {
+            "description": "Paste ID",
+            "in": "path",
+            "name": "paste_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Short-lived grant returned by a deliberate read of a read-limited paste.",
+            "in": "query",
+            "name": "read_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Plain text, or sanitized HTML for a rich-text paste",
+            "headers": {
+              "ETag": {
+                "description": "Current paste entity tag",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid bearer credential"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "API key lacks paste:read"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Paste not found, not visible, or read grant invalid"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal error"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "tags": [
+          "pastes"
+        ],
+        "x-racebin-scopes": [
+          "paste:read"
+        ]
+      }
+    },
     "/pastes/{paste_id}/reads": {
       "post": {
         "description": "Consumes a permitted read and returns JSON by default. A browser-session owner reading their own paste does not increment its read count or consume its read limit. Clients may instead negotiate text/plain, or text/html for rich-text pastes.",
@@ -5827,7 +5940,7 @@
                 }
               },
               "Read-Token": {
-                "description": "Short-lived attachment-download grant issued when a limited read consumes the paste's final permitted read",
+                "description": "Short-lived grant for raw content and attachment downloads after a deliberate read of a read-limited paste",
                 "schema": {
                   "type": "string"
                 }

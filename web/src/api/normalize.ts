@@ -35,6 +35,7 @@ function pasteFromWire(value: WirePaste, etag?: string | null): Paste {
     url: value.url,
     api_url: resource?.api_url,
     read_url: resource?.read_url,
+    raw_url: resource?.raw_url ?? undefined,
     source_url: resource?.source_url ?? undefined,
     archive_url: resource?.archive_url ?? undefined,
     _etag: etag ?? undefined,

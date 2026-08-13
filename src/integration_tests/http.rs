@@ -173,6 +173,38 @@ mod tests {
         .unwrap();
         assert_eq!(owner_state, (0, None, 1, None));
 
+        let ordinary_raw = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/v1/pastes/{}/raw", unlisted.id))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(ordinary_raw.status(), StatusCode::OK);
+        assert_eq!(
+            ordinary_raw.headers().get("Content-Type").unwrap(),
+            "text/plain; charset=utf-8"
+        );
+        assert_eq!(
+            test::read_body(ordinary_raw).await.as_ref(),
+            b"unlisted content"
+        );
+        let ordinary_reads: i64 = sqlx::query_scalar("SELECT read_count FROM pastes WHERE id=$1")
+            .bind(&unlisted.id)
+            .fetch_one(repository.pool())
+            .await
+            .unwrap();
+        assert_eq!(ordinary_reads, 0);
+
+        let limited_raw_without_grant = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/v1/pastes/{}/raw", final_read.id))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(limited_raw_without_grant.status(), StatusCode::NOT_FOUND);
+
         let consumed = test::call_service(
             &app,
             test::TestRequest::post()
@@ -185,12 +217,27 @@ mod tests {
         let grant = consumed
             .headers()
             .get("Read-Token")
-            .expect("final read returns an attachment grant")
+            .expect("limited read returns a follow-up access grant")
             .to_str()
             .unwrap()
             .to_string();
         assert_eq!(
             test::read_body(consumed).await.as_ref(),
+            b"final read content"
+        );
+        let granted_raw = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!(
+                    "/api/v1/pastes/{}/raw?read_token={grant}",
+                    final_read.id
+                ))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(granted_raw.status(), StatusCode::OK);
+        assert_eq!(
+            test::read_body(granted_raw).await.as_ref(),
             b"final read content"
         );
         let granted_download = test::call_service(
@@ -286,6 +333,29 @@ mod tests {
         let sanitized: Value = test::read_body_json(unsafe_document).await;
         assert!(!sanitized["body"]["content"]
             .as_str()
+            .unwrap()
+            .contains("script"));
+        let rich_raw = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!(
+                    "/api/v1/pastes/{}/raw",
+                    sanitized["id"].as_str().unwrap()
+                ))
+                .cookie(cookie.clone())
+                .to_request(),
+        )
+        .await;
+        assert_eq!(rich_raw.status(), StatusCode::OK);
+        assert_eq!(
+            rich_raw.headers().get("Content-Type").unwrap(),
+            "text/html; charset=utf-8"
+        );
+        assert_eq!(
+            rich_raw.headers().get("Referrer-Policy").unwrap(),
+            "no-referrer"
+        );
+        assert!(!String::from_utf8(test::read_body(rich_raw).await.to_vec())
             .unwrap()
             .contains("script"));
 

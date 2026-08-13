@@ -173,15 +173,30 @@ normal API read semantics.
 `Idempotency-Key` when retrying. Owners and administrators receive a
 `source_url`; retrieving that URL does not consume a read.
 
-For a final permitted read, Racebin returns a short-lived attachment grant in
-the `Read-Token` response header. JSON responses also include that grant in each
-attachment URL and the archive URL. The header makes the grant available to
-clients requesting `text/plain` or `text/html` as well. It remains valid for 15
-minutes so the reader can download files after receiving the paste.
+For a permitted read of a read-limited paste, Racebin returns a short-lived
+follow-up grant in the `Read-Token` response header. JSON responses also include
+that grant in the raw, attachment, and archive URLs. The header makes it
+available to clients requesting `text/plain` or `text/html` as well. It remains
+valid for 15 minutes so the reader can retrieve related content after receiving
+the paste.
 
 An idempotently replayed consuming read returns the original logical result
 without incrementing the read count again. Reusing an idempotency key for a
 different paste or request returns a conflict.
+
+## Raw content
+
+`GET /api/v1/pastes/{id}/raw` returns plain text, or sanitized HTML for a
+rich-text paste, without the Racebin interface. For an ordinary visible paste,
+this is a stable, shareable URL and does not increment the read count. Private
+pastes still require authentication.
+
+For a read-limited paste, first perform the deliberate `POST .../reads`
+operation. Its response includes a `raw_url` containing the same short-lived
+`read_token` used for post-read attachment access. This prevents crawlers,
+link previews, and browser prefetching from consuming a limited read merely by
+following a raw URL. The owner may use the stable raw URL without consuming a
+read.
 
 ## Attachments, archives, and QR output
 

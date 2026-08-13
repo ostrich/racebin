@@ -7,6 +7,7 @@ use utoipa::{Modify, OpenApi};
         crate::http::pastes::list_pastes,
         crate::http::pastes::create_paste,
         crate::http::pastes::get_paste,
+        crate::http::pastes::get_paste_raw,
         crate::http::pastes::get_paste_source,
         crate::http::pastes::read_paste,
         crate::http::pastes::update_paste,
@@ -498,8 +499,8 @@ fn add_scope_extensions(openapi: &mut utoipa::openapi::OpenApi) {
 fn operation_scopes(operation_id: &str) -> &'static [&'static str] {
     match operation_id {
         "list_pastes" | "list_folders" => &["paste:list"],
-        "get_paste" | "get_paste_source" | "read_paste" | "get_attachment" | "get_archive"
-        | "get_qr" => &["paste:read"],
+        "get_paste" | "get_paste_raw" | "get_paste_source" | "read_paste" | "get_attachment"
+        | "get_archive" | "get_qr" => &["paste:read"],
         "create_paste"
         | "update_paste"
         | "convert_paste_content"
@@ -825,6 +826,7 @@ mod tests {
             "/openapi.json",
             "/pastes",
             "/pastes/{paste_id}",
+            "/pastes/{paste_id}/raw",
             "/pastes/{paste_id}/source",
             "/pastes/{paste_id}/reads",
             "/content-conversions",
@@ -858,7 +860,6 @@ mod tests {
             assert!(paths.contains_key(path), "missing OpenAPI path {path}");
         }
         assert!(!paths.contains_key("/pastes/{paste_id}/consume"));
-        assert!(!paths.contains_key("/pastes/{paste_id}/raw"));
         let actual_operation_ids = paths
             .values()
             .flat_map(|item| {
@@ -878,6 +879,7 @@ mod tests {
             "list_pastes",
             "create_paste",
             "get_paste",
+            "get_paste_raw",
             "get_paste_source",
             "read_paste",
             "update_paste",
@@ -1042,6 +1044,7 @@ mod tests {
         let anonymous_allowed = [
             "list_pastes",
             "get_paste",
+            "get_paste_raw",
             "read_paste",
             "get_attachment",
             "get_archive",

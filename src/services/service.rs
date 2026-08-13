@@ -836,7 +836,7 @@ async fn create_read_grant(
     paste: &Paste,
     now: i64,
 ) -> DomainResult<Option<String>> {
-    if paste.read_limit.is_none() || paste.attachments.is_empty() {
+    if paste.read_limit.is_none() {
         return Ok(None);
     }
     let token = format!("rbg_{}", Uuid::new_v4().simple());
@@ -994,6 +994,10 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(consumed.paste.read_count, 1);
+        let grant = consumed
+            .grant_token
+            .expect("a limited read produces a follow-up access grant");
+        assert!(services.valid_read_grant("limited", &grant).await.unwrap());
         let remaining: i64 =
             sqlx::query_scalar("SELECT count(*) FROM pastes WHERE id=$1 AND consumed_at IS NULL")
                 .bind("limited")

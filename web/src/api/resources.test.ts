@@ -9,6 +9,7 @@ const pasteResponse = {
   url: "/pastes/example-paste",
   api_url: "/api/v1/pastes/example-paste",
   read_url: "/api/v1/pastes/example-paste/reads",
+  raw_url: "/api/v1/pastes/example-paste/raw",
   title: "Example",
   format: "text",
   language: "javascript",

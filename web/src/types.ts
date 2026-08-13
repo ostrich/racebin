@@ -29,6 +29,7 @@ export type Paste = {
   url?: string;
   api_url?: string;
   read_url?: string;
+  raw_url?: string;
   source_url?: string;
   archive_url?: string;
   _etag?: string;

@@ -7,6 +7,10 @@ test("paste view offers a print action and a paper-safe layout", async ({ page }
   });
   await mockApi(page, false);
   await page.goto("/pastes/sample-paste");
+  await expect(page.getByRole("link", { name: "Raw" })).toHaveAttribute(
+    "href",
+    "/api/v1/pastes/sample-paste/raw"
+  );
   await expect(page.locator(".paste-print-line")).toHaveCount(0);
   await page.getByRole("button", { name: "Print" }).click();
   await expect.poll(() => page.evaluate(() =>
