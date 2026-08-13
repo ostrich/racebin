@@ -138,7 +138,7 @@
     <div bind:this={floatingContent}></div>
   </div>
 </div>
-<div class="paste-print-code" aria-hidden="true">
+<div class="paste-print-code" style={`--print-line-number-width:${String(count).length}ch`} aria-hidden="true">
   {#each printLines as line, index}
     <div class="paste-print-line"><span>{index + 1}</span><code>{@html line}</code></div>
   {/each}

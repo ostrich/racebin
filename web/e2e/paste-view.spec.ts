@@ -45,6 +45,36 @@ test("paste view offers a print action and a paper-safe layout", async ({ page }
   });
 });
 
+test("printed line-number gutter uses the widest number for every line", async ({ page }) => {
+  const content = Array.from({ length: 100 }, (_, index) => `line ${index + 1}`).join("\n");
+  await page.addInitScript(() => {
+    window.print = () => undefined;
+  });
+  await mockApi(page, false, { viewPaste: {
+    ...paste,
+    content,
+    body: { format: "text", content, language: "plaintext" },
+    language: "plaintext"
+  } });
+  await page.goto("/pastes/sample-paste");
+  await page.getByRole("button", { name: "Print" }).click();
+  await page.emulateMedia({ media: "print" });
+
+  const gutters = await page.locator(".paste-print-line").evaluateAll(lines =>
+    [lines[0], lines[98], lines[99]].map(line => {
+      const number = line!.querySelector<HTMLElement>("span")!;
+      const content = line!.querySelector<HTMLElement>("code")!;
+      return {
+        gutterWidth: number.getBoundingClientRect().width,
+        contentLeft: content.getBoundingClientRect().left
+      };
+    })
+  );
+  expect(gutters[0]!.gutterWidth).toBeCloseTo(gutters[2]!.gutterWidth, 5);
+  expect(gutters[0]!.contentLeft).toBeCloseTo(gutters[1]!.contentLeft, 5);
+  expect(gutters[0]!.contentLeft).toBeCloseTo(gutters[2]!.contentLeft, 5);
+});
+
 test("rich text keeps its document hierarchy in the shared print frame", async ({ page }) => {
   await mockApi(page, false, { viewPaste: {
     ...paste,
