@@ -103,6 +103,28 @@
     --syntax-deletion-surface: #67060c;
 }
 
+@media print {
+  :root,
+  :root[data-color-scheme="dark"] {
+    --color-text: #20242a;
+    --color-heading: #17202a;
+    --color-muted: #68717d;
+    --color-line: #d9dde2;
+    --color-code-text: #24292e;
+    --syntax-red: #d73a49;
+    --syntax-purple: #6f42c1;
+    --syntax-blue: #005cc5;
+    --syntax-string: #032f62;
+    --syntax-orange: #e36209;
+    --syntax-muted: #6a737d;
+    --syntax-green: #22863a;
+    --syntax-yellow: #735c0f;
+    --syntax-addition-surface: #f0fff4;
+    --syntax-deletion-text: #b31d28;
+    --syntax-deletion-surface: #ffeef0;
+  }
+}
+
 @media (max-width: 760px) {
   :root {
     --page-gutter: 15px;

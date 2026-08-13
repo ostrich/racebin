@@ -23,6 +23,9 @@
   let showWrapOption = $derived(Boolean(
     paste?.content_kind === "text" && (horizontalOverflow || wrapLines)
   ));
+  let printLanguage = $derived(paste
+    ? $appState.languages.find(language => language.id === paste?.language)?.label ?? paste.language
+    : "");
 
   onMount(() => {
     void getPaste(pasteId)
@@ -53,7 +56,19 @@
 {#if paste}
   <article class="paste-view">
       <div class="page-heading" class:has-view-options={showWrapOption}>
-        <div><p class="eyebrow">{paste.visibility} · {pasteFormatLabel(paste)}</p><h1>{pasteDisplayTitle(paste)}</h1></div>
+        <div>
+          <p class="eyebrow">{paste.visibility} · {pasteFormatLabel(paste)}</p>
+          <h1>{pasteDisplayTitle(paste)}</h1>
+          <p class="paste-print-metadata">
+            <span><strong>Visibility:</strong> {paste.visibility.charAt(0).toUpperCase() + paste.visibility.slice(1)}</span>
+            <span aria-hidden="true">·</span>
+            {#if paste.content_kind === "text"}
+              <span><strong>Language:</strong> {printLanguage}</span>
+            {:else}
+              <span><strong>Format:</strong> {pasteFormatLabel(paste)}</span>
+            {/if}
+          </p>
+        </div>
         <div class="actions">
           <button class="button" type="button" onclick={openRaw}>Raw</button>
           <button class="button" type="button" onclick={copyContent}><Icon name="copy"/> Copy</button>
@@ -80,11 +95,6 @@
         <CodeViewer code={paste.content} language={paste.language} wrap={wrapLines}
           onready={initialLoadReady}
           onoverflowchange={(overflowing) => { horizontalOverflow = overflowing; }}/>
-        <div class="paste-print-code" aria-hidden="true">
-          {#each paste.content.split("\n") as line, index}
-            <div class="paste-print-line"><span>{index + 1}</span><code>{line || " "}</code></div>
-          {/each}
-        </div>
       {/if}
       {#if paste.attachments.length}
         <section><h2>Attachments</h2>

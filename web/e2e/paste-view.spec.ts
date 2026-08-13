@@ -16,6 +16,9 @@ test("paste view offers a print action and a paper-safe layout", async ({ page }
   await expect(page.locator(".site-header")).toBeHidden();
   await expect(page.locator(".paste-view .page-heading .actions")).toBeHidden();
   await expect(page.locator(".paste-code-shell")).toBeHidden();
+  await expect(page.locator(".paste-print-metadata")).toContainText(
+    "Visibility: Unlisted · Language: JavaScript"
+  );
   const printLayout = await page.locator(".paste-print-code").evaluate(viewer => {
     const lines = [...viewer.querySelectorAll<HTMLElement>(".paste-print-line")];
     const number = lines[0]!.querySelector<HTMLElement>("span")!;
@@ -25,6 +28,8 @@ test("paste view offers a print action and a paper-safe layout", async ({ page }
       lineCount: lines.length,
       contentWrap: getComputedStyle(content).whiteSpace,
       contentOverflowWrap: getComputedStyle(content).overflowWrap,
+      keywordColor: getComputedStyle(content.querySelector(".hljs-keyword")!).color,
+      plainColor: getComputedStyle(content).color,
       numberSelectable: getComputedStyle(number).userSelect
     };
   });
@@ -33,7 +38,49 @@ test("paste view offers a print action and a paper-safe layout", async ({ page }
     lineCount: 2,
     contentWrap: "pre-wrap",
     contentOverflowWrap: "anywhere",
+    keywordColor: "rgb(215, 58, 73)",
+    plainColor: "rgb(36, 41, 46)",
     numberSelectable: "none"
+  });
+});
+
+test("rich text keeps its document hierarchy in the shared print frame", async ({ page }) => {
+  await mockApi(page, false, { viewPaste: {
+    ...paste,
+    content_kind: "rich_text",
+    format: "rich_text",
+    language: "plaintext",
+    document: {
+      type: "doc",
+      content: [
+        { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Section" }] },
+        { type: "paragraph", attrs: { textAlign: "center" }, content: [{ type: "text", text: "Centered text" }] }
+      ]
+    }
+  } });
+  await page.goto("/pastes/sample-paste");
+  await expect(page.locator(".rich-text-viewer")).toBeVisible();
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator(".paste-print-metadata")).toContainText(
+    "Visibility: Unlisted · Format: Rich text"
+  );
+  const richLayout = await page.locator(".rich-text-viewer").evaluate(viewer => {
+    const content = viewer.querySelector<HTMLElement>(".rich-text-content")!;
+    const heading = content.querySelector<HTMLElement>("h2")!;
+    const paragraph = content.querySelector<HTMLElement>("p")!;
+    return {
+      borderWidth: getComputedStyle(viewer).borderWidth,
+      padding: getComputedStyle(content).padding,
+      headingLarger: Number.parseFloat(getComputedStyle(heading).fontSize)
+        > Number.parseFloat(getComputedStyle(paragraph).fontSize),
+      alignment: getComputedStyle(paragraph).textAlign
+    };
+  });
+  expect(richLayout).toEqual({
+    borderWidth: "0px",
+    padding: "0px",
+    headingLarger: true,
+    alignment: "center"
   });
 });
 

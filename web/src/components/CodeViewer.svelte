@@ -21,6 +21,7 @@
   let floatingScrollbar: HTMLDivElement;
   let floatingContent: HTMLDivElement;
   let html = $state("");
+  let printLines = $state<string[]>([]);
   let lineOffsets = $state<number[]>([]);
   let floatingVisible = $state(false);
   let floatingLeft = $state(0);
@@ -88,9 +89,13 @@
 
   $effect(() => {
     const current = ++revision;
-    void highlightedCode(code, language).then(result => {
+    void Promise.all([
+      highlightedCode(code, language),
+      Promise.all(code.split("\n").map(line => highlightedCode(line || " ", language)))
+    ]).then(([result, lineResults]) => {
       if (current !== revision) return;
       html = result.html;
+      printLines = lineResults.map(line => line.html);
       void tick().then(() => {
         updateLayout();
         onready?.();
@@ -121,4 +126,9 @@
     onscroll={syncFromFloatingScrollbar}>
     <div bind:this={floatingContent}></div>
   </div>
+</div>
+<div class="paste-print-code" aria-hidden="true">
+  {#each printLines as line, index}
+    <div class="paste-print-line"><span>{index + 1}</span><code>{@html line}</code></div>
+  {/each}
 </div>
