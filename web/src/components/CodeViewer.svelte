@@ -27,6 +27,7 @@
   let floatingLeft = $state(0);
   let floatingWidth = $state(0);
   let revision = 0;
+  let printRevision = 0;
   let reportedOverflow: boolean | undefined;
   let count = $derived(code.split("\n").length);
   let lines = $derived(Array.from({ length: count }, (_, index) => index + 1).join("\n"));
@@ -69,6 +70,18 @@
     viewport.scrollLeft = floatingScrollbar.scrollLeft;
   }
 
+  export async function preparePrint(): Promise<void> {
+    const current = ++printRevision;
+    const source = code;
+    const sourceLanguage = language;
+    const results = await Promise.all(
+      source.split("\n").map(line => highlightedCode(line || " ", sourceLanguage))
+    );
+    if (current !== printRevision || source !== code || sourceLanguage !== language) return;
+    printLines = results.map(result => result.html);
+    await tick();
+  }
+
   onMount(() => {
     const observer = new ResizeObserver(updateLayout);
     observer.observe(viewport);
@@ -89,13 +102,11 @@
 
   $effect(() => {
     const current = ++revision;
-    void Promise.all([
-      highlightedCode(code, language),
-      Promise.all(code.split("\n").map(line => highlightedCode(line || " ", language)))
-    ]).then(([result, lineResults]) => {
+    printRevision += 1;
+    printLines = [];
+    void highlightedCode(code, language).then(result => {
       if (current !== revision) return;
       html = result.html;
-      printLines = lineResults.map(line => line.html);
       void tick().then(() => {
         updateLayout();
         onready?.();

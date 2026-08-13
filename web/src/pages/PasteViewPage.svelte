@@ -16,6 +16,8 @@
   let error = $state("");
   let wrapLines = $state(false);
   let horizontalOverflow = $state(false);
+  let codeViewer = $state<{ preparePrint(): Promise<void> }>();
+  let preparingPrint = $state(false);
   const initialLoadReady = holdNavigation();
   let own = $derived(Boolean(
     paste?.source_url
@@ -51,6 +53,17 @@
     window.open(url, "_blank", "noopener,noreferrer");
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
+
+  async function printPaste(): Promise<void> {
+    if (!paste || preparingPrint) return;
+    preparingPrint = true;
+    try {
+      if (paste.content_kind === "text") await codeViewer?.preparePrint();
+      window.print();
+    } finally {
+      preparingPrint = false;
+    }
+  }
 </script>
 
 {#if paste}
@@ -72,7 +85,7 @@
         <div class="actions">
           <button class="button" type="button" onclick={openRaw}>Raw</button>
           <button class="button" type="button" onclick={copyContent}><Icon name="copy"/> Copy</button>
-          <button class="button" type="button" onclick={() => window.print()}><Icon name="printer"/> Print</button>
+          <button class="button" type="button" disabled={preparingPrint} onclick={printPaste}><Icon name="printer"/> {preparingPrint ? "Preparing…" : "Print"}</button>
           {#if paste.archive_url}<a class="button" href={paste.archive_url}>ZIP</a>{/if}
           {#if $appState.config.qr_codes_enabled}<a class="button" href={pasteQrUrl($appState.config.api_base_url ?? "/api/v1", paste.id)}>QR</a>{/if}
           {#if own}<Link class="button primary" href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/> Edit</Link>{/if}
@@ -92,7 +105,7 @@
           <RichTextViewer document={paste.document} onready={initialLoadReady}/>
         {/await}
       {:else}
-        <CodeViewer code={paste.content} language={paste.language} wrap={wrapLines}
+        <CodeViewer bind:this={codeViewer} code={paste.content} language={paste.language} wrap={wrapLines}
           onready={initialLoadReady}
           onoverflowchange={(overflowing) => { horizontalOverflow = overflowing; }}/>
       {/if}
