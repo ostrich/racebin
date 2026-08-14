@@ -917,6 +917,8 @@ export interface components {
             archive_url?: string | null;
             /** Format: int64 */
             attachment_count: number;
+            /** @description First ordered attachment filename when the paste has no textual content. */
+            attachment_only_filename?: string | null;
             attachments: components["schemas"]["AttachmentResource"][];
             /** Format: date-time */
             created_at: string;
@@ -968,6 +970,8 @@ export interface components {
         PasteSummary: {
             /** Format: int64 */
             attachment_count: number;
+            /** @description First ordered attachment filename when the paste has no textual content. */
+            attachment_only_filename?: string | null;
             /** Format: date-time */
             created_at: string;
             excerpt?: string | null;

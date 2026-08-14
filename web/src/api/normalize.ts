@@ -56,6 +56,7 @@ function pasteFromWire(value: WirePaste, etag?: string | null): Paste {
     read_count: value.read_count,
     read_limit: value.read_limit ?? null,
     attachment_count: value.attachment_count,
+    attachment_only_filename: value.attachment_only_filename ?? undefined,
     size_bytes: value.size_bytes,
     attachments: resource?.attachments.map(attachmentFromWire) ?? []
   };

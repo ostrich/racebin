@@ -177,6 +177,11 @@ impl PasteService {
                     expires_at,last_read_at,read_count,read_limit,
                     (SELECT count(*) FROM attachments summary_files
                      WHERE summary_files.paste_id=pastes.id) AS attachment_count,
+                    CASE WHEN trim(content)='' THEN
+                      (SELECT filename FROM attachments summary_first_file
+                       WHERE summary_first_file.paste_id=pastes.id
+                       ORDER BY sort_order,id LIMIT 1)
+                    ELSE NULL END AS attachment_only_filename,
                     {total_size} AS size_bytes
              FROM pastes WHERE {filter} ORDER BY {order} {direction},id ASC LIMIT $20 OFFSET $21"
         ))
@@ -906,6 +911,7 @@ mod tests {
             read_count: 0,
             read_limit: None,
             attachment_count: 0,
+            attachment_only_filename: None,
             size_bytes: 0,
             attachments: Vec::<Attachment>::new(),
         }

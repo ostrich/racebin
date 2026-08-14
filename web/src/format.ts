@@ -11,7 +11,12 @@ export function formatDate(value: number | string | null): string {
 }
 
 export function pasteDisplayTitle(paste: Paste): string {
-  return paste.title || paste.id;
+  if (paste.title) return paste.title;
+  if (paste.content?.trim()) return "Untitled";
+  const filename = paste.attachments[0]?.filename ?? paste.attachment_only_filename;
+  if (!filename) return "Untitled";
+  const remaining = paste.attachment_count - 1;
+  return remaining > 0 ? `${filename} and ${remaining} more` : filename;
 }
 
 export function pasteFormatLabel(paste: Paste): string {

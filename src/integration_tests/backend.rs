@@ -391,8 +391,12 @@ pub(super) async fn backend_contract(repo: Repository) {
         .unwrap()
         .is_none());
 
+    let attachment_only = PasteInput {
+        content: Some(String::new()),
+        ..paste_input("cascade", "private")
+    };
     let cascade = services
-        .create_paste(&owner, &paste_input("cascade", "private"))
+        .create_paste(&owner, &attachment_only)
         .await
         .unwrap();
     services
@@ -470,6 +474,10 @@ pub(super) async fn backend_contract(repo: Repository) {
         .unwrap();
     assert_eq!(attached.items.len(), 1);
     assert_eq!(attached.items[0].attachment_count, 1);
+    assert_eq!(
+        attached.items[0].attachment_only_filename.as_deref(),
+        Some("file.txt")
+    );
     assert!(attached.items[0].size_bytes >= 4);
     sqlx::query("DELETE FROM pastes WHERE id=$1")
         .bind(&cascade.id)

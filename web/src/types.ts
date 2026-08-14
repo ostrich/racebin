@@ -48,6 +48,7 @@ export type Paste = {
   read_count: number;
   read_limit: number | null;
   attachment_count: number;
+  attachment_only_filename?: string;
   size_bytes: number;
   attachments: Attachment[];
 };

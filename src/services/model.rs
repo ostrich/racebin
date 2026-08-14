@@ -24,6 +24,7 @@ pub struct Paste {
     pub read_count: i64,
     pub read_limit: Option<i64>,
     pub attachment_count: i64,
+    pub attachment_only_filename: Option<String>,
     pub size_bytes: i64,
     pub attachments: Vec<Attachment>,
 }
@@ -62,6 +63,7 @@ impl<'r> FromRow<'r, AnyRow> for Paste {
             read_count: row.try_get("read_count")?,
             read_limit: row.try_get("read_limit")?,
             attachment_count: row.try_get("attachment_count").unwrap_or(0),
+            attachment_only_filename: row.try_get("attachment_only_filename").unwrap_or(None),
             size_bytes: row.try_get("size_bytes").unwrap_or(0),
             attachments: Vec::new(),
         })

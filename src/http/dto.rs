@@ -159,6 +159,8 @@ pub(crate) struct PasteMetadataResource {
     pub read_limit: Option<i64>,
     #[schema(minimum = 0)]
     pub attachment_count: i64,
+    /// First ordered attachment filename when the paste has no textual content.
+    pub attachment_only_filename: Option<String>,
     #[schema(minimum = 0)]
     pub size_bytes: i64,
     pub attachments: Vec<AttachmentResource>,
@@ -200,6 +202,8 @@ pub(crate) struct PasteSummary {
     pub read_limit: Option<i64>,
     #[schema(minimum = 0)]
     pub attachment_count: i64,
+    /// First ordered attachment filename when the paste has no textual content.
+    pub attachment_only_filename: Option<String>,
     #[schema(minimum = 0)]
     pub size_bytes: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -359,6 +363,14 @@ pub(crate) fn metadata_resource(
         read_count: paste.read_count,
         read_limit: paste.read_limit,
         attachment_count,
+        attachment_only_filename: if paste.content.trim().is_empty() {
+            paste
+                .attachments
+                .first()
+                .map(|attachment| attachment.filename.clone())
+        } else {
+            None
+        },
         size_bytes: paste.size_bytes,
         attachments,
     }
@@ -416,6 +428,7 @@ pub(crate) fn summary(
         read_count: paste.read_count,
         read_limit: paste.read_limit,
         attachment_count: paste.attachment_count,
+        attachment_only_filename: paste.attachment_only_filename,
         size_bytes: paste.size_bytes,
         excerpt,
     }

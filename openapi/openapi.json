@@ -1291,6 +1291,13 @@
             "minimum": 0,
             "type": "integer"
           },
+          "attachment_only_filename": {
+            "description": "First ordered attachment filename when the paste has no textual content.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "attachments": {
             "items": {
               "$ref": "#/components/schemas/AttachmentResource"
@@ -1483,6 +1490,13 @@
             "format": "int64",
             "minimum": 0,
             "type": "integer"
+          },
+          "attachment_only_filename": {
+            "description": "First ordered attachment filename when the paste has no textual content.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "created_at": {
             "format": "date-time",
