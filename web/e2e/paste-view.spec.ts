@@ -264,6 +264,12 @@ test("Markdown representation and wrap controls share one aligned control row", 
     rendered_html: "<h2>Scene</h2><p>Wide content</p>"
   } });
   await page.goto("/pastes/sample-paste");
+  const titleAlignment = await page.locator(".paste-view .page-heading").evaluate(heading => {
+    const title = heading.querySelector("h1")!.getBoundingClientRect();
+    const action = heading.querySelector(".icon-button")!.getBoundingClientRect();
+    return Math.abs(title.top + title.height / 2 - (action.top + action.height / 2));
+  });
+  expect(titleAlignment).toBeLessThan(4);
   const actionRight = await page.locator(".paste-view .page-heading .actions").evaluate(
     element => element.getBoundingClientRect().right
   );
@@ -273,7 +279,7 @@ test("Markdown representation and wrap controls share one aligned control row", 
 
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
   await expect(page.getByLabel("Wrap")).toBeVisible();
-  const rowGeometry = await page.locator(".markdown-view-controls").evaluate(row => {
+  const rowGeometry = await page.locator(".paste-view .page-heading .actions").evaluate(row => {
     const wrap = row.querySelector(".paste-wrap-toggle")!.getBoundingClientRect();
     const representation = row.querySelector(".markdown-view-options")!.getBoundingClientRect();
     return {
@@ -314,13 +320,18 @@ test("wide paste offers synchronized sticky scrolling and aligned wrapped lines"
     startsAfterGutter: true,
     alignedWithContent: true
   });
-  const wrapTogglePosition = await page.getByRole("checkbox", { name: "Wrap" }).evaluate(input => {
+  const wrapToggleAlignment = await page.getByRole("checkbox", { name: "Wrap" }).evaluate(input => {
     const toggle = input.closest("label")!.getBoundingClientRect();
-    const heading = document.querySelector(".paste-view .page-heading")!.getBoundingClientRect();
-    const viewer = document.querySelector(".paste-code-shell")!.getBoundingClientRect();
-    return toggle.top >= heading.bottom && toggle.bottom <= viewer.top;
+    const action = document.querySelector(".paste-view .actions .icon-button")!.getBoundingClientRect();
+    return Math.abs(toggle.top + toggle.height / 2 - (action.top + action.height / 2));
   });
-  expect(wrapTogglePosition).toBe(true);
+  expect(wrapToggleAlignment).toBeLessThan(1);
+  const wrapLeadsActions = await page.getByRole("checkbox", { name: "Wrap" }).evaluate(input => {
+    const toggle = input.closest(".paste-view-options")!;
+    const firstAction = document.querySelector(".paste-view .actions .icon-button")!;
+    return Boolean(toggle.compareDocumentPosition(firstAction) & Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+  expect(wrapLeadsActions).toBe(true);
   await floating.evaluate(element => {
     element.scrollLeft = 240;
     element.dispatchEvent(new Event("scroll"));

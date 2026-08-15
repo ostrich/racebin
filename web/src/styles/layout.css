@@ -1000,8 +1000,28 @@
 .paste-floating-scrollbar > div {
   height: 1px;
 }
-.paste-view .page-heading.has-view-options {
-  margin-bottom: var(--space-1);
+.paste-view .page-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: var(--space-6);
+  align-items: center;
+}
+.paste-view .page-heading > :first-child {
+  display: contents;
+}
+.paste-view .page-heading .eyebrow {
+  grid-column: 1;
+  grid-row: 1;
+}
+.paste-view .page-heading h1 {
+  grid-column: 1;
+  grid-row: 2;
+}
+.paste-view .page-heading .actions {
+  grid-column: 2;
+  grid-row: 2;
+  justify-content: flex-end;
 }
 .paste-view-options {
   display: flex;
@@ -1032,15 +1052,9 @@
   background: var(--color-surface);
   color: inherit;
 }
-.markdown-view-controls {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-}
 .markdown-view-options { justify-content: flex-end; }
 .markdown-wrap-slot {
+  min-width: 52px;
   min-height: 28px;
 }
 .paste-wrap-toggle {
@@ -1056,6 +1070,14 @@
   margin: 0;
   accent-color: var(--accent);
   cursor: default;
+}
+@media (max-width: 760px) {
+  .paste-view .page-heading {
+    display: block;
+  }
+  .paste-view .page-heading > :first-child {
+    display: block;
+  }
 }
 .paste-workspace {
   display: grid;

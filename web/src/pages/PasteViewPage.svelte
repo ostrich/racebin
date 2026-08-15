@@ -77,7 +77,7 @@
 
 {#if paste}
   <article class="paste-view">
-      <div class="page-heading" class:has-view-options={paste.content_kind === "markdown" || showWrapOption}>
+      <div class="page-heading">
         <div>
           <p class="eyebrow">{paste.visibility} · {pasteFormatLabel(paste)}</p>
           <h1>{pasteDisplayTitle(paste)}</h1>
@@ -92,6 +92,14 @@
           </p>
         </div>
         <div class="actions">
+          {#if paste.content_kind !== "markdown" && showWrapOption}
+            <div class="paste-view-options">
+              <label class="paste-wrap-toggle">
+                <input type="checkbox" bind:checked={wrapLines}/>
+                <span>Wrap</span>
+              </label>
+            </div>
+          {/if}
           {#if paste.raw_url}<a class="icon-button" href={paste.raw_url} target="_blank" rel="noopener noreferrer" title="Raw" aria-label="Raw"><Icon name="file-code"/></a>{/if}
           <button class="icon-button" type="button" title="Copy" aria-label="Copy" onclick={copyContent}><Icon name="copy"/></button>
           <button class="icon-button" type="button" title={preparingPrint ? "Preparing print" : "Print"} aria-label={preparingPrint ? "Preparing print" : "Print"} disabled={preparingPrint} onclick={printPaste}><Icon name="printer"/></button>
@@ -99,31 +107,22 @@
           {#if $appState.config.qr_codes_enabled}<a class="icon-button" href={pasteQrUrl($appState.config.api_base_url ?? "/api/v1", paste.id)} title="QR code" aria-label="QR code"><Icon name="qr-code"/></a>{/if}
           {#if canManage}<Link class="icon-button primary" href={`/pastes/${paste.id}/edit`} title="Edit" aria-label="Edit"><Icon name="edit-3"/></Link>{/if}
           {#if canManage}<button class="icon-button danger" type="button" title={deleting ? "Deleting paste" : "Delete"} aria-label={deleting ? "Deleting paste" : "Delete"} disabled={deleting} onclick={removePaste}><Icon name="trash-2"/></button>{/if}
+          {#if paste.content_kind === "markdown"}
+            <div class="paste-view-options markdown-wrap-slot">
+              {#if showWrapOption}
+                <label class="paste-wrap-toggle">
+                  <input type="checkbox" bind:checked={wrapLines}/>
+                  <span>Wrap</span>
+                </label>
+              {/if}
+            </div>
+            <div class="paste-view-options markdown-view-options" role="group" aria-label="Paste representation">
+              <button type="button" class:active={markdownView === "rendered"} onclick={() => { markdownView = "rendered"; }}>Rendered</button>
+              <button type="button" class:active={markdownView === "markdown"} onclick={() => { markdownView = "markdown"; }}>Markdown</button>
+            </div>
+          {/if}
         </div>
       </div>
-      {#if paste.content_kind === "markdown"}
-        <div class="markdown-view-controls">
-          <div class="paste-view-options markdown-wrap-slot">
-            {#if showWrapOption}
-              <label class="paste-wrap-toggle">
-                <input type="checkbox" bind:checked={wrapLines}/>
-                <span>Wrap</span>
-              </label>
-            {/if}
-          </div>
-          <div class="paste-view-options markdown-view-options" role="group" aria-label="Paste representation">
-            <button type="button" class:active={markdownView === "rendered"} onclick={() => { markdownView = "rendered"; }}>Rendered</button>
-            <button type="button" class:active={markdownView === "markdown"} onclick={() => { markdownView = "markdown"; }}>Markdown</button>
-          </div>
-        </div>
-      {:else if showWrapOption}
-        <div class="paste-view-options">
-          <label class="paste-wrap-toggle">
-            <input type="checkbox" bind:checked={wrapLines}/>
-            <span>Wrap</span>
-          </label>
-        </div>
-      {/if}
       {#if paste.content_kind === "markdown" && markdownView === "rendered"}
         <RichTextViewer html={paste.rendered_html ?? ""} onready={initialLoadReady}/>
       {:else}
