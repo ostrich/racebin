@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { Editor } from "@tiptap/core";
   import { Markdown } from "@tiptap/markdown";
   import { TableKit } from "@tiptap/extension-table";
@@ -13,6 +13,14 @@
   let { markdown = $bindable(), onchange }: { markdown: string; onchange?: () => void } = $props();
   let element: HTMLDivElement;
   let editor: Editor;
+  let tableTool = $state<HTMLDivElement>();
+  let tablePickerOpen = $state(false);
+  let tableRows = $state(1);
+  let tableColumns = $state(1);
+  let insideTable = $state(false);
+  const tablePickerSize = 8;
+  const tableSizeLabel = (rows: number, columns: number) =>
+    `${rows} ${rows === 1 ? "row" : "rows"} by ${columns} ${columns === 1 ? "column" : "columns"}`;
 
   function safeLink(href: string): boolean {
     try { return ["http:", "https:", "mailto:"].includes(new URL(href, location.origin).protocol); }
@@ -53,7 +61,7 @@
       case "bullet-list": chain.toggleBulletList().run(); break;
       case "ordered-list": chain.toggleOrderedList().run(); break;
       case "task-list": chain.toggleTaskList().run(); break;
-      case "table": chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(); break;
+      case "table": void openTablePicker(); break;
       case "blockquote": chain.toggleBlockquote().run(); break;
       case "code-block": chain.toggleCodeBlock().run(); break;
       case "horizontal-rule": chain.setHorizontalRule().run(); break;
@@ -70,7 +78,51 @@
       }
     }
   }
+  async function openTablePicker(): Promise<void> {
+    tablePickerOpen = !tablePickerOpen;
+    tableRows = 1;
+    tableColumns = 1;
+    if (tablePickerOpen) {
+      await tick();
+      requestAnimationFrame(() => {
+        tableTool?.querySelector<HTMLButtonElement>('[data-table-cell="1-1"]')?.focus();
+      });
+    }
+  }
+  function insertTable(rows: number, columns: number): void {
+    editor.chain().focus().insertTable({ rows, cols: columns, withHeaderRow: true }).run();
+    tablePickerOpen = false;
+    insideTable = true;
+  }
+  function tablePickerKeydown(event: KeyboardEvent, row: number, column: number): void {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      tablePickerOpen = false;
+      tableTool?.querySelector<HTMLButtonElement>(".table-picker-trigger")?.focus();
+      return;
+    }
+    const movement: Record<string, [number, number]> = {
+      ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1]
+    };
+    const delta = movement[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    const nextRow = Math.min(tablePickerSize, Math.max(1, row + delta[0]));
+    const nextColumn = Math.min(tablePickerSize, Math.max(1, column + delta[1]));
+    tableRows = nextRow;
+    tableColumns = nextColumn;
+    tableTool?.querySelector<HTMLButtonElement>(`[data-table-cell="${nextRow}-${nextColumn}"]`)?.focus();
+  }
+  function tableCommand(command: "addRowBefore" | "addRowAfter" | "deleteRow" |
+    "addColumnBefore" | "addColumnAfter" | "deleteColumn" | "deleteTable"): void {
+    editor.chain().focus()[command]().run();
+    insideTable = editor.isActive("table");
+  }
   onMount(() => {
+    const closePicker = (event: PointerEvent) => {
+      if (tablePickerOpen && !tableTool?.contains(event.target as Node)) tablePickerOpen = false;
+    };
+    document.addEventListener("pointerdown", closePicker);
     editor = new Editor({
       element,
       extensions: [
@@ -82,19 +134,63 @@
       content: markdown,
       contentType: "markdown",
       editorProps: { attributes: { class: "rich-text-content", "aria-label": "Rich-text paste content" } },
-      onUpdate: ({ editor: updated }) => { markdown = updated.getMarkdown(); onchange?.(); }
+      onUpdate: ({ editor: updated }) => { markdown = updated.getMarkdown(); onchange?.(); },
+      onSelectionUpdate: ({ editor: updated }) => { insideTable = updated.isActive("table"); },
+      onTransaction: ({ editor: updated }) => { insideTable = updated.isActive("table"); }
     });
-    return () => editor.destroy();
+    return () => {
+      document.removeEventListener("pointerdown", closePicker);
+      editor.destroy();
+    };
   });
 </script>
 
 <div class="rich-text-toolbar" role="toolbar" aria-label="Rich-text formatting">
   {#each commands as item}
-    <button type="button" title={item.label} aria-label={item.label} onclick={() => run(item.command)}>
-      {#if item.icon}<Icon name={item.icon}/>{:else}<span class:paragraph={item.symbolClass === "paragraph"}
-        class:bold={item.symbolClass === "bold"} class:italic={item.symbolClass === "italic"}
-        class:strike={item.symbolClass === "strike"} aria-hidden="true">{item.symbol}</span>{/if}
-    </button>
+    {#if item.command === "table"}
+      <div class="table-tool" bind:this={tableTool}>
+        <button type="button" class="table-picker-trigger" title={item.label} aria-label={item.label}
+          aria-haspopup="grid" aria-expanded={tablePickerOpen} onclick={() => run(item.command)}>
+          <Icon name="table-2"/>
+        </button>
+        {#if tablePickerOpen}
+          <div class="table-picker" role="dialog" aria-label="Choose table size">
+            <div class="table-picker-grid" role="grid" aria-label={`${tableRows} rows by ${tableColumns} columns`}>
+              {#each Array(tablePickerSize) as _, row}
+                {#each Array(tablePickerSize) as _, column}
+                  <button type="button" role="gridcell"
+                    data-table-cell={`${row + 1}-${column + 1}`}
+                    class:selected={row < tableRows && column < tableColumns}
+                    aria-label={tableSizeLabel(row + 1, column + 1)}
+                    onmouseenter={() => { tableRows = row + 1; tableColumns = column + 1; }}
+                    onfocus={() => { tableRows = row + 1; tableColumns = column + 1; }}
+                    onkeydown={(event) => tablePickerKeydown(event, row + 1, column + 1)}
+                    onclick={() => insertTable(row + 1, column + 1)}></button>
+                {/each}
+              {/each}
+            </div>
+            <output aria-live="polite">{tableRows} × {tableColumns} table</output>
+          </div>
+        {/if}
+      </div>
+    {:else}
+      <button type="button" title={item.label} aria-label={item.label} onclick={() => run(item.command)}>
+        {#if item.icon}<Icon name={item.icon}/>{:else}<span class:paragraph={item.symbolClass === "paragraph"}
+          class:bold={item.symbolClass === "bold"} class:italic={item.symbolClass === "italic"}
+          class:strike={item.symbolClass === "strike"} aria-hidden="true">{item.symbol}</span>{/if}
+      </button>
+    {/if}
   {/each}
+  {#if insideTable}
+    <div class="table-edit-controls" role="group" aria-label="Edit table">
+      <button type="button" title="Add row above" aria-label="Add row above" onclick={() => tableCommand("addRowBefore")}>+R↑</button>
+      <button type="button" title="Add row below" aria-label="Add row below" onclick={() => tableCommand("addRowAfter")}>+R↓</button>
+      <button type="button" title="Delete row" aria-label="Delete row" onclick={() => tableCommand("deleteRow")}>−R</button>
+      <button type="button" title="Add column left" aria-label="Add column left" onclick={() => tableCommand("addColumnBefore")}>+C←</button>
+      <button type="button" title="Add column right" aria-label="Add column right" onclick={() => tableCommand("addColumnAfter")}>+C→</button>
+      <button type="button" title="Delete column" aria-label="Delete column" onclick={() => tableCommand("deleteColumn")}>−C</button>
+      <button type="button" title="Delete table" aria-label="Delete table" onclick={() => tableCommand("deleteTable")}><Icon name="trash-2"/></button>
+    </div>
+  {/if}
 </div>
 <div bind:this={element} class="rich-text-editor"></div>

@@ -320,14 +320,16 @@
               <button type="button" class:active={richMode === "visual"} onclick={() => { void showVisualEditor(); }}>Visual</button>
               <button type="button" class:active={richMode === "markdown"} onclick={() => { richMode = "markdown"; }}>Markdown</button>
             </div>
-            {#if richMode === "visual"}
-              {#await import("../components/RichTextEditor.svelte") then module}
-                {@const RichTextEditor = module.default}
-                <RichTextEditor bind:markdown/>
-              {/await}
-            {:else}
-              <CodeEditor bind:value={markdown} bind:language={markdownLanguage} maxLength={$appState.config.max_content_size_bytes}/>
-            {/if}
+            <div class:visual={richMode === "visual"} class="rich-editor-pane">
+              {#if richMode === "visual"}
+                {#await import("../components/RichTextEditor.svelte") then module}
+                  {@const RichTextEditor = module.default}
+                  <RichTextEditor bind:markdown/>
+                {/await}
+              {:else}
+                <CodeEditor bind:value={markdown} bind:language={markdownLanguage} maxLength={$appState.config.max_content_size_bytes}/>
+              {/if}
+            </div>
           </div>
         </div>
       {:else}

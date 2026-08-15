@@ -62,7 +62,7 @@
 
 {#if paste}
   <article class="paste-view">
-      <div class="page-heading" class:has-view-options={showWrapOption}>
+      <div class="page-heading" class:has-view-options={paste.content_kind === "markdown" || showWrapOption}>
         <div>
           <p class="eyebrow">{paste.visibility} · {pasteFormatLabel(paste)}</p>
           <h1>{pasteDisplayTitle(paste)}</h1>
@@ -86,12 +86,21 @@
         </div>
       </div>
       {#if paste.content_kind === "markdown"}
-        <div class="paste-view-options markdown-view-options" role="group" aria-label="Paste representation">
-          <button type="button" class:active={markdownView === "rendered"} onclick={() => { markdownView = "rendered"; }}>Rendered</button>
-          <button type="button" class:active={markdownView === "markdown"} onclick={() => { markdownView = "markdown"; }}>Markdown</button>
+        <div class="markdown-view-controls">
+          <div class="paste-view-options markdown-view-options" role="group" aria-label="Paste representation">
+            <button type="button" class:active={markdownView === "rendered"} onclick={() => { markdownView = "rendered"; }}>Rendered</button>
+            <button type="button" class:active={markdownView === "markdown"} onclick={() => { markdownView = "markdown"; }}>Markdown</button>
+          </div>
+          <div class="paste-view-options markdown-wrap-slot">
+            {#if showWrapOption}
+              <label class="paste-wrap-toggle">
+                <input type="checkbox" bind:checked={wrapLines}/>
+                <span>Wrap</span>
+              </label>
+            {/if}
+          </div>
         </div>
-      {/if}
-      {#if showWrapOption}
+      {:else if showWrapOption}
         <div class="paste-view-options">
           <label class="paste-wrap-toggle">
             <input type="checkbox" bind:checked={wrapLines}/>

@@ -233,6 +233,50 @@ test("ordered rich-text lists can be submitted", async ({ page }) => {
   expect(body).not.toHaveProperty("folder_id");
 });
 
+test("task lists use checkbox rows without ordinary list markers", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  await page.getByLabel("Rich-text paste content").fill("Required task");
+  await page.getByRole("button", { name: "Task list" }).click();
+
+  const checkbox = page.getByRole("checkbox", { name: "Task item checkbox for Required task" });
+  const task = checkbox.locator("xpath=ancestor::li");
+  const taskList = task.locator("xpath=parent::ul");
+  await expect(checkbox).toBeVisible();
+  await expect(taskList).toHaveCSS("list-style-type", "none");
+  await expect(task).toHaveCSS("display", "flex");
+});
+
+test("table picker inserts the selected size and exposes contextual editing controls", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  await page.getByRole("button", { name: "Insert table" }).click();
+
+  const picker = page.getByRole("dialog", { name: "Choose table size" });
+  await expect(picker).toBeVisible();
+  await expect(picker.getByRole("gridcell", { name: "1 row by 1 column" })).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowDown");
+  await expect(picker.getByRole("gridcell", { name: "2 rows by 2 columns" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(picker).toBeHidden();
+  await expect(page.getByRole("button", { name: "Insert table" })).toBeFocused();
+  await page.getByRole("button", { name: "Insert table" }).click();
+  await picker.getByRole("gridcell", { name: "4 rows by 5 columns" }).hover();
+  await expect(picker.getByText("4 × 5 table")).toBeVisible();
+  await picker.getByRole("gridcell", { name: "4 rows by 5 columns" }).click();
+
+  const table = page.locator(".rich-text-editor table");
+  await expect(table.locator("tr")).toHaveCount(4);
+  await expect(table.locator("tr").first().locator("th, td")).toHaveCount(5);
+  const controls = page.getByRole("group", { name: "Edit table" });
+  await expect(controls).toBeVisible();
+  await controls.getByRole("button", { name: "Add row below" }).click();
+  await expect(table.locator("tr")).toHaveCount(5);
+});
+
 test("pasted links are normalized to the supported document contract", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
@@ -278,6 +322,12 @@ test("rich text switches between visual editing and canonical Markdown source", 
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
   const source = page.getByRole("textbox", { name: "Paste content" });
+  const geometry = await page.locator(".rich-editor-pane").evaluate(pane => ({
+    pane: pane.getBoundingClientRect().height,
+    editor: pane.querySelector(".code-editor")!.getBoundingClientRect().height
+  }));
+  expect(geometry.pane).toBeGreaterThan(300);
+  expect(geometry.editor).toBeCloseTo(geometry.pane, 0);
   await source.fill("## Scene\n\n- [x] Ready");
   await page.getByRole("button", { name: "Visual", exact: true }).click();
   await expect(page.getByLabel("Rich-text paste content")).toContainText("Scene");

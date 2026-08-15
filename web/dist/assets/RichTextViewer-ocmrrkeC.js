@@ -1,0 +1,1 @@
+import{D as e,O as t,S as n,c as r,h as i,k as a,p as o,r as s}from"./app.js";var c=i(`<div class="rich-text-viewer"><div class="rich-text-content"></div></div>`);function l(i,l){t(l,!0),s(()=>{l.onready?.()});var u=c(),d=n(u);r(d,()=>l.html,!0),a(d),a(u),o(i,u),e()}export{l as default};

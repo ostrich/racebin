@@ -123,8 +123,30 @@ test("Markdown pastes default to rendered output and expose canonical source", a
   } });
   await page.goto("/pastes/sample-paste");
   await expect(page.locator(".rich-text-viewer")).toContainText("Dialogue");
+  const renderedControlTop = await page.getByRole("group", { name: "Paste representation" })
+    .evaluate(element => element.getBoundingClientRect().top);
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
   await expect(page.locator(".paste-code .content")).toContainText("## Scene");
+  const markdownControlTop = await page.getByRole("group", { name: "Paste representation" })
+    .evaluate(element => element.getBoundingClientRect().top);
+  expect(markdownControlTop).toBe(renderedControlTop);
+});
+
+test("Markdown representation controls remain fixed when the wrap option appears", async ({ page }) => {
+  await mockApi(page, false, { viewPaste: {
+    ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",
+    content: `## Scene\n\n${"wide content ".repeat(80)}`, plain_text: "Scene",
+    rendered_html: "<h2>Scene</h2><p>Wide content</p>"
+  } });
+  await page.goto("/pastes/sample-paste");
+  const controls = page.getByRole("group", { name: "Paste representation" });
+  const renderedTop = await controls.evaluate(element => element.getBoundingClientRect().top);
+  await controls.getByRole("button", { name: "Markdown" }).click();
+  await expect(page.getByLabel("Wrap")).toBeVisible();
+  expect(await controls.evaluate(element => element.getBoundingClientRect().top)).toBe(renderedTop);
+  await controls.getByRole("button", { name: "Rendered" }).click();
+  await expect(page.getByLabel("Wrap")).toBeHidden();
+  expect(await controls.evaluate(element => element.getBoundingClientRect().top)).toBe(renderedTop);
 });
 
 test("wide paste offers synchronized sticky scrolling and aligned wrapped lines", async ({ page }) => {

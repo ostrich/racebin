@@ -64,6 +64,30 @@
 .rich-text-content td { padding: 8px 10px; border: 1px solid var(--line); text-align: left; }
 .rich-text-content th { background: var(--color-code-gutter); }
 .rich-text-content input[type="checkbox"] { margin-right: 7px; accent-color: var(--accent); }
+.rich-text-editor .rich-text-content ul:has(> li > label > input[type="checkbox"]) {
+  padding-left: 0;
+  list-style: none;
+}
+.rich-text-editor .rich-text-content li:has(> label > input[type="checkbox"]) {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.rich-text-editor .rich-text-content li:has(> label > input[type="checkbox"]) > label {
+  flex: 0 0 auto;
+  padding-top: 3px;
+  user-select: none;
+}
+.rich-text-editor .rich-text-content li:has(> label > input[type="checkbox"]) > label input {
+  margin: 0;
+}
+.rich-text-editor .rich-text-content li:has(> label > input[type="checkbox"]) > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.rich-text-editor .rich-text-content li:has(> label > input[type="checkbox"]) > div > p {
+  margin: 0;
+}
 .rich-text-toolbar {
   display: flex;
   flex-wrap: nowrap;
@@ -118,6 +142,59 @@
 }
 .rich-text-toolbar button .strike {
   text-decoration: line-through;
+}
+.table-tool {
+  position: relative;
+  flex: 0 0 32px;
+}
+.table-picker {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  width: max-content;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-popover);
+}
+.table-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 22px);
+  gap: 3px;
+}
+.rich-text-toolbar .table-picker-grid button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-color: var(--color-control-border);
+  border-radius: 2px;
+  background: var(--color-surface-subtle);
+}
+.rich-text-toolbar .table-picker-grid button.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 24%, var(--color-surface));
+}
+.table-picker output {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.table-edit-controls {
+  display: flex;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+}
+.rich-text-toolbar .table-edit-controls button {
+  width: auto;
+  min-width: 32px;
+  padding-inline: 6px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 .conversion-dialog {
   width: min(680px, calc(100vw - 32px));
