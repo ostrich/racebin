@@ -1,5 +1,6 @@
 import type { LucideIcon } from "@lucide/svelte";
 import ArrowUpDown from "@lucide/svelte/icons/arrow-up-down";
+import Archive from "@lucide/svelte/icons/archive";
 import Check from "@lucide/svelte/icons/check";
 import ChevronDown from "@lucide/svelte/icons/chevron-down";
 import Code from "@lucide/svelte/icons/code";
@@ -7,6 +8,7 @@ import Copy from "@lucide/svelte/icons/copy";
 import Ellipsis from "@lucide/svelte/icons/ellipsis";
 import Eraser from "@lucide/svelte/icons/eraser";
 import FileText from "@lucide/svelte/icons/file-text";
+import FileCode from "@lucide/svelte/icons/file-code";
 import KeyRound from "@lucide/svelte/icons/key-round";
 import Link from "@lucide/svelte/icons/link";
 import List from "@lucide/svelte/icons/list";
@@ -24,6 +26,7 @@ import PenLine from "@lucide/svelte/icons/pen-line";
 import Plus from "@lucide/svelte/icons/plus";
 import Printer from "@lucide/svelte/icons/printer";
 import Quote from "@lucide/svelte/icons/quote";
+import QrCode from "@lucide/svelte/icons/qr-code";
 import Redo2 from "@lucide/svelte/icons/redo-2";
 import Search from "@lucide/svelte/icons/search";
 import SquareCode from "@lucide/svelte/icons/square-code";
@@ -41,12 +44,14 @@ export const icons = {
   "align-left": TextAlignStart,
   "align-right": TextAlignEnd,
   "arrow-up-down": ArrowUpDown,
+  archive: Archive,
   check: Check,
   "chevron-down": ChevronDown,
   code: Code,
   copy: Copy,
   "edit-3": PenLine,
   eraser: Eraser,
+  "file-code": FileCode,
   "file-text": FileText,
   "key-round": KeyRound,
   link: Link,
@@ -64,6 +69,7 @@ export const icons = {
   "panel-left-open": PanelLeftOpen,
   plus: Plus,
   printer: Printer,
+  "qr-code": QrCode,
   quote: Quote,
   "redo-2": Redo2,
   search: Search,

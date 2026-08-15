@@ -92,13 +92,13 @@
           </p>
         </div>
         <div class="actions">
-          {#if paste.raw_url}<a class="button" href={paste.raw_url} target="_blank" rel="noopener noreferrer">Raw</a>{/if}
-          <button class="button" type="button" onclick={copyContent}><Icon name="copy"/> Copy</button>
-          <button class="button" type="button" disabled={preparingPrint} onclick={printPaste}><Icon name="printer"/> {preparingPrint ? "Preparing…" : "Print"}</button>
-          {#if paste.archive_url}<a class="button" href={paste.archive_url}>ZIP</a>{/if}
-          {#if $appState.config.qr_codes_enabled}<a class="button" href={pasteQrUrl($appState.config.api_base_url ?? "/api/v1", paste.id)}>QR</a>{/if}
-          {#if canManage}<Link class="button primary" href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/> Edit</Link>{/if}
-          {#if canManage}<button class="button danger" type="button" disabled={deleting} onclick={removePaste}><Icon name="trash-2"/> {deleting ? "Deleting…" : "Delete"}</button>{/if}
+          {#if paste.raw_url}<a class="icon-button" href={paste.raw_url} target="_blank" rel="noopener noreferrer" title="Raw" aria-label="Raw"><Icon name="file-code"/></a>{/if}
+          <button class="icon-button" type="button" title="Copy" aria-label="Copy" onclick={copyContent}><Icon name="copy"/></button>
+          <button class="icon-button" type="button" title={preparingPrint ? "Preparing print" : "Print"} aria-label={preparingPrint ? "Preparing print" : "Print"} disabled={preparingPrint} onclick={printPaste}><Icon name="printer"/></button>
+          {#if paste.archive_url}<a class="icon-button" href={paste.archive_url} title="Download ZIP" aria-label="Download ZIP"><Icon name="archive"/></a>{/if}
+          {#if $appState.config.qr_codes_enabled}<a class="icon-button" href={pasteQrUrl($appState.config.api_base_url ?? "/api/v1", paste.id)} title="QR code" aria-label="QR code"><Icon name="qr-code"/></a>{/if}
+          {#if canManage}<Link class="icon-button primary" href={`/pastes/${paste.id}/edit`} title="Edit" aria-label="Edit"><Icon name="edit-3"/></Link>{/if}
+          {#if canManage}<button class="icon-button danger" type="button" title={deleting ? "Deleting paste" : "Delete"} aria-label={deleting ? "Deleting paste" : "Delete"} disabled={deleting} onclick={removePaste}><Icon name="trash-2"/></button>{/if}
         </div>
       </div>
       {#if paste.content_kind === "markdown"}
