@@ -657,6 +657,26 @@ test("attachment selections accumulate in a removable upload queue", async ({ pa
   expect(multipart).not.toContain("first.txt");
 });
 
+test("attachment picker has one visible stop in the tab order", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+
+  const chooseFiles = page.getByRole("button", { name: "Choose files" });
+  await chooseFiles.focus();
+  const enterChooser = page.waitForEvent("filechooser");
+  await page.keyboard.press("Enter");
+  await enterChooser;
+  await chooseFiles.focus();
+  const spaceChooser = page.waitForEvent("filechooser");
+  await page.keyboard.press("Space");
+  await spaceChooser;
+  await chooseFiles.focus();
+  await page.keyboard.press("Tab");
+
+  await expect(page.getByRole("button", { name: "Create paste" })).toBeFocused();
+  await expect(page.locator('input[type="file"]')).toHaveAttribute("tabindex", "-1");
+});
+
 test("edit page shows current attachments", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/sample-paste/edit");

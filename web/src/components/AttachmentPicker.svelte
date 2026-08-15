@@ -80,8 +80,8 @@
       <small>Choose files or drag them here</small>
     </div>
     <button class="button" type="button" onclick={() => input.click()}>Choose files</button>
-    <input class="visually-hidden" bind:this={input} type="file" multiple
-      aria-label="Add attachments" onchange={selected}/>
+    <input class="visually-hidden" bind:this={input} type="file" multiple tabindex="-1"
+      aria-hidden="true" aria-label="Add attachments" onchange={selected}/>
   </div>
 
   {#if files.length}

@@ -13,17 +13,38 @@ test("the bundled interface font is available", async ({ page }) => {
   expect(faces).toBeGreaterThan(0);
 });
 
-test("the stable scrollbar gutter continues the page backdrop", async ({ page }) => {
+test("desktop layout stays anchored without reserving an idle scrollbar gutter", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1400 });
   await page.goto("/pastes/new");
-  const backdrop = await page.evaluate(() => {
+  const measure = () => page.evaluate(() => {
     const root = document.documentElement;
+    const header = document.querySelector<HTMLElement>(".site-header")!;
+    const heading = document.querySelector<HTMLElement>("h1")!;
     return {
-      page: getComputedStyle(root).backgroundImage,
-      track: getComputedStyle(root, "::-webkit-scrollbar-track").backgroundImage
+      headingX: heading.getBoundingClientRect().x,
+      headerWidth: header.getBoundingClientRect().width,
+      rootWidth: root.getBoundingClientRect().width,
+      viewportWidth: innerWidth,
+      scrollbarGutter: getComputedStyle(root).scrollbarGutter,
+      scrollable: root.scrollHeight > innerHeight
     };
   });
-  expect(backdrop.page).toContain("linear-gradient");
-  expect(backdrop.track).toBe(backdrop.page);
+  const withoutScrollbar = await measure();
+  expect(withoutScrollbar.scrollable).toBe(false);
+  expect(withoutScrollbar.scrollbarGutter).toBe("auto");
+  expect(withoutScrollbar.headerWidth).toBeCloseTo(withoutScrollbar.viewportWidth, 1);
+
+  await page.evaluate(() => {
+    const overflow = document.createElement("div");
+    overflow.dataset.testOverflow = "true";
+    overflow.style.height = "100vh";
+    document.body.append(overflow);
+  });
+  await expect.poll(async () => (await measure()).scrollable).toBe(true);
+  const withScrollbar = await measure();
+  expect(withScrollbar.rootWidth).toBeLessThanOrEqual(withScrollbar.viewportWidth);
+  expect(withScrollbar.headerWidth).toBeCloseTo(withScrollbar.viewportWidth, 1);
+  expect(withScrollbar.headingX).toBeCloseTo(withoutScrollbar.headingX, 1);
 });
 
 test("primary pages do not overflow at supported widths", async ({ page }) => {
@@ -88,6 +109,20 @@ test("workspace sections share a common content edge", async ({ page }) => {
     expect(Math.abs(edge.left - edges[0].left)).toBeLessThan(1);
     expect(Math.abs(edge.right - edges[0].right)).toBeLessThan(1);
   }
+});
+
+test("page headings use consistent eyebrow-to-title spacing", async ({ page }) => {
+  const headingGap = async () => page.locator(".page-heading").evaluate((heading) => {
+    const eyebrow = heading.querySelector<HTMLElement>(".eyebrow")!.getBoundingClientRect();
+    const title = heading.querySelector<HTMLElement>("h1")!.getBoundingClientRect();
+    return title.top - eyebrow.bottom;
+  });
+
+  await page.goto("/pastes");
+  const standardGap = await headingGap();
+  await page.goto("/pastes/tiger-monkey");
+
+  expect(await headingGap()).toBeCloseTo(standardGap, 1);
 });
 
 test("filter expansion preserves the search toolbar boundary", async ({
