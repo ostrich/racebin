@@ -88,10 +88,6 @@
       </div>
       {#if paste.content_kind === "markdown"}
         <div class="markdown-view-controls">
-          <div class="paste-view-options markdown-view-options" role="group" aria-label="Paste representation">
-            <button type="button" class:active={markdownView === "rendered"} onclick={() => { markdownView = "rendered"; }}>Rendered</button>
-            <button type="button" class:active={markdownView === "markdown"} onclick={() => { markdownView = "markdown"; }}>Markdown</button>
-          </div>
           <div class="paste-view-options markdown-wrap-slot">
             {#if showWrapOption}
               <label class="paste-wrap-toggle">
@@ -99,6 +95,10 @@
                 <span>Wrap</span>
               </label>
             {/if}
+          </div>
+          <div class="paste-view-options markdown-view-options" role="group" aria-label="Paste representation">
+            <button type="button" class:active={markdownView === "rendered"} onclick={() => { markdownView = "rendered"; }}>Rendered</button>
+            <button type="button" class:active={markdownView === "markdown"} onclick={() => { markdownView = "markdown"; }}>Markdown</button>
           </div>
         </div>
       {:else if showWrapOption}

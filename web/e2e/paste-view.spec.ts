@@ -233,7 +233,7 @@ test("Markdown representation controls remain fixed when the wrap option appears
   expect(await controls.evaluate(element => element.getBoundingClientRect().top)).toBe(renderedTop);
 });
 
-test("Markdown representation and wrap controls share the heading action edge", async ({ page }) => {
+test("Markdown representation and wrap controls share one aligned control row", async ({ page }) => {
   await mockApi(page, true, { viewPaste: {
     ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",
     content: `## Scene\n\n${"wide content ".repeat(80)}`, plain_text: "Scene",
@@ -249,10 +249,18 @@ test("Markdown representation and wrap controls share the heading action edge", 
 
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
   await expect(page.getByLabel("Wrap")).toBeVisible();
-  const wrapRight = await page.getByLabel("Wrap").locator("xpath=ancestor::label").evaluate(
-    element => element.getBoundingClientRect().right
-  );
-  expect(wrapRight).toBeCloseTo(actionRight, 5);
+  const rowGeometry = await page.locator(".markdown-view-controls").evaluate(row => {
+    const wrap = row.querySelector(".paste-wrap-toggle")!.getBoundingClientRect();
+    const representation = row.querySelector(".markdown-view-options")!.getBoundingClientRect();
+    return {
+      wrapBeforeRepresentation: wrap.right < representation.left,
+      verticalCenterDifference: Math.abs(
+        wrap.top + wrap.height / 2 - (representation.top + representation.height / 2)
+      )
+    };
+  });
+  expect(rowGeometry.wrapBeforeRepresentation).toBe(true);
+  expect(rowGeometry.verticalCenterDifference).toBeLessThan(1);
 });
 
 test("wide paste offers synchronized sticky scrolling and aligned wrapped lines", async ({ page }) => {
