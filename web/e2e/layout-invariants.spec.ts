@@ -13,6 +13,19 @@ test("the bundled interface font is available", async ({ page }) => {
   expect(faces).toBeGreaterThan(0);
 });
 
+test("the stable scrollbar gutter continues the page backdrop", async ({ page }) => {
+  await page.goto("/pastes/new");
+  const backdrop = await page.evaluate(() => {
+    const root = document.documentElement;
+    return {
+      page: getComputedStyle(root).backgroundImage,
+      track: getComputedStyle(root, "::-webkit-scrollbar-track").backgroundImage
+    };
+  });
+  expect(backdrop.page).toContain("linear-gradient");
+  expect(backdrop.track).toBe(backdrop.page);
+});
+
 test("primary pages do not overflow at supported widths", async ({ page }) => {
   for (const viewport of [
     { width: 1440, height: 900 },

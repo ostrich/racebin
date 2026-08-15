@@ -15,10 +15,7 @@
 }
 
 :root {
-  font-family: "Racebin Inter", sans-serif;
-  color: var(--color-text);
-  background-color: var(--color-canvas);
-  background-image: linear-gradient(
+  --page-backdrop: linear-gradient(
     to bottom,
     var(--color-surface) 0,
     var(--color-surface) calc(var(--header-height) - 1px),
@@ -26,10 +23,18 @@
     var(--color-line) var(--header-height),
     var(--color-canvas) var(--header-height)
   );
+  font-family: "Racebin Inter", sans-serif;
+  color: var(--color-text);
+  background-color: var(--color-canvas);
+  background-image: var(--page-backdrop);
   background-attachment: fixed;
   background-repeat: no-repeat;
   background-size: 100% 100%;
   font-synthesis: none;
+}
+
+:root::-webkit-scrollbar-track {
+  background: var(--page-backdrop);
 }
 
 @media (min-width: 761px) {
