@@ -493,6 +493,54 @@ test("pasted rich-text table cells preserve hard line breaks and formatting", as
   await expect(page.locator(".rich-text-editor td").last().locator("br")).toHaveCount(1);
 });
 
+test("pasted Markdown tables recover breaks omitted from clipboard HTML", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  const editor = page.getByLabel("Rich-text paste content");
+  await editor.focus();
+  await editor.evaluate(element => {
+    const clipboard = new DataTransfer();
+    clipboard.setData("text/html", `<table><thead><tr>
+      <th align="left">Left aligned</th><th align="left">Multi-line cell</th>
+    </tr></thead><tbody>
+      <tr><td align="left">Alpha</td><td align="left">First lineSecond line</td></tr>
+      <tr><td align="left">Beta</td><td align="left"><strong>Bold line</strong><em>Italic line</em></td></tr>
+      <tr><td align="left">Gamma</td><td align="left"><a href="https://example.com">Link</a><code>code</code></td></tr>
+    </tbody></table>`);
+    clipboard.setData("text/plain", [
+      "| Left aligned | Multi-line cell |",
+      "| :----------- | :-------------- |",
+      "| Alpha | First line<br>Second line |",
+      "| Beta | **Bold line**<br>*Italic line* |",
+      "| Gamma | [Link](https://example.com)<br>`code` |"
+    ].join("\n"));
+    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true }));
+  });
+  await expect(page.locator(".rich-text-editor tbody td br")).toHaveCount(3);
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  const source = page.getByRole("textbox", { name: "Paste content" });
+  await expect(source).toHaveValue(/First line<br>Second line/);
+  await expect(source).toHaveValue(/\*\*Bold line\*\*<br>\*Italic line\*/);
+  await expect(source).toHaveValue(/\[Link\]\(https:\/\/example\.com\)<br>`code`/);
+});
+
+test("flattened table HTML is unchanged without corroborating Markdown breaks", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  const editor = page.getByLabel("Rich-text paste content");
+  await editor.focus();
+  await editor.evaluate(element => {
+    const clipboard = new DataTransfer();
+    clipboard.setData("text/html", "<table><tbody><tr><td>First lineSecond line</td></tr></tbody></table>");
+    clipboard.setData("text/plain", "First lineSecond line");
+    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true }));
+  });
+  await expect(page.locator(".rich-text-editor td br")).toHaveCount(0);
+  await expect(page.locator(".rich-text-editor td")).toHaveText("First lineSecond line");
+});
+
 test("pasted semantic task lists become nested canonical task lists", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
