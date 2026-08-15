@@ -59,10 +59,6 @@
   color: var(--color-text);
   background: var(--color-surface-subtle);
 }
-.theme-control:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
 .session .theme-control svg {
   width: 15px;
   height: 15px;
@@ -644,7 +640,6 @@
 .sort-menu button:hover,
 .sort-menu button:focus {
   background: var(--color-surface-subtle);
-  outline: none;
 }
 .sort-menu button[aria-checked="true"] {
   color: var(--accent);
@@ -880,8 +875,16 @@
 .content-editor {
   height: 410px;
   min-height: 240px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   resize: vertical;
+}
+.content-editor:has(:is(textarea, .rich-text-content):focus-visible) {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+.content-editor :is(textarea, .rich-text-content):focus-visible {
+  outline: none;
 }
 .content-editor-text .code-editor,
 .content-editor-text .code-editor pre,
@@ -940,10 +943,6 @@
 .editor .code-editor textarea::selection {
   background: var(--color-selection);
   color: transparent;
-}
-.editor .code-editor textarea:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
 }
 .paste-code {
   display: grid;

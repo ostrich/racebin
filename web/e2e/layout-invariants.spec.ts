@@ -130,6 +130,47 @@ test("checkbox rows retain native control geometry", async ({ page }) => {
   expect(geometry.height).toBeLessThanOrEqual(20);
 });
 
+test("form controls and composite editors share one complete focus ring", async ({ page }) => {
+  await page.goto("/pastes/new");
+
+  const focusRing = async (selector: string) => page.locator(selector).evaluate(element => {
+    const style = getComputedStyle(element);
+    return { color: style.outlineColor, style: style.outlineStyle, width: style.outlineWidth };
+  });
+  const expectedFocusColor = async () => page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--color-focus-ring)";
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+
+  await page.getByLabel("Title").focus();
+  const inputRing = await focusRing(".title-field input");
+
+  await page.getByRole("textbox", { name: "Paste content" }).focus();
+  const textEditorRing = await focusRing(".content-editor-text");
+  await expect(page.locator(".content-editor-text textarea")).toHaveCSS("outline-style", "none");
+
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  const richContent = page.locator('.rich-text-editor[data-editor-ready="true"] .rich-text-content');
+  await expect(richContent).toBeVisible();
+  await richContent.focus();
+  const richEditorRing = await focusRing(".content-editor-rich");
+  await expect(richContent).toHaveCSS("outline-style", "none");
+
+  expect(inputRing).toEqual({ color: await expectedFocusColor(), style: "solid", width: "2px" });
+  expect(textEditorRing).toEqual(inputRing);
+  expect(richEditorRing).toEqual(inputRing);
+
+  await page.evaluate(() => { document.documentElement.dataset.colorScheme = "dark"; });
+  await page.getByLabel("Title").focus();
+  const darkRing = await focusRing(".title-field input");
+  expect(darkRing).toEqual({ color: await expectedFocusColor(), style: "solid", width: "2px" });
+  expect(darkRing.color).not.toBe(inputRing.color);
+});
+
 test("paste editor uses the page width without stretching metadata controls", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/pastes/new");

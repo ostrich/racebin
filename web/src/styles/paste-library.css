@@ -41,10 +41,6 @@
   color: var(--color-heading);
   box-shadow: var(--shadow-control);
 }
-.paste-view-switch button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
 .select-all-pastes {
   display: flex;
   align-items: center;
