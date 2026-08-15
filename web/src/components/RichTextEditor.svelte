@@ -17,6 +17,9 @@
   let tablePickerOpen = $state(false);
   let tableRows = $state(1);
   let tableColumns = $state(1);
+  let tablePickerTop = $state(0);
+  let tablePickerLeft = $state(0);
+  let tablePickerPositioned = $state(false);
   let insideTable = $state(false);
   const tablePickerSize = 8;
   const tableSizeLabel = (rows: number, columns: number) =>
@@ -80,10 +83,24 @@
   }
   async function openTablePicker(): Promise<void> {
     tablePickerOpen = !tablePickerOpen;
+    tablePickerPositioned = false;
     tableRows = 1;
     tableColumns = 1;
     if (tablePickerOpen) {
       await tick();
+      const trigger = tableTool?.querySelector<HTMLButtonElement>(".table-picker-trigger");
+      const picker = tableTool?.querySelector<HTMLElement>(".table-picker");
+      if (trigger && picker) {
+        const triggerBox = trigger.getBoundingClientRect();
+        const toolbarBox = trigger.closest(".rich-text-toolbar")!.getBoundingClientRect();
+        const pickerBox = picker.getBoundingClientRect();
+        tablePickerLeft = Math.max(8, Math.min(triggerBox.left, window.innerWidth - pickerBox.width - 8));
+        const below = toolbarBox.bottom + 6;
+        tablePickerTop = below + pickerBox.height <= window.innerHeight - 8
+          ? below
+          : Math.max(8, toolbarBox.top - pickerBox.height - 6);
+        tablePickerPositioned = true;
+      }
       requestAnimationFrame(() => {
         tableTool?.querySelector<HTMLButtonElement>('[data-table-cell="1-1"]')?.focus();
       });
@@ -154,7 +171,8 @@
           <Icon name="table-2"/>
         </button>
         {#if tablePickerOpen}
-          <div class="table-picker" role="dialog" aria-label="Choose table size">
+          <div class:positioned={tablePickerPositioned} class="table-picker" role="dialog" aria-label="Choose table size"
+            style={`top:${tablePickerTop}px;left:${tablePickerLeft}px`}>
             <div class="table-picker-grid" role="grid" aria-label={`${tableRows} rows by ${tableColumns} columns`}>
               {#each Array(tablePickerSize) as _, row}
                 {#each Array(tablePickerSize) as _, column}

@@ -64,6 +64,9 @@
 .rich-text-content td { padding: 8px 10px; border: 1px solid var(--line); text-align: left; }
 .rich-text-content th { background: var(--color-code-gutter); }
 .rich-text-content input[type="checkbox"] { margin-right: 7px; accent-color: var(--accent); }
+.rich-text-content li > p {
+  margin-block: 0;
+}
 .rich-text-editor .rich-text-content ul:has(> li > label > input[type="checkbox"]) {
   padding-left: 0;
   list-style: none;
@@ -74,12 +77,16 @@
   gap: 8px;
 }
 .rich-text-editor .rich-text-content li:has(> label > input[type="checkbox"]) > label {
+  display: flex;
   flex: 0 0 auto;
-  padding-top: 3px;
+  align-items: center;
+  height: 1.65em;
   user-select: none;
 }
 .rich-text-editor .rich-text-content li:has(> label > input[type="checkbox"]) > label input {
   margin: 0;
+  width: 1em;
+  height: 1em;
 }
 .rich-text-editor .rich-text-content li:has(> label > input[type="checkbox"]) > div {
   flex: 1 1 auto;
@@ -148,16 +155,19 @@
   flex: 0 0 32px;
 }
 .table-picker {
-  position: absolute;
+  position: fixed;
   z-index: 20;
-  top: calc(100% + 6px);
-  left: 0;
   width: max-content;
+  margin: 0;
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--color-surface);
   box-shadow: var(--shadow-popover);
+  visibility: hidden;
+}
+.table-picker.positioned {
+  visibility: visible;
 }
 .table-picker-grid {
   display: grid;

@@ -246,6 +246,33 @@ test("task lists use checkbox rows without ordinary list markers", async ({ page
   await expect(checkbox).toBeVisible();
   await expect(taskList).toHaveCSS("list-style-type", "none");
   await expect(task).toHaveCSS("display", "flex");
+  const alignment = await task.evaluate(item => {
+    const checkboxBox = item.querySelector("input")!.getBoundingClientRect();
+    const paragraphBox = item.querySelector("p")!.getBoundingClientRect();
+    return Math.abs((checkboxBox.top + checkboxBox.height / 2)
+      - (paragraphBox.top + Number.parseFloat(getComputedStyle(item).lineHeight) / 2));
+  });
+  expect(alignment).toBeLessThan(2);
+});
+
+test("visual bullet lists use compact item spacing", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  const editor = page.getByLabel("Rich-text paste content");
+  await editor.fill("First item");
+  await page.getByRole("button", { name: "Bulleted list" }).click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Second item");
+  const items = page.locator(".rich-text-editor ul li");
+  await expect(items).toHaveCount(2);
+  const gap = await items.evaluateAll(elements => {
+    const first = elements[0]!.getBoundingClientRect();
+    const second = elements[1]!.getBoundingClientRect();
+    return second.top - first.bottom;
+  });
+  expect(gap).toBeLessThan(8);
 });
 
 test("table picker inserts the selected size and exposes contextual editing controls", async ({ page }) => {
@@ -256,6 +283,19 @@ test("table picker inserts the selected size and exposes contextual editing cont
 
   const picker = page.getByRole("dialog", { name: "Choose table size" });
   await expect(picker).toBeVisible();
+  const placement = await page.getByRole("button", { name: "Insert table" }).evaluate(trigger => {
+    const triggerBox = trigger.getBoundingClientRect();
+    const toolbarBox = trigger.closest(".rich-text-toolbar")!.getBoundingClientRect();
+    const pickerBox = document.querySelector<HTMLElement>(".table-picker")!.getBoundingClientRect();
+    return {
+      leftOffset: Math.abs(pickerBox.left - triggerBox.left),
+      clearsToolbar: pickerBox.top >= toolbarBox.bottom,
+      extendsBeyondToolbar: pickerBox.bottom > toolbarBox.bottom
+    };
+  });
+  expect(placement.leftOffset).toBeLessThan(2);
+  expect(placement.clearsToolbar).toBe(true);
+  expect(placement.extendsBeyondToolbar).toBe(true);
   await expect(picker.getByRole("gridcell", { name: "1 row by 1 column" })).toBeFocused();
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowDown");
