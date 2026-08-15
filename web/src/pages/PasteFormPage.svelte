@@ -15,9 +15,9 @@
   import { showNotice } from "../notices";
   import { clearUnsavedChangesGuard, guardUnsavedChanges, holdNavigation, navigate } from "../navigation";
   import { appState } from "../state";
-  import type { Folder, FolderOverview, Paste, RichTextDocument } from "../types";
+  import type { Folder, FolderOverview, Paste } from "../types";
 
-  type ContentKind = "text" | "rich_text";
+  type ContentKind = "text" | "markdown";
   type ExpirationMode = "never" | "1h" | "12h" | "1d" | "1w" | "30d" | "1y" | "custom";
 
   let { pasteId }: { pasteId?: string } = $props();
@@ -28,8 +28,9 @@
   let conversionDialog: ConversionDialog;
   let title = $state("");
   let content = $state("");
-  let document = $state<RichTextDocument>({ type: "doc", content: [{ type: "paragraph" }] });
-  let richHtml = $state("");
+  let markdown = $state("");
+  let markdownLanguage = $state("markdown");
+  let richMode = $state<"visual" | "markdown">("visual");
   let contentKind = $state<ContentKind>("text");
   let folderId = $state("");
   let folders = $state<Folder[]>([]);
@@ -90,18 +91,12 @@
     }
   }
 
-  function richTextIsEmpty(value: string): boolean {
-    if (!value.trim()) return true;
-    const text = new DOMParser().parseFromString(value, "text/html").body.textContent ?? "";
-    return !text.replaceAll("\u00a0", " ").trim();
-  }
-
   function snapshot(selectedAttachments = attachmentSelection): string {
-    const effectiveKind = contentKind === "rich_text" && richTextIsEmpty(richHtml)
+    const effectiveKind = contentKind === "markdown" && !markdown.trim()
       ? "text"
       : contentKind;
     return JSON.stringify({
-      title, content, richHtml: effectiveKind === "rich_text" ? richHtml : null,
+      title, content, markdown: effectiveKind === "markdown" ? markdown : null,
       contentKind: effectiveKind, folderId, language: effectiveKind === "text" ? language : null,
       visibility, expirationMode, expiresAt, readLimit, attachmentSelection: selectedAttachments
     });
@@ -117,8 +112,7 @@
     paste = source ?? null;
     title = source?.title ?? "";
     content = source?.content ?? "";
-    document = source?.document ?? { type: "doc", content: [{ type: "paragraph" }] };
-    richHtml = typeof source?.document === "string" ? source.document : "";
+    markdown = source?.content_kind === "markdown" ? source.content : "";
     contentKind = source?.content_kind ?? "text";
     folderId = source?.folder_id ? String(source.folder_id) : (
       source ? "" : new URLSearchParams(location.search).get("folder_id") ?? ""
@@ -158,12 +152,12 @@
   });
 
   async function convert(
-    sourceKind: "text" | "rich_text",
-    targetKind: "text" | "rich_text"
+    sourceKind: "text" | "markdown",
+    targetKind: "text" | "markdown"
   ): Promise<Conversion> {
     return convertPaste({
-      source: sourceKind === "rich_text"
-        ? { format: "rich_text", content: richHtml }
+      source: sourceKind === "markdown"
+        ? { format: "markdown", content: markdown }
         : { format: "text", content, language },
       target_format: targetKind
     });
@@ -177,25 +171,40 @@
     if (source === target) return;
     switching = true;
     try {
-      if (source === "rich_text") {
-        const converted = await convert("rich_text", "text");
+      if (source === "text" && target === "markdown" && !content) {
+        drafts.set(source, content);
+        markdown = "";
+        contentKind = target;
+        return;
+      }
+      if (source === "markdown") {
+        const converted = await convert("markdown", "text");
         const convertedText = converted.body.content;
         if (convertedText && !(await conversionDialog.ask(target, convertedText))) return;
         drafts.set(target, convertedText);
         content = convertedText;
-      } else if (target === "rich_text") {
+      } else if (target === "markdown") {
         drafts.set(source, content);
-        const converted = await convert("text", "rich_text");
-        const convertedHtml = converted.body.content;
+        const converted = await convert("text", "markdown");
+        const convertedMarkdown = converted.body.content;
         if (content && !(await conversionDialog.ask(target, content))) return;
-        document = convertedHtml;
-        richHtml = convertedHtml;
+        markdown = convertedMarkdown;
       }
       contentKind = target;
     } catch (reason) {
       showNotice(reason instanceof Error ? reason.message : "Conversion failed", "error");
     } finally {
       switching = false;
+    }
+  }
+
+  async function showVisualEditor(): Promise<void> {
+    if (richMode === "visual") return;
+    try {
+      await convert("markdown", "markdown");
+      richMode = "visual";
+    } catch (reason) {
+      showNotice(reason instanceof Error ? reason.message : "Markdown cannot be opened visually", "error");
     }
   }
 
@@ -210,7 +219,7 @@
       showNotice("Choose a supported language.", "error");
       return;
     }
-    const submittedContent = contentKind === "rich_text" ? richHtml : content;
+    const submittedContent = contentKind === "markdown" ? markdown : content;
     if (new TextEncoder().encode(submittedContent).length > $appState.config.max_content_size_bytes) {
       showNotice(`Content exceeds the ${Math.floor($appState.config.max_content_size_bytes / 1024)} KiB server limit.`, "error");
       return;
@@ -229,8 +238,8 @@
     try {
       const body = {
         title,
-        body: contentKind === "rich_text"
-          ? { format: "rich_text", content: richHtml }
+        body: contentKind === "markdown"
+          ? { format: "markdown", content: markdown }
           : { format: "text", content, language: canonicalLanguage },
         visibility,
         ...(pasteId || (expirationMode !== "never" && expiresAt)
@@ -303,14 +312,22 @@
     <div class="page-heading"><div><p class="eyebrow">{paste ? "Edit" : "Create"}</p><h1>{paste ? pasteDisplayTitle(paste) : "New paste"}</h1></div></div>
     <form onsubmit={(event) => { event.preventDefault(); void submit(); }}>
       <label class="title-field"><span>Title</span><input bind:value={title} maxlength={$appState.config.max_title_characters} placeholder="Optional title"/></label>
-      {#if contentKind === "rich_text"}
+      {#if contentKind === "markdown"}
         <div class="content-field"><span>Content</span>
           <div class="content-editor content-editor-rich" style={`height:${editorHeight}px`}
             use:trackEditorResize>
-            {#await import("../components/RichTextEditor.svelte") then module}
-              {@const RichTextEditor = module.default}
-              <RichTextEditor bind:document bind:html={richHtml}/>
-            {/await}
+            <div class="rich-text-mode" role="group" aria-label="Rich-text editing mode">
+              <button type="button" class:active={richMode === "visual"} onclick={() => { void showVisualEditor(); }}>Visual</button>
+              <button type="button" class:active={richMode === "markdown"} onclick={() => { richMode = "markdown"; }}>Markdown</button>
+            </div>
+            {#if richMode === "visual"}
+              {#await import("../components/RichTextEditor.svelte") then module}
+                {@const RichTextEditor = module.default}
+                <RichTextEditor bind:markdown/>
+              {/await}
+            {:else}
+              <CodeEditor bind:value={markdown} bind:language={markdownLanguage} maxLength={$appState.config.max_content_size_bytes}/>
+            {/if}
           </div>
         </div>
       {:else}
@@ -323,7 +340,7 @@
       {/if}
       <div class:without-folder={!canOrganize} class="form-grid">
         <label class="type-field"><span>Type</span><select value={contentKind} disabled={switching} onchange={changeKind}>
-          {#each $appState.config.formats as format}<option value={format}>{format === "rich_text" ? "Rich text" : "Text"}</option>{/each}
+          {#each $appState.config.formats as format}<option value={format}>{format === "markdown" ? "Rich text" : "Text"}</option>{/each}
         </select></label>
         <LanguagePicker bind:value={language} disabled={contentKind !== "text"}/>
         {#if canOrganize}

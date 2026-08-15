@@ -1,5 +1,5 @@
 use super::*;
-use crate::services::{document_to_html, html_to_document, Attachment, Paste};
+use crate::services::{render_markdown, Attachment, Paste};
 use serde::{Deserialize, Serialize};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use utoipa::ToSchema;
@@ -29,10 +29,9 @@ pub(crate) enum BodyInput {
         #[serde(default)]
         language: Option<String>,
     },
-    /// Rich-text HTML. Racebin sanitizes and normalizes the supported markup,
-    /// removing active content, unsafe URLs, and unsupported attributes before storage.
-    RichText {
-        /// HTML input; the stored and returned representation may differ after sanitization.
+    /// GitHub-Flavored Markdown. Raw HTML and embedded images are not accepted.
+    Markdown {
+        /// Canonical Markdown source.
         content: String,
     },
 }
@@ -94,13 +93,13 @@ pub(crate) struct UpdatePasteRequest {
 pub(crate) enum BodyOutput {
     /// Plain text that is safe to render as text, not HTML.
     Text { content: String, language: String },
-    /// Racebin-sanitized rich-text HTML plus its plain-text projection. The HTML
-    /// contains no supported active-content constructs, but clients must still
-    /// render it according to their own platform's secure HTML practices.
-    RichText {
-        /// Sanitized and normalized HTML.
+    /// Canonical Markdown and its derived safe representations.
+    Markdown {
+        /// Canonical Markdown source.
         content: String,
-        /// Plain-text projection of the rich-text document.
+        /// Sanitized rendered HTML.
+        rendered_html: String,
+        /// Plain-text projection.
         plain_text: String,
     },
 }
@@ -239,11 +238,10 @@ impl CreatePasteRequest {
             (None, None) => None,
             _ => unreachable!(),
         };
-        let (content, document, content_kind, language) = body_into_internal(self.body)?;
+        let (content, content_kind, language) = body_into_internal(self.body)?;
         Ok(PasteInput {
             title: self.title,
             content: Some(content),
-            document,
             content_kind: Some(content_kind),
             language: Some(language),
             visibility: self.visibility,
@@ -265,12 +263,12 @@ impl UpdatePasteRequest {
         {
             return Err("Update must contain at least one field".into());
         }
-        let (content, document, content_kind, language) = match self.body {
+        let (content, content_kind, language) = match self.body {
             Some(body) => {
-                let (content, document, format, language) = body_into_internal(Some(body))?;
-                (Some(content), document, Some(format), Some(language))
+                let (content, format, language) = body_into_internal(Some(body))?;
+                (Some(content), Some(format), Some(language))
             }
-            None => (None, None, None, None),
+            None => (None, None, None),
         };
         let expires_at = self
             .expires_at
@@ -279,7 +277,6 @@ impl UpdatePasteRequest {
         Ok(PasteInput {
             title: self.title,
             content,
-            document,
             content_kind,
             language,
             visibility: self.visibility,
@@ -290,9 +287,7 @@ impl UpdatePasteRequest {
     }
 }
 
-fn body_into_internal(
-    body: Option<BodyInput>,
-) -> Result<(String, Option<serde_json::Value>, String, String), String> {
+fn body_into_internal(body: Option<BodyInput>) -> Result<(String, String, String), String> {
     match body.unwrap_or(BodyInput::Text {
         content: String::new(),
         language: Some("auto".into()),
@@ -302,16 +297,11 @@ fn body_into_internal(
             if language == "auto" {
                 language = detect_language(&content).to_string();
             }
-            Ok((content, None, "text".into(), language))
+            Ok((content, "text".into(), language))
         }
-        BodyInput::RichText { content } => {
-            let document = html_to_document(&content)?;
-            Ok((
-                String::new(),
-                Some(document),
-                "rich_text".into(),
-                "plaintext".into(),
-            ))
+        BodyInput::Markdown { content } => {
+            render_markdown(&content)?;
+            Ok((content, "markdown".into(), "plaintext".into()))
         }
     }
 }
@@ -382,14 +372,12 @@ pub(crate) fn resource(
     paste: Paste,
     grant_token: Option<&str>,
 ) -> PasteResource {
-    let body = if paste.content_kind == "rich_text" {
-        BodyOutput::RichText {
-            content: paste
-                .document
-                .as_ref()
-                .map(document_to_html)
-                .unwrap_or_default(),
-            plain_text: paste.content.clone(),
+    let body = if paste.content_kind == "markdown" {
+        let rendered = render_markdown(&paste.content).expect("stored Markdown is valid");
+        BodyOutput::Markdown {
+            content: paste.content.clone(),
+            rendered_html: rendered.html,
+            plain_text: rendered.plain_text,
         }
     } else {
         BodyOutput::Text {
@@ -411,7 +399,15 @@ pub(crate) fn summary(
 ) -> PasteSummary {
     let own =
         administrative || principal.can("paste:manage") || principal.user_id() == paste.owner_id;
-    let excerpt = (own || paste.read_limit.is_none()).then(|| paste.content.clone());
+    let excerpt = (own || paste.read_limit.is_none()).then(|| {
+        if paste.content_kind == "markdown" {
+            render_markdown(&paste.content)
+                .map(|value| value.plain_text)
+                .unwrap_or_else(|_| paste.content.clone())
+        } else {
+            paste.content.clone()
+        }
+    });
     PasteSummary {
         id: paste.id.clone(),
         url: absolute(request, &format!("/pastes/{}", paste.id)),

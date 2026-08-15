@@ -19,7 +19,7 @@ function isWirePaste(value: unknown): value is WirePaste {
   const candidate = value as Partial<WirePaste>;
   return typeof candidate.id === "string"
     && typeof candidate.url === "string"
-    && (candidate.format === "text" || candidate.format === "rich_text")
+    && (candidate.format === "text" || candidate.format === "markdown")
     && typeof candidate.created_at === "string";
 }
 
@@ -42,11 +42,10 @@ function pasteFromWire(value: WirePaste, etag?: string | null): Paste {
     owner_id: value.owner_id ?? null,
     folder_id: value.folder_id ?? null,
     title: value.title,
-    content: body?.format === "rich_text"
-      ? body.plain_text
-      : body?.content ?? ("excerpt" in value ? value.excerpt ?? "" : ""),
-    document: body?.format === "rich_text" ? body.content : null,
-    content_kind: value.format as "text" | "rich_text",
+    content: body?.content ?? ("excerpt" in value ? value.excerpt ?? "" : ""),
+    rendered_html: body?.format === "markdown" ? body.rendered_html : null,
+    plain_text: body?.format === "markdown" ? body.plain_text : body?.content ?? "",
+    content_kind: value.format as "text" | "markdown",
     language: body?.format === "text" ? body.language : value.language ?? "plaintext",
     visibility: value.visibility as "public" | "unlisted" | "private",
     created_at: unixTimestamp(value.created_at) ?? 0,

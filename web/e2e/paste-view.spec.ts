@@ -82,16 +82,12 @@ test("printed line-number gutter uses the widest number for every line", async (
 test("rich text keeps its document hierarchy in the shared print frame", async ({ page }) => {
   await mockApi(page, false, { viewPaste: {
     ...paste,
-    content_kind: "rich_text",
-    format: "rich_text",
+    content_kind: "markdown",
+    format: "markdown",
     language: "plaintext",
-    document: {
-      type: "doc",
-      content: [
-        { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Section" }] },
-        { type: "paragraph", attrs: { textAlign: "center" }, content: [{ type: "text", text: "Centered text" }] }
-      ]
-    }
+    content: "## Section\n\nFormatted text",
+    plain_text: "Section\n\nFormatted text",
+    rendered_html: "<h2>Section</h2><p>Formatted text</p>"
   } });
   await page.goto("/pastes/sample-paste");
   await expect(page.locator(".rich-text-viewer")).toBeVisible();
@@ -115,8 +111,20 @@ test("rich text keeps its document hierarchy in the shared print frame", async (
     borderWidth: "0px",
     padding: "0px",
     headingLarger: true,
-    alignment: "center"
+    alignment: "start"
   });
+});
+
+test("Markdown pastes default to rendered output and expose canonical source", async ({ page }) => {
+  await mockApi(page, false, { viewPaste: {
+    ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",
+    content: "## Scene\n\n**Dialogue**", plain_text: "Scene\n\nDialogue",
+    rendered_html: "<h2>Scene</h2><p><strong>Dialogue</strong></p>"
+  } });
+  await page.goto("/pastes/sample-paste");
+  await expect(page.locator(".rich-text-viewer")).toContainText("Dialogue");
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await expect(page.locator(".paste-code .content")).toContainText("## Scene");
 });
 
 test("wide paste offers synchronized sticky scrolling and aligned wrapped lines", async ({ page }) => {

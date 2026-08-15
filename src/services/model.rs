@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use sqlx::any::AnyRow;
 use sqlx::{FromRow, Row};
 
@@ -10,7 +9,6 @@ pub struct Paste {
     pub folder_id: Option<i64>,
     pub title: String,
     pub content: String,
-    pub document: Option<Value>,
     pub content_kind: String,
     pub language: String,
     pub visibility: String,
@@ -38,17 +36,12 @@ pub struct PasteRead {
 
 impl<'r> FromRow<'r, AnyRow> for Paste {
     fn from_row(row: &'r AnyRow) -> Result<Self, sqlx::Error> {
-        let document_json: Option<String> = row.try_get("document_json")?;
         Ok(Self {
             id: row.try_get("id")?,
             owner_id: row.try_get("owner_id")?,
             folder_id: row.try_get("folder_id").unwrap_or(None),
             title: row.try_get("title")?,
             content: row.try_get("content")?,
-            document: document_json
-                .map(|value| serde_json::from_str(&value))
-                .transpose()
-                .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
             content_kind: row.try_get("content_kind")?,
             language: row.try_get("language")?,
             visibility: row.try_get("visibility")?,
@@ -86,7 +79,6 @@ pub struct Attachment {
 pub struct PasteInput {
     pub title: Option<String>,
     pub content: Option<String>,
-    pub document: Option<Value>,
     pub content_kind: Option<String>,
     pub language: Option<String>,
     pub visibility: Option<String>,

@@ -32,18 +32,16 @@ pub(super) async fn parse_non_multipart(
             .structured()
             .map_err(|message| error(StatusCode::UNPROCESSABLE_ENTITY, "invalid_paste", message)),
         "text/plain" | "text/markdown" | "text/html" => {
-            let content = String::from_utf8(bytes.to_vec())
+            let mut content = String::from_utf8(bytes.to_vec())
                 .map_err(|_| error(StatusCode::BAD_REQUEST, "invalid_text", "Text input must be UTF-8"))?;
+            if content_type == "text/html" {
+                content = crate::services::html_to_document(&content)
+                    .and_then(|document| crate::services::document_to_markdown(&document))
+                    .map_err(|message| error(StatusCode::UNPROCESSABLE_ENTITY, "invalid_paste", message))?;
+            }
             let mut query = FlatCreateRequest::from(query);
             query.content = Some(content);
-            query.format = Some(if content_type == "text/html" {
-                "rich_text"
-            } else {
-                "text"
-            }.into());
-            if content_type == "text/markdown" {
-                query.language = Some("markdown".into());
-            }
+            query.format = Some(if content_type == "text/plain" { "text" } else { "markdown" }.into());
             query.structured().map_err(|message| {
                 error(StatusCode::UNPROCESSABLE_ENTITY, "invalid_paste", message)
             })

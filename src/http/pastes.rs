@@ -326,15 +326,15 @@ impl FlatCreateRequest {
                 content: self.content.unwrap_or_default(),
                 language: self.language,
             }),
-            "rich_text" => {
+            "markdown" => {
                 if self.language.is_some() {
                     return Err("Rich text does not accept a language".into());
                 }
-                Some(BodyInput::RichText {
+                Some(BodyInput::Markdown {
                     content: self.content.unwrap_or_default(),
                 })
             }
-            _ => return Err("format must be text or rich_text".into()),
+            _ => return Err("format must be text or markdown".into()),
         };
         Ok(CreatePasteRequest {
             title: self.title,
@@ -438,7 +438,7 @@ pub(crate) async fn list_pastes(
     post,
     path = "/pastes",
     tag = "pastes",
-    description = "Creates a paste. Query metadata is accepted only for raw bodies. text/plain creates text and accepts an optional language; text/markdown creates text with language=markdown; text/html creates sanitized rich text and does not accept language. The raw request body is always the content. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. An omitted structured body creates empty text. expires_at and expires_in are mutually exclusive. Clients may request text/plain instead of JSON to receive only the created paste URL.",
+    description = "Creates a paste. Query metadata is accepted only for raw bodies. text/plain creates text and accepts an optional language; text/markdown creates canonical Markdown; text/html imports supported markup into canonical Markdown. The raw request body is always the content. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. An omitted structured body creates empty text. expires_at and expires_in are mutually exclusive. Clients may request text/plain instead of JSON to receive only the created paste URL.",
     params(
         RawCreateQuery,
         ("Idempotency-Key" = Option<String>, Header, description = "Recommended unique key for safely retrying creation"),
@@ -528,7 +528,7 @@ pub(crate) async fn create_paste(
         Err(response) => return response,
     };
     let has_content = match request.body.as_ref() {
-        Some(BodyInput::Text { content, .. } | BodyInput::RichText { content }) => {
+        Some(BodyInput::Text { content, .. } | BodyInput::Markdown { content }) => {
             !content.is_empty()
         }
         None => false,
@@ -629,13 +629,14 @@ pub(crate) async fn get_paste(
 
 #[utoipa::path(
     get, path = "/pastes/{paste_id}/source", tag = "pastes",
-    description = "Returns JSON by default. Clients may instead negotiate text/plain, or text/html for rich-text pastes.",
+    description = "Returns JSON by default. Clients may negotiate a plain-text projection, canonical Markdown, or sanitized rendered HTML.",
     params(("paste_id" = String, Path, description = "Paste ID")),
     responses(
         (status = 200, description = "Non-consuming owner or administrator source",
             content(
                 (crate::http::dto::PasteResource = "application/json"),
                 (String = "text/plain"),
+                (String = "text/markdown"),
                 (String = "text/html")
             ),
             headers(("ETag" = String, description = "Current paste entity tag"))),
@@ -677,8 +678,8 @@ struct RawPasteQuery {
     description = "Returns a paste's native content without the Racebin interface. Ordinary visible pastes have stable, non-consuming raw URLs. A read-limited paste requires owner access or the short-lived read_token returned by POST /pastes/{paste_id}/reads, preventing crawlers and link previews from consuming a read.",
     params(("paste_id" = String, Path, description = "Paste ID"), RawPasteQuery),
     responses(
-        (status = 200, description = "Plain text, or sanitized HTML for a rich-text paste",
-            content((String = "text/plain"), (String = "text/html")),
+        (status = 200, description = "Native plain text or canonical Markdown",
+            content((String = "text/plain"), (String = "text/markdown")),
             headers(("ETag" = String, description = "Current paste entity tag"))),
         (status = 401, description = "Invalid bearer credential", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "API key lacks paste:read", body = crate::http::errors::ProblemDetails),
@@ -938,23 +939,20 @@ pub(crate) async fn convert_paste_content(
         );
     }
     let result = match (&body.source, body.target_format.as_str()) {
-        (BodyInput::Text { content, .. }, "rich_text") => Ok(BodyInput::RichText {
-            content: crate::services::document_to_html(&text_to_document(content)),
+        (BodyInput::Text { content, .. }, "markdown") => Ok(BodyInput::Markdown {
+            content: crate::services::text_to_markdown(content),
         }),
-        (BodyInput::RichText { content }, "text") => crate::services::html_to_document(content)
-            .map(|document| BodyInput::Text {
-                content: crate::services::document_to_text(&document),
+        (BodyInput::Markdown { content }, "text") => {
+            crate::services::render_markdown(content).map(|rendered| BodyInput::Text {
+                content: rendered.plain_text,
                 language: Some("plaintext".into()),
-            }),
-        (source, target)
-            if matches!(
-                (source, target),
-                (BodyInput::Text { .. }, "text") | (BodyInput::RichText { .. }, "rich_text")
-            ) =>
-        {
-            Ok(source.clone())
+            })
         }
-        _ => Err("Conversion supports only text and rich_text".into()),
+        (source @ BodyInput::Text { .. }, "text") => Ok(source.clone()),
+        (source @ BodyInput::Markdown { content }, "markdown") => {
+            crate::services::render_markdown(content).map(|_| source.clone())
+        }
+        _ => Err("Conversion supports only text and markdown".into()),
     };
     match result {
         Ok(body) => HttpResponse::Ok().json(ConversionOutput { body }),
@@ -992,13 +990,25 @@ fn content_response(
     grant: Option<&str>,
 ) -> HttpResponse {
     let tag = dto::etag(&paste);
-    let mut response = if accepts(req, "text/plain") {
+    let mut response = if accepts(req, "text/markdown") && paste.content_kind == "markdown" {
+        HttpResponse::Ok()
+            .insert_header((header::ETAG, tag))
+            .content_type("text/markdown; charset=utf-8")
+            .body(paste.content)
+    } else if accepts(req, "text/plain") {
+        let content = if paste.content_kind == "markdown" {
+            crate::services::render_markdown(&paste.content)
+                .map(|value| value.plain_text)
+                .unwrap_or_default()
+        } else {
+            paste.content
+        };
         HttpResponse::Ok()
             .insert_header((header::ETAG, tag))
             .content_type("text/plain; charset=utf-8")
-            .body(paste.content)
+            .body(content)
     } else if accepts(req, "text/html") {
-        if paste.content_kind != "rich_text" {
+        if paste.content_kind != "markdown" {
             return error(
                 StatusCode::NOT_ACCEPTABLE,
                 "not_acceptable",
@@ -1009,10 +1019,8 @@ fn content_response(
             .insert_header((header::ETAG, tag))
             .content_type("text/html; charset=utf-8")
             .body(
-                paste
-                    .document
-                    .as_ref()
-                    .map(crate::services::document_to_html)
+                crate::services::render_markdown(&paste.content)
+                    .map(|value| value.html)
                     .unwrap_or_default(),
             )
     } else {
@@ -1029,19 +1037,13 @@ fn content_response(
 
 fn raw_content_response(paste: crate::services::Paste) -> HttpResponse {
     let tag = dto::etag(&paste);
-    if paste.content_kind == "rich_text" {
+    if paste.content_kind == "markdown" {
         HttpResponse::Ok()
             .insert_header((header::ETAG, tag))
-            .insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"))
+            .insert_header((header::CONTENT_TYPE, "text/markdown; charset=utf-8"))
             .insert_header(("X-Content-Type-Options", "nosniff"))
             .insert_header(("Referrer-Policy", "no-referrer"))
-            .body(
-                paste
-                    .document
-                    .as_ref()
-                    .map(crate::services::document_to_html)
-                    .unwrap_or_default(),
-            )
+            .body(paste.content)
     } else {
         HttpResponse::Ok()
             .insert_header((header::ETAG, tag))

@@ -10,8 +10,8 @@ create stays manageable from your account.
 ## What you can do
 
 - Share plain text with automatic language detection and syntax highlighting.
-- Create rich-text pastes with headings, lists, links, quotes, code blocks, and
-  other practical formatting.
+- Create rich-text pastes visually or edit their portable Markdown source,
+  including GFM tables and task lists.
 - Move between plain text and rich text with a conversion preview.
 - Add multiple files, download them individually, or bundle a paste and its
   attachments as a ZIP archive.

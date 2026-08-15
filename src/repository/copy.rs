@@ -77,7 +77,7 @@ pub async fn copy_database(
             .await
             .map_err(|error| error.to_string())?;
     let pastes = sqlx::query(
-        "SELECT id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,
+        "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,
                 created_at,updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
          FROM pastes",
     )
@@ -292,9 +292,9 @@ pub async fn copy_database(
     }
     for row in pastes {
         sqlx::query(
-            "INSERT INTO pastes(id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,
+            "INSERT INTO pastes(id,owner_id,folder_id,title,content,content_kind,language,visibility,
                                created_at,updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)",
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)",
         )
         .bind(
             row.try_get::<String, _>("id")
@@ -314,10 +314,6 @@ pub async fn copy_database(
         )
         .bind(
             row.try_get::<String, _>("content")
-                .map_err(|e| e.to_string())?,
-        )
-        .bind(
-            row.try_get::<Option<String>, _>("document_json")
                 .map_err(|e| e.to_string())?,
         )
         .bind(

@@ -80,7 +80,7 @@
             <h3>Create a paste</h3>
             <ol>
               <li>Open <Link href="/pastes/new">New paste</Link> and add an optional title.</li>
-              <li>Choose <strong>Text</strong> for code and plain text, or <strong>Rich text</strong> for headings, lists, links, and other document formatting.</li>
+              <li>Choose <strong>Text</strong> for code and plain text, or <strong>Rich text</strong> for a visual editor backed by portable Markdown. Rich text can switch between Visual and Markdown modes.</li>
               <li>For text, leave the language as <strong>Plaintext</strong> for no highlighting, choose <strong>Auto</strong> to detect it, or select a language yourself.</li>
               <li>Choose who can open it, and optionally set a folder, expiration, view limit, or attachments.</li>
               <li>Select <strong>Create paste</strong>, then copy its page URL to share it.</li>

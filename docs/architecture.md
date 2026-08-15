@@ -186,7 +186,7 @@ The main relational entities are:
 | `invitations` | Expiring, revocable account invitations with creator and redeemer attribution |
 | `api_keys` | Hashed bearer credentials, optionally owned by a user |
 | `api_key_scopes` | Many-to-one scope assignments deleted with their API key |
-| `pastes` | Text or rich-text content, owner, visibility, expiration, revision, and read-limit state |
+| `pastes` | Literal text or canonical Markdown, owner, visibility, expiration, revision, and read-limit state |
 | `folders` | Private, flat organizational containers owned by users |
 | `attachments` | Ordered attachment metadata owned by a paste |
 | `idempotency_records` | Expiring create-request results used to make retries safe |
@@ -194,10 +194,10 @@ The main relational entities are:
 | `paste_read_grants` | Short-lived capabilities for raw content and attachment downloads after limited reads |
 | `auth_attempts` | Expiring authentication-failure records used for rate limiting |
 
-Rich text is stored as a validated JSON document alongside a plain-text
-representation. The frontend uses Tiptap's ProseMirror model internally, but
-the public API accepts and returns sanitized HTML. This keeps an editor-specific
-document schema out of the public contract.
+Rich text is stored as canonical GitHub-Flavored Markdown. Comrak validates it
+and derives sanitized HTML and plain text on demand. Tiptap's ProseMirror model
+exists only while visual editing is active; it is never persisted or exposed as
+the wire contract.
 
 Foreign keys implement ownership cleanup where possible. A deleted user
 leaves their pastes intact with a null owner, while their sessions and
@@ -317,6 +317,7 @@ only when the new page is structurally ready for focus and scroll restoration.
 Notable browser-side technologies are:
 
 - **Tiptap/ProseMirror** for structured rich-text editing;
+- **Comrak** for server-side CommonMark/GFM validation and rendering;
 - **Highlight.js** for syntax highlighting and language detection;
 - **Inter 4.1** as a bundled variable font for consistent layout across hosts;
 - **Vite** for bundling and code splitting;
@@ -387,12 +388,12 @@ responses for fast browser tests.
 
 A typical paste creation follows this path:
 
-1. A Svelte form collects text or sanitized rich-text HTML and optional files.
+1. A Svelte form collects plain text or canonical GFM Markdown and optional files.
 2. The frontend sends one JSON or multipart request to `/api/v1/pastes`.
 3. The HTTP handler resolves the principal and validates CSRF or API-key
    authentication.
 4. `PasteService` validates content, visibility, language, expiration, read
-   limits, ownership, and rich-text structure.
+   limits, ownership, and Markdown structure.
 5. The multipart parser streams files to staging while calculating their
    digests and enforcing configured size, field, and attachment-count limits.
 6. SQLx records the paste, revision, idempotency result, and attachment metadata.

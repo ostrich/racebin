@@ -13,7 +13,7 @@ test("untouched paste form navigates without a discard prompt", async ({ page })
 test("switching an empty paste to rich text does not create unsaved content", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
-  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("rich_text");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
   await expect(page.locator(".rich-text-editor")).toBeVisible({ timeout: 10_000 });
 
   await page.getByRole("link", { name: "My pastes" }).click();
@@ -128,7 +128,7 @@ test("resizing the text editor grows the complete editor and is retained across 
   expect(layers.gutter).toBe(layers.textarea);
   await expect(page.getByRole("textbox", { name: "Paste content" })).toHaveCSS("resize", "none");
 
-  await page.locator(".form-grid select").first().selectOption("rich_text");
+  await page.locator(".form-grid select").first().selectOption("markdown");
   await expect(page.locator(".rich-text-editor")).toBeVisible();
   await expect(page.locator(".content-editor")).toHaveCSS("height", "620px");
   await expect(page.locator(".content-editor")).toHaveCSS("resize", "vertical");
@@ -155,7 +155,7 @@ test("empty rich-text conversion skips preview and disables language", async ({ 
   const textControlsTop = await page.locator(".form-grid").evaluate(
     element => element.getBoundingClientRect().top
   );
-  await page.locator(".form-grid select").first().selectOption("rich_text");
+  await page.locator(".form-grid select").first().selectOption("markdown");
   await expect(page.getByRole("heading", { name: /Convert to/ })).toHaveCount(0);
   await expect(language).toBeDisabled();
   await expect(language).toHaveValue("Not applicable");
@@ -195,9 +195,9 @@ test("paste form labels share the same dark-mode color", async ({ page }) => {
 test("rich-text formatting uses a single-row icon toolbar and confirms clearing", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
-  await page.locator(".form-grid select").first().selectOption("rich_text");
+  await page.locator(".form-grid select").first().selectOption("markdown");
   const toolbar = page.getByRole("toolbar", { name: "Rich-text formatting" });
-  await expect(toolbar.getByRole("button")).toHaveCount(21);
+  await expect(toolbar.getByRole("button")).toHaveCount(19);
   await expect(toolbar.getByRole("button", { name: "Paragraph" })).toHaveText("¶");
   await expect(toolbar.getByRole("button", { name: "Heading 1" })).toHaveText("H1");
   await expect(toolbar.getByRole("button", { name: "Bulleted list" }).locator("svg")).toBeVisible();
@@ -217,7 +217,7 @@ test("rich-text formatting uses a single-row icon toolbar and confirms clearing"
 test("ordered rich-text lists can be submitted", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
-  await page.locator(".form-grid select").first().selectOption("rich_text");
+  await page.locator(".form-grid select").first().selectOption("markdown");
   await page.getByLabel("Rich-text paste content").fill("First item");
   await page.getByRole("button", { name: "Numbered list" }).click();
 
@@ -226,9 +226,8 @@ test("ordered rich-text lists can be submitted", async ({ page }) => {
   );
   await page.getByRole("button", { name: "Create paste" }).click();
   const body = (await submitted).postDataJSON();
-  expect(body.body).toMatchObject({ format: "rich_text" });
-  expect(body.body.content).toContain("<ol>");
-  expect(body.body.content).toContain("<li><p>First item</p></li>");
+  expect(body.body).toMatchObject({ format: "markdown" });
+  expect(body.body.content).toContain("1. First item");
   expect(body).not.toHaveProperty("expires_at");
   expect(body).not.toHaveProperty("read_limit");
   expect(body).not.toHaveProperty("folder_id");
@@ -237,7 +236,7 @@ test("ordered rich-text lists can be submitted", async ({ page }) => {
 test("pasted links are normalized to the supported document contract", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
-  await page.locator(".form-grid select").first().selectOption("rich_text");
+  await page.locator(".form-grid select").first().selectOption("markdown");
   const editor = page.getByLabel("Rich-text paste content");
   await editor.focus();
   await editor.evaluate(element => {
@@ -254,9 +253,8 @@ test("pasted links are normalized to the supported document contract", async ({ 
   );
   await page.getByRole("button", { name: "Create paste" }).click();
   const body = (await submitted).postDataJSON();
-  expect(body.body).toMatchObject({ format: "rich_text" });
-  expect(body.body.content).toContain('href="/help"');
-  expect(body.body.content).toContain('rel="noopener noreferrer nofollow"');
+  expect(body.body).toMatchObject({ format: "markdown" });
+  expect(body.body.content).toContain("[Relative link](/help)");
   expect(body.body.content).not.toContain("onclick");
   expect(body.body.content).not.toContain("tel:");
 });
@@ -265,13 +263,26 @@ test("rich-text conversion populates the plain-text editor", async ({ page }) =>
   await mockApi(page, true);
   await page.goto("/pastes/new");
   const type = page.locator(".form-grid select").first();
-  await type.selectOption("rich_text");
+  await type.selectOption("markdown");
   await page.getByLabel("Rich-text paste content").fill("Rich content");
   await type.selectOption("text");
   await expect(page.getByRole("heading", { name: "Convert to text?" })).toBeVisible();
   await expect(page.locator(".conversion-dialog pre")).toContainText(paste.content);
   await page.getByRole("button", { name: "Convert" }).click();
   await expect(page.locator(".code-editor textarea")).toHaveValue(paste.content);
+});
+
+test("rich text switches between visual editing and canonical Markdown source", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  const source = page.getByRole("textbox", { name: "Paste content" });
+  await source.fill("## Scene\n\n- [x] Ready");
+  await page.getByRole("button", { name: "Visual", exact: true }).click();
+  await expect(page.getByLabel("Rich-text paste content")).toContainText("Scene");
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await expect(source).toHaveValue("## Scene\n\n- [x] Ready");
 });
 
 test("edit page shows current attachments", async ({ page }) => {

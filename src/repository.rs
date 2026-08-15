@@ -74,6 +74,7 @@ impl Repository {
     }
 
     pub async fn migrate(&self) -> Result<(), String> {
+        self.prepare_markdown_migration().await?;
         if self.kind == DatabaseKind::Sqlite {
             SQLITE_MIGRATOR
                 .run(&self.pool)
@@ -86,6 +87,60 @@ impl Repository {
                 .map_err(|error| format!("PostgreSQL migration failed: {error}"))?;
         }
         Ok(())
+    }
+
+    async fn prepare_markdown_migration(&self) -> Result<(), String> {
+        let has_document = match self.kind {
+            DatabaseKind::Sqlite => sqlx::query("SELECT name FROM pragma_table_info('pastes') WHERE name='document_json'")
+                .fetch_optional(&self.pool).await.map_err(|error| error.to_string())?.is_some(),
+            DatabaseKind::Postgres => sqlx::query("SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='pastes' AND column_name='document_json'")
+                .fetch_optional(&self.pool).await.map_err(|error| error.to_string())?.is_some(),
+        };
+        if !has_document {
+            return Ok(());
+        }
+        let rows =
+            sqlx::query("SELECT id,document_json FROM pastes WHERE content_kind='rich_text'")
+                .fetch_all(&self.pool)
+                .await
+                .map_err(|error| error.to_string())?;
+        if rows.is_empty() {
+            return Ok(());
+        }
+        use sqlx::Row;
+        let has_revision = match self.kind {
+            DatabaseKind::Sqlite => sqlx::query("SELECT name FROM pragma_table_info('pastes') WHERE name='revision'").fetch_optional(&self.pool).await.map_err(|e| e.to_string())?.is_some(),
+            DatabaseKind::Postgres => sqlx::query("SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='pastes' AND column_name='revision'").fetch_optional(&self.pool).await.map_err(|e| e.to_string())?.is_some(),
+        };
+        let mut converted = Vec::new();
+        for row in rows {
+            let id: String = row.try_get("id").map_err(|e| e.to_string())?;
+            let encoded: String = row
+                .try_get("document_json")
+                .map_err(|_| format!("Rich-text paste {id} has no document"))?;
+            let document = serde_json::from_str(&encoded)
+                .map_err(|error| format!("Rich-text paste {id} is invalid: {error}"))?;
+            let markdown = crate::services::document_to_markdown(&document)
+                .map_err(|error| format!("Cannot migrate paste {id}: {error}"))?;
+            crate::services::render_markdown(&markdown)
+                .map_err(|error| format!("Cannot migrate paste {id}: {error}"))?;
+            converted.push((id, markdown));
+        }
+        let mut transaction = self.pool.begin().await.map_err(|e| e.to_string())?;
+        for (id, markdown) in converted {
+            let statement = if has_revision {
+                "UPDATE pastes SET revision=revision+CASE WHEN content<>$1 THEN 1 ELSE 0 END,content=$1 WHERE id=$2"
+            } else {
+                "UPDATE pastes SET content=$1 WHERE id=$2"
+            };
+            sqlx::query(statement)
+                .bind(markdown)
+                .bind(id)
+                .execute(&mut *transaction)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        transaction.commit().await.map_err(|e| e.to_string())
     }
 
     pub async fn purge_expired(&self, now: i64) -> Result<usize, String> {

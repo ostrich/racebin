@@ -15,6 +15,7 @@
   let paste = $state<Paste | null>(null);
   let error = $state("");
   let wrapLines = $state(false);
+  let markdownView = $state<"rendered" | "markdown">("rendered");
   let horizontalOverflow = $state(false);
   let codeViewer = $state<{ preparePrint(): Promise<void> }>();
   let preparingPrint = $state(false);
@@ -23,7 +24,7 @@
     paste?.source_url
   ));
   let showWrapOption = $derived(Boolean(
-    paste?.content_kind === "text" && (horizontalOverflow || wrapLines)
+    (paste?.content_kind === "text" || markdownView === "markdown") && (horizontalOverflow || wrapLines)
   ));
   let printLanguage = $derived(paste
     ? $appState.languages.find(language => language.id === paste?.language)?.label ?? paste.language
@@ -84,6 +85,12 @@
           {#if own}<Link class="button primary" href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/> Edit</Link>{/if}
         </div>
       </div>
+      {#if paste.content_kind === "markdown"}
+        <div class="paste-view-options markdown-view-options" role="group" aria-label="Paste representation">
+          <button type="button" class:active={markdownView === "rendered"} onclick={() => { markdownView = "rendered"; }}>Rendered</button>
+          <button type="button" class:active={markdownView === "markdown"} onclick={() => { markdownView = "markdown"; }}>Markdown</button>
+        </div>
+      {/if}
       {#if showWrapOption}
         <div class="paste-view-options">
           <label class="paste-wrap-toggle">
@@ -92,13 +99,13 @@
           </label>
         </div>
       {/if}
-      {#if paste.content_kind === "rich_text" && paste.document}
+      {#if paste.content_kind === "markdown" && markdownView === "rendered"}
         {#await import("../components/RichTextViewer.svelte") then module}
           {@const RichTextViewer = module.default}
-          <RichTextViewer document={paste.document} onready={initialLoadReady}/>
+          <RichTextViewer html={paste.rendered_html ?? ""} onready={initialLoadReady}/>
         {/await}
       {:else}
-        <CodeViewer bind:this={codeViewer} code={paste.content} language={paste.language} wrap={wrapLines}
+        <CodeViewer bind:this={codeViewer} code={paste.content} language={paste.content_kind === "markdown" ? "markdown" : paste.language} wrap={wrapLines}
           onready={initialLoadReady}
           onoverflowchange={(overflowing) => { horizontalOverflow = overflowing; }}/>
       {/if}

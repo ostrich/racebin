@@ -381,7 +381,7 @@ export interface paths {
         };
         get: operations["list_pastes"];
         put?: never;
-        /** @description Creates a paste. Query metadata is accepted only for raw bodies. text/plain creates text and accepts an optional language; text/markdown creates text with language=markdown; text/html creates sanitized rich text and does not accept language. The raw request body is always the content. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. An omitted structured body creates empty text. expires_at and expires_in are mutually exclusive. Clients may request text/plain instead of JSON to receive only the created paste URL. */
+        /** @description Creates a paste. Query metadata is accepted only for raw bodies. text/plain creates text and accepts an optional language; text/markdown creates canonical Markdown; text/html imports supported markup into canonical Markdown. The raw request body is always the content. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. An omitted structured body creates empty text. expires_at and expires_in are mutually exclusive. Clients may request text/plain instead of JSON to receive only the created paste URL. */
         post: operations["create_paste"];
         delete?: never;
         options?: never;
@@ -510,7 +510,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Returns JSON by default. Clients may instead negotiate text/plain, or text/html for rich-text pastes. */
+        /** @description Returns JSON by default. Clients may negotiate a plain-text projection, canonical Markdown, or sanitized rendered HTML. */
         get: operations["get_paste_source"];
         put?: never;
         post?: never;
@@ -649,10 +649,10 @@ export interface components {
             format: "text";
             language?: string | null;
         } | {
-            /** @description HTML input; the stored and returned representation may differ after sanitization. */
+            /** @description Canonical Markdown source. */
             content: string;
             /** @enum {string} */
-            format: "rich_text";
+            format: "markdown";
         };
         BodyOutput: {
             content: string;
@@ -660,12 +660,14 @@ export interface components {
             format: "text";
             language: string;
         } | {
-            /** @description Sanitized and normalized HTML. */
+            /** @description Canonical Markdown source. */
             content: string;
             /** @enum {string} */
-            format: "rich_text";
-            /** @description Plain-text projection of the rich-text document. */
+            format: "markdown";
+            /** @description Plain-text projection. */
             plain_text: string;
+            /** @description Sanitized rendered HTML. */
+            rendered_html: string;
         };
         BrowserSessionResponse: {
             /** @enum {boolean} */
@@ -681,6 +683,8 @@ export interface components {
             attachments_enabled: boolean;
             authentication_methods: string[];
             formats: string[];
+            markdown_dialect: string;
+            markdown_extensions: string[];
             max_attachment_size_bytes: number;
             max_attachments_per_paste: number;
             max_content_size_bytes: number;
@@ -3614,7 +3618,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Plain text, or sanitized HTML for a rich-text paste */
+            /** @description Native plain text or canonical Markdown */
             200: {
                 headers: {
                     /** @description Current paste entity tag */
@@ -3622,7 +3626,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": string;
+                    "text/markdown": string;
                     "text/plain": string;
                 };
             };
@@ -3783,6 +3787,7 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PasteResource"];
                     "text/html": string;
+                    "text/markdown": string;
                     "text/plain": string;
                 };
             };

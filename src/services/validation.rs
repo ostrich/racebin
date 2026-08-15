@@ -30,9 +30,9 @@ pub(crate) fn validate_paste_query(query: &PasteQuery) -> DomainResult<()> {
     if query
         .content_kind
         .as_deref()
-        .is_some_and(|value| !matches!(value, "text" | "rich_text"))
+        .is_some_and(|value| !matches!(value, "text" | "markdown"))
     {
-        return Err(invalid_query("Format must be text or rich_text"));
+        return Err(invalid_query("Format must be text or markdown"));
     }
     if query
         .expiration
@@ -129,10 +129,10 @@ pub(super) fn validate_input(input: &PasteInput, now: i64) -> DomainResult<()> {
     if input
         .content_kind
         .as_deref()
-        .is_some_and(|value| !matches!(value, "text" | "rich_text"))
+        .is_some_and(|value| !matches!(value, "text" | "markdown"))
     {
         return Err(DomainError::validation(
-            "Content kind must be text or rich_text",
+            "Content kind must be text or markdown",
         ));
     }
     if input

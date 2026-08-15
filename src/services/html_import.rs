@@ -1,4 +1,4 @@
-use super::rich_text::validate_document;
+use super::legacy_document::validate_document;
 use html5ever::{local_name, ns, parse_fragment, tendril::TendrilSink, QualName};
 use markup5ever_rcdom::{Handle, NodeData, RcDom};
 use serde_json::{json, Value};
@@ -19,7 +19,6 @@ pub fn html_to_document(input: &str) -> Result<Value, String> {
         "b",
         "em",
         "i",
-        "u",
         "s",
         "del",
         "code",
@@ -36,11 +35,7 @@ pub fn html_to_document(input: &str) -> Result<Value, String> {
     .collect::<HashSet<_>>();
     let attributes = HashMap::from([
         ("a", HashSet::from(["href", "title"])),
-        ("p", HashSet::from(["style"])),
-        ("h1", HashSet::from(["style"])),
-        ("h2", HashSet::from(["style"])),
-        ("h3", HashSet::from(["style"])),
-        ("ol", HashSet::from(["start", "type"])),
+        ("ol", HashSet::from(["start"])),
         ("code", HashSet::from(["class"])),
     ]);
     let cleaned = ammonia::Builder::new()
@@ -53,10 +48,8 @@ pub fn html_to_document(input: &str) -> Result<Value, String> {
         .url_relative(ammonia::UrlRelative::PassThrough)
         .link_rel(Some("noopener noreferrer nofollow"))
         .attribute_filter(|element, attribute, value| match (element, attribute) {
-            ("p" | "h1" | "h2" | "h3", "style") => normalize_alignment(value),
             ("code", "class") => normalize_language_class(value),
             ("ol", "start") if value.parse::<i64>().is_ok() => Some(value.into()),
-            ("ol", "type") if matches!(value, "1" | "a" | "A" | "i" | "I") => Some(value.into()),
             (_, "href" | "title") => Some(value.into()),
             _ => None,
         })
@@ -79,13 +72,6 @@ pub fn html_to_document(input: &str) -> Result<Value, String> {
     let document = json!({"type":"doc","content":content});
     validate_document(&document)?;
     Ok(document)
-}
-
-fn normalize_alignment(value: &str) -> Option<std::borrow::Cow<'_, str>> {
-    let compact = value.replace(' ', "").to_ascii_lowercase();
-    let alignment = compact.strip_prefix("text-align:")?.trim_end_matches(';');
-    matches!(alignment, "left" | "center" | "right")
-        .then(|| std::borrow::Cow::Owned(format!("text-align: {alignment}")))
 }
 
 fn normalize_language_class(value: &str) -> Option<std::borrow::Cow<'_, str>> {

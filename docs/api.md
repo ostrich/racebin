@@ -95,17 +95,15 @@ curl -X POST https://example.com/api/v1/pastes \
   }'
 ```
 
-Rich text uses sanitized HTML on the wire:
+Rich text uses canonical GitHub-Flavored Markdown on the wire:
 
 ```json
-{"body":{"format":"rich_text","content":"<h1>Scene</h1><p>Text</p>"}}
+{"body":{"format":"markdown","content":"# Scene\n\nText"}}
 ```
 
-Racebin normalizes supported rich-text markup and removes active content,
-unsafe URLs, and unsupported attributes before storage. Returned rich-text HTML
-is the sanitized representation and is not guaranteed to be byte-for-byte
-identical to the submitted HTML. This guarantee is also included in the
-OpenAPI rich-text schemas.
+Markdown source is the canonical stored representation. Responses also include
+the server's sanitized `rendered_html` and `plain_text` projection. Raw HTML and
+embedded images are rejected; links support HTTP, HTTPS, email, and relative URLs.
 
 Racebin also accepts `text/plain`, `text/markdown`, `text/html`, URL-encoded
 forms, and multipart forms at the same endpoint. Creation query parameters are
@@ -129,9 +127,9 @@ the default. `Idempotency-Key` is optional but recommended for retried uploads;
 reuse with different content returns `409 Conflict`.
 
 The raw media type determines the representation: `text/plain` creates plain
-text and may use the `language` query parameter, `text/markdown` creates plain
-text with the Markdown language, and `text/html` creates sanitized rich text
-and does not accept a language. Raw requests therefore do not accept `content`
+text and may use the `language` query parameter, `text/markdown` creates
+canonical Markdown, and `text/html` imports supported markup into Markdown.
+Raw requests therefore do not accept `content`
 or `format` query parameters. A new paste must contain non-empty text/rich-text
 content or at least one attachment. Create fields may be omitted but may not be
 JSON `null`.
@@ -186,8 +184,8 @@ different paste or request returns a conflict.
 
 ## Raw content
 
-`GET /api/v1/pastes/{id}/raw` returns plain text, or sanitized HTML for a
-rich-text paste, without the Racebin interface. For an ordinary visible paste,
+`GET /api/v1/pastes/{id}/raw` returns native plain text or canonical Markdown
+without the Racebin interface. For an ordinary visible paste,
 this is a stable, shareable URL and does not increment the read count. Private
 pastes still require authentication.
 
@@ -300,14 +298,13 @@ owner information rather than exposing the server's internal storage model.
 
 ## Content conversion
 
-`POST /api/v1/content-conversions` converts between plain text and sanitized
-rich-text HTML:
+`POST /api/v1/content-conversions` converts between plain text and Markdown:
 
 ```json
 {
   "source":{"format":"text","content":"Scene heading\n\nDialogue"},
-  "target_format":"rich_text"
+  "target_format":"markdown"
 }
 ```
 
-The internal editor document is intentionally not part of the public API.
+Rendered HTML is derived and never becomes a competing stored representation.

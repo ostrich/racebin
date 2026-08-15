@@ -341,15 +341,15 @@
           },
           {
             "additionalProperties": false,
-            "description": "Rich-text HTML. Racebin sanitizes and normalizes the supported markup,\nremoving active content, unsafe URLs, and unsupported attributes before storage.",
+            "description": "GitHub-Flavored Markdown. Raw HTML and embedded images are not accepted.",
             "properties": {
               "content": {
-                "description": "HTML input; the stored and returned representation may differ after sanitization.",
+                "description": "Canonical Markdown source.",
                 "type": "string"
               },
               "format": {
                 "enum": [
-                  "rich_text"
+                  "markdown"
                 ],
                 "type": "string"
               }
@@ -388,25 +388,30 @@
             "type": "object"
           },
           {
-            "description": "Racebin-sanitized rich-text HTML plus its plain-text projection. The HTML\ncontains no supported active-content constructs, but clients must still\nrender it according to their own platform's secure HTML practices.",
+            "description": "Canonical Markdown and its derived safe representations.",
             "properties": {
               "content": {
-                "description": "Sanitized and normalized HTML.",
+                "description": "Canonical Markdown source.",
                 "type": "string"
               },
               "format": {
                 "enum": [
-                  "rich_text"
+                  "markdown"
                 ],
                 "type": "string"
               },
               "plain_text": {
-                "description": "Plain-text projection of the rich-text document.",
+                "description": "Plain-text projection.",
+                "type": "string"
+              },
+              "rendered_html": {
+                "description": "Sanitized rendered HTML.",
                 "type": "string"
               }
             },
             "required": [
               "content",
+              "rendered_html",
               "plain_text",
               "format"
             ],
@@ -465,6 +470,15 @@
             "type": "array"
           },
           "formats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "markdown_dialect": {
+            "type": "string"
+          },
+          "markdown_extensions": {
             "items": {
               "type": "string"
             },
@@ -543,6 +557,8 @@
           "attachments_enabled",
           "qr_codes_enabled",
           "formats",
+          "markdown_dialect",
+          "markdown_extensions",
           "visibility_modes",
           "authentication_methods",
           "paste_create_media_types",
@@ -4633,7 +4649,7 @@
         ]
       },
       "post": {
-        "description": "Creates a paste. Query metadata is accepted only for raw bodies. text/plain creates text and accepts an optional language; text/markdown creates text with language=markdown; text/html creates sanitized rich text and does not accept language. The raw request body is always the content. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. An omitted structured body creates empty text. expires_at and expires_in are mutually exclusive. Clients may request text/plain instead of JSON to receive only the created paste URL.",
+        "description": "Creates a paste. Query metadata is accepted only for raw bodies. text/plain creates text and accepts an optional language; text/markdown creates canonical Markdown; text/html imports supported markup into canonical Markdown. The raw request body is always the content. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. An omitted structured body creates empty text. expires_at and expires_in are mutually exclusive. Clients may request text/plain instead of JSON to receive only the created paste URL.",
         "operationId": "create_paste",
         "parameters": [
           {
@@ -5817,7 +5833,7 @@
         "responses": {
           "200": {
             "content": {
-              "text/html": {
+              "text/markdown": {
                 "schema": {
                   "type": "string"
                 }
@@ -5828,7 +5844,7 @@
                 }
               }
             },
-            "description": "Plain text, or sanitized HTML for a rich-text paste",
+            "description": "Native plain text or canonical Markdown",
             "headers": {
               "ETag": {
                 "description": "Current paste entity tag",
@@ -6051,7 +6067,7 @@
     },
     "/pastes/{paste_id}/source": {
       "get": {
-        "description": "Returns JSON by default. Clients may instead negotiate text/plain, or text/html for rich-text pastes.",
+        "description": "Returns JSON by default. Clients may negotiate a plain-text projection, canonical Markdown, or sanitized rendered HTML.",
         "operationId": "get_paste_source",
         "parameters": [
           {
@@ -6073,6 +6089,11 @@
                 }
               },
               "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/markdown": {
                 "schema": {
                   "type": "string"
                 }

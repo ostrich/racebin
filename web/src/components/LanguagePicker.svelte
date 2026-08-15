@@ -10,7 +10,7 @@
     disabled?: boolean;
   } = $props();
 
-  let input: HTMLInputElement;
+  let input = $state<HTMLInputElement>();
   let open = $state(false);
   let query = $state("");
   let active = $state(-1);
@@ -20,17 +20,16 @@
     return !term || [language.id, language.label, ...(language.aliases ?? [])]
       .join(" ").toLowerCase().includes(term);
   }));
-
   function show(): void {
     if (disabled) return;
     query = "";
     open = true;
     active = -1;
-    input.select();
+    input?.select();
   }
 
-  function filter(): void {
-    query = input.value;
+  function filter(event: Event): void {
+    query = (event.currentTarget as HTMLInputElement).value;
     open = true;
     active = -1;
   }
@@ -41,12 +40,14 @@
     open = false;
   }
 
-  function blur(): void {
+  function blur(event: FocusEvent): void {
+    const target = event.currentTarget as HTMLInputElement;
     window.setTimeout(() => {
       open = false;
-      const normalized = normalizeLanguage(input.value);
+      if (!target.isConnected) return;
+      const normalized = normalizeLanguage(target.value);
       if (normalized) value = normalized;
-      else input.value = value;
+      else target.value = value;
     }, 100);
   }
 
@@ -62,7 +63,7 @@
       if (option) choose(option.id);
     } else if (event.key === "Escape") {
       open = false;
-      input.value = value;
+      (event.currentTarget as HTMLInputElement).value = value;
     }
   }
 </script>
@@ -70,11 +71,17 @@
 <div class="language-field">
   <label for="language-input">Language <small>Type to filter languages.</small></label>
   <div class="language-picker">
-    <input bind:this={input} id="language-input" name="language" {disabled}
-      value={disabled ? "Not applicable" : value} autocomplete="off" role="combobox" aria-autocomplete="list"
-      aria-expanded={open} aria-controls="language-options-menu" placeholder="Type or choose"
-      onfocus={show} oninput={filter} onblur={blur} onkeydown={keydown}/>
-    {#if open}
+    {#if disabled}
+      <input id="language-input" name="language" disabled value="Not applicable"
+        autocomplete="off" role="combobox" aria-expanded="false"
+        aria-controls="language-options-menu" placeholder="Type or choose"/>
+    {:else}
+      <input bind:this={input} id="language-input" name="language" value={value}
+        autocomplete="off" role="combobox" aria-autocomplete="list"
+        aria-expanded={open} aria-controls="language-options-menu" placeholder="Type or choose"
+        onfocus={show} oninput={filter} onblur={blur} onkeydown={keydown}/>
+    {/if}
+    {#if open && !disabled}
       <div id="language-options-menu" class="language-options" role="listbox" tabindex="-1"
         onmousedown={(event) => event.preventDefault()}>
         {#each filtered as language, index (language.id)}

@@ -81,7 +81,6 @@ mod tests {
         let input = |title: &str, visibility: &str| PasteInput {
             title: Some(title.to_string()),
             content: Some(format!("{title} content")),
-            document: None,
             content_kind: Some("text".to_string()),
             language: Some("plaintext".to_string()),
             visibility: Some(visibility.to_string()),
@@ -304,14 +303,14 @@ mod tests {
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
                 .set_json(json!({
                     "source":{"format":"text","content":"INT. LAB - NIGHT\n\nADA\nWe should go."},
-                    "target_format":"rich_text"
+                    "target_format":"markdown"
                 }))
                 .to_request(),
         )
         .await;
         assert_eq!(converted.status(), StatusCode::OK);
         let converted: Value = test::read_body_json(converted).await;
-        assert_eq!(converted["body"]["format"], "rich_text");
+        assert_eq!(converted["body"]["format"], "markdown");
         assert!(converted["body"]["content"]
             .as_str()
             .unwrap()
@@ -324,17 +323,24 @@ mod tests {
                 .cookie(cookie.clone())
                 .insert_header(("X-CSRF-Token", csrf.as_str()))
                 .set_json(json!({
-                    "body":{"format":"rich_text","content":"<script>alert(1)</script>"}
+                    "body":{"format":"markdown","content":"<script>alert(1)</script>"}
                 }))
                 .to_request(),
         )
         .await;
-        assert_eq!(unsafe_document.status(), StatusCode::CREATED);
-        let sanitized: Value = test::read_body_json(unsafe_document).await;
-        assert!(!sanitized["body"]["content"]
-            .as_str()
-            .unwrap()
-            .contains("script"));
+        assert_eq!(unsafe_document.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let safe_document = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/pastes")
+                .cookie(cookie.clone())
+                .insert_header(("X-CSRF-Token", csrf.as_str()))
+                .set_json(json!({"body":{"format":"markdown","content":"# Safe document"}}))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(safe_document.status(), StatusCode::CREATED);
+        let sanitized: Value = test::read_body_json(safe_document).await;
         let rich_raw = test::call_service(
             &app,
             test::TestRequest::get()
@@ -349,15 +355,16 @@ mod tests {
         assert_eq!(rich_raw.status(), StatusCode::OK);
         assert_eq!(
             rich_raw.headers().get("Content-Type").unwrap(),
-            "text/html; charset=utf-8"
+            "text/markdown; charset=utf-8"
         );
         assert_eq!(
             rich_raw.headers().get("Referrer-Policy").unwrap(),
             "no-referrer"
         );
-        assert!(!String::from_utf8(test::read_body(rich_raw).await.to_vec())
-            .unwrap()
-            .contains("script"));
+        assert_eq!(
+            String::from_utf8(test::read_body(rich_raw).await.to_vec()).unwrap(),
+            "# Safe document"
+        );
 
         let created_folder = test::call_service(
             &app,
@@ -693,8 +700,11 @@ mod tests {
         .await;
         assert_eq!(markdown.status(), StatusCode::CREATED);
         let markdown: Value = test::read_body_json(markdown).await;
-        assert_eq!(markdown["body"]["format"], "text");
-        assert_eq!(markdown["body"]["language"], "markdown");
+        assert_eq!(markdown["body"]["format"], "markdown");
+        assert!(markdown["body"]["rendered_html"]
+            .as_str()
+            .unwrap()
+            .contains("<h1>Heading</h1>"));
 
         let contradictory_html = test::call_service(
             &app,
@@ -710,6 +720,23 @@ mod tests {
             contradictory_html.status(),
             StatusCode::UNPROCESSABLE_ENTITY
         );
+        let imported_html = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/pastes")
+                .insert_header(("Authorization", format!("Bearer {write_token}")))
+                .insert_header(("Content-Type", "text/html"))
+                .set_payload("<h2>Imported</h2><p><strong> safely</strong></p>")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(imported_html.status(), StatusCode::CREATED);
+        let imported_html: Value = test::read_body_json(imported_html).await;
+        assert_eq!(imported_html["body"]["format"], "markdown");
+        assert!(imported_html["body"]["content"]
+            .as_str()
+            .unwrap()
+            .contains("## Imported"));
 
         for body in [
             json!({ "title": null }),
@@ -881,7 +908,7 @@ mod tests {
                 .insert_header(("Authorization", format!("Bearer {read_token}")))
                 .set_json(json!({
                     "source":{"format":"text","content":"example"},
-                    "target_format":"rich_text"
+                    "target_format":"markdown"
                 }))
                 .to_request(),
         )
@@ -894,7 +921,7 @@ mod tests {
                 .insert_header(("Authorization", format!("Bearer {write_token}")))
                 .set_json(json!({
                     "source":{"format":"text","content":"example"},
-                    "target_format":"rich_text"
+                    "target_format":"markdown"
                 }))
                 .to_request(),
         )

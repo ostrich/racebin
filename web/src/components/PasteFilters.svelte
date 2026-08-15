@@ -60,7 +60,7 @@
   function shownValue(key: string, value: string): string {
     if (key === "owner_id") return ownerNames?.get(Number(value)) ?? `User #${value}`;
     if (key === "created_after" || key === "created_before") return dateValue(value);
-    if (key === "content_kind") return ({ text: "Text", rich_text: "Rich text" } as Record<string, string>)[value] ?? value;
+    if (key === "content_kind") return ({ text: "Text", markdown: "Rich text" } as Record<string, string>)[value] ?? value;
     if (key === "language") return languageOptions.find(language => language.id === value)?.label ?? value;
     if (key === "visibility") return value.charAt(0).toUpperCase() + value.slice(1);
     if (key === "has_attachments") return value === "true" ? "With attachments" : "Without attachments";
@@ -199,7 +199,7 @@
       <div class="advanced-filter-grid">
         <label><span>Format</span><select name="content_kind" value={params.get("content_kind") ?? ""}>
           <option value="">Any</option>
-          {#each $appState.config.formats as format}<option value={format}>{format === "rich_text" ? "Rich text" : "Text"}</option>{/each}
+          {#each $appState.config.formats as format}<option value={format}>{format === "markdown" ? "Rich text" : "Text"}</option>{/each}
         </select></label>
         {#if mode !== "explore"}
           <label><span>Visibility</span><select name="visibility" value={params.get("visibility") ?? ""}>

@@ -545,6 +545,8 @@ struct Capabilities {
     attachments_enabled: bool,
     qr_codes_enabled: bool,
     formats: [&'static str; 2],
+    markdown_dialect: &'static str,
+    markdown_extensions: [&'static str; 4],
     visibility_modes: [&'static str; 3],
     authentication_methods: [&'static str; 2],
     paste_create_media_types: [&'static str; 6],
@@ -719,7 +721,9 @@ async fn get_capabilities() -> impl Responder {
         max_attachments_per_paste: crate::limits::MAX_ATTACHMENTS_PER_PASTE,
         attachments_enabled: ARGS.attachments_enabled,
         qr_codes_enabled: ARGS.qr_codes,
-        formats: ["text", "rich_text"],
+        formats: ["text", "markdown"],
+        markdown_dialect: "CommonMark with GitHub-Flavored Markdown extensions",
+        markdown_extensions: ["tables", "task_lists", "autolinks", "strikethrough"],
         visibility_modes: ["public", "unlisted", "private"],
         authentication_methods: ["browser_session", "bearer_api_key"],
         paste_create_media_types: [
@@ -1397,8 +1401,8 @@ mod tests {
         let description = operation["description"].as_str().unwrap();
         for phrase in [
             "text/plain creates text",
-            "text/markdown creates text with language=markdown",
-            "text/html creates sanitized rich text",
+            "text/markdown creates canonical Markdown",
+            "text/html imports supported markup into canonical Markdown",
             "raw request body is always the content",
         ] {
             assert!(
@@ -1505,16 +1509,19 @@ mod tests {
     }
 
     #[test]
-    fn rich_text_sanitization_is_part_of_the_generated_contract() {
+    fn markdown_safety_is_part_of_the_generated_contract() {
         let value = serde_json::to_value(ApiDoc::openapi()).unwrap();
         for schema_name in ["BodyInput", "BodyOutput"] {
             let schema = serde_json::to_string(&value["components"]["schemas"][schema_name])
                 .unwrap()
                 .to_ascii_lowercase();
             assert!(
-                schema.contains("sanitiz") && schema.contains("html"),
-                "{schema_name} does not explain the rich-text sanitization contract"
+                schema.contains("markdown"),
+                "{schema_name} does not explain Markdown semantics"
             );
+            if schema_name == "BodyOutput" {
+                assert!(schema.contains("sanitiz") && schema.contains("html"));
+            }
         }
     }
 

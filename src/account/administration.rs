@@ -2,9 +2,9 @@ use super::*;
 
 fn admin_user_query(repo: &Repository) -> String {
     let text_size = if repo.kind() == DatabaseKind::Postgres {
-        "CAST(octet_length(p.content) AS BIGINT) + COALESCE(CAST(octet_length(p.document_json) AS BIGINT),0)"
+        "CAST(octet_length(p.content) AS BIGINT)"
     } else {
-        "length(CAST(p.content AS BLOB)) + COALESCE(length(CAST(p.document_json AS BLOB)),0)"
+        "length(CAST(p.content AS BLOB))"
     };
     format!(
         "SELECT u.id,u.username,u.role,u.enabled,u.password_change_required,u.created_at,u.last_login_at,

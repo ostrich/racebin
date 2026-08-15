@@ -10,7 +10,7 @@ const paste = {
 
 describe("paste formatting", () => {
   it("uses a rich-text label instead of plaintext", () => {
-    expect(pasteFormatLabel({ ...paste, content_kind: "rich_text" })).toBe("Rich text");
+    expect(pasteFormatLabel({ ...paste, content_kind: "markdown" })).toBe("Rich text");
     expect(pasteFormatLabel(paste)).toBe("javascript");
   });
 

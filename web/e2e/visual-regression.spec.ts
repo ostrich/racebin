@@ -68,7 +68,7 @@ test("paste editors", { tag: "@visual" }, async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/pastes/new");
   await expect(page).toHaveScreenshot("text-editor-desktop.png", screenshot);
-  await page.locator(".form-grid select").first().selectOption("rich_text");
+  await page.locator(".form-grid select").first().selectOption("markdown");
   await expect(page.locator(".rich-text-editor")).toBeVisible();
   await expect(page).toHaveScreenshot(
     "rich-text-editor-desktop.png",

@@ -12,6 +12,7 @@ import Link from "@lucide/svelte/icons/link";
 import List from "@lucide/svelte/icons/list";
 import ListFilter from "@lucide/svelte/icons/list-filter";
 import ListOrdered from "@lucide/svelte/icons/list-ordered";
+import ListChecks from "@lucide/svelte/icons/list-checks";
 import LogIn from "@lucide/svelte/icons/log-in";
 import LogOut from "@lucide/svelte/icons/log-out";
 import Minus from "@lucide/svelte/icons/minus";
@@ -27,6 +28,7 @@ import Redo2 from "@lucide/svelte/icons/redo-2";
 import Search from "@lucide/svelte/icons/search";
 import SquareCode from "@lucide/svelte/icons/square-code";
 import Sun from "@lucide/svelte/icons/sun";
+import Table2 from "@lucide/svelte/icons/table-2";
 import TextAlignCenter from "@lucide/svelte/icons/text-align-center";
 import TextAlignEnd from "@lucide/svelte/icons/text-align-end";
 import TextAlignStart from "@lucide/svelte/icons/text-align-start";
@@ -51,6 +53,7 @@ export const icons = {
   list: List,
   "list-filter": ListFilter,
   "list-ordered": ListOrdered,
+  "list-checks": ListChecks,
   "log-in": LogIn,
   "log-out": LogOut,
   minus: Minus,
@@ -66,6 +69,7 @@ export const icons = {
   search: Search,
   "square-code": SquareCode,
   sun: Sun,
+  "table-2": Table2,
   "trash-2": Trash2,
   "undo-2": Undo2,
   "user-round": UserRound

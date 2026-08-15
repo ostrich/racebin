@@ -59,6 +59,11 @@
   border: 0;
   border-top: 1px solid var(--line);
 }
+.rich-text-content table { width: 100%; border-collapse: collapse; }
+.rich-text-content th,
+.rich-text-content td { padding: 8px 10px; border: 1px solid var(--line); text-align: left; }
+.rich-text-content th { background: var(--color-code-gutter); }
+.rich-text-content input[type="checkbox"] { margin-right: 7px; accent-color: var(--accent); }
 .rich-text-toolbar {
   display: flex;
   flex-wrap: nowrap;
@@ -110,9 +115,6 @@
   font-family: serif;
   font-size: 16px;
   font-style: italic;
-}
-.rich-text-toolbar button .underline {
-  text-decoration: underline;
 }
 .rich-text-toolbar button .strike {
   text-decoration: line-through;

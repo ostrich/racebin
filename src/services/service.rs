@@ -4,7 +4,7 @@ use sqlx::{Any, Executor};
 use uuid::Uuid;
 
 use super::model::{Attachment, Page, Paste, PasteInput, PasteQuery, PasteRead};
-use super::rich_text::validate_document;
+use super::render_markdown;
 use super::validation::{authorize_owner, can_read, validate_input, validate_paste_query};
 use super::{DomainError, DomainResult};
 use crate::time::unix_timestamp;
@@ -91,11 +91,9 @@ impl PasteService {
         let folder_id = query.folder_id;
         let unfiled = query.unfiled.map(i64::from);
         let text_size = if self.storage.kind() == crate::repository::DatabaseKind::Postgres {
-            "CAST(octet_length(content) AS BIGINT) + \
-             COALESCE(CAST(octet_length(document_json) AS BIGINT),0)"
+            "CAST(octet_length(content) AS BIGINT)"
         } else {
-            "length(CAST(content AS BLOB)) + \
-             COALESCE(length(CAST(document_json AS BLOB)),0)"
+            "length(CAST(content AS BLOB))"
         };
         let total_size = format!(
             "CAST(({text_size} + COALESCE((SELECT sum(size_bytes) FROM attachments size_files \
@@ -172,7 +170,7 @@ impl PasteService {
             .await
             .map_err(DomainError::internal)?;
         let items = sqlx::query_as::<_, Paste>(&format!(
-            "SELECT id,owner_id,folder_id,title,substr(content,1,500) AS content,NULL AS document_json,
+            "SELECT id,owner_id,folder_id,title,substr(content,1,500) AS content,
                     content_kind,language,visibility,created_at,updated_at,revision,consumed_at,
                     expires_at,last_read_at,read_count,read_limit,
                     (SELECT count(*) FROM attachments summary_files
@@ -238,7 +236,7 @@ impl PasteService {
 
     pub(super) async fn find_paste(&self, id: &str) -> DomainResult<Option<Paste>> {
         let mut paste = sqlx::query_as::<_, Paste>(
-            "SELECT id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,created_at,
+            "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,created_at,
                     updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
              FROM pastes WHERE id=$1 AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at>$2)",
         )
@@ -309,7 +307,7 @@ impl PasteService {
             ""
         };
         let mut paste = sqlx::query_as::<_, Paste>(&format!(
-            "SELECT id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,created_at,
+            "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,created_at,
                     updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
              FROM pastes WHERE id=$1 AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at>$2){lock}"
         ))
@@ -396,7 +394,7 @@ impl PasteService {
             return Ok(None);
         }
         let mut paste = sqlx::query_as::<_, Paste>(
-            "SELECT id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,
+            "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,
                     created_at,updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
              FROM pastes WHERE id=$1",
         )
@@ -446,25 +444,21 @@ impl PasteService {
         let now = unix_timestamp();
         validate_input(input, now)?;
         let content_kind = input.content_kind.as_deref().unwrap_or("text");
-        let (content, document_json) = normalized_content(
-            content_kind,
-            input.content.as_deref().unwrap_or(""),
-            input.document.as_ref(),
-        )?;
+        let (content, _) =
+            normalized_content(content_kind, input.content.as_deref().unwrap_or(""))?;
         let id = Uuid::new_v4().simple().to_string()[..24].to_string();
         let folder_id = input.folder_id.flatten();
         self.validate_folder_owner(owner, folder_id).await?;
         sqlx::query(
-            "INSERT INTO pastes(id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,
+            "INSERT INTO pastes(id,owner_id,folder_id,title,content,content_kind,language,visibility,
                                created_at,updated_at,revision,expires_at,last_read_at,read_count,read_limit)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10,1,$11,NULL,0,$12)",
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,1,$10,NULL,0,$11)",
         )
         .bind(&id)
         .bind(owner)
         .bind(folder_id)
         .bind(input.title.as_deref().unwrap_or("").trim())
         .bind(content)
-        .bind(document_json)
         .bind(content_kind)
         .bind(if content_kind == "text" {
             input.language.as_deref().unwrap_or("plaintext")
@@ -524,11 +518,8 @@ impl PasteService {
         }
         validate_input(input, now)?;
         let content_kind = input.content_kind.as_deref().unwrap_or("text");
-        let (content, document_json) = normalized_content(
-            content_kind,
-            input.content.as_deref().unwrap_or(""),
-            input.document.as_ref(),
-        )?;
+        let (content, _) =
+            normalized_content(content_kind, input.content.as_deref().unwrap_or(""))?;
         let folder_id = input.folder_id.flatten();
         self.validate_folder_owner(owner, folder_id).await?;
         let id = Uuid::new_v4().simple().to_string()[..24].to_string();
@@ -539,16 +530,15 @@ impl PasteService {
             .await
             .map_err(DomainError::internal)?;
         sqlx::query(
-            "INSERT INTO pastes(id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,
+            "INSERT INTO pastes(id,owner_id,folder_id,title,content,content_kind,language,visibility,
                                 created_at,updated_at,revision,expires_at,last_read_at,read_count,read_limit)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10,1,$11,NULL,0,$12)",
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,1,$10,NULL,0,$11)",
         )
         .bind(&id)
         .bind(owner)
         .bind(folder_id)
         .bind(input.title.as_deref().unwrap_or("").trim())
         .bind(content)
-        .bind(document_json)
         .bind(content_kind)
         .bind(if content_kind == "text" {
             input.language.as_deref().unwrap_or("plaintext")
@@ -689,30 +679,23 @@ impl PasteService {
             .as_deref()
             .unwrap_or(&current.content_kind);
         let requested_content = input.content.as_deref().unwrap_or(&current.content);
-        let requested_document = if content_kind == "rich_text" {
-            input.document.as_ref().or(current.document.as_ref())
-        } else {
-            input.document.as_ref()
-        };
-        let (content, document_json) =
-            normalized_content(content_kind, requested_content, requested_document)?;
+        let (content, _) = normalized_content(content_kind, requested_content)?;
         let language = if content_kind == "text" {
             input.language.as_deref().unwrap_or(&current.language)
         } else {
             "plaintext"
         };
         let result = sqlx::query(
-            "UPDATE pastes SET title=coalesce($2,title),content=$3,document_json=$4,
-             content_kind=$5,language=$6,visibility=coalesce($7,visibility),
-             expires_at=CASE WHEN $8=1 THEN $9 ELSE expires_at END,
-             read_limit=CASE WHEN $10=1 THEN $11 ELSE read_limit END,
-             folder_id=$12,updated_at=$13,revision=revision+1
-             WHERE id=$1 AND ($14 IS NULL OR revision=$14)",
+            "UPDATE pastes SET title=coalesce($2,title),content=$3,
+             content_kind=$4,language=$5,visibility=coalesce($6,visibility),
+             expires_at=CASE WHEN $7=1 THEN $8 ELSE expires_at END,
+             read_limit=CASE WHEN $9=1 THEN $10 ELSE read_limit END,
+             folder_id=$11,updated_at=$12,revision=revision+1
+             WHERE id=$1 AND ($13 IS NULL OR revision=$13)",
         )
         .bind(id)
         .bind(input.title.as_deref().map(str::trim))
         .bind(content)
-        .bind(document_json)
         .bind(content_kind)
         .bind(language)
         .bind(input.visibility.as_deref())
@@ -786,25 +769,13 @@ fn redact_folder(principal: &Principal, mut paste: Paste, administrative: bool) 
     paste
 }
 
-fn normalized_content(
-    content_kind: &str,
-    content: &str,
-    document: Option<&serde_json::Value>,
-) -> DomainResult<(String, Option<String>)> {
-    if content_kind == "rich_text" {
-        let document = document
-            .ok_or_else(|| DomainError::validation("Rich-text pastes require a document"))?;
-        let content = validate_document(document).map_err(|error| {
-            DomainError::validation(format!("Rich-text document is invalid: {error}"))
+fn normalized_content(content_kind: &str, content: &str) -> DomainResult<(String, Option<String>)> {
+    if content_kind == "markdown" {
+        render_markdown(content).map_err(|error| {
+            DomainError::validation(format!("Markdown content is invalid: {error}"))
         })?;
-        let document_json = serde_json::to_string(document).map_err(DomainError::internal)?;
-        Ok((content, Some(document_json)))
+        Ok((content.to_string(), None))
     } else {
-        if document.is_some() {
-            return Err(DomainError::validation(
-                "Only rich-text pastes accept a document",
-            ));
-        }
         Ok((content.to_string(), None))
     }
 }
@@ -819,7 +790,7 @@ async fn load_paste_for_read(
     id: &str,
 ) -> DomainResult<Option<Paste>> {
     let mut paste = sqlx::query_as::<_, Paste>(
-        "SELECT id,owner_id,folder_id,title,content,document_json,content_kind,language,visibility,
+        "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,
                 created_at,updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
          FROM pastes WHERE id=$1",
     )
@@ -870,17 +841,12 @@ where
 }
 
 fn paste_size(paste: &Paste) -> i64 {
-    let document_size = paste
-        .document
-        .as_ref()
-        .and_then(|document| serde_json::to_vec(document).ok())
-        .map_or(0, |document| document.len());
     let attachment_size: i64 = paste
         .attachments
         .iter()
         .map(|attachment| attachment.size_bytes.max(0))
         .sum();
-    paste.content.len() as i64 + document_size as i64 + attachment_size
+    paste.content.len() as i64 + attachment_size
 }
 
 #[cfg(test)]
@@ -898,7 +864,6 @@ mod tests {
             folder_id: None,
             title: String::new(),
             content: "secret".to_string(),
-            document: None,
             content_kind: "text".to_string(),
             language: "plaintext".to_string(),
             visibility: "private".to_string(),

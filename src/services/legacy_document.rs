@@ -1,9 +1,12 @@
-use serde_json::{json, Map, Value};
+#[cfg(test)]
+use serde_json::json;
+use serde_json::{Map, Value};
 
 const MAX_DOCUMENT_BYTES: usize = 2 * 1024 * 1024;
 const MAX_DEPTH: usize = 32;
 const MAX_NODES: usize = 100_000;
 
+#[cfg(test)]
 pub fn text_to_document(text: &str) -> Value {
     let mut blocks = Vec::new();
     for paragraph in text.split("\n\n") {
@@ -220,6 +223,7 @@ pub fn document_to_text(document: &Value) -> String {
     output.trim_end_matches('\n').to_string()
 }
 
+#[cfg(test)]
 pub fn document_to_html(document: &Value) -> String {
     let mut output = String::new();
     if let Some(children) = document.get("content").and_then(Value::as_array) {
@@ -230,6 +234,190 @@ pub fn document_to_html(document: &Value) -> String {
     output
 }
 
+/// Converts Racebin's former ProseMirror representation to portable Markdown.
+/// This is retained only for database and HTML-import conversion.
+pub fn document_to_markdown(document: &Value) -> Result<String, String> {
+    validate_document(document)?;
+    let mut output = String::new();
+    write_markdown_children(document, &mut output, 0)?;
+    Ok(output.trim_end().to_string())
+}
+
+fn write_markdown_children(node: &Value, output: &mut String, depth: usize) -> Result<(), String> {
+    let children = node
+        .get("content")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for child in children {
+        write_markdown_node(&child, output, depth)?;
+    }
+    Ok(())
+}
+
+fn write_markdown_node(node: &Value, output: &mut String, depth: usize) -> Result<(), String> {
+    let kind = node.get("type").and_then(Value::as_str).unwrap_or("");
+    let attrs = node.get("attrs").and_then(Value::as_object);
+    if attrs
+        .and_then(|value| value.get("textAlign"))
+        .is_some_and(|value| !value.is_null())
+    {
+        return Err("Text alignment cannot be represented in Markdown".into());
+    }
+    match kind {
+        "text" => write_markdown_text(node, output)?,
+        "hardBreak" => output.push_str("  \n"),
+        "paragraph" => {
+            write_markdown_children(node, output, depth)?;
+            output.push_str("\n\n");
+        }
+        "heading" => {
+            let level = attrs
+                .and_then(|value| value.get("level"))
+                .and_then(Value::as_u64)
+                .unwrap_or(1)
+                .clamp(1, 6);
+            output.push_str(&"#".repeat(level as usize));
+            output.push(' ');
+            write_markdown_children(node, output, depth)?;
+            output.push_str("\n\n");
+        }
+        "horizontalRule" => output.push_str("---\n\n"),
+        "blockquote" => {
+            let mut inner = String::new();
+            write_markdown_children(node, &mut inner, depth + 1)?;
+            for line in inner.trim_end().lines() {
+                output.push_str("> ");
+                output.push_str(line);
+                output.push('\n');
+            }
+            output.push('\n');
+        }
+        "bulletList" => write_markdown_list(node, output, depth, false)?,
+        "orderedList" => {
+            let list_type = attrs
+                .and_then(|value| value.get("type"))
+                .and_then(Value::as_str);
+            if list_type.is_some_and(|value| value != "1") {
+                return Err("Non-decimal ordered lists cannot be represented in Markdown".into());
+            }
+            write_markdown_list(node, output, depth, true)?;
+        }
+        "listItem" | "doc" => write_markdown_children(node, output, depth)?,
+        "codeBlock" => {
+            let language = attrs
+                .and_then(|value| value.get("language"))
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            output.push_str("```");
+            output.push_str(language);
+            output.push('\n');
+            for child in node
+                .get("content")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                output.push_str(child.get("text").and_then(Value::as_str).unwrap_or(""));
+            }
+            if !output.ends_with('\n') {
+                output.push('\n');
+            }
+            output.push_str("```\n\n");
+        }
+        _ => return Err(format!("Unsupported legacy rich-text node: {kind}")),
+    }
+    Ok(())
+}
+
+fn write_markdown_list(
+    node: &Value,
+    output: &mut String,
+    depth: usize,
+    ordered: bool,
+) -> Result<(), String> {
+    let start = node
+        .get("attrs")
+        .and_then(Value::as_object)
+        .and_then(|value| value.get("start"))
+        .and_then(Value::as_i64)
+        .unwrap_or(1);
+    if ordered && start < 0 {
+        return Err("Negative ordered-list starts cannot be represented in Markdown".into());
+    }
+    for (index, item) in node
+        .get("content")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .enumerate()
+    {
+        output.push_str(&"  ".repeat(depth));
+        if ordered {
+            output.push_str(&format!("{}. ", start + index as i64));
+        } else {
+            output.push_str("- ");
+        }
+        let mut inner = String::new();
+        write_markdown_children(item, &mut inner, depth + 1)?;
+        let mut lines = inner.trim_end().lines();
+        output.push_str(lines.next().unwrap_or(""));
+        output.push('\n');
+        for line in lines {
+            output.push_str(&"  ".repeat(depth + 1));
+            output.push_str(line);
+            output.push('\n');
+        }
+    }
+    output.push('\n');
+    Ok(())
+}
+
+fn write_markdown_text(node: &Value, output: &mut String) -> Result<(), String> {
+    let text = node.get("text").and_then(Value::as_str).unwrap_or("");
+    let marks = node
+        .get("marks")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if marks
+        .iter()
+        .any(|mark| mark.get("type").and_then(Value::as_str) == Some("underline"))
+    {
+        return Err("Underline cannot be represented in Markdown".into());
+    }
+    let mut value = text
+        .replace('\\', "\\\\")
+        .replace('*', "\\*")
+        .replace('_', "\\_")
+        .replace('`', "\\`");
+    for mark in marks.iter().rev() {
+        value = match mark.get("type").and_then(Value::as_str).unwrap_or("") {
+            "bold" => format!("**{value}**"),
+            "italic" => format!("*{value}*"),
+            "strike" => format!("~~{value}~~"),
+            "code" => format!("`{}`", text.replace('`', "\\`")),
+            "link" => {
+                let attrs = mark.get("attrs").and_then(Value::as_object);
+                let href = attrs
+                    .and_then(|a| a.get("href"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                let title = attrs
+                    .and_then(|a| a.get("title"))
+                    .and_then(Value::as_str)
+                    .map(|v| format!(" \"{}\"", v.replace('"', "\\\"")))
+                    .unwrap_or_default();
+                format!("[{value}]({href}{title})")
+            }
+            other => return Err(format!("Unsupported legacy rich-text mark: {other}")),
+        };
+    }
+    output.push_str(&value);
+    Ok(())
+}
+
+#[cfg(test)]
 fn write_html_node(node: &Value, output: &mut String) {
     let node_type = node.get("type").and_then(Value::as_str).unwrap_or("");
     let attrs = node.get("attrs").and_then(Value::as_object);
@@ -310,6 +498,7 @@ fn write_html_node(node: &Value, output: &mut String) {
     }
 }
 
+#[cfg(test)]
 fn write_container(tag: &str, attributes: &str, node: &Value, output: &mut String) {
     output.push('<');
     output.push_str(tag);
@@ -325,6 +514,7 @@ fn write_container(tag: &str, attributes: &str, node: &Value, output: &mut Strin
     output.push('>');
 }
 
+#[cfg(test)]
 fn write_marked_text(node: &Value, output: &mut String) {
     let marks = node
         .get("marks")
@@ -379,6 +569,7 @@ fn write_marked_text(node: &Value, output: &mut String) {
     }
 }
 
+#[cfg(test)]
 fn escape_html(value: &str, output: &mut String) {
     for character in value.chars() {
         match character {
@@ -440,7 +631,7 @@ fn append_text(node: &Value, output: &mut String, list_depth: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::rich_text_import::html_to_document;
+    use crate::services::html_import::html_to_document;
     use proptest::prelude::*;
 
     proptest! {
@@ -527,15 +718,27 @@ mod tests {
     }
 
     #[test]
-    fn html_round_trip_preserves_supported_script_formatting() {
+    fn html_import_produces_portable_markdown() {
         let html = "<h1>Episode title</h1><p><strong>INT. LAB - NIGHT</strong></p><p style=\"text-align:center\"><em>Quietly</em><br>We should go.</p><ol start=\"0\"><li><p>First beat</p></li></ol>";
         let document = html_to_document(html).unwrap();
-        let output = document_to_html(&document);
-        assert!(output.contains("<h1>Episode title</h1>"), "{output}");
-        assert!(output.contains("<strong>INT. LAB - NIGHT</strong>"));
-        assert!(output.contains("text-align: center"));
-        assert!(output.contains("<ol start=\"0\">"));
-        assert!(validate_document(&document).is_ok());
+        let output = document_to_markdown(&document).unwrap();
+        assert!(output.contains("# Episode title"), "{output}");
+        assert!(output.contains("**INT. LAB - NIGHT**"));
+        assert!(!output.contains("align"));
+        assert!(output.contains("0. First beat"));
+        assert!(crate::services::render_markdown(&output).is_ok());
+    }
+
+    #[test]
+    fn legacy_conversion_refuses_nonportable_formatting() {
+        let aligned = json!({"type":"doc","content":[{"type":"paragraph","attrs":{"textAlign":"center"},"content":[{"type":"text","text":"Centered"}]}]});
+        assert!(document_to_markdown(&aligned)
+            .unwrap_err()
+            .contains("alignment"));
+        let underlined = json!({"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Underlined","marks":[{"type":"underline"}]}]}]});
+        assert!(document_to_markdown(&underlined)
+            .unwrap_err()
+            .contains("Underline"));
     }
 
     #[test]

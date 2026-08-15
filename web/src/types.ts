@@ -22,7 +22,6 @@ export type Session =
   | { authenticated: true; user: User; csrf_token: string }
   | { authenticated: true; api_key: { id: number; name: string; scopes: string[] }; user?: never; csrf_token?: never };
 export type Attachment = { id: number; filename: string; size_bytes: number; url: string };
-export type RichTextDocument = Record<string, unknown> | string;
 
 export type Paste = {
   id: string;
@@ -37,8 +36,9 @@ export type Paste = {
   folder_id: number | null;
   title: string;
   content: string;
-  document: RichTextDocument | null;
-  content_kind: "text" | "rich_text";
+  rendered_html: string | null;
+  plain_text: string;
+  content_kind: "text" | "markdown";
   language: string;
   visibility: "public" | "unlisted" | "private";
   created_at: number;
@@ -99,7 +99,9 @@ export type Config = {
   max_attachments_per_paste: number;
   attachments_enabled: boolean;
   qr_codes_enabled: boolean;
-  formats: Array<"text" | "rich_text">;
+  formats: Array<"text" | "markdown">;
+  markdown_dialect: string;
+  markdown_extensions: string[];
   visibility_modes: Array<"public" | "unlisted" | "private">;
   authentication_methods: string[];
   paste_create_media_types: string[];

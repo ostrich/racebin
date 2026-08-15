@@ -15,7 +15,9 @@ const config = {
   max_attachments_per_paste: 32,
   attachments_enabled: true,
   qr_codes_enabled: false,
-  formats: ["text", "rich_text"],
+  formats: ["text", "markdown"],
+  markdown_dialect: "CommonMark with GitHub-Flavored Markdown extensions",
+  markdown_extensions: ["tables", "task_lists", "autolinks", "strikethrough"],
   visibility_modes: ["public", "unlisted", "private"],
   authentication_methods: ["browser_session", "bearer_api_key"],
   paste_create_media_types: ["application/json", "multipart/form-data"],
@@ -60,7 +62,8 @@ export const paste = {
   folder_id: null,
   title: "JavaScript example",
   content: "const answer = 42;\nconsole.log(answer);",
-  document: null,
+  rendered_html: null,
+  plain_text: "const answer = 42;\nconsole.log(answer);",
   content_kind: "text",
   format: "text" as const,
   body: {
@@ -100,7 +103,7 @@ function wireMockValue(value: unknown): unknown {
   const object = value as Record<string, unknown>;
   if (typeof object.id === "string" && typeof object.content_kind === "string") {
     const id = object.id;
-    const richText = object.content_kind === "rich_text";
+    const richText = object.content_kind === "markdown";
     return {
       ...object,
       url: `/pastes/${id}`,
@@ -110,7 +113,7 @@ function wireMockValue(value: unknown): unknown {
       source_url: `/api/v1/pastes/${id}/source`,
       format: object.content_kind,
       body: richText
-        ? { format: "rich_text", content: object.document ?? "", plain_text: object.content ?? "" }
+        ? { format: "markdown", content: object.content ?? "", rendered_html: object.rendered_html ?? "", plain_text: object.plain_text ?? object.content ?? "" }
         : { format: "text", content: object.content ?? "", language: object.language ?? "plaintext" },
       created_at: typeof object.created_at === "number"
         ? new Date(object.created_at * 1000).toISOString()
@@ -196,8 +199,8 @@ export async function mockApi(
     if (url.pathname === "/api/v1/pastes/sample-paste") return json(route, viewPaste);
     if (url.pathname === "/api/v1/content-conversions") {
       const body = route.request().postDataJSON() as { source: { format: string; content: string }; target_format: string };
-      return json(route, body.target_format === "rich_text"
-        ? { body: { format: "rich_text", content: `<p>${body.source.content}</p>` } }
+      return json(route, body.target_format === "markdown"
+        ? { body: { format: "markdown", content: body.source.content } }
         : { body: { format: "text", content: paste.content, language: "plaintext" } });
     }
     if (url.pathname === "/api/v1/account/api-keys") {
