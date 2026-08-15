@@ -17,7 +17,18 @@
 :root {
   font-family: "Racebin Inter", sans-serif;
   color: var(--color-text);
-  background: var(--color-canvas);
+  background-color: var(--color-canvas);
+  background-image: linear-gradient(
+    to bottom,
+    var(--color-surface) 0,
+    var(--color-surface) calc(var(--header-height) - 1px),
+    var(--color-line) calc(var(--header-height) - 1px),
+    var(--color-line) var(--header-height),
+    var(--color-canvas) var(--header-height)
+  );
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
   font-synthesis: none;
 }
 

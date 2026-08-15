@@ -68,13 +68,7 @@
 
   let routeKey = $derived($locationState.path);
   let authenticated = $derived(Boolean($appState.session.user));
-  let plainAnonymousHome = $derived(
-    $appState.ready
-      && $appState.config.plain_home_enabled
-      && !authenticated
-      && $locationState.route.name === "home"
-  );
-  let minimalShell = $derived(!$appState.ready || plainAnonymousHome);
+  let minimalShell = $derived(!$appState.ready);
 </script>
 
 <ConfirmDialog bind:this={discardDialog}/>

@@ -53,7 +53,7 @@ test("color theme can follow the system or persist an explicit choice", async ({
   expect(await page.evaluate(() => localStorage.getItem("racebin.colorTheme"))).toBeNull();
 });
 
-test("plain home presents only login while public routes remain available", async ({ page }) => {
+test("plain home presents login within the standard public shell", async ({ page }) => {
   let homepagePasteRequests = 0;
   page.on("request", request => {
     const url = new URL(request.url());
@@ -63,12 +63,13 @@ test("plain home presents only login while public routes remain available", asyn
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Log in" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Racebin" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Explore" })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Log in" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Explore" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Color theme: Automatic theme" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Log in" })).toBeVisible();
   await expect(page.getByText("Recently shared")).toHaveCount(0);
   expect(homepagePasteRequests).toBe(0);
 
-  await page.goto("/explore");
+  await page.getByRole("link", { name: "Explore" }).click();
   await expect(page.getByRole("heading", { name: "Explore" })).toBeVisible();
   await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
   await page.getByRole("link", { name: "JavaScript example" }).click();
