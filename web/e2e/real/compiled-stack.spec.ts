@@ -38,6 +38,7 @@ test("rich-text structures survive visual editing, persistence, and server rende
   await page.getByLabel("Username").fill("test-admin");
   await page.getByLabel("Password").fill("correct horse battery staple");
   await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page).toHaveURL(/\/pastes$/);
 
   await page.goto("/pastes/new");
   await page.getByLabel("Title").fill("Rich-text round-trip test");

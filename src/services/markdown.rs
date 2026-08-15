@@ -246,8 +246,12 @@ mod tests {
         )
         .unwrap();
 
-        assert!(output.html.contains("Parent with <strong>formatting</strong>"));
-        assert!(output.html.contains("<ul>\n<li><input type=\"checkbox\" checked=\"\" disabled=\"\"> Nested task</li>"));
+        assert!(output
+            .html
+            .contains("Parent with <strong>formatting</strong>"));
+        assert!(output.html.contains(
+            "<ul>\n<li><input type=\"checkbox\" checked=\"\" disabled=\"\"> Nested task</li>"
+        ));
         assert!(output.html.contains("Nested multiline<br>\ncontinuation"));
         assert_eq!(
             output.plain_text,
