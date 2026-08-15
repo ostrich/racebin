@@ -238,4 +238,20 @@ mod tests {
         let table = render_markdown("| A | B |\n| --- | --- |\n| one | two |").unwrap();
         assert_eq!(table.plain_text, "A\tB\none\ttwo");
     }
+
+    #[test]
+    fn nested_task_lists_retain_normal_list_structure() {
+        let output = render_markdown(
+            "- [ ] Parent with **formatting**\n  - [x] Nested task\n  - [ ] Nested multiline  \n    continuation",
+        )
+        .unwrap();
+
+        assert!(output.html.contains("Parent with <strong>formatting</strong>"));
+        assert!(output.html.contains("<ul>\n<li><input type=\"checkbox\" checked=\"\" disabled=\"\"> Nested task</li>"));
+        assert!(output.html.contains("Nested multiline<br>\ncontinuation"));
+        assert_eq!(
+            output.plain_text,
+            "[ ] Parent with formatting\n[x] Nested task\n[ ] Nested multiline\ncontinuation"
+        );
+    }
 }

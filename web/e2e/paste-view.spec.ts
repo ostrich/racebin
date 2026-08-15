@@ -132,23 +132,43 @@ test("Markdown pastes default to rendered output and expose canonical source", a
   expect(markdownControlTop).toBe(renderedControlTop);
 });
 
-test("rendered task lists use aligned checkbox rows without ordinary markers", async ({ page }) => {
+test("rendered task lists retain ordinary list flow with checkbox markers", async ({ page }) => {
   await mockApi(page, false, { viewPaste: {
     ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",
-    content: "- [x] Complete\n- [ ] Pending", plain_text: "[x] Complete\n[ ] Pending",
-    rendered_html: '<ul><li><input type="checkbox" checked disabled> Complete</li><li><input type="checkbox" disabled> Pending</li></ul>'
+    content: "- Ordinary\n\n- [x] Complete\n- [ ] Parent with **formatting**\n  - [x] Nested task",
+    plain_text: "Ordinary\n\n[x] Complete\n[ ] Parent with formatting\n[x] Nested task",
+    rendered_html: '<ul><li>Ordinary</li></ul><ul><li><input type="checkbox" checked disabled> Complete</li><li><input type="checkbox" disabled> Parent with <strong>formatting</strong><ul><li><input type="checkbox" checked disabled> Nested task</li></ul></li></ul>'
   } });
   await page.goto("/pastes/sample-paste");
-  const list = page.locator(".rich-text-viewer ul");
-  const item = list.locator("li").first();
+  const ordinary = page.locator(".rich-text-content > ul").nth(0);
+  const list = page.locator(".rich-text-content > ul").nth(1);
+  const item = list.locator(":scope > li").first();
+  const parent = list.locator(":scope > li").nth(1);
+  const nested = parent.locator(":scope > ul > li");
   await expect(list).toHaveCSS("list-style-type", "none");
-  await expect(item).toHaveCSS("display", "flex");
-  const alignment = await item.evaluate(element => {
+  await expect(item).toHaveCSS("display", "list-item");
+  expect(await list.evaluate(element => getComputedStyle(element).paddingLeft))
+    .toBe(await ordinary.evaluate(element => getComputedStyle(element).paddingLeft));
+  const geometry = await parent.evaluate(element => {
     const checkbox = element.querySelector("input")!.getBoundingClientRect();
     const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
-    return Math.abs((checkbox.top + checkbox.height / 2) - (element.getBoundingClientRect().top + lineHeight / 2));
+    const nested = element.querySelector("ul")!.getBoundingClientRect();
+    const nestedItem = element.querySelector("ul > li")!.getBoundingClientRect();
+    const bounds = element.getBoundingClientRect();
+    return {
+      checkboxAlignment: Math.abs((checkbox.top + checkbox.height / 2) - (bounds.top + lineHeight / 2)),
+      nestedBelowParent: nested.top >= bounds.top + lineHeight - 1,
+      nestedIndented: nestedItem.left > bounds.left
+    };
   });
-  expect(alignment).toBeLessThan(2);
+  expect(geometry).toEqual({
+    checkboxAlignment: expect.any(Number),
+    nestedBelowParent: true,
+    nestedIndented: true
+  });
+  expect(geometry.checkboxAlignment).toBeLessThan(2);
+  await expect(parent).toContainText("Parent with formatting");
+  await expect(nested).toContainText("Nested task");
 });
 
 test("rendered Markdown tables retain declared column alignment", async ({ page }) => {

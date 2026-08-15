@@ -98,17 +98,16 @@
   margin: 0;
 }
 .rich-text-viewer .rich-text-content ul:has(> li > input[type="checkbox"]) {
-  padding-left: 0;
   list-style: none;
 }
 .rich-text-viewer .rich-text-content li:has(> input[type="checkbox"]) {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
+  list-style: none;
 }
 .rich-text-viewer .rich-text-content li:has(> input[type="checkbox"]) > input {
-  flex: 0 0 auto;
-  margin: 0;
+  width: 1em;
+  height: 1em;
+  margin: 0 0.4em 0 -1.4em;
+  vertical-align: -0.1em;
 }
 .rich-text-toolbar {
   display: flex;
