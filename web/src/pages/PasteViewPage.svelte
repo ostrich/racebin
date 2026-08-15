@@ -92,7 +92,20 @@
           </p>
         </div>
         <div class="actions">
-          {#if paste.content_kind !== "markdown" && showWrapOption}
+          {#if paste.content_kind === "markdown"}
+            <div class="paste-view-options markdown-wrap-slot">
+              {#if showWrapOption}
+                <label class="paste-wrap-toggle">
+                  <input type="checkbox" bind:checked={wrapLines}/>
+                  <span>Wrap</span>
+                </label>
+              {/if}
+            </div>
+            <div class="paste-view-options markdown-view-options" role="group" aria-label="Paste representation">
+              <button type="button" class:active={markdownView === "rendered"} onclick={() => { markdownView = "rendered"; }}>Rendered</button>
+              <button type="button" class:active={markdownView === "markdown"} onclick={() => { markdownView = "markdown"; }}>Markdown</button>
+            </div>
+          {:else if showWrapOption}
             <div class="paste-view-options">
               <label class="paste-wrap-toggle">
                 <input type="checkbox" bind:checked={wrapLines}/>
@@ -107,20 +120,6 @@
           {#if $appState.config.qr_codes_enabled}<a class="icon-button" href={pasteQrUrl($appState.config.api_base_url ?? "/api/v1", paste.id)} title="QR code" aria-label="QR code"><Icon name="qr-code"/></a>{/if}
           {#if canManage}<Link class="icon-button primary" href={`/pastes/${paste.id}/edit`} title="Edit" aria-label="Edit"><Icon name="edit-3"/></Link>{/if}
           {#if canManage}<button class="icon-button danger" type="button" title={deleting ? "Deleting paste" : "Delete"} aria-label={deleting ? "Deleting paste" : "Delete"} disabled={deleting} onclick={removePaste}><Icon name="trash-2"/></button>{/if}
-          {#if paste.content_kind === "markdown"}
-            <div class="paste-view-options markdown-wrap-slot">
-              {#if showWrapOption}
-                <label class="paste-wrap-toggle">
-                  <input type="checkbox" bind:checked={wrapLines}/>
-                  <span>Wrap</span>
-                </label>
-              {/if}
-            </div>
-            <div class="paste-view-options markdown-view-options" role="group" aria-label="Paste representation">
-              <button type="button" class:active={markdownView === "rendered"} onclick={() => { markdownView = "rendered"; }}>Rendered</button>
-              <button type="button" class:active={markdownView === "markdown"} onclick={() => { markdownView = "markdown"; }}>Markdown</button>
-            </div>
-          {/if}
         </div>
       </div>
       {#if paste.content_kind === "markdown" && markdownView === "rendered"}

@@ -22,6 +22,8 @@
   let tablePickerLeft = $state(0);
   let tablePickerPositioned = $state(false);
   let insideTable = $state(false);
+  let ready = $state(false);
+  let alive = false;
   let activeCommands = $state(new Set<string>());
   const tablePickerSize = 8;
   const tableIncompatibleCommands = new Set([
@@ -169,7 +171,13 @@
       updated.isActive("codeBlock") && "code-block"
     ].filter((command): command is string => Boolean(command)));
   }
+  function scheduleCommandState(updated: Editor): void {
+    queueMicrotask(() => {
+      if (alive && !updated.isDestroyed) updateCommandState(updated);
+    });
+  }
   onMount(() => {
+    alive = true;
     const closePicker = (event: PointerEvent) => {
       if (tablePickerOpen && !tableTool?.contains(event.target as Node)) tablePickerOpen = false;
     };
@@ -188,11 +196,13 @@
       contentType: "markdown",
       editorProps: { attributes: { class: "rich-text-content", "aria-label": "Rich-text paste content" } },
       onUpdate: ({ editor: updated }) => { markdown = updated.getMarkdown(); onchange?.(); },
-      onSelectionUpdate: ({ editor: updated }) => { updateCommandState(updated); },
-      onTransaction: ({ editor: updated }) => { updateCommandState(updated); }
+      onSelectionUpdate: ({ editor: updated }) => { scheduleCommandState(updated); },
+      onTransaction: ({ editor: updated }) => { scheduleCommandState(updated); }
     });
     updateCommandState(editor);
+    ready = true;
     return () => {
+      alive = false;
       document.removeEventListener("pointerdown", closePicker);
       editor.destroy();
     };
@@ -252,4 +262,4 @@
     </div>
   {/if}
 </div>
-<div bind:this={element} class="rich-text-editor"></div>
+<div bind:this={element} class="rich-text-editor" data-editor-ready={ready}></div>

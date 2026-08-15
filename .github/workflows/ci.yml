@@ -3,6 +3,9 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 7 * * *"
 
 permissions:
   contents: read
@@ -50,19 +53,63 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
         working-directory: web
-      - name: Run functional frontend tests
-        run: npm run test:unit && npm run test:e2e
+      - name: Run unit tests and deterministic browser gate
+        run: npm run test:unit && npm run test:e2e:gate
         working-directory: web
+      - name: Summarize browser gate failures
+        if: failure()
+        run: node scripts/summarize-playwright-results.mjs
       - name: Build the application stack
         run: cargo build --locked
       - name: Smoke-test the compiled frontend and disposable backend
         run: npm run test:real
         working-directory: web
+      - name: Summarize real-stack failures
+        if: failure()
+        run: node scripts/summarize-playwright-results.mjs
       - name: Upload Playwright failure details
         if: failure()
         uses: actions/upload-artifact@v6
         with:
           name: playwright-functional-failure-details
+          path: web/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  broad-frontend:
+    name: Broad frontend (nightly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: web
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: web
+      - name: Run the complete functional browser suite
+        run: npm run test:e2e
+        working-directory: web
+      - name: Summarize broad browser failures
+        if: failure()
+        run: node scripts/summarize-playwright-results.mjs
+      - name: Upload broad-suite failure details
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-nightly-failure-details
           path: web/test-results
           if-no-files-found: ignore
           retention-days: 7
@@ -86,6 +133,9 @@ jobs:
       - name: Run visual regression tests
         run: npm run test:visual
         working-directory: web
+      - name: Summarize visual failures
+        if: failure()
+        run: node scripts/summarize-playwright-results.mjs
       - name: Upload visual failure details
         if: failure()
         uses: actions/upload-artifact@v6

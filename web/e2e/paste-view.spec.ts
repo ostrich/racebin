@@ -270,12 +270,19 @@ test("Markdown representation and wrap controls share one aligned control row", 
     return Math.abs(title.top + title.height / 2 - (action.top + action.height / 2));
   });
   expect(titleAlignment).toBeLessThan(4);
-  const actionRight = await page.locator(".paste-view .page-heading .actions").evaluate(
-    element => element.getBoundingClientRect().right
-  );
-  const representationRight = await page.getByRole("group", { name: "Paste representation" })
-    .getByRole("button", { name: "Markdown" }).evaluate(element => element.getBoundingClientRect().right);
-  expect(representationRight).toBeCloseTo(actionRight, 5);
+  const actionOrder = await page.locator(".paste-view .page-heading .actions").evaluate(row => {
+    const representation = row.querySelector(".markdown-view-options")!.getBoundingClientRect();
+    const firstMainAction = row.querySelector(".icon-button")!.getBoundingClientRect();
+    const lastMainAction = row.querySelectorAll(".icon-button").item(
+      row.querySelectorAll(".icon-button").length - 1
+    ).getBoundingClientRect();
+    return {
+      representationBeforeMainActions: representation.right < firstMainAction.left,
+      mainActionsRightAligned: Math.abs(lastMainAction.right - row.getBoundingClientRect().right)
+    };
+  });
+  expect(actionOrder.representationBeforeMainActions).toBe(true);
+  expect(actionOrder.mainActionsRightAligned).toBeLessThan(1);
 
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
   await expect(page.getByLabel("Wrap")).toBeVisible();

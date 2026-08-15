@@ -4,7 +4,9 @@ export default defineConfig({
   testDir: "./e2e",
   testIgnore: "**/real/**",
   fullyParallel: true,
-  reporter: "list",
+  reporter: process.env.CI
+    ? [["line"], ["github"], ["json", { outputFile: "test-results/results.json" }]]
+    : "list",
   use: {
     baseURL: "http://127.0.0.1:4173",
     trace: "retain-on-failure"

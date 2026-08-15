@@ -48,6 +48,18 @@ The Rust suite includes:
 
 ## Frontend gates
 
+Install the repository's pre-push hook once per checkout:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The hook runs `scripts/check-before-push.sh`. It checks Rust formatting,
+retired naming, the OpenAPI snapshot and generated TypeScript types, frontend
+API boundaries, CSS architecture, Svelte diagnostics, frontend unit tests, the
+production bundle, committed generated artifacts, and a deterministic browser
+gate. Run the script directly when you want the same result without pushing.
+
 The main frontend commands are:
 
 ```bash
@@ -55,6 +67,7 @@ cd web
 npm run check
 npm run check:css
 npm run test:unit
+npm run test:e2e:gate
 npm run test:e2e
 npm run test:visual
 npm run build
@@ -75,6 +88,13 @@ different responsibilities:
 - Layout-invariant tests express measurable requirements such as common content
   edges, stable filter boundaries, shared control heights, and no horizontal
   page overflow.
+
+`test:e2e:gate` is the deliberately small, reliable push gate. `test:e2e`
+runs the complete functional suite and remains available locally and in the
+scheduled broad workflow. Tests must wait for observable application state,
+not arbitrary delays. For example, rich-text tests wait for
+`data-editor-ready="true"`, and the real-stack server is accepted only after
+`/readyz` succeeds.
 
 When an intentional visual change requires new baselines, inspect the failed
 images before updating them:
@@ -157,17 +177,23 @@ schema.
 
 ## CI workflow
 
-GitHub Actions runs three jobs:
+GitHub Actions runs three push/PR jobs and one scheduled broad job:
 
 - **Rust** provisions PostgreSQL 18, checks retired naming, formatting, strict
   Clippy, and the complete SQLite/PostgreSQL suite.
 - **Frontend** verifies generated API artifacts and the API boundary, builds
   and verifies committed `web/dist`, enforces the CSS architecture, runs unit
-  and functional Playwright tests, builds the Rust application, and runs the
-  disposable real-stack suite.
+  tests and the deterministic browser gate, builds the Rust application, and
+  runs the disposable real-stack suite.
 - **Visual regression** runs after the frontend job succeeds in the pinned
   Playwright container.
+- **Broad frontend (nightly)** runs the complete functional browser suite after
+  the normal frontend gate. It also runs when the workflow is dispatched
+  manually.
 
-The workflow uploads Playwright traces and failure details when a browser job
-fails. A local pass without PostgreSQL does not replace the PostgreSQL-backed CI
-run.
+Playwright emits GitHub annotations for exact failed assertions. A compact
+failure summary is added to the workflow run, while traces and page-state
+details remain downloadable artifacts. Visual regression is intentionally a
+separate downstream job, so functional failures do not get obscured by image
+diffs. A local pass without PostgreSQL does not replace the PostgreSQL-backed
+CI run.

@@ -43,6 +43,7 @@ test("rich-text structures survive visual editing, persistence, and server rende
   await page.goto("/pastes/new");
   await page.getByLabel("Title").fill("Rich-text round-trip test");
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  await expect(page.locator('.rich-text-editor[data-editor-ready="true"]')).toBeVisible();
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
   const source = page.getByRole("textbox", { name: "Paste content" });
   const markdown = [
