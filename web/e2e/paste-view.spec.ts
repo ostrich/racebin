@@ -163,6 +163,30 @@ test("Markdown representation changes never render an empty transition frame", a
   await expect(page.locator(".rich-text-viewer")).toBeVisible();
 });
 
+test("paste managers can delete from the paste view", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/sample-paste");
+  const deleteButton = page.getByRole("button", { name: "Delete", exact: true });
+  await expect(deleteButton).toBeVisible();
+
+  page.once("dialog", dialog => dialog.accept());
+  const deletion = page.waitForRequest(request =>
+    request.url().endsWith("/api/v1/pastes/sample-paste") && request.method() === "DELETE"
+  );
+  await deleteButton.click();
+  const request = await deletion;
+  expect(request.headers()["if-match"]).toBe("*");
+  await expect(page).toHaveURL(/\/pastes$/);
+  await expect(page.getByRole("heading", { name: "My pastes" })).toBeVisible();
+});
+
+test("paste deletion is hidden without management access", async ({ page }) => {
+  await mockApi(page, true, { viewPaste: { ...paste, source_url: null } });
+  await page.goto("/pastes/sample-paste");
+  await expect(page.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Edit", exact: true })).toHaveCount(0);
+});
+
 test("rendered task lists retain ordinary list flow with checkbox markers", async ({ page }) => {
   await mockApi(page, false, { viewPaste: {
     ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",

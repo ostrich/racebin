@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { getPaste, getPasteSource, pasteQrUrl, readPaste } from "../api";
+  import { deletePaste, getPaste, getPasteSource, pasteQrUrl, readPaste } from "../api";
   import AttachmentList from "../components/AttachmentList.svelte";
   import CodeViewer from "../components/CodeViewer.svelte";
   import Icon from "../components/Icon.svelte";
@@ -8,7 +8,7 @@
   import RichTextViewer from "../components/RichTextViewer.svelte";
   import { formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
   import { showNotice } from "../notices";
-  import { holdNavigation } from "../navigation";
+  import { holdNavigation, navigate } from "../navigation";
   import { appState } from "../state";
   import type { Paste } from "../types";
 
@@ -20,8 +20,9 @@
   let horizontalOverflow = $state(false);
   let codeViewer = $state<{ preparePrint(): Promise<void> }>();
   let preparingPrint = $state(false);
+  let deleting = $state(false);
   const initialLoadReady = holdNavigation();
-  let own = $derived(Boolean(
+  let canManage = $derived(Boolean(
     paste?.source_url
   ));
   let showWrapOption = $derived(Boolean(
@@ -59,6 +60,19 @@
       preparingPrint = false;
     }
   }
+
+  async function removePaste(): Promise<void> {
+    if (!paste || deleting || !canManage || !confirm("Delete this paste permanently?")) return;
+    deleting = true;
+    try {
+      await deletePaste(paste.id, paste._etag ?? "*");
+      showNotice("Paste deleted.");
+      await navigate("/pastes");
+    } catch (reason) {
+      showNotice(reason instanceof Error ? reason.message : "Unable to delete paste", "error");
+      deleting = false;
+    }
+  }
 </script>
 
 {#if paste}
@@ -83,7 +97,8 @@
           <button class="button" type="button" disabled={preparingPrint} onclick={printPaste}><Icon name="printer"/> {preparingPrint ? "Preparing…" : "Print"}</button>
           {#if paste.archive_url}<a class="button" href={paste.archive_url}>ZIP</a>{/if}
           {#if $appState.config.qr_codes_enabled}<a class="button" href={pasteQrUrl($appState.config.api_base_url ?? "/api/v1", paste.id)}>QR</a>{/if}
-          {#if own}<Link class="button primary" href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/> Edit</Link>{/if}
+          {#if canManage}<Link class="button primary" href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/> Edit</Link>{/if}
+          {#if canManage}<button class="button danger" type="button" disabled={deleting} onclick={removePaste}><Icon name="trash-2"/> {deleting ? "Deleting…" : "Delete"}</button>{/if}
         </div>
       </div>
       {#if paste.content_kind === "markdown"}
@@ -118,7 +133,7 @@
       {/if}
       {#if paste.attachments.length}
         <section><h2>Attachments</h2>
-          <AttachmentList pasteId={paste.id} attachments={paste.attachments} canDelete={own} etag={paste._etag}
+          <AttachmentList pasteId={paste.id} attachments={paste.attachments} canDelete={canManage} etag={paste._etag}
             ondelete={(attachment, etag) => { if (paste) paste = { ...paste, _etag: etag ?? paste._etag, attachments: paste.attachments.filter(item => item.id !== attachment.id) }; }}/>
         </section>
       {/if}

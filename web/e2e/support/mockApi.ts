@@ -57,7 +57,7 @@ export const paste = {
   api_url: "/api/v1/pastes/sample-paste",
   read_url: "/api/v1/pastes/sample-paste/reads",
   raw_url: "/api/v1/pastes/sample-paste/raw",
-  source_url: "/api/v1/pastes/sample-paste/source",
+  source_url: "/api/v1/pastes/sample-paste/source" as string | null,
   owner_id: 1,
   folder_id: null,
   title: "JavaScript example",
@@ -110,7 +110,7 @@ function wireMockValue(value: unknown): unknown {
       api_url: `/api/v1/pastes/${id}`,
       read_url: `/api/v1/pastes/${id}/reads`,
       raw_url: `/api/v1/pastes/${id}/raw`,
-      source_url: `/api/v1/pastes/${id}/source`,
+      source_url: object.source_url === null ? null : `/api/v1/pastes/${id}/source`,
       format: object.content_kind,
       body: richText
         ? { format: "markdown", content: object.content ?? "", rendered_html: object.rendered_html ?? "", plain_text: object.plain_text ?? object.content ?? "" }
