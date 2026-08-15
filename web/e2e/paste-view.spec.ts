@@ -132,6 +132,37 @@ test("Markdown pastes default to rendered output and expose canonical source", a
   expect(markdownControlTop).toBe(renderedControlTop);
 });
 
+test("Markdown representation changes never render an empty transition frame", async ({ page }) => {
+  await mockApi(page, false, { viewPaste: {
+    ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",
+    content: "## Scene\n\n**Dialogue**", plain_text: "Scene\n\nDialogue",
+    rendered_html: "<h2>Scene</h2><p><strong>Dialogue</strong></p>"
+  } });
+  await page.goto("/pastes/sample-paste");
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await expect(page.locator(".paste-code-shell")).toBeVisible();
+
+  const renderedEmptyState = await page.evaluate(async () => {
+    const pasteView = document.querySelector(".paste-view")!;
+    let observedEmptyState = false;
+    const observer = new MutationObserver(() => {
+      if (!pasteView.querySelector(".rich-text-viewer, .paste-code-shell")) {
+        observedEmptyState = true;
+      }
+    });
+    observer.observe(pasteView, { childList: true, subtree: true });
+    const rendered = [...document.querySelectorAll<HTMLButtonElement>("button")]
+      .find(button => button.textContent?.trim() === "Rendered")!;
+    rendered.click();
+    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    observer.disconnect();
+    return observedEmptyState;
+  });
+
+  expect(renderedEmptyState).toBe(false);
+  await expect(page.locator(".rich-text-viewer")).toBeVisible();
+});
+
 test("rendered task lists retain ordinary list flow with checkbox markers", async ({ page }) => {
   await mockApi(page, false, { viewPaste: {
     ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",

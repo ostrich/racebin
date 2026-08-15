@@ -1054,6 +1054,7 @@
 }
 .paste-workspace {
   display: grid;
+  grid-template-areas: "folders main";
   grid-template-columns: 220px minmax(0, 1fr);
   gap: var(--space-8);
   align-items: start;
@@ -1062,9 +1063,11 @@
     gap 0.16s ease;
 }
 .paste-workspace-main {
+  grid-area: main;
   min-width: 0;
 }
 .folder-nav {
+  grid-area: folders;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-surface);

@@ -5,6 +5,7 @@
   import CodeViewer from "../components/CodeViewer.svelte";
   import Icon from "../components/Icon.svelte";
   import Link from "../components/Link.svelte";
+  import RichTextViewer from "../components/RichTextViewer.svelte";
   import { formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
   import { showNotice } from "../notices";
   import { holdNavigation } from "../navigation";
@@ -109,10 +110,7 @@
         </div>
       {/if}
       {#if paste.content_kind === "markdown" && markdownView === "rendered"}
-        {#await import("../components/RichTextViewer.svelte") then module}
-          {@const RichTextViewer = module.default}
-          <RichTextViewer html={paste.rendered_html ?? ""} onready={initialLoadReady}/>
-        {/await}
+        <RichTextViewer html={paste.rendered_html ?? ""} onready={initialLoadReady}/>
       {:else}
         <CodeViewer bind:this={codeViewer} code={paste.content} language={paste.content_kind === "markdown" ? "markdown" : paste.language} wrap={wrapLines}
           onready={initialLoadReady}

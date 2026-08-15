@@ -77,6 +77,36 @@ test("workspace boundaries align and the folder sidebar collapses persistently",
   )).toContain("folder-sidebar-collapsed");
 });
 
+test("cold workspace navigation keeps main content in its final grid area", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("racebin.folderSidebarCollapsed", "true"));
+  await mockApi(page, true, { delay: 200 });
+  await page.goto("/pastes/new");
+  await page.getByRole("link", { name: "My pastes" }).click();
+  await expect(page.getByText("Loading pastes…")).toBeVisible();
+
+  const loadingGeometry = await page.locator(".paste-workspace").evaluate(workspace => {
+    const main = workspace.querySelector<HTMLElement>(".paste-workspace-main")!;
+    const bounds = workspace.getBoundingClientRect();
+    const mainBounds = main.getBoundingClientRect();
+    return {
+      left: mainBounds.left,
+      width: mainBounds.width,
+      followsSidebarColumn: mainBounds.left > bounds.left,
+      occupiesMainColumn: mainBounds.width > bounds.width / 2
+    };
+  });
+  expect(loadingGeometry.followsSidebarColumn).toBe(true);
+  expect(loadingGeometry.occupiesMainColumn).toBe(true);
+
+  await expect(page.locator(".paste-list")).toBeVisible();
+  const loadedGeometry = await page.locator(".paste-workspace-main").evaluate(main => ({
+    left: main.getBoundingClientRect().left,
+    width: main.getBoundingClientRect().width
+  }));
+  expect(loadedGeometry.left).toBeCloseTo(loadingGeometry.left, 5);
+  expect(loadedGeometry.width).toBeCloseTo(loadingGeometry.width, 5);
+});
+
 test("folder sidebar remains fixed at its initial position while scrolling", async ({ page }) => {
   const items = Array.from({ length: 40 }, (_, index) => ({
     ...paste,
