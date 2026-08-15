@@ -15,6 +15,8 @@ export default defineConfig({
       "@tiptap/extension-task-item",
       "@tiptap/extension-task-list",
       "@tiptap/markdown",
+      "@tiptap/pm/model",
+      "@tiptap/pm/state",
       "@tiptap/starter-kit"
     ]
   },
