@@ -213,10 +213,13 @@
   grid-template-columns: auto 1fr auto;
   gap: 10px;
   align-items: center;
-  padding: 12px;
-  border: 1px solid var(--line);
-  background: var(--color-surface);
+  min-width: 0;
   text-decoration: none;
+}
+.attachments a > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .attachments svg {
   width: 18px;
@@ -532,6 +535,88 @@
   grid-template-columns: 1fr auto;
   gap: 8px;
   align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+.attachment-row:has(a:hover) {
+  background: var(--color-surface-subtle);
+}
+.attachment-picker {
+  display: grid;
+  gap: var(--space-2);
+}
+.attachment-drop-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: 72px;
+  padding: var(--space-3);
+  border: 1px dashed var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-subtle);
+}
+.attachment-drop-zone.dragging {
+  border-color: var(--color-focus-ring);
+  box-shadow: 0 0 0 2px var(--color-focus-ring);
+}
+.attachment-drop-zone > div {
+  display: grid;
+  gap: var(--space-1);
+}
+.attachment-drop-zone small,
+.attachment-picker-limits,
+.attachment-queue-summary {
+  color: var(--muted);
+}
+.attachment-queue {
+  display: grid;
+  gap: var(--space-2);
+}
+.attachment-queue-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-height);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+.attachment-queue-row > svg {
+  width: 18px;
+  height: 18px;
+}
+.attachment-queue-row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-queue-row > small {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.attachment-picker-limits,
+.attachment-queue-summary {
+  font-size: 11px;
+}
+@media (max-width: 560px) {
+  .attachment-drop-zone {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .attachment-drop-zone .button {
+    align-self: start;
+  }
+  .attachment-queue-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .attachment-queue-row > small {
+    display: none;
+  }
 }
 .existing-attachments {
   display: grid;

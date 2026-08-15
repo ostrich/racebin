@@ -623,6 +623,40 @@ test("table row editing retains a Markdown-compatible header row", async ({ page
   await expect(page.locator(".rich-text-editor th")).toHaveCount(2);
 });
 
+test("attachment selections accumulate in a removable upload queue", async ({ page }) => {
+  await mockApi(page, true);
+  let multipart = "";
+  page.on("request", request => {
+    if (new URL(request.url()).pathname === "/api/v1/pastes" && request.method() === "POST") {
+      multipart = request.postData() ?? "";
+    }
+  });
+  await page.goto("/pastes/new");
+  const picker = page.getByLabel("Add attachments");
+  await picker.setInputFiles({
+    name: "first.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("first")
+  });
+  await picker.setInputFiles({
+    name: "second.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("second")
+  });
+
+  const queue = page.getByRole("region", { name: "Selected attachments" });
+  await expect(queue.getByText("first.txt")).toBeVisible();
+  await expect(queue.getByText("second.txt")).toBeVisible();
+  await expect(queue).toContainText("2 files");
+  await page.getByRole("button", { name: "Remove first.txt" }).click();
+  await expect(queue.getByText("first.txt")).toBeHidden();
+
+  await page.getByRole("button", { name: "Create paste" }).click();
+  await expect(page).toHaveURL(/\/pastes\/sample-paste$/);
+  expect(multipart).toContain("second.txt");
+  expect(multipart).not.toContain("first.txt");
+});
+
 test("edit page shows current attachments", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/sample-paste/edit");

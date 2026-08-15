@@ -6,6 +6,7 @@
     type Conversion, type CreatePasteInput, type FlatCreateInput, type UpdatePasteInput
   } from "../api";
   import AttachmentList from "../components/AttachmentList.svelte";
+  import AttachmentPicker from "../components/AttachmentPicker.svelte";
   import CodeEditor from "../components/CodeEditor.svelte";
   import ConversionDialog from "../components/ConversionDialog.svelte";
   import LanguagePicker from "../components/LanguagePicker.svelte";
@@ -24,7 +25,7 @@
   let paste = $state<Paste | null>(null);
   let loading = $state(false);
   let error = $state("");
-  let files = $state<HTMLInputElement>();
+  let selectedAttachments = $state<File[]>([]);
   let conversionDialog: ConversionDialog;
   let title = $state("");
   let content = $state("");
@@ -39,7 +40,6 @@
   let expirationMode = $state<ExpirationMode>("never");
   let expiresAt = $state("");
   let readLimit = $state("");
-  let attachmentSelection = $state("");
   let submitting = $state(false);
   let switching = $state(false);
   let editorHeight = $state(410);
@@ -91,14 +91,20 @@
     }
   }
 
-  function snapshot(selectedAttachments = attachmentSelection): string {
+  function attachmentFingerprint(): string {
+    return selectedAttachments
+      .map(file => `${file.name}:${file.size}:${file.lastModified}`).join("|");
+  }
+
+  function snapshot(selectedAttachmentFingerprint = attachmentFingerprint()): string {
     const effectiveKind = contentKind === "markdown" && !markdown.trim()
       ? "text"
       : contentKind;
     return JSON.stringify({
       title, content, markdown: effectiveKind === "markdown" ? markdown : null,
       contentKind: effectiveKind, folderId, language: effectiveKind === "text" ? language : null,
-      visibility, expirationMode, expiresAt, readLimit, attachmentSelection: selectedAttachments
+      visibility, expirationMode, expiresAt, readLimit,
+      attachmentSelection: selectedAttachmentFingerprint
     });
   }
   let dirty = $derived(initialized && snapshot() !== baseline);
@@ -208,11 +214,6 @@
     }
   }
 
-  function selectedFiles(): void {
-    attachmentSelection = [...(files?.files ?? [])]
-      .map(file => `${file.name}:${file.size}:${file.lastModified}`).join("|");
-  }
-
   async function submit(): Promise<void> {
     const canonicalLanguage = contentKind === "text" ? normalizeLanguage(language) : "plaintext";
     if (!canonicalLanguage) {
@@ -224,7 +225,7 @@
       showNotice(`Content exceeds the ${Math.floor($appState.config.max_content_size_bytes / 1024)} KiB server limit.`, "error");
       return;
     }
-    const selected = [...(files?.files ?? [])];
+    const selected = selectedAttachments;
     if (selected.length + (paste?.attachments.length ?? 0) > $appState.config.max_attachments_per_paste) {
       showNotice(`A paste can have at most ${$appState.config.max_attachments_per_paste} attachments.`, "error");
       return;
@@ -377,8 +378,10 @@
         </div>
       {/if}
       {#if $appState.config.attachments_enabled}
-        <label class="field"><span>Add attachments</span><input bind:this={files} type="file" multiple onchange={selectedFiles}/>
-          <small>Up to {$appState.config.max_attachments_per_paste} files; combined upload limit: {Math.floor($appState.config.max_attachment_size_bytes / 1024 / 1024)} MiB</small></label>
+        <AttachmentPicker bind:files={selectedAttachments}
+          existingCount={paste?.attachments.length ?? 0}
+          maxFiles={$appState.config.max_attachments_per_paste}
+          maxBytes={$appState.config.max_attachment_size_bytes}/>
       {/if}
       <div class="actions">
         <button class="button primary" type="submit" disabled={submitting || switching}>{submitting ? "Saving…" : paste ? "Save changes" : "Create paste"}</button>

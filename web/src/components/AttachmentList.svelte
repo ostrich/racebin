@@ -1,5 +1,6 @@
 <script lang="ts">
   import { deleteAttachment } from "../api";
+  import { formatByteSize } from "../format";
   import { showNotice } from "../notices";
   import type { Attachment } from "../types";
   import Icon from "./Icon.svelte";
@@ -40,8 +41,8 @@
     <div class="attachment-row">
       <a href={attachment.url}>
         <Icon name="file-text"/>
-        <span>{attachment.filename}</span>
-        <small>{attachment.size_bytes.toLocaleString()} bytes</small>
+        <span title={attachment.filename}>{attachment.filename}</span>
+        <small>{formatByteSize(attachment.size_bytes)}</small>
       </a>
       {#if canDelete}
         <button class="icon-button" type="button" title="Delete attachment"
