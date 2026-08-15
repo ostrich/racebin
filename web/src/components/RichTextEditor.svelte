@@ -8,7 +8,7 @@
   import StarterKit from "@tiptap/starter-kit";
   import { showNotice } from "../notices";
   import Icon from "./Icon.svelte";
-  import { CodeBlockPasteNormalization } from "./CodeBlockPasteNormalization";
+  import { RichTextPasteNormalization } from "./RichTextPasteNormalization";
   import type { IconName } from "./icons";
 
   let { markdown = $bindable(), onchange }: { markdown: string; onchange?: () => void } = $props();
@@ -181,7 +181,7 @@
           gapcursor: false, underline: false,
           link: { openOnClick: false, autolink: true, protocols: ["http", "https", "mailto"], isAllowedUri: safeLink,
             HTMLAttributes: { rel: "noopener noreferrer nofollow", target: "_blank" } } }),
-        CodeBlockPasteNormalization, TableKit, TaskList, TaskItem.configure({ nested: true }),
+        RichTextPasteNormalization, TableKit, TaskList, TaskItem.configure({ nested: true }),
         Markdown.configure({ markedOptions: { gfm: true } })
       ],
       content: markdown,

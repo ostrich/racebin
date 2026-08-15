@@ -470,6 +470,55 @@ test("pasted code blocks do not acquire editable trailing blank lines", async ({
   expect(await source.inputValue()).not.toContain("const answer = 42;\n\n```");
 });
 
+test("pasted rich-text table cells preserve hard line breaks and formatting", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  const editor = page.getByLabel("Rich-text paste content");
+  await editor.focus();
+  await editor.evaluate(element => {
+    const clipboard = new DataTransfer();
+    clipboard.setData("text/html", `<table><tbody>
+      <tr><th><span>Label</span></th><th><span>Details</span></th></tr>
+      <tr><td><span>Example</span></td><td><strong><span>Bold line</span></strong><br><em><span>Italic line</span></em></td></tr>
+    </tbody></table>`);
+    clipboard.setData("text/plain", "Label\tDetails\nExample\tBold line\nItalic line");
+    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true }));
+  });
+  await expect(page.locator(".rich-text-editor td").last().locator("br")).toHaveCount(1);
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  const source = page.getByRole("textbox", { name: "Paste content" });
+  await expect(source).toHaveValue(/\*\*Bold line\*\*<br>\*Italic line\*/);
+  await page.getByRole("button", { name: "Visual", exact: true }).click();
+  await expect(page.locator(".rich-text-editor td").last().locator("br")).toHaveCount(1);
+});
+
+test("pasted semantic task lists become nested canonical task lists", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  const editor = page.getByLabel("Rich-text paste content");
+  await editor.focus();
+  await editor.evaluate(element => {
+    const clipboard = new DataTransfer();
+    clipboard.setData("text/html", `<ul>
+      <li data-task-list-item="true" data-checked="true"><span contenteditable="false"><input type="checkbox" checked></span><div><p>Completed task</p></div></li>
+      <li data-task-list-item="true" data-checked="false"><span contenteditable="false"><input type="checkbox"></span><div><p>Parent task</p><ul><li data-task-list-item="true" data-checked="true"><span contenteditable="false"><input type="checkbox" checked></span><div><p>Nested task</p></div></li></ul></div></li>
+    </ul>`);
+    clipboard.setData("text/plain", "Completed task\nParent task\nNested task");
+    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true }));
+  });
+  await expect(page.locator('.rich-text-editor ul[data-type="taskList"]')).toHaveCount(2);
+  await expect(page.locator('.rich-text-editor li[data-checked]')).toHaveCount(3);
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  const source = page.getByRole("textbox", { name: "Paste content" });
+  await expect.poll(async () => (await source.inputValue()).trimEnd()).toBe([
+    "- [x] Completed task",
+    "- [ ] Parent task",
+    "  - [x] Nested task"
+  ].join("\n"));
+});
+
 test("table cells prevent block structures that canonical Markdown cannot preserve", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
