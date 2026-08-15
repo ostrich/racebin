@@ -450,6 +450,26 @@ test("code blocks survive visual and Markdown mode round trips", async ({ page }
   await expect(page.locator(".rich-text-editor pre code")).toContainText("const answer = 42;");
 });
 
+test("pasted code blocks do not acquire editable trailing blank lines", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  const editor = page.getByLabel("Rich-text paste content");
+  await editor.focus();
+  await editor.evaluate(element => {
+    const clipboard = new DataTransfer();
+    clipboard.setData("text/html", "<p>Example:</p><pre><code>const answer = 42;\n</code></pre>");
+    clipboard.setData("text/plain", "Example:\n\nconst answer = 42;");
+    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true }));
+  });
+  await expect(page.locator(".rich-text-editor pre code")).toHaveText("const answer = 42;");
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  const source = page.getByRole("textbox", { name: "Paste content" });
+  await expect.poll(async () => (await source.inputValue()).trimEnd())
+    .toBe("Example:\n\n```\nconst answer = 42;\n```");
+  expect(await source.inputValue()).not.toContain("const answer = 42;\n\n```");
+});
+
 test("table cells prevent block structures that canonical Markdown cannot preserve", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
