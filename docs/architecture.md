@@ -342,7 +342,8 @@ later architectural layer.
    geometry, radii, page dimensions, sticky offsets, and stacking levels.
    Dark mode changes these tokens rather than restyling individual components.
 3. `web/src/styles/primitives.css` defines reusable layout and interaction
-   primitives such as stacks, clusters, headings, and buttons.
+   primitives such as stacks, clusters, headings, buttons, labeled fields,
+   and the control surface used by both native fields and composite widgets.
 4. `web/src/styles/layout.css` defines the shared shell and page compositions.
 5. `web/src/styles/rich-text.css`, `folder-responsive.css`, and
    `paste-library.css` contain focused feature styling.
@@ -352,16 +353,19 @@ later architectural layer.
    adaptations in the `overrides` layer.
 
 New UI should use semantic tokens and existing primitives before adding a
-component-specific rule. Components own their internal layout; pages own only
-the arrangement between components. Fixed dimensions and sticky offsets must
-come from tokens when they participate in shared alignment. This keeps layout
+component-specific rule. Foundations own baseline geometry and appearance;
+component rules describe real variants instead of cancelling foundation
+properties. Components own their internal layout, while pages own only the
+arrangement between components. Fixed dimensions and sticky offsets must come
+from tokens when they participate in shared alignment. This keeps layout
 behavior consistent and prevents page-specific overrides from becoming a
 second design system.
 
 `npm run check:css` applies standards linting and project-specific boundaries:
 literal colors and theme selectors are confined to the token sheet,
-`!important` is confined to utilities, duplicate selectors and properties are
-rejected, and the global layer order is verified. Visual tests exercise the
+`!important` is confined to utilities, duplicate declarations and conflicting
+property ownership for the same selector are rejected, and the global layer
+order is verified. Visual tests exercise the
 representative paste workspace in automatic, light, and dark themes at desktop
 and mobile sizes. Functional tests additionally assert semantic invariants,
 such as a primary action retaining its filled accent treatment.

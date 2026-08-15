@@ -36,8 +36,8 @@
     <p class="eyebrow">Account recovery</p><h1>Choose a new password</h1>
     <p class="muted">This one-time link expires one hour after it was created.</p>
     <form class="stack" onsubmit={submit}>
-      <label><span>New password</span><input type="password" minlength={$appState.config.minimum_password_characters} autocomplete="new-password" bind:value={password} required></label>
-      <label><span>Confirm password</span><input type="password" minlength={$appState.config.minimum_password_characters} autocomplete="new-password" bind:value={confirmation} required></label>
+      <label class="field"><span>New password</span><input type="password" minlength={$appState.config.minimum_password_characters} autocomplete="new-password" bind:value={password} required></label>
+      <label class="field"><span>Confirm password</span><input type="password" minlength={$appState.config.minimum_password_characters} autocomplete="new-password" bind:value={confirmation} required></label>
       {#if error}<p class="form-error" role="alert">{error}</p>{/if}
       <button class="button primary" type="submit" disabled={saving}>{saving ? "Resetting…" : "Reset password"}</button>
     </form>

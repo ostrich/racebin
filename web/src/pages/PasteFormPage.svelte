@@ -311,9 +311,9 @@
   <section class="editor">
     <div class="page-heading"><div><p class="eyebrow">{paste ? "Edit" : "Create"}</p><h1>{paste ? pasteDisplayTitle(paste) : "New paste"}</h1></div></div>
     <form onsubmit={(event) => { event.preventDefault(); void submit(); }}>
-      <label class="title-field"><span>Title</span><input bind:value={title} maxlength={$appState.config.max_title_characters} placeholder="Optional title"/></label>
+      <label class="field title-field"><span>Title</span><input bind:value={title} maxlength={$appState.config.max_title_characters} placeholder="Optional title"/></label>
       {#if contentKind === "markdown"}
-        <div class="content-field"><span>Content</span>
+        <div class="field content-field"><span>Content</span>
           <div class="content-editor content-editor-rich" style={`height:${editorHeight}px`}
             use:trackEditorResize>
             <div class="rich-text-mode" role="group" aria-label="Rich-text editing mode">
@@ -333,7 +333,7 @@
           </div>
         </div>
       {:else}
-        <div class="content-field"><span>Content</span>
+        <div class="field content-field"><span>Content</span>
           <div class="content-editor content-editor-text" style={`height:${editorHeight}px`}
             use:trackEditorResize>
             <CodeEditor bind:value={content} bind:language maxLength={$appState.config.max_content_size_bytes}/>
@@ -341,33 +341,33 @@
         </div>
       {/if}
       <div class:without-folder={!canOrganize} class="form-grid">
-        <label class="type-field"><span>Type</span><select value={contentKind} disabled={switching} onchange={changeKind}>
+        <label class="field type-field"><span>Type</span><select value={contentKind} disabled={switching} onchange={changeKind}>
           {#each $appState.config.formats as format}<option value={format}>{format === "markdown" ? "Rich text" : "Text"}</option>{/each}
         </select></label>
         <LanguagePicker bind:value={language} disabled={contentKind !== "text"}/>
         {#if canOrganize}
-          <label class="folder-field"><span>Folder</span><select bind:value={folderId}>
+          <label class="field folder-field"><span>Folder</span><select bind:value={folderId}>
             <option value="">Uncategorized</option>
             {#each folders as folder}<option value={String(folder.id)}>{folder.name}</option>{/each}
           </select></label>
         {/if}
-        <label class="visibility-field"><span>Visibility</span><select bind:value={visibility}>
+        <label class="field visibility-field"><span>Visibility</span><select bind:value={visibility}>
           {#each $appState.config.visibility_modes as mode}<option value={mode}>{mode}</option>{/each}
         </select></label>
-        <label class="expiration-mode-field"><span>Expiration</span><select value={expirationMode} onchange={changeExpirationMode}>
+        <label class="field expiration-mode-field"><span>Expiration</span><select value={expirationMode} onchange={changeExpirationMode}>
           <option value="never">Never</option><option value="1h">1 hour</option>
           <option value="12h">12 hours</option><option value="1d">1 day</option>
           <option value="1w">1 week</option><option value="30d">30 days</option>
           <option value="1y">1 year</option><option value="custom">Custom…</option>
         </select></label>
-        <label class="expiration-time-field"><span>Date and time</span>
+        <label class="field expiration-time-field"><span>Date and time</span>
           {#if expirationMode === "never"}
             <input type="text" value="Not applicable" disabled/>
           {:else}
             <input type="datetime-local" bind:value={expiresAt} required oninput={customizeExpiration}/>
           {/if}
         </label>
-        <label class="read-limit-field"><span>View limit</span><input type="number" min="1" bind:value={readLimit} placeholder="Unlimited"/></label>
+        <label class="field read-limit-field"><span>View limit</span><input type="number" min="1" bind:value={readLimit} placeholder="Unlimited"/></label>
       </div>
       {#if paste?.attachments.length}
         <div class="existing-attachments"><span>Current attachments</span>
@@ -377,7 +377,7 @@
         </div>
       {/if}
       {#if $appState.config.attachments_enabled}
-        <label><span>Add attachments</span><input bind:this={files} type="file" multiple onchange={selectedFiles}/>
+        <label class="field"><span>Add attachments</span><input bind:this={files} type="file" multiple onchange={selectedFiles}/>
           <small>Up to {$appState.config.max_attachments_per_paste} files; combined upload limit: {Math.floor($appState.config.max_attachment_size_bytes / 1024 / 1024)} MiB</small></label>
       {/if}
       <div class="actions">

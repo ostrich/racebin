@@ -23,3 +23,5 @@ if ! head -n 1 web/src/style.css | grep -q '^@layer reset, tokens, foundations, 
   echo "The global cascade layer order must remain explicit and stable." >&2
   exit 1
 fi
+
+node scripts/check-css-consistency.mjs

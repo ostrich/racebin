@@ -7,6 +7,7 @@ export default {
     "color-function-alias-notation": null,
     "color-function-notation": null,
     "declaration-block-no-redundant-longhand-properties": null,
+    "declaration-block-no-duplicate-properties": true,
     "declaration-empty-line-before": null,
     "declaration-block-single-line-max-declarations": null,
     "import-notation": null,

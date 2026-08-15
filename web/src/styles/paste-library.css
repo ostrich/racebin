@@ -163,8 +163,6 @@
 .paste-meta .meta-detail {
   display: inline-flex;
   align-items: center;
-  background: transparent;
-  padding: 0;
   color: var(--muted);
   text-decoration: none;
   white-space: nowrap;

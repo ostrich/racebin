@@ -182,6 +182,28 @@ test("Markdown representation controls remain fixed when the wrap option appears
   expect(await controls.evaluate(element => element.getBoundingClientRect().top)).toBe(renderedTop);
 });
 
+test("Markdown representation and wrap controls share the heading action edge", async ({ page }) => {
+  await mockApi(page, true, { viewPaste: {
+    ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",
+    content: `## Scene\n\n${"wide content ".repeat(80)}`, plain_text: "Scene",
+    rendered_html: "<h2>Scene</h2><p>Wide content</p>"
+  } });
+  await page.goto("/pastes/sample-paste");
+  const actionRight = await page.locator(".paste-view .page-heading .actions").evaluate(
+    element => element.getBoundingClientRect().right
+  );
+  const representationRight = await page.getByRole("group", { name: "Paste representation" })
+    .getByRole("button", { name: "Markdown" }).evaluate(element => element.getBoundingClientRect().right);
+  expect(representationRight).toBeCloseTo(actionRight, 5);
+
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await expect(page.getByLabel("Wrap")).toBeVisible();
+  const wrapRight = await page.getByLabel("Wrap").locator("xpath=ancestor::label").evaluate(
+    element => element.getBoundingClientRect().right
+  );
+  expect(wrapRight).toBeCloseTo(actionRight, 5);
+});
+
 test("wide paste offers synchronized sticky scrolling and aligned wrapped lines", async ({ page }) => {
   const content = Array.from(
     { length: 60 },

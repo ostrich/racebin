@@ -161,7 +161,7 @@
   <div class="paste-filter-toolbar">
     <form class="paste-search"
       onsubmit={(event) => { event.preventDefault(); void submitSearch(event); }}>
-      <label><span>Search</span><input name="search" value={params.get("search") ?? ""}
+      <label class="field"><span>Search</span><input name="search" value={params.get("search") ?? ""}
         placeholder={mode === "admin" ? "Title, content, ID, owner, file…" : "Title, content, ID, language, file…"}/></label>
       <button class="button primary" type="submit"><Icon name="search"/> Search</button>
     </form>
@@ -197,41 +197,41 @@
     <form class="filter-panel" id="paste-filter-panel" aria-label="Paste filters"
       onsubmit={(event) => { event.preventDefault(); void submitFilters(event); }}>
       <div class="advanced-filter-grid">
-        <label><span>Format</span><select name="content_kind" value={params.get("content_kind") ?? ""}>
+        <label class="field"><span>Format</span><select name="content_kind" value={params.get("content_kind") ?? ""}>
           <option value="">Any</option>
           {#each $appState.config.formats as format}<option value={format}>{format === "markdown" ? "Rich text" : "Text"}</option>{/each}
         </select></label>
         {#if mode !== "explore"}
-          <label><span>Visibility</span><select name="visibility" value={params.get("visibility") ?? ""}>
+          <label class="field"><span>Visibility</span><select name="visibility" value={params.get("visibility") ?? ""}>
             <option value="">Any</option>
             {#each $appState.config.visibility_modes as visibility}<option value={visibility}>{visibility.charAt(0).toUpperCase() + visibility.slice(1)}</option>{/each}
           </select></label>
         {/if}
-        <label><span>Attachments</span><select name="has_attachments" value={params.get("has_attachments") ?? ""}>
+        <label class="field"><span>Attachments</span><select name="has_attachments" value={params.get("has_attachments") ?? ""}>
           <option value="">Any</option><option value="true">With attachments</option>
           <option value="false">Without attachments</option>
         </select></label>
-        <label><span>Language</span><select name="language" value={params.get("language") ?? ""}>
+        <label class="field"><span>Language</span><select name="language" value={params.get("language") ?? ""}>
           <option value="">Any</option>
           {#each languageOptions.filter(language => language.id !== "auto") as language}
             <option value={language.id}>{language.label}</option>
           {/each}
         </select></label>
         {#if mode === "admin"}
-          <label><span>Owner ID</span><input type="number" min="1" name="owner_id" value={params.get("owner_id") ?? ""}/></label>
+          <label class="field"><span>Owner ID</span><input type="number" min="1" name="owner_id" value={params.get("owner_id") ?? ""}/></label>
         {/if}
-        <label><span>Created after</span><input type="date" name="created_after" value={dateValue(params.get("created_after"))}/></label>
-        <label><span>Created before</span><input type="date" name="created_before" value={dateValue(params.get("created_before"))}/></label>
-        <label><span>Expiration</span><select name="expiration" value={params.get("expiration") ?? ""}>
+        <label class="field"><span>Created after</span><input type="date" name="created_after" value={dateValue(params.get("created_after"))}/></label>
+        <label class="field"><span>Created before</span><input type="date" name="created_before" value={dateValue(params.get("created_before"))}/></label>
+        <label class="field"><span>Expiration</span><select name="expiration" value={params.get("expiration") ?? ""}>
           <option value="">Any</option><option value="never">Never</option><option value="scheduled">Scheduled</option>
         </select></label>
-        <label><span>Minimum views</span><input type="number" min="0" name="min_reads" value={params.get("min_reads") ?? ""}/></label>
-        <label><span>Maximum views</span><input type="number" min="0" name="max_reads" value={params.get("max_reads") ?? ""}/></label>
-        <label><span>Minimum size (KiB)</span><input type="number" min="0" step="0.1" name="min_size_kib"
+        <label class="field"><span>Minimum views</span><input type="number" min="0" name="min_reads" value={params.get("min_reads") ?? ""}/></label>
+        <label class="field"><span>Maximum views</span><input type="number" min="0" name="max_reads" value={params.get("max_reads") ?? ""}/></label>
+        <label class="field"><span>Minimum size (KiB)</span><input type="number" min="0" step="0.1" name="min_size_kib"
           value={params.get("min_size_bytes") ? Number(params.get("min_size_bytes")) / 1024 : ""}/></label>
-        <label><span>Maximum size (KiB)</span><input type="number" min="0" step="0.1" name="max_size_kib"
+        <label class="field"><span>Maximum size (KiB)</span><input type="number" min="0" step="0.1" name="max_size_kib"
           value={params.get("max_size_bytes") ? Number(params.get("max_size_bytes")) / 1024 : ""}/></label>
-        <label><span>View limit</span><select name="read_limit" value={params.get("read_limit") ?? ""}>
+        <label class="field"><span>View limit</span><select name="read_limit" value={params.get("read_limit") ?? ""}>
           <option value="">Any</option><option value="unlimited">Unlimited</option><option value="limited">Limited</option>
         </select></label>
       </div>

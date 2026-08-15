@@ -103,7 +103,7 @@
       {/if}
     </div>
     <form class="key-form" onsubmit={(event) => { event.preventDefault(); void create(event); }}>
-      <label><span>Name</span><input name="name" required maxlength="100"/></label>
+      <label class="field"><span>Name</span><input name="name" required maxlength="100"/></label>
       <fieldset><legend>Scopes</legend><div class="scope-options">
         {#each scopes as scope}
           <label class="check" title={scope.description}><input type="checkbox" name="scopes" value={scope.id}/><span>{scope.id}</span></label>

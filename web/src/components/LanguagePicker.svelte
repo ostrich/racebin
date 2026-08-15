@@ -68,15 +68,15 @@
   }
 </script>
 
-<div class="language-field">
-  <label for="language-input">Language <small>Type to filter languages.</small></label>
+<div class="field language-field">
+  <label class="field-label" for="language-input">Language <small>Type to filter languages.</small></label>
   <div class="language-picker">
     {#if disabled}
-      <input id="language-input" name="language" disabled value="Not applicable"
+      <input class="control" id="language-input" name="language" disabled value="Not applicable"
         autocomplete="off" role="combobox" aria-expanded="false"
         aria-controls="language-options-menu" placeholder="Type or choose"/>
     {:else}
-      <input bind:this={input} id="language-input" name="language" value={value}
+      <input class="control" bind:this={input} id="language-input" name="language" value={value}
         autocomplete="off" role="combobox" aria-autocomplete="list"
         aria-expanded={open} aria-controls="language-options-menu" placeholder="Type or choose"
         onfocus={show} oninput={filter} onblur={blur} onkeydown={keydown}/>
