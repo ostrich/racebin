@@ -132,6 +132,39 @@ test("Markdown pastes default to rendered output and expose canonical source", a
   expect(markdownControlTop).toBe(renderedControlTop);
 });
 
+test("rendered task lists use aligned checkbox rows without ordinary markers", async ({ page }) => {
+  await mockApi(page, false, { viewPaste: {
+    ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",
+    content: "- [x] Complete\n- [ ] Pending", plain_text: "[x] Complete\n[ ] Pending",
+    rendered_html: '<ul><li><input type="checkbox" checked disabled> Complete</li><li><input type="checkbox" disabled> Pending</li></ul>'
+  } });
+  await page.goto("/pastes/sample-paste");
+  const list = page.locator(".rich-text-viewer ul");
+  const item = list.locator("li").first();
+  await expect(list).toHaveCSS("list-style-type", "none");
+  await expect(item).toHaveCSS("display", "flex");
+  const alignment = await item.evaluate(element => {
+    const checkbox = element.querySelector("input")!.getBoundingClientRect();
+    const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
+    return Math.abs((checkbox.top + checkbox.height / 2) - (element.getBoundingClientRect().top + lineHeight / 2));
+  });
+  expect(alignment).toBeLessThan(2);
+});
+
+test("rendered Markdown tables retain declared column alignment", async ({ page }) => {
+  await mockApi(page, false, { viewPaste: {
+    ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",
+    content: "| Left | Center | Right |\n| :--- | :---: | ---: |\n| A | B | C |",
+    plain_text: "Left\tCenter\tRight\nA\tB\tC",
+    rendered_html: '<table><thead><tr><th align="left">Left</th><th align="center">Center</th><th align="right">Right</th></tr></thead></table>'
+  } });
+  await page.goto("/pastes/sample-paste");
+  const headings = page.locator(".rich-text-viewer th");
+  await expect(headings.nth(0)).toHaveCSS("text-align", "left");
+  await expect(headings.nth(1)).toHaveCSS("text-align", "center");
+  await expect(headings.nth(2)).toHaveCSS("text-align", "right");
+});
+
 test("Markdown representation controls remain fixed when the wrap option appears", async ({ page }) => {
   await mockApi(page, false, { viewPaste: {
     ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",

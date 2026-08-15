@@ -32,3 +32,41 @@ test("compiled frontend creates and reads a paste through a disposable backend",
   await expect(page.getByRole("heading", { name: "Disposable stack smoke test" })).toBeVisible();
   await expect(page.locator("code.hljs")).toContainText("const verified = true;");
 });
+
+test("rich-text structures survive visual editing, persistence, and server rendering", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByLabel("Username").fill("test-admin");
+  await page.getByLabel("Password").fill("correct horse battery staple");
+  await page.getByRole("button", { name: "Log in" }).click();
+
+  await page.goto("/pastes/new");
+  await page.getByLabel("Title").fill("Rich-text round-trip test");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  const source = page.getByRole("textbox", { name: "Paste content" });
+  const markdown = [
+    "3. Third",
+    "4. Fourth",
+    "",
+    "- [x] Complete",
+    "- [ ] Pending",
+    "",
+    "| Line |",
+    "| --- |",
+    "| first<br>second |"
+  ].join("\n");
+  await source.fill(markdown);
+  await page.getByRole("button", { name: "Visual", exact: true }).click();
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await expect(source).toHaveValue(markdown);
+  await page.getByRole("button", { name: "Create paste" }).click();
+
+  await expect(page).toHaveURL(/\/pastes\/[^/]+$/);
+  await expect(page.locator(".rich-text-viewer ol")).toHaveAttribute("start", "3");
+  await expect(page.locator(".rich-text-viewer input[type=checkbox]")).toHaveCount(2);
+  await expect(page.locator(".rich-text-viewer td br")).toHaveCount(1);
+  const pasteId = new URL(page.url()).pathname.split("/").at(-1)!;
+  const stored = await page.request.get(`/api/v1/pastes/${pasteId}/source`);
+  expect(stored.ok()).toBe(true);
+  expect((await stored.json()).body.content).toBe(markdown);
+});

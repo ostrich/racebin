@@ -21,7 +21,20 @@
   let tablePickerLeft = $state(0);
   let tablePickerPositioned = $state(false);
   let insideTable = $state(false);
+  let activeCommands = $state(new Set<string>());
   const tablePickerSize = 8;
+  const tableIncompatibleCommands = new Set([
+    "heading-1", "heading-2", "heading-3", "bullet-list", "ordered-list", "task-list",
+    "table", "blockquote", "code-block", "horizontal-rule"
+  ]);
+  const commandDisabled = (command: string) => insideTable && tableIncompatibleCommands.has(command);
+  const commandTitle = (command: string, label: string) => commandDisabled(command)
+    ? `${label} is not supported inside Markdown table cells`
+    : label;
+  const toggleCommands = new Set([
+    "paragraph", "heading-1", "heading-2", "heading-3", "bold", "italic", "strike",
+    "link", "bullet-list", "ordered-list", "task-list", "blockquote", "code", "code-block"
+  ]);
   const tableSizeLabel = (rows: number, columns: number) =>
     `${rows} ${rows === 1 ? "row" : "rows"} by ${columns} ${columns === 1 ? "column" : "columns"}`;
 
@@ -51,6 +64,7 @@
     { command: "redo", label: "Redo", icon: "redo-2" }
   ];
   function run(command: string): void {
+    if (commandDisabled(command)) return;
     const chain = editor.chain().focus();
     switch (command) {
       case "paragraph": chain.setParagraph().run(); break;
@@ -135,6 +149,25 @@
     editor.chain().focus()[command]().run();
     insideTable = editor.isActive("table");
   }
+  function updateCommandState(updated: Editor): void {
+    insideTable = updated.isActive("table");
+    activeCommands = new Set([
+      updated.isActive("paragraph") && "paragraph",
+      updated.isActive("heading", { level: 1 }) && "heading-1",
+      updated.isActive("heading", { level: 2 }) && "heading-2",
+      updated.isActive("heading", { level: 3 }) && "heading-3",
+      updated.isActive("bold") && "bold",
+      updated.isActive("italic") && "italic",
+      updated.isActive("strike") && "strike",
+      updated.isActive("link") && "link",
+      updated.isActive("bulletList") && "bullet-list",
+      updated.isActive("orderedList") && "ordered-list",
+      updated.isActive("taskList") && "task-list",
+      updated.isActive("blockquote") && "blockquote",
+      updated.isActive("code") && "code",
+      updated.isActive("codeBlock") && "code-block"
+    ].filter((command): command is string => Boolean(command)));
+  }
   onMount(() => {
     const closePicker = (event: PointerEvent) => {
       if (tablePickerOpen && !tableTool?.contains(event.target as Node)) tablePickerOpen = false;
@@ -143,7 +176,7 @@
     editor = new Editor({
       element,
       extensions: [
-        StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5, 6] }, dropcursor: false, gapcursor: false,
+        StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5, 6] }, dropcursor: false, gapcursor: false, underline: false,
           link: { openOnClick: false, autolink: true, protocols: ["http", "https", "mailto"], isAllowedUri: safeLink,
             HTMLAttributes: { rel: "noopener noreferrer nofollow", target: "_blank" } } }),
         TableKit, TaskList, TaskItem.configure({ nested: true }), Markdown.configure({ markedOptions: { gfm: true } })
@@ -152,9 +185,10 @@
       contentType: "markdown",
       editorProps: { attributes: { class: "rich-text-content", "aria-label": "Rich-text paste content" } },
       onUpdate: ({ editor: updated }) => { markdown = updated.getMarkdown(); onchange?.(); },
-      onSelectionUpdate: ({ editor: updated }) => { insideTable = updated.isActive("table"); },
-      onTransaction: ({ editor: updated }) => { insideTable = updated.isActive("table"); }
+      onSelectionUpdate: ({ editor: updated }) => { updateCommandState(updated); },
+      onTransaction: ({ editor: updated }) => { updateCommandState(updated); }
     });
+    updateCommandState(editor);
     return () => {
       document.removeEventListener("pointerdown", closePicker);
       editor.destroy();
@@ -166,7 +200,8 @@
   {#each commands as item}
     {#if item.command === "table"}
       <div class="table-tool" bind:this={tableTool}>
-        <button type="button" class="table-picker-trigger" title={item.label} aria-label={item.label}
+        <button type="button" class="table-picker-trigger" title={commandTitle(item.command, item.label)} aria-label={item.label}
+          disabled={commandDisabled(item.command)}
           aria-haspopup="grid" aria-expanded={tablePickerOpen} onclick={() => run(item.command)}>
           <Icon name="table-2"/>
         </button>
@@ -192,7 +227,10 @@
         {/if}
       </div>
     {:else}
-      <button type="button" title={item.label} aria-label={item.label} onclick={() => run(item.command)}>
+      <button type="button" title={commandTitle(item.command, item.label)} aria-label={item.label}
+        class:active={activeCommands.has(item.command)}
+        aria-pressed={toggleCommands.has(item.command) ? activeCommands.has(item.command) : undefined}
+        disabled={commandDisabled(item.command)} onclick={() => run(item.command)}>
         {#if item.icon}<Icon name={item.icon}/>{:else}<span class:paragraph={item.symbolClass === "paragraph"}
           class:bold={item.symbolClass === "bold"} class:italic={item.symbolClass === "italic"}
           class:strike={item.symbolClass === "strike"} aria-hidden="true">{item.symbol}</span>{/if}

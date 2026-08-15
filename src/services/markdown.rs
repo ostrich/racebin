@@ -12,6 +12,9 @@ fn options() -> Options<'static> {
     options.extension.tasklist = true;
     options.extension.strikethrough = true;
     options.extension.autolink = true;
+    // Validation permits only the exact hard-break tags emitted by the visual editor;
+    // Ammonia still sanitizes the formatted result below.
+    options.render.r#unsafe = true;
     options
 }
 
@@ -79,6 +82,9 @@ pub fn render_markdown(source: &str) -> Result<MarkdownOutput, String> {
             ("a", HashSet::from(["href", "title"])),
             ("code", HashSet::from(["class"])),
             ("input", HashSet::from(["type", "checked", "disabled"])),
+            ("ol", HashSet::from(["start"])),
+            ("th", HashSet::from(["align"])),
+            ("td", HashSet::from(["align"])),
         ]))
         .url_schemes(HashSet::from(["http", "https", "mailto"]))
         .url_relative(ammonia::UrlRelative::PassThrough)
@@ -102,6 +108,7 @@ fn validate_node<'a>(node: &'a AstNode<'a>, depth: usize, count: &mut usize) -> 
         return Err("Markdown content contains too many nodes".into());
     }
     match &node.data.borrow().value {
+        NodeValue::HtmlInline(html) if is_hard_break_html(html) => {}
         NodeValue::HtmlBlock(_) | NodeValue::HtmlInline(_) => {
             return Err("Raw HTML is not supported in Markdown pastes".into())
         }
@@ -113,6 +120,13 @@ fn validate_node<'a>(node: &'a AstNode<'a>, depth: usize, count: &mut usize) -> 
         validate_node(child, depth + 1, count)?;
     }
     Ok(())
+}
+
+fn is_hard_break_html(html: &str) -> bool {
+    matches!(
+        html.trim().to_ascii_lowercase().as_str(),
+        "<br>" | "<br/>" | "<br />"
+    )
 }
 
 fn validate_link(href: &str) -> Result<(), String> {
@@ -152,10 +166,21 @@ fn append_plain_text<'a>(node: &'a AstNode<'a>, output: &mut String) {
     for child in node.children() {
         append_plain_text(child, output);
     }
-    if matches!(
-        node.data.borrow().value,
-        NodeValue::Paragraph | NodeValue::Heading(_) | NodeValue::Item(_) | NodeValue::TableRow(_)
-    ) {
+    match node.data.borrow().value {
+        NodeValue::TableCell => output.push('\t'),
+        NodeValue::TableRow(_) => {
+            if output.ends_with('\t') {
+                output.pop();
+            }
+            push_newline(output);
+        }
+        NodeValue::Paragraph | NodeValue::Heading(_) | NodeValue::Item(_) => push_newline(output),
+        _ => {}
+    }
+}
+
+fn push_newline(output: &mut String) {
+    if !output.ends_with('\n') {
         output.push('\n');
     }
 }
@@ -184,5 +209,33 @@ mod tests {
         assert!(render_markdown("<script>alert(1)</script>").is_err());
         assert!(render_markdown("![alt](https://example.com/a.png)").is_err());
         assert!(render_markdown("[bad](javascript:alert(1))").is_err());
+    }
+
+    #[test]
+    fn preserves_supported_structural_details() {
+        let ordered = render_markdown("3. Third\n4. Fourth").unwrap();
+        assert!(ordered.html.contains("<ol start=\"3\">"));
+
+        let aligned_table =
+            render_markdown("| Left | Center | Right |\n| :--- | :---: | ---: |\n| A | B | C |")
+                .unwrap();
+        assert!(aligned_table.html.contains("align=\"left\""));
+        assert!(aligned_table.html.contains("align=\"center\""));
+        assert!(aligned_table.html.contains("align=\"right\""));
+
+        let table_break = render_markdown("| Line |\n| --- |\n| first<br>second |").unwrap();
+        assert!(table_break.html.contains("first<br"));
+        assert!(table_break.html.contains("second"));
+        assert!(render_markdown("text <br class=\"unsafe\"> more").is_err());
+        assert!(render_markdown("text <span>unsafe</span>").is_err());
+    }
+
+    #[test]
+    fn plain_text_projection_preserves_structure_without_spurious_blank_lines() {
+        let list = render_markdown("- first\n- second\n\n- [x] done\n- [ ] pending").unwrap();
+        assert_eq!(list.plain_text, "first\nsecond\n[x] done\n[ ] pending");
+
+        let table = render_markdown("| A | B |\n| --- | --- |\n| one | two |").unwrap();
+        assert_eq!(table.plain_text, "A\tB\none\ttwo");
     }
 }

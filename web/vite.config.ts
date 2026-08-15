@@ -11,7 +11,10 @@ export default defineConfig({
   optimizeDeps: {
     include: [
       "@tiptap/core",
-      "@tiptap/extension-text-align",
+      "@tiptap/extension-table",
+      "@tiptap/extension-task-item",
+      "@tiptap/extension-task-list",
+      "@tiptap/markdown",
       "@tiptap/starter-kit"
     ]
   },

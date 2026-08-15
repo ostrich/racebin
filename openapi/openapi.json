@@ -341,7 +341,7 @@
           },
           {
             "additionalProperties": false,
-            "description": "GitHub-Flavored Markdown. Raw HTML and embedded images are not accepted.",
+            "description": "GitHub-Flavored Markdown. Raw HTML other than editor-generated hard breaks and embedded images are not accepted.",
             "properties": {
               "content": {
                 "description": "Canonical Markdown source.",

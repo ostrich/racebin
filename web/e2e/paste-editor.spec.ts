@@ -207,6 +207,9 @@ test("rich-text formatting uses a single-row icon toolbar and confirms clearing"
   expect(rows).toBe(1);
 
   await page.getByLabel("Rich-text paste content").fill("Formatted text");
+  const bold = toolbar.getByRole("button", { name: "Bold" });
+  await bold.click();
+  await expect(bold).toHaveAttribute("aria-pressed", "true");
   page.once("dialog", dialog => {
     expect(dialog.message()).toBe("Clear all formatting from this rich-text paste?");
     void dialog.dismiss();
@@ -343,6 +346,24 @@ test("pasted links are normalized to the supported document contract", async ({ 
   expect(body.body.content).not.toContain("tel:");
 });
 
+test("pasted formatting cannot introduce non-GFM underline syntax", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  const editor = page.getByLabel("Rich-text paste content");
+  await editor.focus();
+  await editor.evaluate(element => {
+    const clipboard = new DataTransfer();
+    clipboard.setData("text/plain", "underlined text");
+    clipboard.setData("text/html", "<p><u>underlined text</u></p>");
+    element.dispatchEvent(new ClipboardEvent("paste", {
+      bubbles: true, cancelable: true, clipboardData: clipboard
+    }));
+  });
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Paste content" })).toHaveValue("underlined text");
+});
+
 test("rich-text conversion populates the plain-text editor", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
@@ -373,6 +394,116 @@ test("rich text switches between visual editing and canonical Markdown source", 
   await expect(page.getByLabel("Rich-text paste content")).toContainText("Scene");
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
   await expect(source).toHaveValue("## Scene\n\n- [x] Ready");
+});
+
+test("the supported Markdown document contract survives a visual-editor round trip", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  const source = page.getByRole("textbox", { name: "Paste content" });
+  const document = [
+    "# Heading",
+    "",
+    "**bold** *italic* ~~strike~~ `inline` [relative](/help)",
+    "",
+    "> quoted",
+    "",
+    "- first",
+    "  - nested",
+    "- second",
+    "",
+    "3. third",
+    "4. fourth",
+    "",
+    "- [x] complete",
+    "- [ ] pending",
+    "",
+    "```javascript",
+    "const answer = 42;",
+    "```",
+    "",
+    "---",
+    "",
+    "| A | B |",
+    "| :--- | ---: |",
+    "| one | two |"
+  ].join("\n");
+  await source.fill(document);
+  await page.getByRole("button", { name: "Visual", exact: true }).click();
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await expect(source).toHaveValue(document);
+});
+
+test("code blocks survive visual and Markdown mode round trips", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  await page.getByLabel("Rich-text paste content").fill("const answer = 42;");
+  await page.getByRole("button", { name: "Code block" }).click();
+  await expect(page.locator(".rich-text-editor pre code")).toContainText("const answer = 42;");
+
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  const source = page.getByRole("textbox", { name: "Paste content" });
+  await expect(source).toHaveValue(/```[\s\S]*const answer = 42;[\s\S]*```/);
+  await page.getByRole("button", { name: "Visual", exact: true }).click();
+  await expect(page.locator(".rich-text-editor pre code")).toContainText("const answer = 42;");
+});
+
+test("table cells prevent block structures that canonical Markdown cannot preserve", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  await page.getByRole("button", { name: "Insert table" }).click();
+  await page.getByRole("dialog", { name: "Choose table size" })
+    .getByRole("gridcell", { name: "1 row by 1 column" }).click();
+  const cell = page.locator(".rich-text-editor th");
+  await cell.click();
+  await page.keyboard.type("zxcdsdsaf");
+  await expect(page.getByRole("button", { name: "Code block" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Inline code" })).toBeEnabled();
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  const source = page.getByRole("textbox", { name: "Paste content" });
+  await expect(source).toHaveValue(/zxcdsdsaf/);
+  await page.getByRole("button", { name: "Visual", exact: true }).click();
+  await expect(page.locator(".rich-text-editor th")).toContainText("zxcdsdsaf");
+  await expect(page.locator(".rich-text-editor pre")).toHaveCount(0);
+});
+
+test("table cell line breaks remain valid canonical Markdown", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  await page.getByRole("button", { name: "Insert table" }).click();
+  await page.getByRole("dialog", { name: "Choose table size" })
+    .getByRole("gridcell", { name: "1 row by 1 column" }).click();
+  await page.locator(".rich-text-editor th").click();
+  await page.keyboard.type("first");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("second");
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Paste content" })).toHaveValue(/first<br>second/i);
+  await page.getByRole("button", { name: "Visual", exact: true }).click();
+  await expect(page.locator(".rich-text-editor th br")).toHaveCount(1);
+});
+
+test("table row editing retains a Markdown-compatible header row", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  await page.getByRole("button", { name: "Insert table" }).click();
+  await page.getByRole("dialog", { name: "Choose table size" })
+    .getByRole("gridcell", { name: "2 rows by 2 columns" }).click();
+  await page.locator(".rich-text-editor th").first().click();
+  await page.getByRole("group", { name: "Edit table" })
+    .getByRole("button", { name: "Delete row" }).click();
+  await page.locator(".rich-text-editor td").first().click();
+  await page.keyboard.type("value");
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Paste content" })).toHaveValue(/value/);
+  await page.getByRole("button", { name: "Visual", exact: true }).click();
+  await expect(page.locator(".rich-text-editor table")).toContainText("value");
+  await expect(page.locator(".rich-text-editor th")).toHaveCount(2);
 });
 
 test("edit page shows current attachments", async ({ page }) => {

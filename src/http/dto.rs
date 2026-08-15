@@ -29,7 +29,7 @@ pub(crate) enum BodyInput {
         #[serde(default)]
         language: Option<String>,
     },
-    /// GitHub-Flavored Markdown. Raw HTML and embedded images are not accepted.
+    /// GitHub-Flavored Markdown. Raw HTML other than editor-generated hard breaks and embedded images are not accepted.
     Markdown {
         /// Canonical Markdown source.
         content: String,

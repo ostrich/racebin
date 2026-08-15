@@ -63,6 +63,8 @@
 .rich-text-content th,
 .rich-text-content td { padding: 8px 10px; border: 1px solid var(--line); text-align: left; }
 .rich-text-content th { background: var(--color-code-gutter); }
+.rich-text-content :is(th, td)[align="center"] { text-align: center; }
+.rich-text-content :is(th, td)[align="right"] { text-align: right; }
 .rich-text-content input[type="checkbox"] { margin-right: 7px; accent-color: var(--accent); }
 .rich-text-content li > p {
   margin-block: 0;
@@ -93,6 +95,19 @@
   min-width: 0;
 }
 .rich-text-editor .rich-text-content li:has(> label > input[type="checkbox"]) > div > p {
+  margin: 0;
+}
+.rich-text-viewer .rich-text-content ul:has(> li > input[type="checkbox"]) {
+  padding-left: 0;
+  list-style: none;
+}
+.rich-text-viewer .rich-text-content li:has(> input[type="checkbox"]) {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.rich-text-viewer .rich-text-content li:has(> input[type="checkbox"]) > input {
+  flex: 0 0 auto;
   margin: 0;
 }
 .rich-text-toolbar {
@@ -126,6 +141,14 @@
 }
 .rich-text-toolbar button:hover {
   border-color: var(--accent);
+}
+.rich-text-toolbar button.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--color-surface));
+}
+.rich-text-toolbar button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .rich-text-toolbar button svg {
   width: 17px;

@@ -102,8 +102,9 @@ Rich text uses canonical GitHub-Flavored Markdown on the wire:
 ```
 
 Markdown source is the canonical stored representation. Responses also include
-the server's sanitized `rendered_html` and `plain_text` projection. Raw HTML and
-embedded images are rejected; links support HTTP, HTTPS, email, and relative URLs.
+the server's sanitized `rendered_html` and `plain_text` projection. Raw HTML
+other than the `<br>` hard breaks needed inside Markdown table cells and embedded
+images are rejected; links support HTTP, HTTPS, email, and relative URLs.
 
 Racebin also accepts `text/plain`, `text/markdown`, `text/html`, URL-encoded
 forms, and multipart forms at the same endpoint. Creation query parameters are
