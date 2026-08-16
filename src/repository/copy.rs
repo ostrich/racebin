@@ -140,6 +140,10 @@ pub async fn copy_database(
              VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
         )
         .bind(row.try_get::<i64, _>("id").map_err(|e| e.to_string())?)
+        .bind(
+            row.try_get::<String, _>("username")
+                .map_err(|e| e.to_string())?,
+        )
         .bind(row.try_get::<String, _>("password_hash").map_err(|e| e.to_string())?)
         .bind(row.try_get::<String, _>("role").map_err(|e| e.to_string())?)
         .bind(row.try_get::<i64, _>("is_owner").map_err(|e| e.to_string())?)
