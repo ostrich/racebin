@@ -24,7 +24,7 @@ pub fn text_to_document(text: &str) -> Value {
     json!({"type":"doc","content":blocks})
 }
 
-pub fn validate_document(document: &Value) -> Result<String, String> {
+pub(super) fn validate_document(document: &Value) -> Result<String, String> {
     if serde_json::to_vec(document)
         .map_err(|error| error.to_string())?
         .len()
