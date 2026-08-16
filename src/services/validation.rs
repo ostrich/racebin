@@ -127,6 +127,16 @@ pub(super) fn validate_input(input: &PasteInput, now: i64) -> DomainResult<()> {
         return Err(DomainError::validation("Title exceeds 200 characters"));
     }
     if input
+        .content
+        .as_ref()
+        .is_some_and(|content| content.len() > crate::limits::MAX_CONTENT_SIZE_BYTES)
+    {
+        return Err(DomainError::payload_too_large(
+            "content_too_large",
+            "Content exceeds the configured size limit",
+        ));
+    }
+    if input
         .content_kind
         .as_deref()
         .is_some_and(|value| !matches!(value, "text" | "markdown"))
@@ -180,5 +190,20 @@ mod tests {
             error.message,
             "Visibility must be public, unlisted, or private"
         );
+    }
+
+    #[test]
+    fn paste_content_size_is_a_domain_invariant() {
+        let error = validate_input(
+            &PasteInput {
+                content: Some("x".repeat(crate::limits::MAX_CONTENT_SIZE_BYTES + 1)),
+                ..PasteInput::default()
+            },
+            0,
+        )
+        .unwrap_err();
+
+        assert_eq!(error.kind, ErrorKind::PayloadTooLarge);
+        assert_eq!(error.code, "content_too_large");
     }
 }
