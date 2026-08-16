@@ -1,13 +1,11 @@
-use argon2::password_hash::{
-    rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
-};
+use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
-use rand::{distributions::Alphanumeric, Rng};
-use sha2::{Digest, Sha256};
+use rand::{distr::Alphanumeric, RngExt};
 use sqlx::any::AnyRow;
 use sqlx::{FromRow, Row};
 use std::sync::LazyLock;
 
+use crate::crypto::sha256_hex;
 use crate::domain_error::{DomainError, DomainResult};
 use crate::repository::{DatabaseKind, Repository};
 use crate::time::unix_timestamp;
@@ -137,12 +135,12 @@ impl Invitation {
 }
 
 fn hash(value: &str) -> String {
-    format!("{:x}", Sha256::digest(value.as_bytes()))
+    sha256_hex(value)
 }
 
 fn random_token(length: usize) -> String {
-    rand::thread_rng()
-        .sample_iter(&Alphanumeric)
+    rand::rng()
+        .sample_iter(Alphanumeric)
         .take(length)
         .map(char::from)
         .collect()
@@ -155,8 +153,10 @@ pub fn password_hash(password: &str) -> DomainResult<String> {
             "Password must contain at least 12 characters",
         ));
     }
+    let salt = SaltString::encode_b64(&rand::random::<[u8; 16]>())
+        .map_err(|error| DomainError::internal(error.to_string()))?;
     Argon2::default()
-        .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
+        .hash_password(password.as_bytes(), &salt)
         .map(|hash| hash.to_string())
         .map_err(|error| DomainError::internal(error.to_string()))
 }
@@ -331,7 +331,16 @@ pub async fn list_users(repo: &Repository) -> DomainResult<Vec<User>> {
 
 #[cfg(test)]
 mod tests {
-    use super::Invitation;
+    use super::{random_token, Invitation};
+
+    #[test]
+    fn random_tokens_have_the_requested_alphanumeric_shape() {
+        for length in [0, 1, 48, 64] {
+            let token = random_token(length);
+            assert_eq!(token.len(), length);
+            assert!(token.bytes().all(|byte| byte.is_ascii_alphanumeric()));
+        }
+    }
 
     #[test]
     fn invitation_status_respects_terminal_states_and_expiration() {

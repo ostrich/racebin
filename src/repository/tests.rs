@@ -35,7 +35,7 @@ mod tests {
         sqlx::raw_sql("CREATE TABLE _sqlx_migrations(version BIGINT PRIMARY KEY,description TEXT NOT NULL,installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,success BOOLEAN NOT NULL,checksum BLOB NOT NULL,execution_time BIGINT NOT NULL)")
             .execute(repository.pool()).await.unwrap();
         for migration in crate::repository::SQLITE_MIGRATOR.iter().filter(|migration| migration.version <= 10) {
-            sqlx::raw_sql(&migration.sql).execute(repository.pool()).await.unwrap();
+            sqlx::raw_sql(migration.sql.clone()).execute(repository.pool()).await.unwrap();
             sqlx::query("INSERT INTO _sqlx_migrations(version,description,success,checksum,execution_time) VALUES($1,$2,1,$3,0)")
                 .bind(migration.version).bind(migration.description.as_ref()).bind(migration.checksum.as_ref())
                 .execute(repository.pool()).await.unwrap();
@@ -56,7 +56,9 @@ mod tests {
         assert!(migrated.1.contains("# **Scene**"));
         assert_eq!(migrated.2, 2);
         for table in ["attachments", "idempotency_records", "paste_read_receipts", "paste_read_grants"] {
-            let count: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM {table}")).fetch_one(repository.pool()).await.unwrap();
+            let count: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+                "SELECT count(*) FROM {table}"
+            ))).fetch_one(repository.pool()).await.unwrap();
             assert_eq!(count, 1, "{table}");
         }
         let legacy_column: i64 = sqlx::query_scalar("SELECT count(*) FROM pragma_table_info('pastes') WHERE name='document_json'").fetch_one(repository.pool()).await.unwrap();

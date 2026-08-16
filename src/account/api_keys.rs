@@ -1,7 +1,7 @@
-use rand::{distributions::Alphanumeric, Rng};
-use sha2::{Digest, Sha256};
+use rand::{distr::Alphanumeric, RngExt};
 use sqlx::{Any, Row};
 
+use crate::crypto::sha256_hex;
 use crate::domain_error::{DomainError, DomainResult};
 use crate::repository::Repository;
 use crate::time::unix_timestamp;
@@ -36,7 +36,7 @@ impl ApiKey {
 }
 
 fn token_hash(token: &str) -> String {
-    format!("{:x}", Sha256::digest(token.as_bytes()))
+    sha256_hex(token)
 }
 
 pub fn normalize_scopes(scopes: &[String]) -> Result<Vec<String>, &'static str> {
@@ -101,13 +101,13 @@ pub async fn create(
     }
     let scopes = normalize_scopes(scopes)
         .map_err(|message| DomainError::validation_code("invalid_api_key_scopes", message))?;
-    let secret: String = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
+    let secret: String = rand::rng()
+        .sample_iter(Alphanumeric)
         .take(48)
         .map(char::from)
         .collect();
-    let token_prefix: String = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
+    let token_prefix: String = rand::rng()
+        .sample_iter(Alphanumeric)
         .take(10)
         .map(char::from)
         .collect();

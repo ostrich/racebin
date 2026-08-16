@@ -1,5 +1,6 @@
 use super::pastes::{FlatCreateRequest, RawCreateQuery, StagedFile};
 use super::*;
+use crate::crypto::lower_hex;
 use crate::http::dto::CreatePasteRequest;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -151,7 +152,7 @@ pub(super) async fn parse_multipart(
                 filename,
                 storage_key: uuid::Uuid::new_v4().simple().to_string(),
                 size_bytes: size as i64,
-                digest: format!("{:x}", digest.finalize()),
+                digest: lower_hex(&digest.finalize()),
             });
         } else {
             if !matches!(
@@ -320,7 +321,7 @@ pub(super) fn request_fingerprint(request: &CreatePasteRequest, files: &[StagedF
         digest.update(file.size_bytes.to_be_bytes());
         digest.update(file.digest.as_bytes());
     }
-    format!("{:x}", digest.finalize())
+    lower_hex(&digest.finalize())
 }
 
 async fn read_body(payload: &mut web::Payload, limit: usize) -> Result<web::Bytes, HttpResponse> {

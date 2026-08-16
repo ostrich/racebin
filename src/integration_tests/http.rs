@@ -7,6 +7,7 @@ mod tests {
     use crate::services::{PasteInput, PasteService, Principal};
     use actix_web::{cookie::Cookie, http::StatusCode, test, web, App};
     use serde_json::{json, Value};
+    use std::io::Read;
     use std::path::Path;
 
     #[actix_web::test]
@@ -513,6 +514,39 @@ mod tests {
         .await;
         assert_eq!(downloaded.status(), StatusCode::OK);
         assert_eq!(test::read_body(downloaded).await.as_ref(), b"hello");
+
+        let archive = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/v1/pastes/{id}/archive"))
+                .cookie(cookie.clone())
+                .to_request(),
+        )
+        .await;
+        assert_eq!(archive.status(), StatusCode::OK);
+        assert_eq!(
+            archive
+                .headers()
+                .get("content-type")
+                .and_then(|value| value.to_str().ok()),
+            Some("application/zip")
+        );
+        let archive = test::read_body(archive).await;
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(archive)).unwrap();
+        let mut paste_text = String::new();
+        archive
+            .by_name("paste.txt")
+            .unwrap()
+            .read_to_string(&mut paste_text)
+            .unwrap();
+        assert_eq!(paste_text, "body");
+        let mut attachment_text = String::new();
+        archive
+            .by_name("hello.txt")
+            .unwrap()
+            .read_to_string(&mut attachment_text)
+            .unwrap();
+        assert_eq!(attachment_text, "hello");
 
         let scopes = vec!["paste:read".to_string()];
         let (_, read_token) = api_keys::create(&repository, Some(1), "read only", &scopes)

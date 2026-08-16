@@ -1,4 +1,5 @@
 use crate::account::{self as accounts, api_keys};
+use crate::crypto::sha256_hex;
 use crate::repository::Repository;
 use sqlx::{Any, Executor};
 use uuid::Uuid;
@@ -8,7 +9,6 @@ use super::render_markdown;
 use super::validation::{authorize_owner, can_read, validate_input, validate_paste_query};
 use super::{DomainError, DomainResult};
 use crate::time::unix_timestamp;
-use sha2::{Digest, Sha256};
 
 #[derive(Clone)]
 pub struct PasteService {
@@ -146,30 +146,32 @@ impl PasteService {
              AND ($18 IS NULL OR folder_id=$18)
              AND ($19 IS NULL OR ($19=1 AND folder_id IS NULL))"
         );
-        let total: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM pastes WHERE {filter}"))
-            .bind(i64::from(admin))
-            .bind(user_id)
-            .bind(visibility)
-            .bind(owner)
-            .bind(unix_timestamp())
-            .bind(&search)
-            .bind(content_kind)
-            .bind(language)
-            .bind(has_attachments)
-            .bind(query.created_after)
-            .bind(query.created_before)
-            .bind(expiration)
-            .bind(query.min_reads)
-            .bind(query.max_reads)
-            .bind(limited)
-            .bind(query.min_size_bytes)
-            .bind(query.max_size_bytes)
-            .bind(folder_id)
-            .bind(unfiled)
-            .fetch_one(self.storage.pool())
-            .await
-            .map_err(DomainError::internal)?;
-        let items = sqlx::query_as::<_, Paste>(&format!(
+        let total: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "SELECT count(*) FROM pastes WHERE {filter}"
+        )))
+        .bind(i64::from(admin))
+        .bind(user_id)
+        .bind(visibility)
+        .bind(owner)
+        .bind(unix_timestamp())
+        .bind(&search)
+        .bind(content_kind)
+        .bind(language)
+        .bind(has_attachments)
+        .bind(query.created_after)
+        .bind(query.created_before)
+        .bind(expiration)
+        .bind(query.min_reads)
+        .bind(query.max_reads)
+        .bind(limited)
+        .bind(query.min_size_bytes)
+        .bind(query.max_size_bytes)
+        .bind(folder_id)
+        .bind(unfiled)
+        .fetch_one(self.storage.pool())
+        .await
+        .map_err(DomainError::internal)?;
+        let items = sqlx::query_as::<_, Paste>(sqlx::AssertSqlSafe(format!(
             "SELECT id,owner_id,folder_id,title,substr(content,1,500) AS content,
                     content_kind,language,visibility,created_at,updated_at,revision,consumed_at,
                     expires_at,last_read_at,read_count,read_limit,
@@ -182,7 +184,7 @@ impl PasteService {
                     ELSE NULL END AS attachment_only_filename,
                     {total_size} AS size_bytes
              FROM pastes WHERE {filter} ORDER BY {order} {direction},id ASC LIMIT $20 OFFSET $21"
-        ))
+        )))
         .bind(i64::from(admin))
         .bind(user_id)
         .bind(visibility)
@@ -306,11 +308,11 @@ impl PasteService {
         } else {
             ""
         };
-        let mut paste = sqlx::query_as::<_, Paste>(&format!(
+        let mut paste = sqlx::query_as::<_, Paste>(sqlx::AssertSqlSafe(format!(
             "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,created_at,
                     updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
              FROM pastes WHERE id=$1 AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at>$2){lock}"
-        ))
+        )))
         .bind(id)
         .bind(now)
         .fetch_optional(&mut *tx)
@@ -781,7 +783,7 @@ fn normalized_content(content_kind: &str, content: &str) -> DomainResult<(String
 }
 
 fn hash_token(token: &str) -> String {
-    format!("{:x}", Sha256::digest(token.as_bytes()))
+    sha256_hex(token)
 }
 
 async fn load_paste_for_read(

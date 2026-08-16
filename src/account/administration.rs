@@ -18,10 +18,10 @@ fn admin_user_query(repo: &Repository) -> String {
 }
 
 pub async fn list_admin_users(repo: &Repository) -> DomainResult<Vec<AdminUser>> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{} ORDER BY lower(u.username)",
         admin_user_query(repo)
-    ))
+    )))
     .bind(unix_timestamp())
     .fetch_all(repo.pool())
     .await
@@ -29,12 +29,15 @@ pub async fn list_admin_users(repo: &Repository) -> DomainResult<Vec<AdminUser>>
 }
 
 pub async fn admin_user(repo: &Repository, id: i64) -> DomainResult<Option<AdminUser>> {
-    sqlx::query_as(&format!("{} WHERE u.id=$2", admin_user_query(repo)))
-        .bind(unix_timestamp())
-        .bind(id)
-        .fetch_optional(repo.pool())
-        .await
-        .map_err(DomainError::from)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "{} WHERE u.id=$2",
+        admin_user_query(repo)
+    )))
+    .bind(unix_timestamp())
+    .bind(id)
+    .fetch_optional(repo.pool())
+    .await
+    .map_err(DomainError::from)
 }
 
 pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> DomainResult<()> {
@@ -58,12 +61,13 @@ pub async fn update_user(
     } else {
         ""
     };
-    let target: Option<(String, i64)> =
-        sqlx::query_as(&format!("SELECT role,enabled FROM users WHERE id=$1{lock}"))
-            .bind(id)
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(DomainError::from)?;
+    let target: Option<(String, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT role,enabled FROM users WHERE id=$1{lock}"
+    )))
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(DomainError::from)?;
     let (current_role, currently_enabled) =
         target.ok_or_else(|| DomainError::not_found("User not found"))?;
     let final_enabled = enabled.unwrap_or(currently_enabled != 0);
@@ -221,10 +225,10 @@ pub async fn reset_password(repo: &Repository, token: &str, password: &str) -> D
     } else {
         ""
     };
-    let user_id: Option<i64> = sqlx::query_scalar(&format!(
+    let user_id: Option<i64> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT r.user_id FROM password_reset_tokens r JOIN users u ON u.id=r.user_id
          WHERE r.token_hash=$1 AND r.expires_at>$2 AND u.enabled=1{lock}"
-    ))
+    )))
     .bind(token_hash)
     .bind(unix_timestamp())
     .fetch_optional(&mut *tx)

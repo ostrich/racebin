@@ -394,11 +394,11 @@ pub async fn copy_database(
             "api_keys",
             "attachments",
         ] {
-            sqlx::query(&format!(
+            sqlx::query(sqlx::AssertSqlSafe(format!(
                 "SELECT setval(pg_get_serial_sequence('{table}','id'),
                                coalesce((SELECT max(id) FROM {table}),1),
                                EXISTS(SELECT 1 FROM {table}))"
-            ))
+            )))
             .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
@@ -415,10 +415,11 @@ pub async fn copy_database(
         ("pastes", counts[7]),
         ("attachments", counts[8]),
     ] {
-        let actual: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM {table}"))
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
+        let actual: i64 =
+            sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT count(*) FROM {table}")))
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
         if actual != expected as i64 {
             return Err(format!(
                 "copy verification failed for {table}: expected {expected}, got {actual}"

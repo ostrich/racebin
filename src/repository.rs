@@ -133,7 +133,7 @@ impl Repository {
             } else {
                 "UPDATE pastes SET content=$1 WHERE id=$2"
             };
-            sqlx::query(statement)
+            sqlx::query(sqlx::AssertSqlSafe(statement))
                 .bind(markdown)
                 .bind(id)
                 .execute(&mut *transaction)

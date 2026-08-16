@@ -524,14 +524,34 @@ pub(crate) async fn get_qr(
         .expect("validated at startup")
         .as_str()
         .trim_end_matches('/');
-    match qrcode_generator::to_png_to_vec(
-        format!("{origin}/pastes/{paste_id}"),
-        qrcode_generator::QrCodeEcc::Low,
-        512,
-    ) {
+    let encoded = qr_png(&format!("{origin}/pastes/{paste_id}"));
+    match encoded {
         Ok(bytes) => HttpResponse::Ok()
             .insert_header((header::CONTENT_TYPE, "image/png"))
             .body(bytes),
-        Err(e) => internal(e.to_string()),
+        Err(e) => internal(e),
+    }
+}
+
+fn qr_png(value: &str) -> Result<Vec<u8>, String> {
+    qrcode_generator::qr::Encoder::new(qrcode_generator::qr::ErrorCorrection::Low)
+        .encode_text(value)
+        .map_err(|error| error.to_string())
+        .and_then(|symbol| {
+            qrcode_generator::Renderer::new(&symbol, 512)
+                .to_png_vec()
+                .map_err(|error| error.to_string())
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::qr_png;
+
+    #[test]
+    fn qr_renderer_produces_a_png() {
+        let bytes = qr_png("https://example.test/pastes/example").expect("QR should render");
+        assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
+        assert!(bytes.len() > 100);
     }
 }

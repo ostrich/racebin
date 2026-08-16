@@ -98,10 +98,11 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
         "pastes",
         "attachments",
     ] {
-        let count: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM {table}"))
-            .fetch_one(destination.pool())
-            .await
-            .unwrap();
+        let count: i64 =
+            sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT count(*) FROM {table}")))
+                .fetch_one(destination.pool())
+                .await
+                .unwrap();
         assert_eq!(count, if table == "pastes" { 2 } else { 1 }, "{table}");
     }
     let rich_document: String =

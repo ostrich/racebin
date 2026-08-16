@@ -69,10 +69,10 @@ pub async fn redeem_invitation(
     } else {
         ""
     };
-    let invitation_id: Option<i64> = sqlx::query_scalar(&format!(
+    let invitation_id: Option<i64> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT id FROM invitations
          WHERE token_hash=$1 AND expires_at>$2 AND redeemed=0 AND revoked=0{lock}"
-    ))
+    )))
     .bind(token_hash)
     .bind(unix_timestamp())
     .fetch_optional(&mut *tx)
