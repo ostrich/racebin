@@ -113,11 +113,7 @@ pub(crate) async fn admin_pastes(
     }
     match services.list_pastes(&value, &query, true).await {
         Ok(page) => {
-            let total_pages = if page.total_items == 0 {
-                0
-            } else {
-                (page.total_items as u64).div_ceil(u64::from(page.page_size)) as u32
-            };
+            let total_pages = dto::total_pages(page.total_items, page.page_size);
             HttpResponse::Ok().json(dto::PastePage {
                 items: page
                     .items

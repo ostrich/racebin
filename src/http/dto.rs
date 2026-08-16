@@ -226,6 +226,16 @@ pub(crate) struct PastePage {
     pub pagination: Pagination,
 }
 
+pub(crate) fn total_pages(total_items: i64, page_size: u32) -> u32 {
+    if total_items <= 0 || page_size == 0 {
+        return 0;
+    }
+    let pages = u64::try_from(total_items)
+        .unwrap_or_default()
+        .div_ceil(u64::from(page_size));
+    u32::try_from(pages).unwrap_or(u32::MAX)
+}
+
 impl CreatePasteRequest {
     pub fn into_input(self, now: i64) -> Result<PasteInput, String> {
         if self.expires_at.is_some() && self.expires_in.is_some() {
@@ -595,5 +605,13 @@ mod tests {
             .unwrap();
         assert_eq!(input.content.as_deref(), Some(""));
         assert_eq!(input.content_kind.as_deref(), Some("text"));
+    }
+
+    #[test]
+    fn pagination_arithmetic_is_bounded() {
+        assert_eq!(total_pages(0, 30), 0);
+        assert_eq!(total_pages(31, 30), 2);
+        assert_eq!(total_pages(i64::MAX, 1), u32::MAX);
+        assert_eq!(total_pages(1, 0), 0);
     }
 }
