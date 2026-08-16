@@ -1,9 +1,44 @@
-use super::service::{
-    folder_database_error, folder_name_key, folder_principal, validate_folder_name,
-};
 use super::{DomainError, DomainResult, Folder, FolderOverview, PasteService, Principal};
 use crate::time::unix_timestamp;
 use std::collections::HashSet;
+
+fn folder_principal(principal: &Principal, scope: &str) -> DomainResult<i64> {
+    let owner = principal
+        .user_id()
+        .ok_or_else(|| DomainError::forbidden("Folders require a user-owned credential"))?;
+    if matches!(principal, Principal::ApiKey(_)) && !principal.can(scope) {
+        return Err(DomainError::forbidden(format!("Missing {scope} scope")));
+    }
+    Ok(owner)
+}
+
+fn validate_folder_name(name: &str) -> DomainResult<&str> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 100 || name.chars().any(char::is_control) {
+        return Err(DomainError::validation(
+            "Folder name must contain 1 to 100 printable characters",
+        ));
+    }
+    if matches!(
+        name.to_ascii_lowercase().as_str(),
+        "all pastes" | "uncategorized"
+    ) {
+        return Err(DomainError::validation("Folder name is reserved"));
+    }
+    Ok(name)
+}
+
+fn folder_database_error(error: sqlx::Error) -> DomainError {
+    if matches!(&error, sqlx::Error::Database(database) if database.is_unique_violation()) {
+        DomainError::conflict("folder_exists", "A folder with that name already exists")
+    } else {
+        DomainError::internal(error)
+    }
+}
+
+fn folder_name_key(name: &str) -> String {
+    name.to_lowercase()
+}
 
 impl PasteService {
     pub async fn list_folders(&self, principal: &Principal) -> DomainResult<FolderOverview> {

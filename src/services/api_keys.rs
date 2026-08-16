@@ -2,22 +2,22 @@ use crate::account::api_keys;
 
 use super::{DomainError, DomainResult, PasteService, Principal};
 
-impl PasteService {
-    fn key_owner(&self, principal: &Principal) -> DomainResult<i64> {
-        let owner = principal
-            .user_id()
-            .ok_or_else(|| DomainError::forbidden("User identity required"))?;
-        if matches!(principal, Principal::ApiKey(key) if !key.has_scope("api_key:manage")) {
-            return Err(DomainError::forbidden("Missing api_key:manage permission"));
-        }
-        Ok(owner)
+fn key_owner(principal: &Principal) -> DomainResult<i64> {
+    let owner = principal
+        .user_id()
+        .ok_or_else(|| DomainError::forbidden("User identity required"))?;
+    if matches!(principal, Principal::ApiKey(key) if !key.has_scope("api_key:manage")) {
+        return Err(DomainError::forbidden("Missing api_key:manage permission"));
     }
+    Ok(owner)
+}
 
+impl PasteService {
     pub async fn list_api_keys(
         &self,
         principal: &Principal,
     ) -> DomainResult<Vec<api_keys::ApiKey>> {
-        api_keys::list_for_user(&self.storage, self.key_owner(principal)?).await
+        api_keys::list_for_user(&self.storage, key_owner(principal)?).await
     }
 
     pub async fn create_api_key(
@@ -26,7 +26,7 @@ impl PasteService {
         name: &str,
         scopes: &[String],
     ) -> DomainResult<(api_keys::ApiKey, String)> {
-        let owner = self.key_owner(principal)?;
+        let owner = key_owner(principal)?;
         let name = name.trim();
         if name.is_empty() || name.chars().count() > 100 {
             return Err(DomainError::validation_code(
@@ -56,10 +56,10 @@ impl PasteService {
         id: i64,
         enabled: bool,
     ) -> DomainResult<bool> {
-        api_keys::set_enabled_for_user(&self.storage, id, self.key_owner(principal)?, enabled).await
+        api_keys::set_enabled_for_user(&self.storage, id, key_owner(principal)?, enabled).await
     }
 
     pub async fn delete_api_key(&self, principal: &Principal, id: i64) -> DomainResult<bool> {
-        api_keys::delete_for_user(&self.storage, id, self.key_owner(principal)?).await
+        api_keys::delete_for_user(&self.storage, id, key_owner(principal)?).await
     }
 }

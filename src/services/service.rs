@@ -725,45 +725,6 @@ impl PasteService {
     }
 }
 
-pub(super) fn folder_principal(principal: &Principal, scope: &str) -> DomainResult<i64> {
-    let owner = principal
-        .user_id()
-        .ok_or_else(|| DomainError::forbidden("Folders require a user-owned credential"))?;
-    if matches!(principal, Principal::ApiKey(_)) && !principal.can(scope) {
-        return Err(DomainError::forbidden(format!("Missing {scope} scope")));
-    }
-    Ok(owner)
-}
-
-pub(super) fn validate_folder_name(name: &str) -> DomainResult<&str> {
-    let name = name.trim();
-    if name.is_empty() || name.chars().count() > 100 || name.chars().any(char::is_control) {
-        return Err(DomainError::validation(
-            "Folder name must contain 1 to 100 printable characters",
-        ));
-    }
-    if matches!(
-        name.to_ascii_lowercase().as_str(),
-        "all pastes" | "uncategorized"
-    ) {
-        return Err(DomainError::validation("Folder name is reserved"));
-    }
-    Ok(name)
-}
-
-pub(super) fn folder_database_error(error: impl std::fmt::Display) -> DomainError {
-    let error = error.to_string();
-    if error.to_ascii_lowercase().contains("unique") {
-        DomainError::conflict("folder_exists", "A folder with that name already exists")
-    } else {
-        DomainError::internal(error)
-    }
-}
-
-pub(super) fn folder_name_key(name: &str) -> String {
-    name.to_lowercase()
-}
-
 fn redact_folder(principal: &Principal, mut paste: Paste, administrative: bool) -> Paste {
     if administrative || principal.user_id() != paste.owner_id {
         paste.folder_id = None;
