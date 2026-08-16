@@ -1,7 +1,6 @@
 use sqlx::any::{install_default_drivers, AnyPoolOptions};
 use sqlx::AnyPool;
 use std::collections::HashSet;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 use tokio::sync::{Mutex, MutexGuard};
@@ -200,7 +199,8 @@ impl Repository {
             .map_err(|e| e.to_string())?;
         tx.commit().await.map_err(|e| e.to_string())?;
         for paste_id in &paste_ids {
-            let _ = fs::remove_dir_all(self.data_dir.join("attachments").join(paste_id));
+            let _ =
+                tokio::fs::remove_dir_all(self.data_dir.join("attachments").join(paste_id)).await;
         }
         let valid: HashSet<String> = sqlx::query_scalar("SELECT id FROM pastes")
             .fetch_all(&self.pool)
@@ -209,28 +209,30 @@ impl Repository {
             .into_iter()
             .collect();
         let attachment_root = self.data_dir.join("attachments");
-        if let Ok(entries) = fs::read_dir(attachment_root) {
-            for entry in entries.flatten() {
+        if let Ok(mut entries) = tokio::fs::read_dir(attachment_root).await {
+            while let Ok(Some(entry)) = entries.next_entry().await {
                 let name = entry.file_name().to_string_lossy().into_owned();
                 if name == ".staging" {
-                    if let Ok(staged) = fs::read_dir(entry.path()) {
-                        for file in staged.flatten() {
+                    if let Ok(mut staged) = tokio::fs::read_dir(entry.path()).await {
+                        while let Ok(Some(file)) = staged.next_entry().await {
                             let stale = file
                                 .metadata()
+                                .await
                                 .and_then(|metadata| metadata.modified())
                                 .and_then(|modified| {
                                     modified.elapsed().map_err(std::io::Error::other)
                                 })
                                 .is_ok_and(|age| age.as_secs() >= 3600);
                             if stale {
-                                let _ = fs::remove_file(file.path());
+                                let _ = tokio::fs::remove_file(file.path()).await;
                             }
                         }
                     }
                     continue;
                 }
-                if entry.path().is_dir() && !valid.contains(&name) {
-                    let _ = fs::remove_dir_all(entry.path());
+                if entry.file_type().await.is_ok_and(|kind| kind.is_dir()) && !valid.contains(&name)
+                {
+                    let _ = tokio::fs::remove_dir_all(entry.path()).await;
                 }
             }
         }
