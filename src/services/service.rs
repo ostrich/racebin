@@ -735,7 +735,10 @@ fn redact_folder(principal: &Principal, mut paste: Paste, administrative: bool) 
 fn normalized_content(content_kind: &str, content: &str) -> DomainResult<(String, Option<String>)> {
     if content_kind == "markdown" {
         render_markdown(content).map_err(|error| {
-            DomainError::validation(format!("Markdown content is invalid: {error}"))
+            DomainError::unprocessable(
+                "invalid_paste",
+                format!("Markdown content is invalid: {error}"),
+            )
         })?;
         Ok((content.to_string(), None))
     } else {

@@ -50,6 +50,7 @@ pub(super) fn domain_error(value: DomainError) -> HttpResponse {
         ErrorKind::Unauthorized => StatusCode::UNAUTHORIZED,
         ErrorKind::Forbidden => StatusCode::FORBIDDEN,
         ErrorKind::Validation => StatusCode::BAD_REQUEST,
+        ErrorKind::Unprocessable => StatusCode::UNPROCESSABLE_ENTITY,
         ErrorKind::Conflict => StatusCode::CONFLICT,
         ErrorKind::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         ErrorKind::Precondition => StatusCode::PRECONDITION_FAILED,

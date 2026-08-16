@@ -449,7 +449,7 @@ mod tests {
                 .to_request(),
         )
         .await;
-        assert_eq!(expired.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(expired.status(), StatusCode::UNPROCESSABLE_ENTITY);
         let empty_update = test::call_service(
             &app,
             test::TestRequest::patch()
@@ -773,12 +773,15 @@ mod tests {
             .unwrap()
             .contains("## Imported"));
 
-        for body in [
-            json!({ "title": null }),
-            json!({
-                "expires_at": "2030-01-01T00:00:00Z",
-                "expires_in": 60
-            }),
+        for (body, expected_status) in [
+            (json!({ "title": null }), StatusCode::BAD_REQUEST),
+            (
+                json!({
+                    "expires_at": "2030-01-01T00:00:00Z",
+                    "expires_in": 60
+                }),
+                StatusCode::UNPROCESSABLE_ENTITY,
+            ),
         ] {
             let invalid_create = test::call_service(
                 &app,
@@ -789,14 +792,7 @@ mod tests {
                     .to_request(),
             )
             .await;
-            assert!(
-                matches!(
-                    invalid_create.status(),
-                    StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY
-                ),
-                "unexpected create status {}",
-                invalid_create.status()
-            );
+            assert_eq!(invalid_create.status(), expected_status);
         }
 
         let raw_replay = test::call_service(

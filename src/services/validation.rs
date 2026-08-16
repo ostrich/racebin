@@ -124,7 +124,10 @@ pub(super) fn validate_input(input: &PasteInput, now: i64) -> DomainResult<()> {
         .as_deref()
         .is_some_and(|value| value.chars().count() > crate::limits::MAX_TITLE_CHARACTERS)
     {
-        return Err(DomainError::validation("Title exceeds 200 characters"));
+        return Err(DomainError::unprocessable(
+            "invalid_paste",
+            "Title exceeds 200 characters",
+        ));
     }
     if input
         .content
@@ -141,8 +144,9 @@ pub(super) fn validate_input(input: &PasteInput, now: i64) -> DomainResult<()> {
         .as_deref()
         .is_some_and(|value| !matches!(value, "text" | "markdown"))
     {
-        return Err(DomainError::validation(
-            "Content kind must be text or markdown",
+        return Err(DomainError::unprocessable(
+            "invalid_paste",
+            "Format must be text or markdown",
         ));
     }
     if input
@@ -150,7 +154,8 @@ pub(super) fn validate_input(input: &PasteInput, now: i64) -> DomainResult<()> {
         .as_deref()
         .is_some_and(|value| !matches!(value, "public" | "unlisted" | "private"))
     {
-        return Err(DomainError::validation(
+        return Err(DomainError::unprocessable(
+            "invalid_paste",
             "Visibility must be public, unlisted, or private",
         ));
     }
@@ -158,7 +163,8 @@ pub(super) fn validate_input(input: &PasteInput, now: i64) -> DomainResult<()> {
         .read_limit
         .is_some_and(|value| value.is_some_and(|limit| limit <= 0))
     {
-        return Err(DomainError::validation(
+        return Err(DomainError::unprocessable(
+            "invalid_paste",
             "Read limit must be positive or null",
         ));
     }
@@ -166,7 +172,10 @@ pub(super) fn validate_input(input: &PasteInput, now: i64) -> DomainResult<()> {
         .expires_at
         .is_some_and(|value| value.is_some_and(|expires_at| expires_at <= now))
     {
-        return Err(DomainError::validation("Expiration must be in the future"));
+        return Err(DomainError::unprocessable(
+            "invalid_paste",
+            "Expiration must be in the future",
+        ));
     }
     Ok(())
 }

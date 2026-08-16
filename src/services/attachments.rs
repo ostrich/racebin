@@ -71,7 +71,7 @@ impl PasteService {
             .ok_or_else(|| DomainError::not_found("Paste not found"))?;
         authorize_owner(principal, &paste, "paste:write")?;
         if inputs.is_empty() {
-            return Err(DomainError::validation_code(
+            return Err(DomainError::unprocessable(
                 "invalid_attachment",
                 "At least one attachment is required",
             ));
@@ -101,7 +101,7 @@ impl PasteService {
                     .count()
                     != 1
             {
-                return Err(DomainError::validation_code(
+                return Err(DomainError::unprocessable(
                     "invalid_attachment",
                     "Attachment metadata is invalid",
                 ));
