@@ -14,11 +14,12 @@
     "test": "npm run test:unit && npm run test:e2e && npm run test:visual",
     "test:unit": "vitest run",
     "test:e2e": "playwright test --grep-invert @visual",
-    "test:e2e:gate": "playwright test e2e/home-auth.spec.ts e2e/layout-invariants.spec.ts e2e/paste-view.spec.ts",
+    "test:e2e:gate": "playwright test e2e/accessibility.spec.ts e2e/home-auth.spec.ts e2e/layout-invariants.spec.ts e2e/paste-view.spec.ts",
     "test:real": "playwright test --config playwright.real.config.ts",
     "test:visual": "playwright test --grep @visual"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@lucide/svelte": "^1.31.0",
     "@playwright/test": "^1.54.1",
     "@sveltejs/vite-plugin-svelte": "^7.2.0",

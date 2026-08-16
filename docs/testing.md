@@ -82,7 +82,8 @@ different responsibilities:
   Svelte components in jsdom.
 - Functional Playwright tests use deterministic API fixtures for editing,
   highlighting, folder/list behavior, caching, back/forward restoration,
-  administration, responsive geometry, and accessibility-oriented controls.
+  administration, responsive geometry, and WCAG A/AA accessibility scans of
+  representative public, authenticated, editor, paste-view, and admin screens.
 - Visual Playwright tests compare reviewed automatic/light/dark theme matrices
   at desktop and mobile sizes, plus focused page snapshots.
 - Layout-invariant tests express measurable requirements such as common content

@@ -88,6 +88,9 @@
   color: var(--color-hero-muted);
   line-height: 1.6;
 }
+.welcome .eyebrow {
+  color: var(--color-hero-action);
+}
 .welcome .button {
   background: transparent;
   color: var(--color-hero-text);
@@ -567,10 +570,12 @@
   display: grid;
   gap: var(--space-1);
 }
-.attachment-drop-zone small,
 .attachment-picker-limits,
 .attachment-queue-summary {
   color: var(--muted);
+}
+.attachment-drop-zone small {
+  color: var(--color-label);
 }
 .attachment-queue {
   display: grid;
