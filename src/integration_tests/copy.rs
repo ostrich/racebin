@@ -190,7 +190,7 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
         .unwrap_err();
     assert!(error.contains("not empty"));
     sqlx::query(
-        "TRUNCATE attachments,pastes,folders,api_key_scopes,api_keys,password_reset_tokens,sessions,invitations,users
+        "TRUNCATE audit_events,instance_settings,attachments,pastes,folders,api_key_scopes,api_keys,password_reset_tokens,sessions,invitations,users
          RESTART IDENTITY CASCADE",
     )
     .execute(destination.pool())

@@ -100,7 +100,11 @@ pub(crate) async fn upload_attachments(
     paste_id: web::Path<String>,
     mut payload: Multipart,
 ) -> HttpResponse {
-    if !ARGS.attachments_enabled {
+    let attachments_enabled = match crate::services::settings::get(&services.storage).await {
+        Ok(settings) => settings.attachments_enabled,
+        Err(value) => return domain_error(value),
+    };
+    if !attachments_enabled {
         return error(
             StatusCode::FORBIDDEN,
             "uploads_disabled",
@@ -508,7 +512,11 @@ pub(crate) async fn get_qr(
     services: web::Data<PasteService>,
     paste_id: web::Path<String>,
 ) -> HttpResponse {
-    if !ARGS.qr_codes {
+    let qr_codes_enabled = match crate::services::settings::get(&services.storage).await {
+        Ok(settings) => settings.qr_codes_enabled,
+        Err(value) => return domain_error(value),
+    };
+    if !qr_codes_enabled {
         return error(StatusCode::NOT_FOUND, "not_found", "QR codes are disabled");
     }
     let value = match principal(&services, &req).await {

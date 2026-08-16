@@ -25,7 +25,9 @@ pub async fn copy_database(
           (SELECT count(*) FROM api_keys) +
           (SELECT count(*) FROM api_key_scopes) +
           (SELECT count(*) FROM pastes) +
-          (SELECT count(*) FROM attachments)",
+          (SELECT count(*) FROM attachments) +
+          (SELECT count(*) FROM instance_settings) +
+          (SELECT count(*) FROM audit_events)",
     )
     .fetch_one(destination.pool())
     .await
@@ -36,7 +38,7 @@ pub async fn copy_database(
 
     let mut source_tx = source.pool.begin().await.map_err(|e| e.to_string())?;
     let users = sqlx::query(
-        "SELECT id,username,password_hash,role,enabled,password_change_required,created_at,last_login_at FROM users",
+        "SELECT id,username,password_hash,role,is_owner,enabled,password_change_required,created_at,last_login_at FROM users",
     )
     .fetch_all(&mut *source_tx)
     .await
@@ -47,7 +49,7 @@ pub async fn copy_database(
             .await
             .map_err(|e| e.to_string())?;
     let sessions = sqlx::query(
-        "SELECT id,user_id,token_hash,csrf_token,created_at,expires_at,last_used_at FROM sessions",
+        "SELECT id,user_id,token_hash,csrf_token,created_at,expires_at,last_used_at,reauthenticated_at FROM sessions",
     )
     .fetch_all(&mut *source_tx)
     .await
@@ -90,6 +92,10 @@ pub async fn copy_database(
     .fetch_all(&mut *source_tx)
     .await
     .map_err(|e| e.to_string())?;
+    let settings = sqlx::query("SELECT site_name,home_mode,public_explore_enabled,invitations_enabled,attachments_enabled,qr_codes_enabled,default_format,default_language,default_visibility,default_expiration_seconds,updated_at,updated_by_user_id FROM instance_settings WHERE id=1")
+        .fetch_all(&mut *source_tx).await.map_err(|e| e.to_string())?;
+    let audit_events = sqlx::query("SELECT id,actor_user_id,actor_username,actor_api_key_id,action,target_type,target_id,target_label,details,created_at FROM audit_events ORDER BY id")
+        .fetch_all(&mut *source_tx).await.map_err(|e| e.to_string())?;
 
     for row in &attachments {
         let paste_id: String = row.try_get("paste_id").map_err(|e| e.to_string())?;
@@ -124,17 +130,19 @@ pub async fn copy_database(
         api_key_scopes.len(),
         pastes.len(),
         attachments.len(),
+        settings.len(),
+        audit_events.len(),
     ];
     let mut tx = destination.pool.begin().await.map_err(|e| e.to_string())?;
     for row in users {
         sqlx::query(
-            "INSERT INTO users(id,username,password_hash,role,enabled,password_change_required,created_at,last_login_at)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+            "INSERT INTO users(id,username,password_hash,role,is_owner,enabled,password_change_required,created_at,last_login_at)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
         )
         .bind(row.try_get::<i64, _>("id").map_err(|e| e.to_string())?)
-        .bind(row.try_get::<String, _>("username").map_err(|e| e.to_string())?)
         .bind(row.try_get::<String, _>("password_hash").map_err(|e| e.to_string())?)
         .bind(row.try_get::<String, _>("role").map_err(|e| e.to_string())?)
+        .bind(row.try_get::<i64, _>("is_owner").map_err(|e| e.to_string())?)
         .bind(row.try_get::<i64, _>("enabled").map_err(|e| e.to_string())?)
         .bind(
             row.try_get::<i64, _>("password_change_required")
@@ -176,8 +184,8 @@ pub async fn copy_database(
     }
     for row in sessions {
         sqlx::query(
-            "INSERT INTO sessions(id,user_id,token_hash,csrf_token,created_at,expires_at,last_used_at)
-             VALUES($1,$2,$3,$4,$5,$6,$7)",
+            "INSERT INTO sessions(id,user_id,token_hash,csrf_token,created_at,expires_at,last_used_at,reauthenticated_at)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
         )
         .bind(row.try_get::<i64, _>("id").map_err(|e| e.to_string())?)
         .bind(
@@ -204,6 +212,7 @@ pub async fn copy_database(
             row.try_get::<i64, _>("last_used_at")
                 .map_err(|e| e.to_string())?,
         )
+        .bind(row.try_get::<Option<i64>, _>("reauthenticated_at").map_err(|e| e.to_string())?)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -385,6 +394,25 @@ pub async fn copy_database(
         .await
         .map_err(|e| e.to_string())?;
     }
+    for row in settings {
+        sqlx::query("INSERT INTO instance_settings(id,site_name,home_mode,public_explore_enabled,invitations_enabled,attachments_enabled,qr_codes_enabled,default_format,default_language,default_visibility,default_expiration_seconds,updated_at,updated_by_user_id) VALUES(1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)")
+            .bind(row.try_get::<String,_>("site_name").map_err(|e|e.to_string())?).bind(row.try_get::<String,_>("home_mode").map_err(|e|e.to_string())?)
+            .bind(row.try_get::<i64,_>("public_explore_enabled").map_err(|e|e.to_string())?).bind(row.try_get::<i64,_>("invitations_enabled").map_err(|e|e.to_string())?)
+            .bind(row.try_get::<i64,_>("attachments_enabled").map_err(|e|e.to_string())?).bind(row.try_get::<i64,_>("qr_codes_enabled").map_err(|e|e.to_string())?)
+            .bind(row.try_get::<String,_>("default_format").map_err(|e|e.to_string())?).bind(row.try_get::<String,_>("default_language").map_err(|e|e.to_string())?)
+            .bind(row.try_get::<String,_>("default_visibility").map_err(|e|e.to_string())?).bind(row.try_get::<Option<i64>,_>("default_expiration_seconds").map_err(|e|e.to_string())?)
+            .bind(row.try_get::<i64,_>("updated_at").map_err(|e|e.to_string())?).bind(row.try_get::<Option<i64>,_>("updated_by_user_id").map_err(|e|e.to_string())?)
+            .execute(&mut *tx).await.map_err(|e|e.to_string())?;
+    }
+    for row in audit_events {
+        sqlx::query("INSERT INTO audit_events(id,actor_user_id,actor_username,actor_api_key_id,action,target_type,target_id,target_label,details,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)")
+            .bind(row.try_get::<i64,_>("id").map_err(|e|e.to_string())?).bind(row.try_get::<Option<i64>,_>("actor_user_id").map_err(|e|e.to_string())?)
+            .bind(row.try_get::<String,_>("actor_username").map_err(|e|e.to_string())?).bind(row.try_get::<Option<i64>,_>("actor_api_key_id").map_err(|e|e.to_string())?)
+            .bind(row.try_get::<String,_>("action").map_err(|e|e.to_string())?).bind(row.try_get::<String,_>("target_type").map_err(|e|e.to_string())?)
+            .bind(row.try_get::<Option<String>,_>("target_id").map_err(|e|e.to_string())?).bind(row.try_get::<Option<String>,_>("target_label").map_err(|e|e.to_string())?)
+            .bind(row.try_get::<String,_>("details").map_err(|e|e.to_string())?).bind(row.try_get::<i64,_>("created_at").map_err(|e|e.to_string())?)
+            .execute(&mut *tx).await.map_err(|e|e.to_string())?;
+    }
     if destination.kind == DatabaseKind::Postgres {
         for table in [
             "users",
@@ -393,6 +421,7 @@ pub async fn copy_database(
             "invitations",
             "api_keys",
             "attachments",
+            "audit_events",
         ] {
             sqlx::query(sqlx::AssertSqlSafe(format!(
                 "SELECT setval(pg_get_serial_sequence('{table}','id'),
@@ -414,6 +443,8 @@ pub async fn copy_database(
         ("api_key_scopes", counts[6]),
         ("pastes", counts[7]),
         ("attachments", counts[8]),
+        ("instance_settings", counts[9]),
+        ("audit_events", counts[10]),
     ] {
         let actual: i64 =
             sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT count(*) FROM {table}")))

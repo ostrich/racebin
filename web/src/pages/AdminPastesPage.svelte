@@ -1,6 +1,7 @@
 <script lang="ts">
   import { deletePaste, listAdminPastes, listAdminUsers } from "../api";
   import Icon from "../components/Icon.svelte";
+  import AdminNav from "../components/AdminNav.svelte";
   import Link from "../components/Link.svelte";
   import Pagination from "../components/Pagination.svelte";
   import PasteFilters from "../components/PasteFilters.svelte";
@@ -113,7 +114,8 @@
 </script>
 
 <section aria-busy={loading}>
-  <div class="page-heading"><div><p class="eyebrow">Administration</p><h1>All pastes</h1></div><Link class="button" href="/admin">Admin home</Link></div>
+  <div class="page-heading"><div><p class="eyebrow">Administration</p><h1>All pastes</h1></div></div>
+  <div class="section-layout"><AdminNav/><div class="section-content">
   <PasteFilters params={appliedQuery} mode="admin" {ownerNames}/>
   {#if page}
     <p class="result-count">{page.total_items} pastes</p>
@@ -146,4 +148,5 @@
     <Pagination {page} params={appliedQuery}/>
   {:else if error}<div class="empty compact"><p>{error}</p></div>
   {:else}<p class="muted">Loading pastes…</p>{/if}
+  </div></div>
 </section>

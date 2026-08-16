@@ -50,6 +50,9 @@ mod tests {
         );
         let repository = Repository::open(&url, &data_dir).await.unwrap();
         repository.migrate().await.unwrap();
+        crate::services::settings::initialize(&repository, &crate::args::ARGS)
+            .await
+            .unwrap();
         sqlx::query(
             "INSERT INTO users(id,username,password_hash,role,enabled,password_change_required,created_at)
              VALUES(1,'http-user',$1,'user',1,0,$2)",
@@ -72,12 +75,14 @@ mod tests {
             id: 1,
             username: "http-user".to_string(),
             role: "user".to_string(),
+            is_owner: false,
             enabled: true,
             password_change_required: false,
         };
         let principal = Principal::Session(accounts::SessionUser {
             user,
             csrf_token: "direct".to_string(),
+            reauthenticated_at: None,
         });
         let services = PasteService::new(repository.clone());
         let input = |title: &str, visibility: &str| PasteInput {
@@ -107,10 +112,12 @@ mod tests {
                 id: 2,
                 username: "other-user".to_string(),
                 role: "user".to_string(),
+                is_owner: false,
                 enabled: true,
                 password_change_required: false,
             },
             csrf_token: "other".to_string(),
+            reauthenticated_at: None,
         });
         let other_owner = services
             .create_paste(&other_principal, &input("other owner", "private"))

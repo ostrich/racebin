@@ -14,3 +14,8 @@ export async function loadSession(): Promise<void> {
 export function replaceSession(session: Session): void {
   appState.update(state => ({ ...state, session }));
 }
+
+export async function loadCapabilities(): Promise<void> {
+  const config = await getCapabilities();
+  appState.update(state => ({ ...state, config }));
+}

@@ -7,7 +7,7 @@ fn admin_user_query(repo: &Repository) -> String {
         "length(CAST(p.content AS BLOB))"
     };
     format!(
-        "SELECT u.id,u.username,u.role,u.enabled,u.password_change_required,u.created_at,u.last_login_at,
+        "SELECT u.id,u.username,u.role,u.is_owner,u.enabled,u.password_change_required,u.created_at,u.last_login_at,
           CAST((SELECT count(*) FROM pastes p WHERE p.owner_id=u.id) AS BIGINT) AS paste_count,
           CAST(COALESCE((SELECT sum({text_size} + COALESCE((SELECT sum(a.size_bytes) FROM attachments a WHERE a.paste_id=p.id),0)) FROM pastes p WHERE p.owner_id=u.id),0) AS BIGINT) AS storage_bytes,
           CAST((SELECT count(*) FROM sessions s WHERE s.user_id=u.id AND s.expires_at>$1) AS BIGINT) AS active_session_count,
@@ -61,15 +61,21 @@ pub async fn update_user(
     } else {
         ""
     };
-    let target: Option<(String, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "SELECT role,enabled FROM users WHERE id=$1{lock}"
+    let target: Option<(String, i64, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT role,enabled,is_owner FROM users WHERE id=$1{lock}"
     )))
     .bind(id)
     .fetch_optional(&mut *tx)
     .await
     .map_err(DomainError::from)?;
-    let (current_role, currently_enabled) =
+    let (current_role, currently_enabled, is_owner) =
         target.ok_or_else(|| DomainError::not_found("User not found"))?;
+    if is_owner != 0 && (enabled == Some(false) || admin == Some(false)) {
+        return Err(DomainError::validation_code(
+            "owner_protected",
+            "The owner cannot be disabled or demoted",
+        ));
+    }
     let final_enabled = enabled.unwrap_or(currently_enabled != 0);
     let final_admin = admin.unwrap_or(current_role == "admin");
     if current_role == "admin" && currently_enabled != 0 && (!final_enabled || !final_admin) {
@@ -124,6 +130,65 @@ pub async fn update_user(
         .await
         .map_err(DomainError::from)?;
     }
+    tx.commit().await.map_err(DomainError::from)
+}
+
+pub async fn transfer_ownership(
+    repo: &Repository,
+    current_owner_id: i64,
+    target_id: i64,
+) -> DomainResult<()> {
+    if current_owner_id == target_id {
+        return Err(DomainError::validation_code(
+            "invalid_owner",
+            "Choose another administrator",
+        ));
+    }
+    let _write_guard = repo.lock_writes().await;
+    let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
+    let current: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM users WHERE id=$1 AND is_owner=1 AND enabled=1")
+            .bind(current_owner_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(DomainError::from)?;
+    if current.is_none() {
+        return Err(DomainError::forbidden(
+            "Only the current owner can transfer ownership",
+        ));
+    }
+    let target: Option<(String, i64)> =
+        sqlx::query_as("SELECT role,enabled FROM users WHERE id=$1")
+            .bind(target_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(DomainError::from)?;
+    match target {
+        None => return Err(DomainError::not_found("User not found")),
+        Some((role, 1)) if role == "admin" => {}
+        Some(_) => {
+            return Err(DomainError::validation_code(
+                "invalid_owner",
+                "The new owner must be an enabled administrator",
+            ))
+        }
+    }
+    sqlx::query("UPDATE users SET is_owner=0 WHERE id=$1")
+        .bind(current_owner_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(DomainError::from)?;
+    sqlx::query("UPDATE users SET is_owner=1 WHERE id=$1")
+        .bind(target_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(DomainError::from)?;
+    sqlx::query("UPDATE sessions SET reauthenticated_at=NULL WHERE user_id IN ($1,$2)")
+        .bind(current_owner_id)
+        .bind(target_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(DomainError::from)?;
     tx.commit().await.map_err(DomainError::from)
 }
 

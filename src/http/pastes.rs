@@ -397,6 +397,17 @@ pub(crate) async fn list_pastes(
             "Authentication required for owner=me",
         );
     }
+    let public_explore_enabled = match crate::services::settings::get(&services.storage).await {
+        Ok(settings) => settings.public_explore_enabled,
+        Err(value) => return domain_error(value),
+    };
+    if !query.mine.unwrap_or(false) && !public_explore_enabled {
+        return error(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "Public discovery is disabled",
+        );
+    }
     if let Err(error) = crate::services::validate_paste_query(&query) {
         return domain_error(error);
     }
@@ -519,10 +530,25 @@ pub(crate) async fn create_paste(
             .await
             .map(|request| (request, Vec::new()))
     };
-    let (request, mut staged) = match parsed {
+    let (mut request, mut staged) = match parsed {
         Ok(value) => value,
         Err(response) => return response,
     };
+    let settings = match crate::services::settings::get(&services.storage).await {
+        Ok(settings) => settings,
+        Err(error) => return domain_error(error),
+    };
+    if request.visibility.is_none() {
+        request.visibility = Some(settings.default_visibility);
+    }
+    if request.expires_at.is_none() && request.expires_in.is_none() {
+        request.expires_in = settings.default_expiration_seconds;
+    }
+    if let Some(BodyInput::Text { language, .. }) = request.body.as_mut() {
+        if language.is_none() {
+            *language = Some(settings.default_language);
+        }
+    }
     let has_content = match request.body.as_ref() {
         Some(BodyInput::Text { content, .. } | BodyInput::Markdown { content }) => {
             !content.is_empty()

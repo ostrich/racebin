@@ -29,6 +29,8 @@ import Quote from "@lucide/svelte/icons/quote";
 import QrCode from "@lucide/svelte/icons/qr-code";
 import Redo2 from "@lucide/svelte/icons/redo-2";
 import Search from "@lucide/svelte/icons/search";
+import ScrollText from "@lucide/svelte/icons/scroll-text";
+import SlidersHorizontal from "@lucide/svelte/icons/sliders-horizontal";
 import SquareCode from "@lucide/svelte/icons/square-code";
 import Sun from "@lucide/svelte/icons/sun";
 import Table2 from "@lucide/svelte/icons/table-2";
@@ -73,6 +75,8 @@ export const icons = {
   quote: Quote,
   "redo-2": Redo2,
   search: Search,
+  "scroll-text": ScrollText,
+  "sliders-horizontal": SlidersHorizontal,
   "square-code": SquareCode,
   sun: Sun,
   "table-2": Table2,

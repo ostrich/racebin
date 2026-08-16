@@ -5,9 +5,102 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(get_session)
         .service(login)
         .service(logout)
+        .service(reauthenticate)
         .service(change_password)
         .service(reset_password)
         .service(redeem_invitation);
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+struct ReauthenticateInput {
+    password: String,
+}
+
+#[utoipa::path(
+    post, path = "/session/reauthenticate", tag = "account",
+    request_body = ReauthenticateInput,
+    responses(
+        (status = 204, description = "Session authorized for sensitive owner operations for ten minutes"),
+        (status = 401, description = "Password is incorrect", body = crate::http::errors::ProblemDetails),
+        (status = 403, description = "Browser session and CSRF token required", body = crate::http::errors::ProblemDetails)
+    ), security(("sessionCookie" = []))
+)]
+#[post("/session/reauthenticate")]
+pub(crate) async fn reauthenticate(
+    req: HttpRequest,
+    services: web::Data<PasteService>,
+    body: web::Json<ReauthenticateInput>,
+) -> HttpResponse {
+    let session = match principal(&services, &req)
+        .await
+        .and_then(|p| require_mutation(&services, &req, p))
+    {
+        Ok(Principal::Session(session)) => session,
+        Ok(_) => {
+            return error(
+                StatusCode::FORBIDDEN,
+                "session_required",
+                "A browser session is required",
+            )
+        }
+        Err(response) => return response,
+    };
+    let client = auth::client_address(&req);
+    match accounts::login_retry_after(&services.storage, &session.user.username, &client).await {
+        Ok(Some(retry_after)) => {
+            let mut response = error(
+                StatusCode::TOO_MANY_REQUESTS,
+                "rate_limited",
+                "Too many password attempts",
+            );
+            response.headers_mut().insert(
+                header::RETRY_AFTER,
+                header::HeaderValue::from_str(&retry_after.to_string()).unwrap(),
+            );
+            return response;
+        }
+        Ok(None) => {}
+        Err(value) => return domain_error(value),
+    }
+    match accounts::verify_user(&services.storage, &session.user.username, &body.password).await {
+        Ok(Some(_)) => {
+            if let Err(value) =
+                accounts::clear_login_failures(&services.storage, &session.user.username).await
+            {
+                return domain_error(value);
+            }
+            match req.cookie(accounts::SESSION_COOKIE) {
+                Some(cookie) => {
+                    match accounts::mark_session_reauthenticated(&services.storage, cookie.value())
+                        .await
+                    {
+                        Ok(()) => HttpResponse::NoContent().finish(),
+                        Err(error) => domain_error(error),
+                    }
+                }
+                None => error(
+                    StatusCode::UNAUTHORIZED,
+                    "invalid_session",
+                    "Session is no longer valid",
+                ),
+            }
+        }
+        Ok(None) => {
+            if let Err(value) =
+                accounts::record_login_failure(&services.storage, &session.user.username, &client)
+                    .await
+            {
+                return domain_error(value);
+            }
+            error(
+                StatusCode::UNAUTHORIZED,
+                "invalid_credentials",
+                "Password is incorrect",
+            )
+        }
+        Err(error) => domain_error(error),
+    }
 }
 
 #[utoipa::path(
@@ -25,26 +118,43 @@ pub(crate) async fn get_session(
     services: web::Data<PasteService>,
 ) -> HttpResponse {
     match principal(&services, &req).await {
-        Ok(Principal::Session(session)) => HttpResponse::Ok().json(
-            contract::SessionResponse::Browser(contract::BrowserSessionResponse {
-                authenticated: true,
-                user: session.user.into(),
-                csrf_token: session.csrf_token,
-            }),
-        ),
-        Ok(Principal::ApiKey(key)) => HttpResponse::Ok().json(contract::SessionResponse::Bearer(
-            contract::BearerSessionResponse {
-                authenticated: true,
-                api_key: contract::ApiKeyIdentity {
-                    id: key.id,
-                    name: key.name,
-                    scopes: key.scopes,
+        Ok(Principal::Session(session)) => {
+            let permissions = Principal::Session(session.clone())
+                .permissions()
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
+            HttpResponse::Ok().json(contract::SessionResponse::Browser(
+                contract::BrowserSessionResponse {
+                    authenticated: true,
+                    user: session.user.into(),
+                    csrf_token: session.csrf_token,
+                    permissions,
                 },
-            },
-        )),
+            ))
+        }
+        Ok(Principal::ApiKey(key)) => {
+            let permissions = Principal::ApiKey(key.clone())
+                .permissions()
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
+            HttpResponse::Ok().json(contract::SessionResponse::Bearer(
+                contract::BearerSessionResponse {
+                    authenticated: true,
+                    api_key: contract::ApiKeyIdentity {
+                        id: key.id,
+                        name: key.name,
+                        scopes: key.scopes,
+                    },
+                    permissions,
+                },
+            ))
+        }
         Ok(Principal::Anonymous) => HttpResponse::Ok().json(contract::SessionResponse::Anonymous(
             contract::AnonymousSessionResponse {
                 authenticated: false,
+                permissions: Vec::new(),
             },
         )),
         Err(response) => response,
@@ -117,6 +227,20 @@ pub(crate) async fn login(
                         body.remember.unwrap_or(false),
                     ))
                     .json(contract::SessionCreatedResponse {
+                        permissions: if user.is_owner() {
+                            crate::services::OWNER_PERMISSIONS
+                                .iter()
+                                .chain(crate::services::ADMIN_PERMISSIONS)
+                                .map(|p| p.id().to_owned())
+                                .collect()
+                        } else if user.is_admin() {
+                            crate::services::ADMIN_PERMISSIONS
+                                .iter()
+                                .map(|p| p.id().to_owned())
+                                .collect()
+                        } else {
+                            Vec::new()
+                        },
                         user: user.into(),
                         csrf_token: csrf,
                     }),
@@ -338,6 +462,17 @@ pub(crate) async fn redeem_invitation(
     token: web::Path<String>,
     body: web::Json<InvitationInput>,
 ) -> HttpResponse {
+    let invitations_enabled = match crate::services::settings::get(&services.storage).await {
+        Ok(settings) => settings.invitations_enabled,
+        Err(value) => return domain_error(value),
+    };
+    if !invitations_enabled {
+        return error(
+            StatusCode::FORBIDDEN,
+            "invitations_disabled",
+            "Invitations are disabled",
+        );
+    }
     let client = auth::client_address(&req);
     let retry_after = match accounts::invitation_retry_after(&services.storage, &client).await {
         Ok(value) => value,
@@ -363,6 +498,7 @@ pub(crate) async fn redeem_invitation(
             Ok((session, csrf, _)) => HttpResponse::Created()
                 .cookie(cookies::session_cookie(session, false))
                 .json(contract::SessionCreatedResponse {
+                    permissions: Vec::new(),
                     user: user.into(),
                     csrf_token: csrf,
                 }),

@@ -23,7 +23,7 @@ export class ApiError extends Error {
 }
 
 export type TransportOptions = {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   json?: unknown;
   body?: FormData;
   headers?: HeadersInit;

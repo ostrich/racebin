@@ -119,16 +119,18 @@
     title = source?.title ?? "";
     content = source?.content ?? "";
     markdown = source?.format === "markdown" ? source.content : "";
-    contentKind = source?.format ?? "text";
+    contentKind = source?.format ?? $appState.config.default_format;
     folderId = source?.folder_id ? String(source.folder_id) : (
       source ? "" : new URLSearchParams(location.search).get("folder_id") ?? ""
     );
-    language = normalizeLanguage(source?.language ?? "plaintext") ?? "plaintext";
-    visibility = source?.visibility ?? "unlisted";
-    expirationMode = source?.expires_at ? "custom" : "never";
+    language = normalizeLanguage(source?.language ?? $appState.config.default_language) ?? "plaintext";
+    visibility = source?.visibility ?? $appState.config.default_visibility;
+    expirationMode = source?.expires_at || $appState.config.default_expiration_seconds ? "custom" : "never";
     expiresAt = source?.expires_at
       ? localDateTime(new Date(source.expires_at * 1000))
-      : "";
+      : $appState.config.default_expiration_seconds
+        ? localDateTime(new Date(Date.now() + $appState.config.default_expiration_seconds * 1000))
+        : "";
     readLimit = source?.read_limit ? String(source.read_limit) : "";
     drafts.set(contentKind, content);
     void tick().then(() => {

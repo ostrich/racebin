@@ -21,7 +21,7 @@
     if (!(await confirmDiscardChanges())) return;
     clearUnsavedChangesGuard();
     await logoutSession();
-    replaceSession({ authenticated: false });
+    replaceSession({ authenticated: false, permissions: [] });
     await navigate("/");
   }
 
@@ -37,13 +37,13 @@
   <Link class="brand" href="/">{$appState.config.site_name}</Link>
   {#if !minimal}
     <nav class="primary-nav">
-      <Link href="/explore">Explore</Link>
+      {#if $appState.config.public_explore_enabled}<Link href="/explore">Explore</Link>{/if}
       {#if $appState.session.user}
         <Link href="/pastes">My pastes</Link>
         <Link href="/pastes/new"><Icon name="plus"/> New</Link>
         <Link href="/help">Help</Link>
       {/if}
-      {#if $appState.session.user?.role === "admin"}
+      {#if $appState.session.user?.role === "admin" || $appState.session.user?.role === "owner"}
         <Link href="/admin">Admin</Link>
       {/if}
     </nav>

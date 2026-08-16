@@ -23,7 +23,7 @@
       });
       dirty = false;
       clearUnsavedChangesGuard();
-      replaceSession({ authenticated: false });
+      replaceSession({ authenticated: false, permissions: [] });
       await navigate("/login");
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Password update failed", "error");

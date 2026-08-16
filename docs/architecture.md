@@ -167,8 +167,14 @@ Authorization is enforced by both the HTTP and domain layers:
   administrative scope;
 - service validation enforces visibility and ownership;
 - API-key scopes constrain individual operations; and
-- transactional account operations prevent disabling or demoting the last
-  enabled administrator.
+- transactional account operations protect the single owner and prevent
+  disabling or demoting the last enabled administrator.
+
+The owner is a strict superset of the administrator role. Routine
+administration can use browser sessions or explicitly scoped API keys.
+Instance configuration, administrator-role changes, ownership transfer, and
+audit access are browser-session-only; the most sensitive changes require a
+password confirmation no older than ten minutes.
 
 Disabled users cannot authenticate, and disabling an account or changing its
 password revokes its sessions. A forced password change limits the session to
@@ -180,8 +186,8 @@ The main relational entities are:
 
 | Entity | Purpose and relationships |
 | --- | --- |
-| `users` | Account identity, password hash, role, enabled state, forced-password-change state, and last login |
-| `sessions` | Expiring browser credentials owned by users; deleted with their user |
+| `users` | Account identity, password hash, role, owner marker, enabled state, forced-password-change state, and last login |
+| `sessions` | Expiring browser credentials and recent-authentication state owned by users; deleted with their user |
 | `password_reset_tokens` | One-time, one-hour password recovery hashes created by administrators |
 | `invitations` | Expiring, revocable account invitations with creator and redeemer attribution |
 | `api_keys` | Hashed bearer credentials, optionally owned by a user |
@@ -193,6 +199,8 @@ The main relational entities are:
 | `paste_read_receipts` | Expiring replay records for idempotent read requests |
 | `paste_read_grants` | Short-lived capabilities for raw content and attachment downloads after limited reads |
 | `auth_attempts` | Expiring authentication-failure records used for rate limiting |
+| `instance_settings` | Singleton database-owned site identity, feature switches, and new-paste defaults |
+| `audit_events` | Append-only snapshots of sensitive administrative activity |
 
 Rich text is stored as canonical GitHub-Flavored Markdown. Comrak validates it
 and derives sanitized HTML and plain text on demand. Tiptap's ProseMirror model

@@ -65,10 +65,12 @@ fn principal(id: i64, username: &str, role: &str) -> Principal {
             id,
             username: username.to_string(),
             role: role.to_string(),
+            is_owner: role == "admin",
             enabled: true,
             password_change_required: false,
         },
         csrf_token: "csrf".to_string(),
+        reauthenticated_at: None,
     })
 }
 

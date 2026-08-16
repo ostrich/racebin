@@ -12,11 +12,11 @@ RACEBIN_DATA_DIR=/var/lib/racebin
 # Comma-separated immediate proxy addresses whose X-Forwarded-For value is trusted.
 # RACEBIN_TRUSTED_PROXIES=127.0.0.1,::1
 
-## Browser application
+## Initial browser settings (seeded once, then managed by the owner in the UI)
 # RACEBIN_SITE_NAME=Racebin
 # RACEBIN_PLAIN_HOME=false
 
-## Attachments and optional output
+## Initial feature settings (seeded once, then managed by the owner in the UI)
 # RACEBIN_ATTACHMENTS=true
 # RACEBIN_MAX_ATTACHMENT_SIZE_MB=2048
 # RACEBIN_QR_CODES=false
@@ -24,4 +24,5 @@ RACEBIN_DATA_DIR=/var/lib/racebin
 
 ## Accounts are managed with:
 ## racebin account create USERNAME [--admin] --data-dir /var/lib/racebin
+## racebin account owner USERNAME --data-dir /var/lib/racebin
 ## racebin account password USERNAME --data-dir /var/lib/racebin

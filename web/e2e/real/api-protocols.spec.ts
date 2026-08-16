@@ -47,6 +47,48 @@ test("browser authentication enforces CSRF and bearer scopes", async ({ request 
   }
 });
 
+test("owner settings stay behind a browser-session boundary and produce audit history", async ({ request }) => {
+  const csrf = await login(request);
+  const settingsResponse = await request.get("/api/v1/admin/settings");
+  expect(settingsResponse.ok()).toBe(true);
+  const original = await settingsResponse.json();
+
+  const token = await createKey(request, csrf, ["user:manage"]);
+  const bearer = await createRequest.newContext({
+    baseURL: "http://127.0.0.1:4174",
+    extraHTTPHeaders: { Authorization: `Bearer ${token}` }
+  });
+  try {
+    expect((await bearer.get("/api/v1/admin/settings")).status()).toBe(403);
+  } finally {
+    await bearer.dispose();
+  }
+
+  const withoutCsrf = await request.put("/api/v1/admin/settings", {
+    data: { ...original, site_name: "Disposable Racebin" }
+  });
+  expect(withoutCsrf.status()).toBe(403);
+
+  const updated = await request.put("/api/v1/admin/settings", {
+    headers: { "X-CSRF-Token": csrf },
+    data: { ...original, site_name: "Disposable Racebin" }
+  });
+  expect(updated.ok()).toBe(true);
+  expect((await updated.json()).site_name).toBe("Disposable Racebin");
+
+  const audit = await request.get("/api/v1/admin/audit-events");
+  expect(audit.ok()).toBe(true);
+  expect(await audit.json()).toEqual(expect.arrayContaining([
+    expect.objectContaining({ action: "instance.settings_changed", target_type: "instance" })
+  ]));
+
+  const restored = await request.put("/api/v1/admin/settings", {
+    headers: { "X-CSRF-Token": csrf },
+    data: original
+  });
+  expect(restored.ok()).toBe(true);
+});
+
 test("idempotent creation and conditional updates preserve protocol state", async ({ request }) => {
   const csrf = await login(request);
   const token = await createKey(request, csrf, ["paste:read", "paste:write", "paste:delete"]);

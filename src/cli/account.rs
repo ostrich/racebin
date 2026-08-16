@@ -61,8 +61,8 @@ pub(crate) async fn run_if_requested() -> Result<bool, String> {
                 "user"
             };
             sqlx::query(
-                "INSERT INTO users(username,password_hash,role,enabled,password_change_required,created_at)
-                 VALUES($1,$2,$3,1,0,$4)",
+                "INSERT INTO users(username,password_hash,role,is_owner,enabled,password_change_required,created_at)
+                 VALUES($1,$2,$3,CASE WHEN $3='admin' AND NOT EXISTS(SELECT 1 FROM users WHERE is_owner=1) THEN 1 ELSE 0 END,1,0,$4)",
             )
             .bind(username)
             .bind(accounts::password_hash(&password(&arguments)?).map_err(|error| error.to_string())?)
@@ -120,8 +120,38 @@ pub(crate) async fn run_if_requested() -> Result<bool, String> {
                 .map_err(|error| error.to_string())?;
             println!("set {username} role to {role}");
         }
+        "owner" => {
+            let username = arguments
+                .get(3)
+                .ok_or("usage: racebin account owner USERNAME")?;
+            let id = user_id(&repository, username).await?;
+            let mut tx = repository
+                .pool()
+                .begin()
+                .await
+                .map_err(|error| error.to_string())?;
+            sqlx::query("UPDATE users SET is_owner=0 WHERE is_owner=1")
+                .execute(&mut *tx)
+                .await
+                .map_err(|error| error.to_string())?;
+            let result =
+                sqlx::query("UPDATE users SET role='admin',is_owner=1,enabled=1 WHERE id=$1")
+                    .bind(id)
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(|error| error.to_string())?;
+            if result.rows_affected() != 1 {
+                return Err(format!("account not found: {username}"));
+            }
+            sqlx::query("UPDATE sessions SET reauthenticated_at=NULL")
+                .execute(&mut *tx)
+                .await
+                .map_err(|error| error.to_string())?;
+            tx.commit().await.map_err(|error| error.to_string())?;
+            println!("set {username} as site owner");
+        }
         _ => println!(
-            "usage: racebin account <create|list|password|enable|disable|role> [arguments]\n\
+            "usage: racebin account <create|list|password|enable|disable|role|owner> [arguments]\n\
              use --database-url URL to select the database"
         ),
     }

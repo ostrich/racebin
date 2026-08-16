@@ -33,6 +33,12 @@ The user-facing scopes are `paste:read`, `paste:write`, `paste:delete`,
 `paste:list`, and `api_key:manage`; administrative keys can additionally use
 `paste:manage`, `user:manage`, and `invitation:manage`.
 
+Owner-only endpoints for settings, administrator roles, ownership transfer,
+and audit events deliberately accept browser sessions only. They are still
+part of the JSON API used by the bundled UI, but there is no owner API-key
+scope. `POST /session/reauthenticate` establishes the short recent-password
+window required by role changes and ownership transfer.
+
 Errors use `application/problem+json` with `type`, `title`, `status`, and
 `detail` fields. The `type` is a stable Racebin URN suitable for programmatic
 classification; clients should not branch on the human-readable title or

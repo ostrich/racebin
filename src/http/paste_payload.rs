@@ -60,7 +60,11 @@ pub(super) async fn parse_multipart(
     payload: web::Payload,
     services: &PasteService,
 ) -> Result<(CreatePasteRequest, Vec<StagedFile>), HttpResponse> {
-    if !ARGS.attachments_enabled {
+    let attachments_enabled = crate::services::settings::get(&services.storage)
+        .await
+        .map_err(domain_error)?
+        .attachments_enabled;
+    if !attachments_enabled {
         return Err(error(
             StatusCode::FORBIDDEN,
             "uploads_disabled",

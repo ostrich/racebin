@@ -46,14 +46,15 @@ Open [http://127.0.0.1:7042](http://127.0.0.1:7042) to explore Racebin. The
 repository includes a prebuilt browser application, so the initial local run
 requires only Rust. Node.js is required when modifying the frontend.
 
-To create an administrator, stop Racebin and run:
+To create the initial site owner, stop Racebin and run:
 
 ```bash
 cargo run --release -- account create admin --admin \
   --data-dir ./racebin_data
 ```
 
-The account command prompts for a password of at least 12 characters. Start
+The first administrator becomes the owner and can configure the site from the
+administration workspace. The account command prompts for a password of at least 12 characters. Start
 Racebin again with the first command and sign in. This direct HTTP setup is for
 local evaluation only.
 

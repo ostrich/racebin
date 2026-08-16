@@ -100,6 +100,22 @@ export interface paths {
         patch: operations["admin_update_key"];
         trace?: never;
     };
+    "/admin/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["admin_audit_events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/invitations": {
         parameters: {
             query?: never;
@@ -132,6 +148,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/ownership-transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["admin_transfer_ownership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/pastes": {
         parameters: {
             query?: never;
@@ -141,6 +173,22 @@ export interface paths {
         };
         get: operations["admin_pastes"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["admin_settings"];
+        put: operations["admin_replace_settings"];
         post?: never;
         delete?: never;
         options?: never;
@@ -210,6 +258,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["admin_update_user_role"];
         trace?: never;
     };
     "/admin/users/{id}/sessions": {
@@ -552,6 +616,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/session/reauthenticate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reauthenticate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -581,6 +661,7 @@ export interface components {
         AnonymousSessionResponse: {
             /** @enum {boolean} */
             authenticated: false;
+            permissions: string[];
         };
         ApiKeyCreatedResponse: {
             key: components["schemas"]["ApiKeyResource"];
@@ -638,10 +719,25 @@ export interface components {
         AttachmentUploadResponse: {
             items: components["schemas"]["AttachmentUploadItem"][];
         };
+        AuditEventResource: {
+            action: string;
+            /** Format: int64 */
+            actor_api_key_id?: number | null;
+            actor_username: string;
+            /** Format: date-time */
+            created_at: string;
+            details: unknown;
+            /** Format: int64 */
+            id: number;
+            target_id?: string | null;
+            target_label?: string | null;
+            target_type: string;
+        };
         BearerSessionResponse: {
             api_key: components["schemas"]["ApiKeyIdentity"];
             /** @enum {boolean} */
             authenticated: true;
+            permissions: string[];
         };
         BodyInput: {
             content: string;
@@ -673,6 +769,7 @@ export interface components {
             /** @enum {boolean} */
             authenticated: true;
             csrf_token: string;
+            permissions: string[];
             user: components["schemas"]["UserResource"];
         };
         Capabilities: {
@@ -682,7 +779,13 @@ export interface components {
             attachment_upload_media_types: string[];
             attachments_enabled: boolean;
             authentication_methods: string[];
+            /** Format: int64 */
+            default_expiration_seconds?: number | null;
+            default_format: string;
+            default_language: string;
+            default_visibility: string;
             formats: string[];
+            invitations_enabled: boolean;
             markdown_dialect: string;
             markdown_extensions: string[];
             max_attachment_size_bytes: number;
@@ -694,6 +797,7 @@ export interface components {
             minimum_password_characters: number;
             paste_create_media_types: string[];
             plain_home_enabled: boolean;
+            public_explore_enabled: boolean;
             qr_codes_enabled: boolean;
             scopes: components["schemas"]["ScopeDescription"][];
             server_version: string;
@@ -806,6 +910,19 @@ export interface components {
             /** Format: int64 */
             paste_count: number;
         };
+        InstanceSettingsResource: {
+            attachments_enabled: boolean;
+            /** Format: int64 */
+            default_expiration_seconds?: number | null;
+            default_format: string;
+            default_language: string;
+            default_visibility: string;
+            home_mode: string;
+            invitations_enabled: boolean;
+            public_explore_enabled: boolean;
+            qr_codes_enabled: boolean;
+            site_name: string;
+        };
         InvitationCreatedResponse: {
             token: string;
             /** Format: uri-reference */
@@ -897,6 +1014,10 @@ export interface components {
         };
         /** @enum {string} */
         OwnerFilter: "me";
+        OwnershipTransfer: {
+            /** Format: int64 */
+            user_id: number;
+        };
         Pagination: {
             /** Format: int32 */
             page: number;
@@ -1013,12 +1134,19 @@ export interface components {
         };
         /** @enum {string} */
         ReadLimitFilter: "unlimited" | "limited";
+        ReauthenticateInput: {
+            password: string;
+        };
+        RoleUpdate: {
+            role: components["schemas"]["UserRole"];
+        };
         ScopeDescription: {
             description: string;
             id: string;
         };
         SessionCreatedResponse: {
             csrf_token: string;
+            permissions: string[];
             user: components["schemas"]["UserResource"];
         };
         SessionResponse: components["schemas"]["BrowserSessionResponse"] | components["schemas"]["BearerSessionResponse"] | components["schemas"]["AnonymousSessionResponse"];
@@ -1053,10 +1181,9 @@ export interface components {
             username: string;
         };
         /** @enum {string} */
-        UserRole: "user" | "admin";
+        UserRole: "user" | "admin" | "owner";
         UserUpdate: {
             enabled?: boolean;
-            role?: components["schemas"]["UserRole"];
         };
     };
     responses: never;
@@ -1553,6 +1680,35 @@ export interface operations {
             };
         };
     };
+    admin_audit_events: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent owner audit events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventResource"][];
+                };
+            };
+            /** @description Owner browser session required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     admin_invitations: {
         parameters: {
             query?: never;
@@ -1710,6 +1866,37 @@ export interface operations {
             };
         };
     };
+    admin_transfer_ownership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnershipTransfer"];
+            };
+        };
+        responses: {
+            /** @description Ownership transferred */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Owner browser session and recent authentication required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     admin_pastes: {
         parameters: {
             query?: {
@@ -1800,6 +1987,68 @@ export interface operations {
             };
             /** @description Internal error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    admin_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Instance settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettingsResource"];
+                };
+            };
+            /** @description Owner browser session required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    admin_replace_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstanceSettingsResource"];
+            };
+        };
+        responses: {
+            /** @description Updated instance settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettingsResource"];
+                };
+            };
+            /** @description Owner browser session required */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2101,6 +2350,39 @@ export interface operations {
             };
             /** @description Internal error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    admin_update_user_role: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Role updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Owner browser session and recent authentication required */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4015,6 +4297,46 @@ export interface operations {
             };
             /** @description Internal error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    reauthenticate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthenticateInput"];
+            };
+        };
+        responses: {
+            /** @description Session authorized for sensitive owner operations for ten minutes */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Password is incorrect */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Browser session and CSRF token required */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -5,6 +5,10 @@
   import AdminPastesPage from "./pages/AdminPastesPage.svelte";
   import AdminUserPage from "./pages/AdminUserPage.svelte";
   import AdminUsersPage from "./pages/AdminUsersPage.svelte";
+  import AdminInvitationsPage from "./pages/AdminInvitationsPage.svelte";
+  import AdminApiKeysPage from "./pages/AdminApiKeysPage.svelte";
+  import AdminSettingsPage from "./pages/AdminSettingsPage.svelte";
+  import AdminAuditPage from "./pages/AdminAuditPage.svelte";
   import HelpPage from "./pages/HelpPage.svelte";
   import HomePage from "./pages/HomePage.svelte";
   import InvitationPage from "./pages/InvitationPage.svelte";
@@ -33,6 +37,7 @@
   function accessPolicy(location: RouteLocation): string | null {
     const user = $appState.session.user;
     const authenticated = Boolean(user);
+    if (location.route.name === "explore" && !$appState.config.public_explore_enabled) return "/";
     if (user?.password_change_required && location.route.name !== "password") {
       return "/account/password";
     }
@@ -41,9 +46,11 @@
     ].includes(location.route.name);
     if (!authenticated && protectedRoute) return "/login";
     if (authenticated && location.route.name === "login") return "/pastes";
-    const adminRoute = ["admin", "admin-pastes", "admin-users", "admin-user"]
+    const adminRoute = ["admin", "admin-pastes", "admin-users", "admin-user", "admin-invitations", "admin-api-keys"]
       .includes(location.route.name);
-    if (user?.role !== "admin" && adminRoute) return "/";
+    if (user?.role !== "admin" && user?.role !== "owner" && adminRoute) return "/";
+    const ownerRoute = ["admin-settings", "admin-audit"].includes(location.route.name);
+    if (user?.role !== "owner" && ownerRoute) return "/admin";
     return null;
   }
 
@@ -112,6 +119,14 @@
         <AdminUsersPage/>
       {:else if route.name === "admin-user"}
         <AdminUserPage userId={route.userId}/>
+      {:else if route.name === "admin-invitations"}
+        <AdminInvitationsPage/>
+      {:else if route.name === "admin-api-keys"}
+        <AdminApiKeysPage/>
+      {:else if route.name === "admin-settings"}
+        <AdminSettingsPage/>
+      {:else if route.name === "admin-audit"}
+        <AdminAuditPage/>
       {:else if route.name === "help"}
         <HelpPage/>
       {:else if route.name === "password-reset"}

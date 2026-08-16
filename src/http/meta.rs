@@ -26,6 +26,7 @@ use utoipa::{Modify, OpenApi};
         crate::http::account::get_session,
         crate::http::account::login,
         crate::http::account::logout,
+        crate::http::account::reauthenticate,
         crate::http::account::change_password,
         crate::http::account::reset_password,
         crate::http::account::redeem_invitation,
@@ -37,6 +38,11 @@ use utoipa::{Modify, OpenApi};
         crate::http::admin::admin_user,
         crate::http::admin::admin_pastes,
         crate::http::admin::admin_update_user,
+        crate::http::admin::admin_update_user_role,
+        crate::http::admin::admin_transfer_ownership,
+        crate::http::admin::admin_settings,
+        crate::http::admin::admin_replace_settings,
+        crate::http::admin::admin_audit_events,
         crate::http::admin::admin_create_password_reset,
         crate::http::admin::admin_revoke_user_sessions,
         crate::http::admin::admin_revoke_user_keys,
@@ -540,6 +546,12 @@ struct Capabilities {
     #[schema(format = "uri-reference")]
     api_base_url: Option<String>,
     plain_home_enabled: bool,
+    public_explore_enabled: bool,
+    invitations_enabled: bool,
+    default_format: String,
+    default_language: String,
+    default_visibility: String,
+    default_expiration_seconds: Option<i64>,
     max_attachment_size_bytes: usize,
     max_attachments_per_paste: usize,
     attachments_enabled: bool,
@@ -708,21 +720,31 @@ async fn get_openapi() -> impl Responder {
 
 #[utoipa::path(get, path = "/capabilities", tag = "discovery", responses((status = 200, description = "Runtime features, limits, and authorization scopes", body = Capabilities)), security(()))]
 #[get("/capabilities")]
-async fn get_capabilities() -> impl Responder {
+async fn get_capabilities(services: web::Data<PasteService>) -> impl Responder {
+    let settings = match crate::services::settings::get(&services.storage).await {
+        Ok(settings) => settings,
+        Err(error) => return domain_error(error),
+    };
     let (web_base_url, api_base_url) = canonical_base_urls(ARGS.public_url.as_ref());
     HttpResponse::Ok().json(Capabilities {
-        site_name: ARGS.site_name.clone().unwrap_or_else(|| "Racebin".into()),
+        site_name: settings.site_name,
         server_version: env!("CARGO_PKG_VERSION"),
         api_version: "v1",
         web_base_url,
         api_base_url,
-        plain_home_enabled: ARGS.plain_home,
+        plain_home_enabled: settings.home_mode == "plain",
+        public_explore_enabled: settings.public_explore_enabled,
+        invitations_enabled: settings.invitations_enabled,
+        default_format: settings.default_format,
+        default_language: settings.default_language,
+        default_visibility: settings.default_visibility,
+        default_expiration_seconds: settings.default_expiration_seconds,
         max_attachment_size_bytes: ARGS
             .attachment_size_limit_bytes()
             .expect("attachment limit is validated at startup"),
         max_attachments_per_paste: crate::limits::MAX_ATTACHMENTS_PER_PASTE,
-        attachments_enabled: ARGS.attachments_enabled,
-        qr_codes_enabled: ARGS.qr_codes,
+        attachments_enabled: settings.attachments_enabled,
+        qr_codes_enabled: settings.qr_codes_enabled,
         formats: ["text", "markdown"],
         markdown_dialect: "CommonMark with GitHub-Flavored Markdown extensions",
         markdown_extensions: ["tables", "task_lists", "autolinks", "strikethrough"],
@@ -904,6 +926,7 @@ mod tests {
             "get_session",
             "login",
             "logout",
+            "reauthenticate",
             "change_password",
             "reset_password",
             "redeem_invitation",
@@ -915,6 +938,11 @@ mod tests {
             "admin_user",
             "admin_pastes",
             "admin_update_user",
+            "admin_update_user_role",
+            "admin_transfer_ownership",
+            "admin_settings",
+            "admin_replace_settings",
+            "admin_audit_events",
             "admin_create_password_reset",
             "admin_revoke_user_sessions",
             "admin_revoke_user_keys",

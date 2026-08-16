@@ -54,17 +54,28 @@ async fn main() -> std::io::Result<()> {
     }
     ARGS.attachment_size_limit_bytes()
         .map_err(std::io::Error::other)?;
-    if ARGS.qr_codes && ARGS.public_url.is_none() {
-        return Err(std::io::Error::other(
-            "--public-url is required when --qr is enabled",
-        ));
-    }
     prepare_data_dir(std::path::Path::new(&ARGS.data_dir))?;
     let database_url = ARGS.effective_database_url();
     let repository = repository::Repository::open(&database_url, &ARGS.data_dir)
         .await
         .map_err(std::io::Error::other)?;
     repository.migrate().await.map_err(std::io::Error::other)?;
+    let settings = services::settings::initialize(&repository, &ARGS)
+        .await
+        .map_err(|error| std::io::Error::other(error.to_string()))?;
+    if settings.qr_codes_enabled && ARGS.public_url.is_none() {
+        return Err(std::io::Error::other(
+            "A public URL is required while QR generation is enabled",
+        ));
+    }
+    let owner_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM users WHERE is_owner=1 AND enabled=1")
+            .fetch_one(repository.pool())
+            .await
+            .map_err(std::io::Error::other)?;
+    if owner_count == 0 {
+        log::warn!("no enabled owner exists; assign one with `racebin account owner USERNAME`");
+    }
     let purged = repository
         .purge_expired(time::unix_timestamp())
         .await

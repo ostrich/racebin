@@ -11,6 +11,12 @@ const config = {
   web_base_url: "http://127.0.0.1:4173",
   api_base_url: "http://127.0.0.1:4173/api/v1",
   plain_home_enabled: false,
+  public_explore_enabled: true,
+  invitations_enabled: true,
+  default_format: "text",
+  default_language: "plaintext",
+  default_visibility: "unlisted",
+  default_expiration_seconds: null,
   max_attachment_size_bytes: 20 * 1024 * 1024,
   max_attachments_per_paste: 32,
   attachments_enabled: true,
@@ -26,7 +32,11 @@ const config = {
     { id: "paste:read", description: "Read paste content available to the key owner" },
     { id: "paste:write", description: "Create and update pastes, folders, and attachments" },
     { id: "paste:delete", description: "Delete owned pastes" },
-    { id: "paste:list", description: "List and search non-public pastes and folders" }
+    { id: "paste:list", description: "List and search non-public pastes and folders" },
+    { id: "paste:manage", description: "Manage every paste" },
+    { id: "user:manage", description: "Manage ordinary user accounts" },
+    { id: "invitation:manage", description: "Create and revoke invitations" },
+    { id: "api_key:manage", description: "Manage ordinary users' API keys" }
   ],
   max_title_characters: 200,
   max_content_size_bytes: 2 * 1024 * 1024,
@@ -40,7 +50,7 @@ const languages = [
 const user = {
   id: 1,
   username: "test-admin",
-  role: "admin",
+  role: "owner",
   enabled: true,
   password_change_required: false,
   created_at: joinedAt,
@@ -50,6 +60,15 @@ const user = {
   active_session_count: 1,
   api_key_count: 2,
   active_api_key_count: 1
+};
+const managedUser = {
+  ...user,
+  id: 2,
+  username: "example-user",
+  role: "user",
+  paste_count: 1,
+  api_key_count: 0,
+  active_api_key_count: 0
 };
 export const paste = {
   id: "sample-paste",
@@ -162,9 +181,10 @@ export async function mockApi(
     if (url.pathname === "/api/v1/session") {
       if (route.request().method() === "POST") signedIn = true;
       return json(route, signedIn
-        ? { authenticated: true, user, csrf_token: "csrf" }
-        : { authenticated: false });
+        ? { authenticated: true, user, csrf_token: "csrf", permissions: ["paste:manage", "user:manage", "invitation:manage", "api_key:manage", "administrator:manage", "instance:configure", "ownership:transfer", "audit:read"] }
+        : { authenticated: false, permissions: [] });
     }
+    if (url.pathname === "/api/v1/session/reauthenticate") return route.fulfill({ status: 204 });
     if (url.pathname === "/api/v1/capabilities") {
       return json(route, { ...config, plain_home_enabled: options.plainHome ?? false });
     }
@@ -209,11 +229,14 @@ export async function mockApi(
         created_at: createdAt, last_used_at: null
       }]);
     }
-    if (url.pathname === "/api/v1/admin/users") return json(route, [user]);
+    if (url.pathname === "/api/v1/admin/users") return json(route, [user, managedUser]);
     if (url.pathname === "/api/v1/admin/users/1") {
       if (route.request().method() === "PATCH") return json(route, {});
       return json(route, user);
     }
+    if (url.pathname === "/api/v1/admin/users/2") return json(route, managedUser);
+    if (url.pathname === "/api/v1/admin/users/2/role") return route.fulfill({ status: 204 });
+    if (url.pathname === "/api/v1/admin/ownership-transfer") return route.fulfill({ status: 204 });
     if (url.pathname === "/api/v1/admin/users/1/password-reset") {
       return json(route, { url: "/password-reset/sample-reset-token" }, 201);
     }
@@ -253,6 +276,17 @@ export async function mockApi(
       id: 4, user_id: 1, name: "Automation", token_prefix: "abcd",
       scopes: ["paste:read", "paste:write"], enabled: true,
       created_at: createdAt, last_used_at: null
+    }]);
+    if (url.pathname === "/api/v1/admin/settings") return json(route, {
+      site_name: "Racebin", home_mode: "standard", public_explore_enabled: true,
+      invitations_enabled: true, attachments_enabled: true, qr_codes_enabled: false,
+      default_format: "text", default_language: "plaintext", default_visibility: "unlisted",
+      default_expiration_seconds: null
+    });
+    if (url.pathname === "/api/v1/admin/audit-events") return json(route, [{
+      id: 1, actor_username: "test-admin", actor_api_key_id: null,
+      action: "instance.settings_changed", target_type: "instance", target_id: "1",
+      target_label: null, details: {}, created_at: createdAt
     }]);
     if (url.pathname === "/api/v1/pastes") {
       if (route.request().method() === "POST") return json(route, paste, 201);

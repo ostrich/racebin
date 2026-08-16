@@ -12,6 +12,10 @@ export type Route =
   | { name: "admin-pastes" }
   | { name: "admin-users" }
   | { name: "admin-user"; userId: number }
+  | { name: "admin-invitations" }
+  | { name: "admin-api-keys" }
+  | { name: "admin-settings" }
+  | { name: "admin-audit" }
   | { name: "help" }
   | { name: "password-reset"; token: string }
   | { name: "invitation"; token: string }
@@ -35,6 +39,10 @@ export function parseRoute(path: string): Route {
   if (path === "/admin") return { name: "admin" };
   if (path === "/admin/pastes") return { name: "admin-pastes" };
   if (path === "/admin/users") return { name: "admin-users" };
+  if (path === "/admin/invitations") return { name: "admin-invitations" };
+  if (path === "/admin/api-keys") return { name: "admin-api-keys" };
+  if (path === "/admin/settings") return { name: "admin-settings" };
+  if (path === "/admin/audit") return { name: "admin-audit" };
   if (path === "/help") return { name: "help" };
   const adminUser = path.match(/^\/admin\/users\/(\d+)$/);
   if (adminUser?.[1]) return { name: "admin-user", userId: Number(adminUser[1]) };
@@ -68,6 +76,10 @@ export function routeTitle(route: Route): string {
     case "admin-pastes": return "Manage pastes";
     case "admin-users": return "Manage users";
     case "admin-user": return "Manage user";
+    case "admin-invitations": return "Invitations";
+    case "admin-api-keys": return "API keys";
+    case "admin-settings": return "Site settings";
+    case "admin-audit": return "Audit log";
     case "help": return "Help";
     case "password-reset": return "Reset password";
     case "invitation": return "Invitation";

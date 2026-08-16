@@ -9,12 +9,18 @@ export type AppState = {
 };
 
 export const appState = writable<AppState>({
-  session: { authenticated: false },
+  session: { authenticated: false, permissions: [] },
   config: {
     site_name: "Racebin",
     server_version: "",
     api_version: "v1",
     plain_home_enabled: false,
+    public_explore_enabled: true,
+    invitations_enabled: true,
+    default_format: "text",
+    default_language: "plaintext",
+    default_visibility: "unlisted",
+    default_expiration_seconds: null,
     max_attachment_size_bytes: 0,
     max_attachments_per_paste: 0,
     attachments_enabled: true,

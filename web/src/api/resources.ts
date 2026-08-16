@@ -32,6 +32,7 @@ export const login = (input: LoginInput) => normalized<Schema["SessionCreatedRes
 );
 export const logout = () => transport<void>("/session", { method: "DELETE" });
 export const changePassword = (input: Schema["PasswordInput"]) => transport<void>("/account/password", { method: "PATCH", json: input });
+export const reauthenticate = (password: string) => transport<void>("/session/reauthenticate", { method: "POST", json: { password } });
 export const redeemInvitation = (token: string, input: Schema["InvitationInput"]) =>
   transport<void>(`/invitations/${id(token)}/redeem`, { method: "POST", json: input });
 export const resetPassword = (token: string, input: Schema["PasswordResetInput"]) =>
@@ -127,6 +128,17 @@ export const listAdminUsers = () => normalized<AdminUser[]>(transport<Schema["Ad
 export const getAdminUser = (userId: number) => normalized<AdminUser>(transport<Schema["AdminUserResource"]>(`/admin/users/${id(userId)}`));
 export const updateAdminUser = (userId: number, input: UserUpdate) =>
   transport<void>(`/admin/users/${id(userId)}`, { method: "PATCH", json: input });
+export const updateAdminUserRole = (userId: number, role: "user" | "admin") =>
+  transport<void>(`/admin/users/${id(userId)}/role`, { method: "PATCH", json: { role } });
+export const transferOwnership = (userId: number) =>
+  transport<void>("/admin/ownership-transfer", { method: "POST", json: { user_id: userId } });
+export type InstanceSettings = Schema["InstanceSettingsResource"];
+export type AuditEvent = Schema["AuditEventResource"];
+export const getInstanceSettings = () => normalized<InstanceSettings>(transport<InstanceSettings>("/admin/settings"));
+export const replaceInstanceSettings = (settings: InstanceSettings) => normalized<InstanceSettings>(
+  transport<InstanceSettings>("/admin/settings", { method: "PUT", json: settings })
+);
+export const listAuditEvents = () => normalized<AuditEvent[]>(transport<AuditEvent[]>("/admin/audit-events"));
 export const createPasswordReset = (userId: number) => normalized<Schema["LinkResponse"]>(
   transport<Schema["LinkResponse"]>(`/admin/users/${id(userId)}/password-reset`, { method: "POST" })
 );

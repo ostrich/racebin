@@ -127,15 +127,23 @@ containing spaces and keep it readable only by root and the service group. Run
 | `--qr-codes` | `RACEBIN_QR_CODES` | `false` |
 | `--insecure-cookie` | `RACEBIN_INSECURE_COOKIE` | `false` |
 
-`RACEBIN_ATTACHMENTS=false` disables new uploads; it does not erase existing
+`RACEBIN_SITE_NAME`, `RACEBIN_PLAIN_HOME`, `RACEBIN_ATTACHMENTS`, and
+`RACEBIN_QR_CODES` seed the database the first time this version starts. After
+that first start, the owner manages those values under **Admin → Site settings**
+and the database is authoritative. The environment remains responsible for
+deployment concerns such as bind addresses, storage paths, limits, proxy trust,
+cookies, and the canonical public URL.
+
+Disabling attachments in site settings disables new uploads; it does not erase existing
 attachment data or prevent authorized downloads. Racebin also enforces fixed
 limits published by `/api/v1/capabilities`: 200 title characters, 2 MiB of text
 or rich-text input, 32 attachments per paste, 100 pastes per bulk move, and a
 maximum list page size of 100. The configurable attachment limit applies to
 each file and to the combined file bytes in one multipart request.
 
-`RACEBIN_PLAIN_HOME=true` gives anonymous visitors a minimal login-oriented
-home page. It does not disable public paste URLs or `/explore`.
+The login-focused home mode gives anonymous visitors a minimal login page.
+Public discovery can be disabled independently; direct public and unlisted
+paste URLs continue to work when Explore is hidden.
 
 A typical SQLite production configuration is:
 
@@ -173,7 +181,7 @@ Restrict `/etc/racebin.conf` to `0640` or tighter when it contains credentials.
 Racebin applies the appropriate migrations at startup. See the
 [database guide](database.md) for backups and SQLite-to-PostgreSQL migration.
 
-## Create the first administrator
+## Create the first owner
 
 Create the initial account before exposing the service publicly. For the
 generic service account, load the same environment used by systemd:

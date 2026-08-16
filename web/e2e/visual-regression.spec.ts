@@ -82,6 +82,8 @@ test("paste view and administration", { tag: "@visual" }, async ({ page }) => {
   await expect(page).toHaveScreenshot("paste-view-desktop.png", screenshot);
   await page.goto("/admin/pastes");
   await expect(page).toHaveScreenshot("admin-pastes-desktop.png", screenshot);
+  await page.goto("/admin/settings");
+  await expect(page).toHaveScreenshot("admin-settings-desktop.png", screenshot);
 });
 
 test("dark account page", { tag: "@visual" }, async ({ page }) => {

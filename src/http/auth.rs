@@ -134,6 +134,34 @@ pub(super) fn require_admin(principal: &Principal, scope: &str) -> Result<(), Ht
     }
 }
 
+pub(super) fn require_owner_session(principal: &Principal) -> Result<(), HttpResponse> {
+    match principal {
+        Principal::Session(_) if principal.is_owner() => Ok(()),
+        Principal::ApiKey(_) => Err(error(
+            StatusCode::FORBIDDEN,
+            "session_required",
+            "This owner operation requires a browser session",
+        )),
+        _ => Err(error(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "Owner permission required",
+        )),
+    }
+}
+
+pub(super) fn require_recent_authentication(principal: &Principal) -> Result<(), HttpResponse> {
+    if principal.has_recent_authentication() {
+        Ok(())
+    } else {
+        Err(error(
+            StatusCode::FORBIDDEN,
+            "recent_authentication_required",
+            "Confirm your password to continue",
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::client_address;

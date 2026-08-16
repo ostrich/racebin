@@ -72,8 +72,9 @@ test("administrator can inspect a user and copy a recovery link", async ({ page 
   await mockApi(page, true);
   await page.goto("/admin/users");
   await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
-  await expect(page.getByText("4.0 KiB")).toBeVisible();
-  await page.getByRole("link", { name: "Manage" }).click();
+  const administrator = page.getByRole("row").filter({ hasText: "test-admin" });
+  await expect(administrator.getByText("4.0 KiB")).toBeVisible();
+  await administrator.getByRole("link", { name: "Manage" }).click();
   await expect(page.getByRole("heading", { name: "test-admin" })).toBeVisible();
   await page.getByRole("button", { name: /Create and copy reset link/ }).click();
   await expect(page.getByText("Password reset link copied.")).toBeVisible();
@@ -99,16 +100,13 @@ test("user administration follows shared spacing and field primitives", async ({
     const right = box(".admin-user-panels > .panel:last-child");
     const heading = box(".admin-user-panels > .panel:first-child h2");
     const description = box(".admin-user-panels > .panel:first-child p");
-    const label = box(".admin-user-access .field > span");
-    const control = box(".admin-user-access select");
     return {
       section: panels.top - metrics.bottom,
       columns: right.left - left.right,
-      panelContent: description.top - heading.bottom,
-      field: control.top - label.bottom
+      panelContent: description.top - heading.bottom
     };
   });
-  expect(gaps).toEqual({ section: 20, columns: 16, panelContent: 16, field: 8 });
+  expect(gaps).toEqual({ section: 16, columns: 16, panelContent: 16 });
 });
 
 test("password recovery validates and submits a new password", async ({ page }) => {

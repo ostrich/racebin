@@ -20,6 +20,7 @@ pub use invitations::*;
 pub use throttling::*;
 
 pub const SESSION_COOKIE: &str = "racebin_session";
+pub const RECENT_AUTHENTICATION_SECONDS: i64 = 10 * 60;
 static DUMMY_PASSWORD_HASH: LazyLock<String> =
     LazyLock::new(|| password_hash("racebin-dummy-password").expect("valid dummy password"));
 
@@ -28,6 +29,7 @@ pub struct User {
     pub id: i64,
     pub username: String,
     pub role: String,
+    pub is_owner: bool,
     pub enabled: bool,
     pub password_change_required: bool,
 }
@@ -37,6 +39,7 @@ pub struct AdminUser {
     pub id: i64,
     pub username: String,
     pub role: String,
+    pub is_owner: bool,
     pub enabled: bool,
     pub password_change_required: bool,
     pub created_at: i64,
@@ -54,6 +57,7 @@ impl<'r> FromRow<'r, AnyRow> for AdminUser {
             id: row.try_get("id")?,
             username: row.try_get("username")?,
             role: row.try_get("role")?,
+            is_owner: row.try_get::<i64, _>("is_owner")? != 0,
             enabled: row.try_get::<i64, _>("enabled")? != 0,
             password_change_required: row.try_get::<i64, _>("password_change_required")? != 0,
             created_at: row.try_get("created_at")?,
@@ -73,6 +77,7 @@ impl<'r> FromRow<'r, AnyRow> for User {
             id: row.try_get("id")?,
             username: row.try_get("username")?,
             role: row.try_get("role")?,
+            is_owner: row.try_get::<i64, _>("is_owner")? != 0,
             enabled: row.try_get::<i64, _>("enabled")? != 0,
             password_change_required: row.try_get::<i64, _>("password_change_required")? != 0,
         })
@@ -81,7 +86,21 @@ impl<'r> FromRow<'r, AnyRow> for User {
 
 impl User {
     pub fn is_admin(&self) -> bool {
-        self.role == "admin"
+        self.role == "admin" || self.is_owner
+    }
+
+    pub fn is_owner(&self) -> bool {
+        self.is_owner
+    }
+
+    pub fn public_role(&self) -> &'static str {
+        if self.is_owner {
+            "owner"
+        } else if self.role == "admin" {
+            "admin"
+        } else {
+            "user"
+        }
     }
 }
 
@@ -89,6 +108,7 @@ impl User {
 pub struct SessionUser {
     pub user: User,
     pub csrf_token: String,
+    pub reauthenticated_at: Option<i64>,
 }
 
 #[derive(Clone, Debug)]
@@ -187,12 +207,13 @@ pub async fn verify_user(
         id: i64,
         username: String,
         role: String,
+        is_owner: i64,
         enabled: i64,
         password_change_required: i64,
         password_hash: String,
     }
     let row = sqlx::query_as::<_, UserPassword>(
-        "SELECT id,username,role,enabled,password_change_required,password_hash
+        "SELECT id,username,role,is_owner,enabled,password_change_required,password_hash
          FROM users WHERE username=$1",
     )
     .bind(username)
@@ -213,6 +234,7 @@ pub async fn verify_user(
             id: value.id,
             username: value.username,
             role: value.role,
+            is_owner: value.is_owner != 0,
             enabled: value.enabled != 0,
             password_change_required: value.password_change_required != 0,
         })
@@ -236,8 +258,8 @@ pub async fn create_session(
         .await
         .map_err(DomainError::from)?;
     sqlx::query(
-        "INSERT INTO sessions(user_id,token_hash,csrf_token,created_at,expires_at,last_used_at)
-         VALUES($1,$2,$3,$4,$5,$4)",
+        "INSERT INTO sessions(user_id,token_hash,csrf_token,created_at,expires_at,last_used_at,reauthenticated_at)
+         VALUES($1,$2,$3,$4,$5,$4,$4)",
     )
     .bind(user_id)
     .bind(hash(&token))
@@ -273,14 +295,16 @@ pub async fn session_user(repo: &Repository, token: &str) -> DomainResult<Option
         id: i64,
         username: String,
         role: String,
+        is_owner: i64,
         enabled: i64,
         password_change_required: i64,
         csrf_token: String,
         session_id: i64,
+        reauthenticated_at: Option<i64>,
     }
     let row = sqlx::query_as::<_, SessionRow>(
-        "SELECT u.id,u.username,u.role,u.enabled,u.password_change_required,
-                s.csrf_token,s.id AS session_id
+        "SELECT u.id,u.username,u.role,u.is_owner,u.enabled,u.password_change_required,
+                s.csrf_token,s.id AS session_id,s.reauthenticated_at
          FROM sessions s JOIN users u ON u.id=s.user_id
          WHERE s.token_hash=$1 AND s.expires_at>$2 AND u.enabled=1",
     )
@@ -303,10 +327,12 @@ pub async fn session_user(repo: &Repository, token: &str) -> DomainResult<Option
             id: value.id,
             username: value.username,
             role: value.role,
+            is_owner: value.is_owner != 0,
             enabled: value.enabled != 0,
             password_change_required: value.password_change_required != 0,
         },
         csrf_token: value.csrf_token,
+        reauthenticated_at: value.reauthenticated_at,
     }))
 }
 
@@ -319,9 +345,27 @@ pub async fn delete_session(repo: &Repository, token: &str) -> DomainResult<()> 
         .map_err(DomainError::from)
 }
 
+pub async fn mark_session_reauthenticated(repo: &Repository, token: &str) -> DomainResult<()> {
+    let result = sqlx::query(
+        "UPDATE sessions SET reauthenticated_at=$2 WHERE token_hash=$1 AND expires_at>$2",
+    )
+    .bind(hash(token))
+    .bind(unix_timestamp())
+    .execute(repo.pool())
+    .await
+    .map_err(DomainError::from)?;
+    if result.rows_affected() == 0 {
+        return Err(DomainError::unauthorized(
+            "invalid_session",
+            "Session is no longer valid",
+        ));
+    }
+    Ok(())
+}
+
 pub async fn list_users(repo: &Repository) -> DomainResult<Vec<User>> {
     sqlx::query_as(
-        "SELECT id,username,role,enabled,password_change_required
+        "SELECT id,username,role,is_owner,enabled,password_change_required
          FROM users ORDER BY username",
     )
     .fetch_all(repo.pool())

@@ -1,7 +1,7 @@
 export type User = {
   id: number;
   username: string;
-  role: "user" | "admin";
+  role: "user" | "admin" | "owner";
   enabled?: boolean;
   password_change_required: boolean;
 };
@@ -18,9 +18,9 @@ export type AdminUser = User & {
 };
 
 export type Session =
-  | { authenticated: false; user?: never; api_key?: never; csrf_token?: never }
-  | { authenticated: true; user: User; csrf_token: string }
-  | { authenticated: true; api_key: { id: number; name: string; scopes: string[] }; user?: never; csrf_token?: never };
+  | { authenticated: false; permissions: string[]; user?: never; api_key?: never; csrf_token?: never }
+  | { authenticated: true; user: User; csrf_token: string; permissions: string[] }
+  | { authenticated: true; api_key: { id: number; name: string; scopes: string[] }; permissions: string[]; user?: never; csrf_token?: never };
 export type Attachment = { id: number; filename: string; size_bytes: number; url: string };
 
 export type Paste = {
@@ -95,6 +95,12 @@ export type Config = {
   web_base_url?: string;
   api_base_url?: string;
   plain_home_enabled: boolean;
+  public_explore_enabled: boolean;
+  invitations_enabled: boolean;
+  default_format: "text" | "markdown";
+  default_language: string;
+  default_visibility: "public" | "unlisted" | "private";
+  default_expiration_seconds: number | null;
   max_attachment_size_bytes: number;
   max_attachments_per_paste: number;
   attachments_enabled: boolean;

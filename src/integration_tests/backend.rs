@@ -2,8 +2,46 @@ use super::*;
 use crate::services::ErrorKind;
 
 pub(super) async fn backend_contract(repo: Repository) {
+    let initial_settings = crate::services::settings::initialize(&repo, &crate::args::ARGS)
+        .await
+        .unwrap();
+    assert_eq!(
+        initial_settings.site_name,
+        crate::args::ARGS.site_name.as_deref().unwrap_or("Racebin")
+    );
     insert_user(&repo, 1, "administrator", "admin").await;
     insert_user(&repo, 2, "paste-owner", "user").await;
+    sqlx::query("UPDATE users SET is_owner=1 WHERE id=1")
+        .execute(repo.pool())
+        .await
+        .unwrap();
+    let owner_protected = accounts::update_user(&repo, 1, Some(false), None)
+        .await
+        .unwrap_err();
+    assert_eq!(owner_protected.code, "owner_protected");
+    accounts::set_role(&repo, 2, true).await.unwrap();
+    accounts::transfer_ownership(&repo, 1, 2).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT is_owner FROM users WHERE id=2")
+            .fetch_one(repo.pool())
+            .await
+            .unwrap(),
+        1
+    );
+    accounts::transfer_ownership(&repo, 2, 1).await.unwrap();
+    accounts::set_role(&repo, 2, false).await.unwrap();
+    let mut changed_settings = initial_settings.clone();
+    changed_settings.site_name = "Contract site".into();
+    changed_settings.public_explore_enabled = false;
+    let changed_settings = crate::services::settings::replace(&repo, 1, &changed_settings)
+        .await
+        .unwrap();
+    assert_eq!(changed_settings.site_name, "Contract site");
+    assert!(!changed_settings.public_explore_enabled);
+    sqlx::query("UPDATE users SET is_owner=0 WHERE id=1")
+        .execute(repo.pool())
+        .await
+        .unwrap();
     let last_admin = accounts::update_user(&repo, 1, Some(false), Some(false))
         .await
         .unwrap_err();

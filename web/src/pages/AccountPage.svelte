@@ -10,7 +10,9 @@
   import type { ApiKey } from "../types";
 
   let scopes = $derived($appState.config.scopes.filter(scope =>
-    $appState.session.user?.role === "admin" || !scope.id.endsWith(":manage")
+    $appState.session.user?.role === "admin" ||
+    $appState.session.user?.role === "owner" ||
+    !scope.id.endsWith(":manage")
   ));
   let keys = $state<ApiKey[]>([]);
   let loading = $state(true);

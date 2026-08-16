@@ -29,7 +29,8 @@ client-address limit is meaningful; see [setup.md](setup.md).
 
 ## Invitations
 
-Administrators create 24-hour invitations from `/admin`. A recipient chooses a
+Administrators create 24-hour invitations from `/admin/invitations` when the
+owner has enabled invitations. A recipient chooses a
 username and password when redeeming the one-use link. The administration page
 shows whether an invitation is active, redeemed, revoked, or expired, including
 the redeeming username when applicable.
@@ -49,12 +50,16 @@ only as a hash. Creating the link does not sign the user out; successfully
 resetting the password revokes all existing sessions.
 
 Disabled users cannot sign in or use password-reset links. Racebin prevents the
-last enabled administrator from being disabled or demoted.
+last enabled administrator from being disabled or demoted. The owner cannot be
+disabled or demoted; ownership must first be transferred.
 
 ## Roles, API keys, and scopes
 
 The `user` role manages its own pastes, folders, password, and API keys. The
-`admin` role also receives administrative access. Authorization is still
+`admin` role manages content, ordinary user accounts, invitations, and API
+keys. The single `owner` is an administrator with additional authority to
+manage administrator roles, configure the instance, transfer ownership, and
+read the audit log. Authorization is still
 checked per operation: API keys carry explicit scopes rather than inheriting
 unrestricted browser privileges.
 
@@ -74,14 +79,17 @@ counts, paste count, and total stored bytes including attachments. A user's
 detail page supports:
 
 - enabling or disabling the account;
-- assigning the user or administrator role;
+- assigning the user or administrator role (owner only);
 - creating and copying a password-reset link;
 - revoking every browser session;
 - revoking every API key; and
 - opening the administrative paste list filtered to that owner.
 
-The administration home also manages invitations and all API keys. Paste
-administration provides owner-aware search and filtering.
+Administration is a persistent workspace with separate pages for pastes, users,
+invitations, and API keys. Owners additionally see site settings and the audit
+log. Administrative API-key scopes remain available for routine operations,
+but owner-only operations require a browser session. Role changes and ownership
+transfer also require password confirmation from the last ten minutes.
 
 ## Operator CLI
 
@@ -96,12 +104,17 @@ racebin account disable USERNAME --data-dir /var/lib/racebin
 racebin account enable USERNAME --data-dir /var/lib/racebin
 racebin account role USERNAME user --data-dir /var/lib/racebin
 racebin account role USERNAME admin --data-dir /var/lib/racebin
+racebin account owner USERNAME --data-dir /var/lib/racebin
 ```
 
 For PostgreSQL, pass `--database-url postgresql://...` to the command or set
 `RACEBIN_DATABASE_URL`. Without a database URL, the CLI opens
 `<data-dir>/database.sqlite`. `--data-dir` still identifies attachment storage
 and should match the server configuration.
+
+The first administrator created in a new database becomes its owner. The
+`account owner` command is the recovery path for assigning or replacing the
+owner directly; it promotes and enables the selected account.
 
 `create` and `password` prompt without echo. For non-interactive provisioning,
 pass `--password-file PATH`; Racebin reads the file's contents, removes a

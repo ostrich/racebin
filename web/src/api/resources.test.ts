@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appState } from "../state";
 import {
-  createPaste, createPasteWithAttachments, deleteAttachment, readPaste, updatePaste
+  createPaste, createPasteWithAttachments, deleteAttachment, readPaste, reauthenticate,
+  replaceInstanceSettings, updatePaste
 } from "./resources";
 
 const pasteResponse = {
@@ -41,6 +42,7 @@ describe("typed API resources", () => {
       ...state,
       session: {
         authenticated: true,
+        permissions: [],
         user: { id: 1, username: "reader", role: "user", password_change_required: false },
         csrf_token: "csrf-example"
       }
@@ -111,5 +113,30 @@ describe("typed API resources", () => {
     expect(result.readToken).toBe("download-grant");
     expect(result.idempotencyReplayed).toBe(true);
     expect(new Headers(fetchMock.mock.calls[0]![1].headers).get("Idempotency-Key")).toBe("read-key");
+  });
+
+  it("keeps owner settings and password confirmation behind the typed API layer", async () => {
+    const settings = {
+      site_name: "Example", home_mode: "standard", public_explore_enabled: true,
+      invitations_enabled: true, attachments_enabled: true, qr_codes_enabled: false,
+      default_format: "text", default_language: "plaintext", default_visibility: "unlisted",
+      default_expiration_seconds: null
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(settings), {
+        status: 200, headers: { "Content-Type": "application/json" }
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await reauthenticate("correct password");
+    await replaceInstanceSettings(settings);
+
+    expect(fetchMock.mock.calls[0]![0]).toBe("/api/v1/session/reauthenticate");
+    expect(fetchMock.mock.calls[0]![1].method).toBe("POST");
+    expect(fetchMock.mock.calls[1]![0]).toBe("/api/v1/admin/settings");
+    expect(fetchMock.mock.calls[1]![1].method).toBe("PUT");
+    expect(new Headers(fetchMock.mock.calls[1]![1].headers).get("X-CSRF-Token"))
+      .toBe("csrf-example");
   });
 });

@@ -102,6 +102,7 @@ pub async fn redeem_invitation(
         id,
         username,
         role: "user".to_string(),
+        is_owner: false,
         enabled: true,
         password_change_required: false,
     })

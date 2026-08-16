@@ -6,6 +6,10 @@ describe("routes", () => {
     expect(parseRoute("/pastes/sample-paste")).toEqual({ name: "paste", pasteId: "sample-paste" });
     expect(parseRoute("/pastes/sample-paste/edit")).toEqual({ name: "edit-paste", pasteId: "sample-paste" });
     expect(parseRoute("/admin/users/42")).toEqual({ name: "admin-user", userId: 42 });
+    expect(parseRoute("/admin/invitations")).toEqual({ name: "admin-invitations" });
+    expect(parseRoute("/admin/api-keys")).toEqual({ name: "admin-api-keys" });
+    expect(parseRoute("/admin/settings")).toEqual({ name: "admin-settings" });
+    expect(parseRoute("/admin/audit")).toEqual({ name: "admin-audit" });
     expect(parseRoute("/pastes/example/extra")).toEqual({ name: "not-found" });
     expect(parseRoute("/admin/users/not-a-number")).toEqual({ name: "not-found" });
   });

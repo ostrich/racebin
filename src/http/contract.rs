@@ -8,11 +8,15 @@ use utoipa::ToSchema;
 pub(crate) enum UserRole {
     User,
     Admin,
+    Owner,
 }
 
 impl UserRole {
-    fn from_storage(value: &str) -> Self {
-        match value {
+    fn from_user(role: &str, is_owner: bool) -> Self {
+        if is_owner {
+            return Self::Owner;
+        }
+        match role {
             "user" => Self::User,
             "admin" => Self::Admin,
             _ => unreachable!("database role constraint rejected an unknown role"),
@@ -58,7 +62,7 @@ impl From<User> for UserResource {
         Self {
             id: user.id,
             username: user.username,
-            role: UserRole::from_storage(&user.role),
+            role: UserRole::from_user(&user.role, user.is_owner),
             password_change_required: user.password_change_required,
         }
     }
@@ -87,6 +91,7 @@ pub(crate) struct BrowserSessionResponse {
     pub authenticated: bool,
     pub user: UserResource,
     pub csrf_token: String,
+    pub permissions: Vec<String>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -94,18 +99,21 @@ pub(crate) struct BrowserSessionResponse {
 pub(crate) struct BearerSessionResponse {
     pub authenticated: bool,
     pub api_key: ApiKeyIdentity,
+    pub permissions: Vec<String>,
 }
 
 #[derive(Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct AnonymousSessionResponse {
     pub authenticated: bool,
+    pub permissions: Vec<String>,
 }
 
 #[derive(Serialize, ToSchema)]
 pub(crate) struct SessionCreatedResponse {
     pub user: UserResource,
     pub csrf_token: String,
+    pub permissions: Vec<String>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -175,7 +183,7 @@ impl From<AdminUser> for AdminUserResource {
         Self {
             id: user.id,
             username: user.username,
-            role: UserRole::from_storage(&user.role),
+            role: UserRole::from_user(&user.role, user.is_owner),
             enabled: user.enabled,
             password_change_required: user.password_change_required,
             created_at: super::dto::format_timestamp(user.created_at),
