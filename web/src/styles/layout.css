@@ -573,6 +573,7 @@
 .attachment-picker-limits,
 .attachment-queue-summary {
   color: var(--muted);
+  font-size: 11px;
 }
 .attachment-drop-zone small {
   color: var(--color-label);
@@ -604,10 +605,6 @@
 .attachment-queue-row > small {
   color: var(--muted);
   white-space: nowrap;
-}
-.attachment-picker-limits,
-.attachment-queue-summary {
-  font-size: 11px;
 }
 @media (max-width: 560px) {
   .attachment-drop-zone {
