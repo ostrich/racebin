@@ -130,8 +130,8 @@ pub(crate) async fn upload_attachments(
     if let Err(e) = tokio::fs::create_dir_all(&directory).await {
         return internal(e.to_string());
     }
-    let Some(limit) = ARGS.max_attachment_size_mb.checked_mul(1024 * 1024) else {
-        return internal("Configured upload size is too large");
+    let Ok(limit) = ARGS.attachment_size_limit_bytes() else {
+        return internal("Configured attachment size limit is invalid");
     };
     let mut staged: Vec<(PathBuf, PathBuf, String, String, i64)> = Vec::new();
     let mut cleanup = UploadCleanup::default();
@@ -144,11 +144,14 @@ pub(crate) async fn upload_attachments(
                 return error(StatusCode::BAD_REQUEST, "invalid_upload", e.to_string());
             }
         };
-        if staged.len() >= 32 {
+        if staged.len() >= crate::limits::MAX_ATTACHMENTS_PER_PASTE {
             return error(
                 StatusCode::PAYLOAD_TOO_LARGE,
                 "too_many_attachments",
-                "A paste may contain at most 32 attachments",
+                format!(
+                    "A paste may contain at most {} attachments",
+                    crate::limits::MAX_ATTACHMENTS_PER_PASTE
+                ),
             );
         }
         if field.name() != Some("file") {
@@ -236,7 +239,13 @@ pub(crate) async fn upload_attachments(
     }
     let inputs = staged
         .iter()
-        .map(|(_, _, name, storage_key, size)| (name.clone(), storage_key.clone(), *size))
+        .map(
+            |(_, _, filename, storage_key, size_bytes)| crate::services::NewAttachment {
+                filename: filename.clone(),
+                storage_key: storage_key.clone(),
+                size_bytes: *size_bytes,
+            },
+        )
         .collect::<Vec<_>>();
     let attachments = match services
         .add_attachments(&value, &paste_id, &inputs, expected_revision)
@@ -250,13 +259,6 @@ pub(crate) async fn upload_attachments(
             return domain_error(e);
         }
     };
-    if attachments.is_empty() {
-        return error(
-            StatusCode::BAD_REQUEST,
-            "invalid_upload",
-            "No valid attachments were supplied",
-        );
-    }
     cleanup.paths.clear();
     let current = match services.ensure_can_update(&value, &paste_id).await {
         Ok(current) => current,

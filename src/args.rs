@@ -76,6 +76,16 @@ impl Args {
             )
         })
     }
+
+    pub fn attachment_size_limit_bytes(&self) -> Result<usize, &'static str> {
+        let bytes = self
+            .max_attachment_size_mb
+            .checked_mul(1024 * 1024)
+            .ok_or("--max-attachment-size-mb is too large")?;
+        i64::try_from(bytes)
+            .map(|_| bytes)
+            .map_err(|_| "--max-attachment-size-mb exceeds the database size range")
+    }
 }
 
 #[cfg(test)]
@@ -103,5 +113,16 @@ mod tests {
         assert!(defaults.trusted_proxies.is_empty());
         let configured = Args::parse_from(["racebin", "--trusted-proxies", "127.0.0.1,10.0.0.1"]);
         assert_eq!(configured.trusted_proxies.len(), 2);
+    }
+
+    #[test]
+    fn attachment_limit_must_fit_the_database_representation() {
+        let mut arguments = Args::parse_from(["racebin"]);
+        assert_eq!(
+            arguments.attachment_size_limit_bytes().unwrap(),
+            2048 * 1024 * 1024
+        );
+        arguments.max_attachment_size_mb = usize::MAX;
+        assert!(arguments.attachment_size_limit_bytes().is_err());
     }
 }

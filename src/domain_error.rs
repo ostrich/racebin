@@ -7,6 +7,7 @@ pub enum ErrorKind {
     Forbidden,
     Validation,
     Conflict,
+    PayloadTooLarge,
     Precondition,
     Internal,
 }
@@ -50,6 +51,9 @@ impl DomainError {
     pub fn conflict(code: &'static str, message: impl Into<String>) -> Self {
         Self::new(ErrorKind::Conflict, code, message)
     }
+    pub fn payload_too_large(code: &'static str, message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::PayloadTooLarge, code, message)
+    }
     pub fn precondition(message: impl Into<String>) -> Self {
         Self::new(ErrorKind::Precondition, "precondition_failed", message)
     }
@@ -87,6 +91,10 @@ mod tests {
             ErrorKind::Precondition
         );
         assert_eq!(DomainError::forbidden("denied").kind, ErrorKind::Forbidden);
+        assert_eq!(
+            DomainError::payload_too_large("too_many", "large").kind,
+            ErrorKind::PayloadTooLarge
+        );
         assert_eq!(
             DomainError::validation("invalid").kind,
             ErrorKind::Validation

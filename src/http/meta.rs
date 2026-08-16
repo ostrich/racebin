@@ -717,7 +717,9 @@ async fn get_capabilities() -> impl Responder {
         web_base_url,
         api_base_url,
         plain_home_enabled: ARGS.plain_home,
-        max_attachment_size_bytes: ARGS.max_attachment_size_mb * 1024 * 1024,
+        max_attachment_size_bytes: ARGS
+            .attachment_size_limit_bytes()
+            .expect("attachment limit is validated at startup"),
         max_attachments_per_paste: crate::limits::MAX_ATTACHMENTS_PER_PASTE,
         attachments_enabled: ARGS.attachments_enabled,
         qr_codes_enabled: ARGS.qr_codes,

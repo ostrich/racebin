@@ -74,6 +74,13 @@ pub struct Attachment {
     pub size_bytes: i64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NewAttachment {
+    pub filename: String,
+    pub storage_key: String,
+    pub size_bytes: i64,
+}
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PasteInput {

@@ -71,10 +71,7 @@ pub(super) async fn parse_multipart(
     let mut values = HashMap::<String, String>::new();
     let mut files = Vec::new();
     let mut total_size = 0usize;
-    let limit = ARGS
-        .max_attachment_size_mb
-        .checked_mul(1024 * 1024)
-        .ok_or_else(|| internal("Configured upload size is too large"))?;
+    let limit = ARGS.attachment_size_limit_bytes().map_err(internal)?;
     let staging = services
         .storage
         .data_dir
@@ -106,7 +103,10 @@ pub(super) async fn parse_multipart(
                 return Err(error(
                     StatusCode::PAYLOAD_TOO_LARGE,
                     "too_many_attachments",
-                    "A paste may contain at most 32 attachments",
+                    format!(
+                        "A paste may contain at most {} attachments",
+                        crate::limits::MAX_ATTACHMENTS_PER_PASTE
+                    ),
                 ));
             }
             let filename = super::attachments::sanitize_upload_filename(filename);
@@ -259,12 +259,10 @@ pub(super) async fn promote_created_files(
     }
     let inputs = staged
         .iter()
-        .map(|file| {
-            (
-                file.filename.clone(),
-                file.storage_key.clone(),
-                file.size_bytes,
-            )
+        .map(|file| crate::services::NewAttachment {
+            filename: file.filename.clone(),
+            storage_key: file.storage_key.clone(),
+            size_bytes: file.size_bytes,
         })
         .collect::<Vec<_>>();
     match services

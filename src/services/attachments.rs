@@ -1,5 +1,5 @@
 use super::validation::authorize_owner;
-use super::{Attachment, DomainError, DomainResult, PasteService, Principal};
+use super::{Attachment, DomainError, DomainResult, NewAttachment, PasteService, Principal};
 use crate::time::unix_timestamp;
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -61,7 +61,7 @@ impl PasteService {
         &self,
         principal: &Principal,
         id: &str,
-        inputs: &[(String, String, i64)],
+        inputs: &[NewAttachment],
         expected_revision: Option<i64>,
     ) -> DomainResult<Vec<Attachment>> {
         let _write_guard = self.storage.lock_writes().await;
@@ -70,16 +70,46 @@ impl PasteService {
             .await?
             .ok_or_else(|| DomainError::not_found("Paste not found"))?;
         authorize_owner(principal, &paste, "paste:write")?;
+        if inputs.is_empty() {
+            return Err(DomainError::validation_code(
+                "invalid_attachment",
+                "At least one attachment is required",
+            ));
+        }
+        if paste.attachments.len().saturating_add(inputs.len())
+            > crate::limits::MAX_ATTACHMENTS_PER_PASTE
+        {
+            return Err(DomainError::payload_too_large(
+                "too_many_attachments",
+                format!(
+                    "A paste may contain at most {} attachments",
+                    crate::limits::MAX_ATTACHMENTS_PER_PASTE
+                ),
+            ));
+        }
         let mut names = paste
             .attachments
             .iter()
             .map(|attachment| attachment.filename.as_str())
             .collect::<HashSet<_>>();
-        for (name, _, _) in inputs {
-            if !names.insert(name) {
+        for input in inputs {
+            if input.filename.is_empty()
+                || input.size_bytes < 0
+                || input.storage_key.starts_with('.')
+                || std::path::Path::new(&input.storage_key)
+                    .components()
+                    .count()
+                    != 1
+            {
+                return Err(DomainError::validation_code(
+                    "invalid_attachment",
+                    "Attachment metadata is invalid",
+                ));
+            }
+            if !names.insert(&input.filename) {
                 return Err(DomainError::conflict(
                     "attachment_exists",
-                    format!("{name} already exists"),
+                    format!("{} already exists", input.filename),
                 ));
             }
         }
@@ -97,7 +127,7 @@ impl PasteService {
         .await
         .map_err(DomainError::internal)?;
         let mut attachments = Vec::with_capacity(inputs.len());
-        for (offset, (filename, storage_key, size_bytes)) in inputs.iter().enumerate() {
+        for (offset, input) in inputs.iter().enumerate() {
             let sort_order = starting_sort_order + offset as i64;
             let id: i64 = sqlx::query_scalar(
                 "INSERT INTO attachments(paste_id,sort_order,filename,storage_key,size_bytes)
@@ -105,18 +135,18 @@ impl PasteService {
             )
             .bind(&paste.id)
             .bind(sort_order)
-            .bind(filename)
-            .bind(storage_key)
-            .bind(size_bytes)
+            .bind(&input.filename)
+            .bind(&input.storage_key)
+            .bind(input.size_bytes)
             .fetch_one(&mut *tx)
             .await
             .map_err(DomainError::internal)?;
             attachments.push(Attachment {
                 id,
                 sort_order,
-                filename: filename.clone(),
-                storage_key: storage_key.clone(),
-                size_bytes: *size_bytes,
+                filename: input.filename.clone(),
+                storage_key: input.storage_key.clone(),
+                size_bytes: input.size_bytes,
             });
         }
         let changed = sqlx::query(

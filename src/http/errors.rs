@@ -51,6 +51,7 @@ pub(super) fn domain_error(value: DomainError) -> HttpResponse {
         ErrorKind::Forbidden => StatusCode::FORBIDDEN,
         ErrorKind::Validation => StatusCode::BAD_REQUEST,
         ErrorKind::Conflict => StatusCode::CONFLICT,
+        ErrorKind::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         ErrorKind::Precondition => StatusCode::PRECONDITION_FAILED,
         ErrorKind::Internal => return internal(value.message),
     };

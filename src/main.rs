@@ -52,15 +52,8 @@ async fn main() -> std::io::Result<()> {
     if ARGS.threads == 0 {
         return Err(std::io::Error::other("--threads must be at least 1"));
     }
-    if ARGS
-        .max_attachment_size_mb
-        .checked_mul(1024 * 1024)
-        .is_none()
-    {
-        return Err(std::io::Error::other(
-            "--max-attachment-size-mb is too large",
-        ));
-    }
+    ARGS.attachment_size_limit_bytes()
+        .map_err(std::io::Error::other)?;
     if ARGS.qr_codes && ARGS.public_url.is_none() {
         return Err(std::io::Error::other(
             "--public-url is required when --qr is enabled",

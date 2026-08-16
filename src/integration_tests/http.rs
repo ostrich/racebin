@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use super::super::attachment;
     use crate::account::{self as accounts, api_keys};
     use crate::http::attachments::{attachment_path, sanitize_upload_filename};
     use crate::http::configure;
@@ -141,7 +142,7 @@ mod tests {
             .add_attachments(
                 &principal,
                 &final_read.id,
-                &[("download.txt".into(), "final-read-file".into(), 12)],
+                &[attachment("download.txt", "final-read-file", 12)],
                 Some(1),
             )
             .await

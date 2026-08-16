@@ -84,8 +84,8 @@ pub(super) async fn concurrency_contract(repo: Repository) {
         .create_paste(&admin, &paste_input("concurrent attachments", "private"))
         .await
         .unwrap();
-    let left_file = [("left.txt".to_string(), "left-store".to_string(), 1)];
-    let right_file = [("right.txt".to_string(), "right-store".to_string(), 1)];
+    let left_file = [attachment("left.txt", "left-store", 1)];
+    let right_file = [attachment("right.txt", "right-store", 1)];
     let (left, right) = futures::join!(
         services.add_attachments(&admin, &paste.id, &left_file, None),
         services.add_attachments(&admin, &paste.id, &right_file, None)

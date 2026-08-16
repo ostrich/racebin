@@ -31,6 +31,63 @@ pub(super) async fn backend_contract(repo: Repository) {
     let services = PasteService::new(repo.clone());
     let owner = principal(2, "paste-owner", "user");
     let anonymous = Principal::Anonymous;
+
+    let attachment_limit_paste = services
+        .create_paste(&owner, &paste_input("attachment limit", "private"))
+        .await
+        .unwrap();
+    let maximum_attachments = (0..crate::limits::MAX_ATTACHMENTS_PER_PASTE)
+        .map(|index| NewAttachment {
+            filename: format!("attachment-{index}.txt"),
+            storage_key: format!("attachment-store-{index}"),
+            size_bytes: 1,
+        })
+        .collect::<Vec<_>>();
+    services
+        .add_attachments(
+            &owner,
+            &attachment_limit_paste.id,
+            &maximum_attachments,
+            None,
+        )
+        .await
+        .unwrap();
+    let excess = [attachment("excess.txt", "excess-store", 1)];
+    let error = services
+        .add_attachments(&owner, &attachment_limit_paste.id, &excess, None)
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "too_many_attachments");
+    let stored_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM attachments WHERE paste_id=$1")
+            .bind(&attachment_limit_paste.id)
+            .fetch_one(repo.pool())
+            .await
+            .unwrap();
+    assert_eq!(
+        stored_count,
+        crate::limits::MAX_ATTACHMENTS_PER_PASTE as i64
+    );
+    let revision = services
+        .get_source(&owner, &attachment_limit_paste.id)
+        .await
+        .unwrap()
+        .unwrap()
+        .revision;
+    let empty_error = services
+        .add_attachments(&owner, &attachment_limit_paste.id, &[], Some(revision))
+        .await
+        .unwrap_err();
+    assert_eq!(empty_error.code, "invalid_attachment");
+    assert_eq!(
+        services
+            .get_source(&owner, &attachment_limit_paste.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .revision,
+        revision
+    );
     let unsupported_kind = PasteInput {
         content_kind: Some("redirect".into()),
         ..paste_input("unsupported", "public")
@@ -390,12 +447,12 @@ pub(super) async fn backend_contract(repo: Repository) {
         .add_attachments(
             &owner,
             &cascade.id,
-            &[("file.txt".to_string(), "stored-file".to_string(), 4)],
+            &[attachment("file.txt", "stored-file", 4)],
             None,
         )
         .await
         .unwrap();
-    let attachment = services
+    let stored_attachment = services
         .get_source(&owner, &cascade.id)
         .await
         .unwrap()
@@ -409,7 +466,7 @@ pub(super) async fn backend_contract(repo: Repository) {
             .add_attachments(
                 &owner,
                 &cascade.id,
-                &[("stale.txt".to_string(), "stale-file".to_string(), 5)],
+                &[attachment("stale.txt", "stale-file", 5)],
                 Some(1),
             )
             .await
@@ -419,7 +476,7 @@ pub(super) async fn backend_contract(repo: Repository) {
     );
     assert_eq!(
         services
-            .delete_attachment(&owner, &cascade.id, attachment.id, Some(1))
+            .delete_attachment(&owner, &cascade.id, stored_attachment.id, Some(1))
             .await
             .unwrap_err()
             .message,

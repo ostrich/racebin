@@ -1,6 +1,14 @@
 use crate::account::{self as accounts, api_keys};
 use crate::repository::{copy_database, DatabaseKind, Repository};
-use crate::services::{PasteInput, PasteQuery, PasteService, Principal};
+use crate::services::{NewAttachment, PasteInput, PasteQuery, PasteService, Principal};
+
+fn attachment(filename: &str, storage_key: &str, size_bytes: i64) -> NewAttachment {
+    NewAttachment {
+        filename: filename.to_string(),
+        storage_key: storage_key.to_string(),
+        size_bytes,
+    }
+}
 use std::path::{Path, PathBuf};
 
 mod backend;
