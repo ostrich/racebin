@@ -20,7 +20,7 @@ export function pasteDisplayTitle(paste: Paste): string {
 }
 
 export function pasteFormatLabel(paste: Paste): string {
-  if (paste.content_kind === "markdown") return "Rich text";
+  if (paste.format === "markdown") return "Rich text";
   return paste.language;
 }
 

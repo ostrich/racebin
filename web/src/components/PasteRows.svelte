@@ -102,8 +102,8 @@
                 {/if}
                 {#if filterable}
                   <Link class="meta-badge" href={filterUrl(
-                    paste.content_kind === "text" ? "language" : "content_kind",
-                    paste.content_kind === "text" ? paste.language : paste.content_kind
+                    paste.format === "text" ? "language" : "format",
+                    paste.format === "text" ? paste.language : paste.format
                   )}>{pasteFormatLabel(paste)}</Link>
                   <Link class="meta-badge" href={filterUrl("visibility", paste.visibility)}>{paste.visibility}</Link>
                   {#if paste.folder_id && folderNames}

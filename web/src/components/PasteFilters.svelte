@@ -18,7 +18,7 @@
   let languageOptions = $derived(availableLanguageOptions($appState.languages));
 
   const labels: Record<string, string> = {
-    content_kind: "Format", language: "Language", visibility: "Visibility",
+    format: "Format", language: "Language", visibility: "Visibility",
     has_attachments: "Attachments", owner_id: "Owner", created_after: "Created after",
     created_before: "Created before", expiration: "Expiration", min_reads: "Minimum views",
     max_reads: "Maximum views", min_size_bytes: "Minimum size",
@@ -60,7 +60,7 @@
   function shownValue(key: string, value: string): string {
     if (key === "owner_id") return ownerNames?.get(Number(value)) ?? `User #${value}`;
     if (key === "created_after" || key === "created_before") return dateValue(value);
-    if (key === "content_kind") return ({ text: "Text", markdown: "Rich text" } as Record<string, string>)[value] ?? value;
+    if (key === "format") return ({ text: "Text", markdown: "Rich text" } as Record<string, string>)[value] ?? value;
     if (key === "language") return languageOptions.find(language => language.id === value)?.label ?? value;
     if (key === "visibility") return value.charAt(0).toUpperCase() + value.slice(1);
     if (key === "has_attachments") return value === "true" ? "With attachments" : "Without attachments";
@@ -197,7 +197,7 @@
     <form class="filter-panel" id="paste-filter-panel" aria-label="Paste filters"
       onsubmit={(event) => { event.preventDefault(); void submitFilters(event); }}>
       <div class="advanced-filter-grid">
-        <label class="field"><span>Format</span><select name="content_kind" value={params.get("content_kind") ?? ""}>
+        <label class="field"><span>Format</span><select name="format" value={params.get("format") ?? ""}>
           <option value="">Any</option>
           {#each $appState.config.formats as format}<option value={format}>{format === "markdown" ? "Rich text" : "Text"}</option>{/each}
         </select></label>

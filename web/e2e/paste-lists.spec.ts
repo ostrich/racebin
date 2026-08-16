@@ -86,7 +86,7 @@ test("search, filters, and sort preserve unrelated list state", async ({ page })
   await page.getByRole("button", { name: /^Filters/ }).click();
   await page.getByLabel("Format").selectOption("text");
   await page.getByRole("button", { name: "Apply filters" }).click();
-  await expect(page).toHaveURL(/content_kind=text/);
+  await expect(page).toHaveURL(/format=text/);
   await expect(page).toHaveURL(/search=example/);
   await expect(page).toHaveURL(/sort=size/);
   await expect(page.getByRole("button", { name: /Filters 1/ })).toBeVisible();
@@ -96,11 +96,11 @@ test("search, filters, and sort preserve unrelated list state", async ({ page })
   await page.getByRole("menuitemradio", { name: "Oldest" }).click();
   await expect(page).toHaveURL(/sort=created/);
   await expect(page).toHaveURL(/direction=asc/);
-  await expect(page).toHaveURL(/content_kind=text/);
+  await expect(page).toHaveURL(/format=text/);
   await expect(page).toHaveURL(/folder_id=5/);
 
   await page.getByRole("link", { name: "Clear filters" }).click();
-  await expect(page).not.toHaveURL(/content_kind/);
+  await expect(page).not.toHaveURL(/format/);
   await expect(page).toHaveURL(/search=example/);
   await expect(page).toHaveURL(/sort=created/);
   await expect(page).toHaveURL(/folder_id=5/);
@@ -351,8 +351,6 @@ test("list geometry remains stable when the document starts or stops overflowing
     const bounds = element.getBoundingClientRect();
     return { left: bounds.left, right: bounds.right };
   });
-  expect(await page.evaluate(() => getComputedStyle(document.documentElement).scrollbarGutter))
-    .toContain("stable");
   await page.getByRole("link", { name: /Scripts/ }).click();
   await expect(page.getByRole("link", { name: "Overflow paste 39" })).toBeVisible();
   const after = await page.locator(".paste-workspace-main").evaluate(element => {

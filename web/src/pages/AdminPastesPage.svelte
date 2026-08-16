@@ -18,10 +18,6 @@
       params.set("q", params.get("search") ?? "");
       params.delete("search");
     }
-    if (params.has("content_kind")) {
-      params.set("format", params.get("content_kind") ?? "");
-      params.delete("content_kind");
-    }
     for (const key of ["created_after", "created_before"]) {
       const value = params.get(key);
       if (value && Number.isFinite(Number(value))) {
@@ -132,7 +128,7 @@
             {:else}<Link href={filterUrl("owner_id", String(paste.owner_id))}><strong>{ownerNames.get(paste.owner_id) ?? `User #${paste.owner_id}`}</strong><small>User #{paste.owner_id}</small></Link>{/if}
           </div>
           <div class="paste-meta">
-            <Link class="meta-badge" href={filterUrl(paste.content_kind === "text" ? "language" : "content_kind", paste.content_kind === "text" ? paste.language : paste.content_kind)}>{pasteFormatLabel(paste)}</Link>
+            <Link class="meta-badge" href={filterUrl(paste.format === "text" ? "language" : "format", paste.format === "text" ? paste.language : paste.format)}>{pasteFormatLabel(paste)}</Link>
             <Link class="meta-badge" href={filterUrl("visibility", paste.visibility)}>{paste.visibility}</Link>
             {#if paste.attachment_count}<Link class="meta-detail" href={filterUrl("has_attachments", "true")}>{paste.attachment_count} attachment{paste.attachment_count === 1 ? "" : "s"}</Link>{/if}
             <span class="meta-detail">{formatByteSize(paste.size_bytes)}</span>

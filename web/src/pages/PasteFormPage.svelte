@@ -118,8 +118,8 @@
     paste = source ?? null;
     title = source?.title ?? "";
     content = source?.content ?? "";
-    markdown = source?.content_kind === "markdown" ? source.content : "";
-    contentKind = source?.content_kind ?? "text";
+    markdown = source?.format === "markdown" ? source.content : "";
+    contentKind = source?.format ?? "text";
     folderId = source?.folder_id ? String(source.folder_id) : (
       source ? "" : new URLSearchParams(location.search).get("folder_id") ?? ""
     );

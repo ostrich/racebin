@@ -3,14 +3,14 @@ import { formatByteSize, pasteDisplayTitle, pasteFormatLabel } from "./format";
 import type { Paste } from "./types";
 
 const paste = {
-  content_kind: "text",
+  format: "text",
   language: "javascript",
   content: ""
 } as Paste;
 
 describe("paste formatting", () => {
   it("uses a rich-text label instead of plaintext", () => {
-    expect(pasteFormatLabel({ ...paste, content_kind: "markdown" })).toBe("Rich text");
+    expect(pasteFormatLabel({ ...paste, format: "markdown" })).toBe("Rich text");
     expect(pasteFormatLabel(paste)).toBe("javascript");
   });
 

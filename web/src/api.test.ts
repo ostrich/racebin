@@ -35,10 +35,9 @@ describe("API wire mapping", () => {
     const paste = normalizePayload(wire, "\"paste-example-paste-1\"") as Paste;
 
     expect(wire).toEqual(before);
-    expect(paste.content_kind).toBe("text");
+    expect(paste.format).toBe("text");
     expect(paste.content).toBe("const answer = 42;");
     expect(paste._etag).toBe("\"paste-example-paste-1\"");
-    expect(paste).not.toHaveProperty("format");
     expect(paste).not.toHaveProperty("body");
   });
 

@@ -64,7 +64,6 @@ export const paste = {
   content: "const answer = 42;\nconsole.log(answer);",
   rendered_html: null,
   plain_text: "const answer = 42;\nconsole.log(answer);",
-  content_kind: "text",
   format: "text" as const,
   body: {
     format: "text" as const,
@@ -101,9 +100,9 @@ function wireMockValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(wireMockValue);
   if (!value || typeof value !== "object") return value;
   const object = value as Record<string, unknown>;
-  if (typeof object.id === "string" && typeof object.content_kind === "string") {
+  if (typeof object.id === "string" && typeof object.format === "string") {
     const id = object.id;
-    const richText = object.content_kind === "markdown";
+    const richText = object.format === "markdown";
     return {
       ...object,
       url: `/pastes/${id}`,
@@ -111,7 +110,7 @@ function wireMockValue(value: unknown): unknown {
       read_url: `/api/v1/pastes/${id}/reads`,
       raw_url: `/api/v1/pastes/${id}/raw`,
       source_url: object.source_url === null ? null : `/api/v1/pastes/${id}/source`,
-      format: object.content_kind,
+      format: object.format,
       body: richText
         ? { format: "markdown", content: object.content ?? "", rendered_html: object.rendered_html ?? "", plain_text: object.plain_text ?? object.content ?? "" }
         : { format: "text", content: object.content ?? "", language: object.language ?? "plaintext" },

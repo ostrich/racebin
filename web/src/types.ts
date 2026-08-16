@@ -38,7 +38,7 @@ export type Paste = {
   content: string;
   rendered_html: string | null;
   plain_text: string;
-  content_kind: "text" | "markdown";
+  format: "text" | "markdown";
   language: string;
   visibility: "public" | "unlisted" | "private";
   created_at: number;

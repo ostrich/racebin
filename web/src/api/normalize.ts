@@ -45,7 +45,7 @@ function pasteFromWire(value: WirePaste, etag?: string | null): Paste {
     content: body?.content ?? ("excerpt" in value ? value.excerpt ?? "" : ""),
     rendered_html: body?.format === "markdown" ? body.rendered_html : null,
     plain_text: body?.format === "markdown" ? body.plain_text : body?.content ?? "",
-    content_kind: value.format as "text" | "markdown",
+    format: value.format as "text" | "markdown",
     language: body?.format === "text" ? body.language : value.language ?? "plaintext",
     visibility: value.visibility as "public" | "unlisted" | "private",
     created_at: unixTimestamp(value.created_at) ?? 0,

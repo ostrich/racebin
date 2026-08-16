@@ -82,7 +82,6 @@ test("printed line-number gutter uses the widest number for every line", async (
 test("rich text keeps its document hierarchy in the shared print frame", async ({ page }) => {
   await mockApi(page, false, { viewPaste: {
     ...paste,
-    content_kind: "markdown",
     format: "markdown",
     language: "plaintext",
     content: "## Section\n\nFormatted text",
@@ -117,7 +116,7 @@ test("rich text keeps its document hierarchy in the shared print frame", async (
 
 test("Markdown pastes default to rendered output and expose canonical source", async ({ page }) => {
   await mockApi(page, false, { viewPaste: {
-    ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",
+    ...paste, format: "markdown", language: "plaintext",
     content: "## Scene\n\n**Dialogue**", plain_text: "Scene\n\nDialogue",
     rendered_html: "<h2>Scene</h2><p><strong>Dialogue</strong></p>"
   } });
@@ -134,7 +133,7 @@ test("Markdown pastes default to rendered output and expose canonical source", a
 
 test("Markdown representation changes never render an empty transition frame", async ({ page }) => {
   await mockApi(page, false, { viewPaste: {
-    ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",
+    ...paste, format: "markdown", language: "plaintext",
     content: "## Scene\n\n**Dialogue**", plain_text: "Scene\n\nDialogue",
     rendered_html: "<h2>Scene</h2><p><strong>Dialogue</strong></p>"
   } });
@@ -189,7 +188,7 @@ test("paste deletion is hidden without management access", async ({ page }) => {
 
 test("rendered task lists retain ordinary list flow with checkbox markers", async ({ page }) => {
   await mockApi(page, false, { viewPaste: {
-    ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",
+    ...paste, format: "markdown", language: "plaintext",
     content: "- Ordinary\n\n- [x] Complete\n- [ ] Parent with **formatting**\n  - [x] Nested task",
     plain_text: "Ordinary\n\n[x] Complete\n[ ] Parent with formatting\n[x] Nested task",
     rendered_html: '<ul><li>Ordinary</li></ul><ul><li><input type="checkbox" checked disabled> Complete</li><li><input type="checkbox" disabled> Parent with <strong>formatting</strong><ul><li><input type="checkbox" checked disabled> Nested task</li></ul></li></ul>'
@@ -228,7 +227,7 @@ test("rendered task lists retain ordinary list flow with checkbox markers", asyn
 
 test("rendered Markdown tables retain declared column alignment", async ({ page }) => {
   await mockApi(page, false, { viewPaste: {
-    ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",
+    ...paste, format: "markdown", language: "plaintext",
     content: "| Left | Center | Right |\n| :--- | :---: | ---: |\n| A | B | C |",
     plain_text: "Left\tCenter\tRight\nA\tB\tC",
     rendered_html: '<table><thead><tr><th align="left">Left</th><th align="center">Center</th><th align="right">Right</th></tr></thead></table>'
@@ -242,7 +241,7 @@ test("rendered Markdown tables retain declared column alignment", async ({ page 
 
 test("Markdown representation controls remain fixed when the wrap option appears", async ({ page }) => {
   await mockApi(page, false, { viewPaste: {
-    ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",
+    ...paste, format: "markdown", language: "plaintext",
     content: `## Scene\n\n${"wide content ".repeat(80)}`, plain_text: "Scene",
     rendered_html: "<h2>Scene</h2><p>Wide content</p>"
   } });
@@ -259,7 +258,7 @@ test("Markdown representation controls remain fixed when the wrap option appears
 
 test("Markdown representation and wrap controls share one aligned control row", async ({ page }) => {
   await mockApi(page, true, { viewPaste: {
-    ...paste, content_kind: "markdown", format: "markdown", language: "plaintext",
+    ...paste, format: "markdown", language: "plaintext",
     content: `## Scene\n\n${"wide content ".repeat(80)}`, plain_text: "Scene",
     rendered_html: "<h2>Scene</h2><p>Wide content</p>"
   } });
