@@ -1,5 +1,8 @@
 import { currentState } from "../state";
 import { clearQueryCache } from "../queryCache";
+import type { components } from "./generated";
+
+type ProblemDetails = components["schemas"]["ProblemDetails"];
 
 export type ApiResult<T> = {
   data: T;
@@ -12,8 +15,7 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
-    public code?: string,
-    public errors?: Record<string, string[]>,
+    public problemType?: string,
     public retryAfter?: string
   ) {
     super(message);
@@ -46,16 +48,11 @@ export async function transport<T>(path: string, options: TransportOptions = {})
     credentials: "same-origin"
   });
   if (!response.ok) {
-    const problem = await response.json().catch(() => ({ detail: response.statusText })) as {
-      detail?: string;
-      code?: string;
-      errors?: Record<string, string[]>;
-    };
+    const problem = await response.json().catch(() => null) as ProblemDetails | null;
     throw new ApiError(
       response.status,
-      problem.detail ?? response.statusText,
-      problem.code,
-      problem.errors,
+      problem?.detail ?? response.statusText,
+      problem?.type,
       response.headers.get("Retry-After") ?? undefined
     );
   }

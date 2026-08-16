@@ -78,11 +78,12 @@ describe("API wire mapping", () => {
     });
   });
 
-  it("preserves structured API errors and retry guidance", async () => {
+  it("preserves Problem Details identity and retry guidance", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      code: "validation_failed",
+      type: "urn:racebin:problem:validation_failed",
+      title: "Unprocessable Entity",
+      status: 422,
       detail: "Request is invalid",
-      errors: { title: ["Title is too long"] }
     }), {
       status: 422,
       headers: { "Content-Type": "application/problem+json", "Retry-After": "3" }
@@ -91,8 +92,7 @@ describe("API wire mapping", () => {
     const error = await transport("/pastes").catch(reason => reason) as ApiError;
     expect(error).toMatchObject({
       status: 422,
-      code: "validation_failed",
-      errors: { title: ["Title is too long"] },
+      problemType: "urn:racebin:problem:validation_failed",
       retryAfter: "3"
     });
   });
