@@ -77,7 +77,7 @@ test("primary pages do not overflow at supported widths", async ({ page }) => {
 
 test("long paste identifiers do not displace mobile navigation", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/pastes/tiger-monkey");
+  await page.goto("/pastes/example-paste");
   const heading = page.getByRole("heading", { level: 1 });
   await heading.evaluate(element => {
     element.textContent = "f7f7113f74ab4a59baaac0ba";
@@ -120,7 +120,7 @@ test("page headings use consistent eyebrow-to-title spacing", async ({ page }) =
 
   await page.goto("/pastes");
   const standardGap = await headingGap();
-  await page.goto("/pastes/tiger-monkey");
+  await page.goto("/pastes/example-paste");
 
   expect(await headingGap()).toBeCloseTo(standardGap, 1);
 });

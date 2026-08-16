@@ -97,7 +97,7 @@ pub(super) async fn backend_contract(repo: Repository) {
         .await
         .unwrap_err()
         .message
-        .contains("Content kind"));
+        .contains("Format"));
 
     let verified = accounts::verify_user(&repo, "paste-owner", "correct horse battery staple")
         .await

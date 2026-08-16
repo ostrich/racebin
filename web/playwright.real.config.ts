@@ -4,6 +4,10 @@ export default defineConfig({
   testDir: "./e2e/real",
   globalTeardown: "./e2e/real/teardown.ts",
   fullyParallel: false,
+  // The real-stack files intentionally share one disposable server and database.
+  // Serialize them so one worker cannot tear down or mutate shared state while
+  // another worker is still exercising it.
+  workers: 1,
   reporter: process.env.CI
     ? [["line"], ["github"], ["json", { outputFile: "test-results/results.json" }]]
     : "list",
