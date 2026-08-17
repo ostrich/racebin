@@ -130,7 +130,7 @@
               </div>
               <div class="row-actions">
                 <button class="icon-button" type="button" title="Copy link" aria-label="Copy link"
-                  onclick={() => copyLink(paste)}><Icon name="copy"/></button>
+                  onclick={() => copyLink(paste)}><Icon name="link-2"/></button>
                 {#if manage}
                   <Link class="icon-button" title="Edit" aria-label="Edit"
                     href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/></Link>

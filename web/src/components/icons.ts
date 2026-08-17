@@ -11,6 +11,7 @@ import FileText from "@lucide/svelte/icons/file-text";
 import FileCode from "@lucide/svelte/icons/file-code";
 import KeyRound from "@lucide/svelte/icons/key-round";
 import Link from "@lucide/svelte/icons/link";
+import Link2 from "@lucide/svelte/icons/link-2";
 import List from "@lucide/svelte/icons/list";
 import ListFilter from "@lucide/svelte/icons/list-filter";
 import ListOrdered from "@lucide/svelte/icons/list-ordered";
@@ -57,6 +58,7 @@ export const icons = {
   "file-text": FileText,
   "key-round": KeyRound,
   link: Link,
+  "link-2": Link2,
   list: List,
   "list-filter": ListFilter,
   "list-ordered": ListOrdered,

@@ -107,7 +107,7 @@
         {#if $appState.session.user?.role === "owner" && user.role === "admin"}<button class="button danger" type="button" onclick={makeOwner}>Transfer ownership to this administrator</button>{/if}
       </section>
       <section class="panel stack"><h2>Security</h2><p class="muted">Recovery links are valid once for one hour. Resetting a password signs out every existing session.</p>
-        <div class="admin-security-actions"><button class="button" type="button" disabled={!canManage} onclick={resetLink}><Icon name="copy"/> Create and copy reset link</button><button class="button" type="button" disabled={!canManage} onclick={() => revoke("sessions", "Sign out all sessions")}>Sign out everywhere</button><button class="button danger" type="button" disabled={!canManage} onclick={() => revoke("api-keys", "Revoke all API keys")}>Revoke all API keys</button></div>
+        <div class="admin-security-actions"><button class="button" type="button" disabled={!canManage} onclick={resetLink}><Icon name="link-2"/> Create and copy reset link</button><button class="button" type="button" disabled={!canManage} onclick={() => revoke("sessions", "Sign out all sessions")}>Sign out everywhere</button><button class="button danger" type="button" disabled={!canManage} onclick={() => revoke("api-keys", "Revoke all API keys")}>Revoke all API keys</button></div>
       </section>
     </div>
     </div></div>

@@ -71,7 +71,7 @@
   {#if result}
     <h2 id="invitation-dialog-title">Invitation created</h2>
     <p class="dialog-message">This one-use link expires in 24 hours.</p>
-    <label class="field"><span>Invitation link</span><div class="copy-field"><input readonly value={resultUrl}><button class="button primary" type="button" onclick={copy}><Icon name="copy"/> Copy link</button></div></label>
+    <label class="field"><span>Invitation link</span><div class="copy-field"><input readonly value={resultUrl}><button class="button primary" type="button" onclick={copy}><Icon name="link-2"/> Copy link</button></div></label>
     {#if comment.trim()}<p class="invitation-comment"><strong>Note</strong><span>{comment.trim()}</span></p>{/if}
     <div class="actions"><button class="button primary" type="button" onclick={close}>Done</button></div>
   {:else}

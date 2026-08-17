@@ -141,7 +141,7 @@
               </div>
               <div class="row-actions">
                 <button class="icon-button" title="Edit private note" aria-label="Edit private note" onclick={() => invitationDialog.edit(invitation)}><Icon name="edit-3"/></button>
-                {#if invitation.url}<button class="icon-button" title="Copy invitation link" aria-label="Copy invitation link" onclick={() => copy(invitation)}><Icon name="copy"/></button>{/if}
+                {#if invitation.url}<button class="icon-button" title="Copy invitation link" aria-label="Copy invitation link" onclick={() => copy(invitation)}><Icon name="link-2"/></button>{/if}
                 {#if invitation.status === "active"}<button class="button danger" onclick={() => revoke(invitation)}>Revoke</button>{/if}
               </div>
             </article>
