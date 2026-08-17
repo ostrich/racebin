@@ -120,12 +120,13 @@
   <PasteFilters params={appliedQuery} mode="admin" {ownerNames}/>
   {#if page}
     <p class="result-count">{page.total_items} pastes</p>
-    <div class="admin-paste-head" aria-hidden="true"><span>Paste</span><span>Owner</span><span>Metadata</span><span>Created</span><span>Actions</span></div>
+    <div class="admin-paste-head" aria-hidden="true"><span>Paste</span><span>Owner</span><span>Details</span><span>Actions</span></div>
     <div class="admin-paste-list">
       {#each page.items as paste (paste.id)}
         <article class="admin-paste-row paste-row">
           <div class="paste-main"><Link class="paste-title" href={`/pastes/${paste.id}`}>{pasteDisplayTitle(paste)}</Link>
-            <p>{paste.content.slice(0, 160).replace(/\s+/g, " ")}</p><code>{paste.id}</code></div>
+            <p>{paste.content.slice(0, 160).replace(/\s+/g, " ")}</p>
+            <div class="paste-identity-meta"><code>{paste.id}</code><time datetime={new Date(paste.created_at * 1000).toISOString()}>{formatDate(paste.created_at)}</time></div></div>
           <div class="admin-paste-owner">
             {#if paste.owner_id === null}<span class="muted">No owner</span>
             {:else}<Link href={filterUrl("owner_id", String(paste.owner_id))}><strong>{ownerNames.get(paste.owner_id) ?? `User #${paste.owner_id}`}</strong><small>User #{paste.owner_id}</small></Link>{/if}
@@ -137,9 +138,8 @@
             <span class="meta-detail">{formatByteSize(paste.size_bytes)}</span>
             <span class="meta-detail">{paste.read_count} view{paste.read_count === 1 ? "" : "s"}</span>
           </div>
-          <time datetime={new Date(paste.created_at * 1000).toISOString()}>{formatDate(paste.created_at)}</time>
           <div class="row-actions">
-            <button class="icon-button" title="Copy link" aria-label="Copy link" type="button" onclick={() => copy(paste)}><Icon name="copy"/></button>
+            <button class="icon-button" title="Copy link" aria-label="Copy link" type="button" onclick={() => copy(paste)}><Icon name="link-2"/></button>
             <Link class="icon-button" title="Edit" aria-label="Edit" href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/></Link>
             <button class="icon-button" title="Delete" aria-label="Delete" type="button" onclick={() => remove(paste)}><Icon name="trash-2"/></button>
           </div>

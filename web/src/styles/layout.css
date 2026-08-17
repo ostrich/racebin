@@ -866,8 +866,7 @@
 .admin-paste-row {
   display: grid;
   grid-template-columns:
-    minmax(240px, 1.5fr) minmax(130px, 0.65fr) minmax(190px, 1fr)
-    150px auto;
+    minmax(260px, 1.6fr) minmax(130px, 0.65fr) minmax(210px, 1fr) auto;
   gap: 18px;
   align-items: center;
 }
@@ -884,10 +883,24 @@
   border-bottom: 1px solid var(--line);
 }
 .admin-paste-row .paste-main code {
-  display: block;
-  margin-top: 5px;
   color: var(--muted);
   font-size: 11px;
+}
+.paste-identity-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: 5px;
+}
+.paste-identity-meta time {
+  color: var(--muted);
+  font-size: 11px;
+}
+.paste-identity-meta time::before {
+  content: "·";
+  margin-right: var(--space-2);
+  color: var(--color-detail-separator);
 }
 .admin-paste-owner a {
   display: grid;
@@ -903,10 +916,6 @@
 .admin-paste-row .paste-meta {
   flex-wrap: wrap;
 }
-.admin-paste-row time {
-  color: var(--muted);
-  font-size: 12px;
-}
 @media (max-width: 900px) {
   .advanced-filter-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -918,13 +927,12 @@
     grid-template-columns: minmax(0, 1fr) auto;
   }
   .admin-paste-owner,
-  .admin-paste-row .paste-meta,
-  .admin-paste-row time {
+  .admin-paste-row .paste-meta {
     grid-column: 1;
   }
   .admin-paste-row .row-actions {
     grid-column: 2;
-    grid-row: 1/5;
+    grid-row: 1/4;
   }
 }
 @media (max-width: 620px) {

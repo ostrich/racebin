@@ -84,6 +84,8 @@ test("administrator can inspect a user and copy a recovery link", async ({ page 
   await page.getByRole("link", { name: "View pastes" }).click();
   await expect(page).toHaveURL(/\/admin\/pastes\?owner_id=1$/);
   await expect(page.getByRole("heading", { name: "All pastes" })).toBeVisible();
+  await expect(page.locator(".admin-paste-head > span")).toHaveText(["Paste", "Owner", "Details", "Actions"]);
+  await expect(page.locator(".admin-paste-row .paste-identity-meta time").first()).toBeVisible();
   await page.getByRole("button", { name: /^Filters/ }).click();
   await expect(page.getByLabel("Owner ID")).toHaveValue("1");
 });
