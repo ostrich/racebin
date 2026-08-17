@@ -210,11 +210,9 @@ test("rich-text formatting uses a single-row icon toolbar and confirms clearing"
   const bold = toolbar.getByRole("button", { name: "Bold" });
   await bold.click();
   await expect(bold).toHaveAttribute("aria-pressed", "true");
-  page.once("dialog", dialog => {
-    expect(dialog.message()).toBe("Clear all formatting from this rich-text paste?");
-    void dialog.dismiss();
-  });
   await toolbar.getByRole("button", { name: "Clear all formatting" }).click();
+  await expect(page.getByRole("heading", { name: "Clear all formatting?" })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
 });
 
 test("ordered rich-text lists can be submitted", async ({ page }) => {
@@ -372,7 +370,7 @@ test("rich-text conversion populates the plain-text editor", async ({ page }) =>
   await page.getByLabel("Rich-text paste content").fill("Rich content");
   await type.selectOption("text");
   await expect(page.getByRole("heading", { name: "Convert to text?" })).toBeVisible();
-  await expect(page.locator(".conversion-dialog pre")).toContainText(paste.content);
+  await expect(page.locator(".site-dialog pre")).toContainText(paste.content);
   await page.getByRole("button", { name: "Convert" }).click();
   await expect(page.locator(".code-editor textarea")).toHaveValue(paste.content);
 });
@@ -717,8 +715,8 @@ test("attachment deletion carries the returned revision into the next edit", asy
   });
 
   await page.goto("/pastes/sample-paste/edit");
-  page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "Delete example.txt" }).click();
+  await page.getByRole("button", { name: "Delete attachment" }).click();
   await expect(page.getByRole("link", { name: /example.txt/ })).toBeHidden();
   await page.getByLabel("Title").fill("Updated after attachment removal");
   await page.getByRole("button", { name: "Save changes" }).click();

@@ -27,9 +27,11 @@ test("anonymous application shell and login are accessible", async ({ page }) =>
 
 test("primary authenticated workflows are accessible", async ({ page }) => {
   await mockApi(page, true);
-  for (const path of ["/pastes", "/pastes/new", "/pastes/sample-paste", "/admin"]) {
+  for (const path of ["/pastes", "/pastes/new", "/pastes/sample-paste", "/admin", "/admin/invitations"]) {
     await page.goto(path);
     await expect(page.locator("main")).not.toBeEmpty();
     await expectNoAccessibilityViolations(page);
   }
+  await page.getByRole("button", { name: "Create invitation" }).click();
+  await expectNoAccessibilityViolations(page);
 });

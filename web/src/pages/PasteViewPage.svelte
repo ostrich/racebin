@@ -7,6 +7,7 @@
   import Link from "../components/Link.svelte";
   import RichTextViewer from "../components/RichTextViewer.svelte";
   import { formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
+  import { confirmAction } from "../confirmations";
   import { showNotice } from "../notices";
   import { holdNavigation, navigate } from "../navigation";
   import { appState } from "../state";
@@ -62,7 +63,7 @@
   }
 
   async function removePaste(): Promise<void> {
-    if (!paste || deleting || !canManage || !confirm("Delete this paste permanently?")) return;
+    if (!paste || deleting || !canManage || !(await confirmAction({ title: "Delete paste?", message: "This paste and its attachments will be permanently deleted.", confirmLabel: "Delete paste", dangerous: true }))) return;
     deleting = true;
     try {
       await deletePaste(paste.id, paste._etag ?? "*");

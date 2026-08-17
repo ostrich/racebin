@@ -27,7 +27,7 @@ pub(super) async fn concurrency_contract(repo: Repository) {
         1
     );
 
-    let invitation = accounts::create_invitation(&repo, 10).await.unwrap();
+    let invitation = accounts::create_invitation(&repo, 10, None).await.unwrap();
     let (left, right) = futures::join!(
         accounts::redeem_invitation(
             &repo,

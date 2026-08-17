@@ -261,17 +261,20 @@ export async function mockApi(
       if (route.request().method() === "POST") {
         return json(route, { token: "new-token", url: "/invitations/new-token" }, 201);
       }
-      return json(route, [
-        {
-          id: 4, token_prefix: "active", expires_at: expiresAt,
-          status: "active", url: "/invitations/active-token", redeemed_by_username: null
-        },
-        {
-          id: 3, token_prefix: "invite", expires_at: expiresAt,
-          status: "redeemed", url: null, redeemed_by_username: "reader"
-        }
-      ]);
+      const active = {
+        id: 4, token_prefix: "active", comment: "For a new teammate",
+        created_at: createdAt, created_by_username: "test-admin", expires_at: expiresAt,
+        status: "active", url: "/invitations/active-token", redeemed_by_username: null
+      };
+      const redeemed = {
+        id: 3, token_prefix: "invite", comment: "Documentation reviewer",
+        created_at: createdAt, created_by_username: "test-admin", expires_at: expiresAt,
+        status: "redeemed", url: null, redeemed_by_username: "reader", redeemed_at: createdAt
+      };
+      const items = url.searchParams.get("view") === "history" ? [redeemed] : [active];
+      return json(route, { items, pagination: { page: 1, page_size: 25, total_items: items.length, total_pages: 1 } });
     }
+    if (url.pathname.startsWith("/api/v1/admin/invitations/")) return route.fulfill({ status: 204 });
     if (url.pathname === "/api/v1/admin/api-keys") return json(route, [{
       id: 4, user_id: 1, name: "Automation", token_prefix: "abcd",
       scopes: ["paste:read", "paste:write"], enabled: true,

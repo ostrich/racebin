@@ -45,8 +45,8 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     .unwrap();
     sqlx::query(
         "INSERT INTO invitations(
-            id,token_hash,token,created_by_user_id,expires_at,redeemed,redeemed_by_user_id,revoked
-         ) VALUES(61,'invitation-hash','copy-token',42,9999999999,1,42,0)",
+            id,token_hash,token,created_by_user_id,comment,created_at,expires_at,redeemed,redeemed_at,redeemed_by_user_id,revoked
+         ) VALUES(61,'invitation-hash','copy-token',42,'Copied invitation',1,9999999999,1,2,42,0)",
     )
     .execute(source.pool())
     .await
@@ -123,6 +123,15 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
             .await
             .unwrap();
     assert_eq!(invitation_token.as_deref(), Some("copy-token"));
+    let invitation_metadata: (Option<String>, i64, Option<i64>) =
+        sqlx::query_as("SELECT comment,created_at,redeemed_at FROM invitations WHERE id=61")
+            .fetch_one(destination.pool())
+            .await
+            .unwrap();
+    assert_eq!(
+        invitation_metadata,
+        (Some("Copied invitation".to_string()), 1, Some(2))
+    );
     let copied_folder: Option<i64> =
         sqlx::query_scalar("SELECT folder_id FROM pastes WHERE id='copied-paste'")
             .fetch_one(destination.pool())

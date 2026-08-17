@@ -61,7 +61,7 @@ pub async fn copy_database(
     .await
     .map_err(|e| e.to_string())?;
     let invitations = sqlx::query(
-        "SELECT id,token_hash,token,created_by_user_id,expires_at,redeemed,redeemed_by_user_id,revoked
+        "SELECT id,token_hash,token,created_by_user_id,comment,created_at,expires_at,redeemed,redeemed_at,redeemed_by_user_id,revoked
          FROM invitations",
     )
     .fetch_all(&mut *source_tx)
@@ -236,8 +236,8 @@ pub async fn copy_database(
     for row in invitations {
         sqlx::query(
             "INSERT INTO invitations(
-                id,token_hash,token,created_by_user_id,expires_at,redeemed,redeemed_by_user_id,revoked
-             ) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+                id,token_hash,token,created_by_user_id,comment,created_at,expires_at,redeemed,redeemed_at,redeemed_by_user_id,revoked
+             ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
         )
         .bind(row.try_get::<i64, _>("id").map_err(|e| e.to_string())?)
         .bind(
@@ -253,11 +253,23 @@ pub async fn copy_database(
                 .map_err(|e| e.to_string())?,
         )
         .bind(
+            row.try_get::<Option<String>, _>("comment")
+                .map_err(|e| e.to_string())?,
+        )
+        .bind(
+            row.try_get::<i64, _>("created_at")
+                .map_err(|e| e.to_string())?,
+        )
+        .bind(
             row.try_get::<i64, _>("expires_at")
                 .map_err(|e| e.to_string())?,
         )
         .bind(
             row.try_get::<i64, _>("redeemed")
+                .map_err(|e| e.to_string())?,
+        )
+        .bind(
+            row.try_get::<Option<i64>, _>("redeemed_at")
                 .map_err(|e| e.to_string())?,
         )
         .bind(

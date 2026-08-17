@@ -19,6 +19,7 @@
   import PasteListPage from "./pages/PasteListPage.svelte";
   import PasteViewPage from "./pages/PasteViewPage.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
+  import { setConfirmationPrompt } from "./confirmations";
   import Link from "./components/Link.svelte";
   import Shell from "./components/Shell.svelte";
   import {
@@ -55,6 +56,7 @@
   }
 
   onMount(() => {
+    setConfirmationPrompt(options => discardDialog.ask(options));
     setDiscardPrompt(() => discardDialog.ask({
       title: "Discard unsaved changes?",
       message: "Your changes will not be saved.",
@@ -120,7 +122,7 @@
       {:else if route.name === "admin-user"}
         <AdminUserPage userId={route.userId}/>
       {:else if route.name === "admin-invitations"}
-        <AdminInvitationsPage/>
+        <AdminInvitationsPage query={$locationState.query}/>
       {:else if route.name === "admin-api-keys"}
         <AdminApiKeysPage/>
       {:else if route.name === "admin-settings"}

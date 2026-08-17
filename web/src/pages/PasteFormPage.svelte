@@ -12,6 +12,7 @@
   import LanguagePicker from "../components/LanguagePicker.svelte";
   import Link from "../components/Link.svelte";
   import { pasteDisplayTitle } from "../format";
+  import { confirmAction } from "../confirmations";
   import { normalizeLanguage } from "../highlighting";
   import { showNotice } from "../notices";
   import { clearUnsavedChangesGuard, guardUnsavedChanges, holdNavigation, navigate } from "../navigation";
@@ -293,7 +294,7 @@
   }
 
   async function deletePaste(): Promise<void> {
-    if (!pasteId || !confirm("Delete this paste permanently?")) return;
+    if (!pasteId || !(await confirmAction({ title: "Delete paste?", message: "This paste and its attachments will be permanently deleted.", confirmLabel: "Delete paste", dangerous: true }))) return;
     try {
       await deletePasteRequest(pasteId, paste?._etag ?? "*");
       initialized = false;

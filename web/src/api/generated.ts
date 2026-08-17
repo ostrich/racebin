@@ -145,7 +145,7 @@ export interface paths {
         delete: operations["admin_revoke_invitation"];
         options?: never;
         head?: never;
-        patch?: never;
+        patch: operations["admin_update_invitation"];
         trace?: never;
     };
     "/admin/ownership-transfer": {
@@ -928,15 +928,32 @@ export interface components {
             /** Format: uri-reference */
             url: string;
         };
+        InvitationCreateInput: {
+            /**
+             * @description Private administrative note identifying the intended recipient or purpose. An omitted,
+             *     empty, or null value leaves the invitation without a note.
+             */
+            comment?: string | null;
+        };
         InvitationInput: {
             password: string;
             username: string;
         };
+        InvitationPage: {
+            items: components["schemas"]["InvitationResource"][];
+            pagination: components["schemas"]["Pagination"];
+        };
         InvitationResource: {
+            comment?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            created_by_username: string;
             /** Format: date-time */
             expires_at: string;
             /** Format: int64 */
             id: number;
+            /** Format: date-time */
+            redeemed_at?: string | null;
             redeemed_by_username?: string | null;
             status: components["schemas"]["InvitationStatus"];
             token_prefix: string;
@@ -1711,20 +1728,38 @@ export interface operations {
     };
     admin_invitations: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Select currently usable invitations or terminal history. */
+                view: string;
+                /** @description Search comments, creators, recipients, and token prefixes. */
+                search?: string;
+                /** @description Restrict history to one terminal status. */
+                status: string;
+                page?: number;
+                page_size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Invitation records */
+            /** @description Paginated active invitations or terminal invitation history */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InvitationResource"][];
+                    "application/json": components["schemas"]["InvitationPage"];
+                };
+            };
+            /** @description Invalid invitation filter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Authentication required */
@@ -1766,7 +1801,12 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description Optional private administrative comment */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationCreateInput"];
+            };
+        };
         responses: {
             /** @description Invitation created */
             201: {
@@ -1848,6 +1888,80 @@ export interface operations {
             };
             /** @description Invitation not found or already redeemed */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    admin_update_invitation: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required for session-cookie mutations */
+                "X-CSRF-Token"?: string;
+            };
+            path: {
+                /** @description Invitation ID */
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** @description Replacement private administrative comment */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Invitation comment updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Administrator with invitation:manage required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Invitation not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Invalid comment */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

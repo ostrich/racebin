@@ -251,11 +251,24 @@ pub(crate) struct InvitationCreatedResponse {
     pub url: String,
 }
 
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct InvitationCreateInput {
+    /// Private administrative note identifying the intended recipient or purpose. An omitted,
+    /// empty, or null value leaves the invitation without a note.
+    #[schema(max_length = 200)]
+    pub comment: Option<String>,
+}
+
 #[derive(Serialize, ToSchema)]
 pub(crate) struct InvitationResource {
     #[schema(minimum = 1)]
     pub id: i64,
     pub token_prefix: String,
+    pub comment: Option<String>,
+    #[schema(format = DateTime)]
+    pub created_at: String,
+    pub created_by_username: String,
     #[schema(format = DateTime)]
     pub expires_at: String,
     pub status: InvitationStatus,
@@ -264,6 +277,15 @@ pub(crate) struct InvitationResource {
     pub url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub redeemed_by_username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(format = DateTime)]
+    pub redeemed_at: Option<String>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub(crate) struct InvitationPage {
+    pub items: Vec<InvitationResource>,
+    pub pagination: super::dto::Pagination,
 }
 
 #[derive(Clone, Copy, Serialize, ToSchema)]
@@ -296,10 +318,14 @@ impl InvitationResource {
         Self {
             id: invitation.id,
             token_prefix: invitation.token_prefix,
+            comment: invitation.comment,
+            created_at: super::dto::format_timestamp(invitation.created_at),
+            created_by_username: invitation.created_by_username,
             expires_at: super::dto::format_timestamp(invitation.expires_at),
             status: InvitationStatus::from_storage(status),
             url,
             redeemed_by_username: invitation.redeemed_by_username,
+            redeemed_at: invitation.redeemed_at.map(super::dto::format_timestamp),
         }
     }
 }

@@ -1,7 +1,7 @@
 export type DiscardPrompt = () => Promise<boolean>;
 
 let unsavedCheck: (() => boolean) | undefined;
-let discardPrompt: DiscardPrompt = async () => window.confirm("Discard unsaved changes?");
+let discardPrompt: DiscardPrompt = async () => false;
 
 export function setDiscardPrompt(prompt: DiscardPrompt): void {
   discardPrompt = prompt;

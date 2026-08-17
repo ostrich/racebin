@@ -48,6 +48,7 @@ use utoipa::{Modify, OpenApi};
         crate::http::admin::admin_revoke_user_keys,
         crate::http::admin::admin_invitations,
         crate::http::admin::admin_create_invitation,
+        crate::http::admin::admin_update_invitation,
         crate::http::admin::admin_revoke_invitation,
         crate::http::admin::admin_keys,
         crate::http::admin::admin_update_key,
@@ -524,9 +525,10 @@ fn operation_scopes(operation_id: &str) -> &'static [&'static str] {
         | "admin_update_user"
         | "admin_create_password_reset"
         | "admin_revoke_user_sessions" => &["user:manage"],
-        "admin_invitations" | "admin_create_invitation" | "admin_revoke_invitation" => {
-            &["invitation:manage"]
-        }
+        "admin_invitations"
+        | "admin_create_invitation"
+        | "admin_update_invitation"
+        | "admin_revoke_invitation" => &["invitation:manage"],
         "admin_keys" | "admin_update_key" | "admin_delete_key" | "admin_revoke_user_keys" => {
             &["api_key:manage"]
         }
@@ -786,7 +788,7 @@ async fn get_capabilities(services: web::Data<PasteService>) -> impl Responder {
             },
             ScopeDescription {
                 id: "invitation:manage",
-                description: "Create, list, and revoke invitations",
+                description: "Create, list, annotate, and revoke invitations",
             },
             ScopeDescription {
                 id: "api_key:manage",
@@ -948,6 +950,7 @@ mod tests {
             "admin_revoke_user_keys",
             "admin_invitations",
             "admin_create_invitation",
+            "admin_update_invitation",
             "admin_revoke_invitation",
             "admin_keys",
             "admin_update_key",

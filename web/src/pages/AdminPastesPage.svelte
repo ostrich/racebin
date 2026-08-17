@@ -6,6 +6,7 @@
   import Pagination from "../components/Pagination.svelte";
   import PasteFilters from "../components/PasteFilters.svelte";
   import { formatByteSize, formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
+  import { confirmAction } from "../confirmations";
   import { showNotice } from "../notices";
   import { cachedQuery, loadQuery } from "../queryCache";
   import { holdNavigation } from "../navigation";
@@ -103,7 +104,7 @@
   }
 
   async function remove(paste: Paste): Promise<void> {
-    if (!confirm("Delete this paste permanently?")) return;
+    if (!(await confirmAction({ title: "Delete paste?", message: "This paste and its attachments will be permanently deleted.", confirmLabel: "Delete paste", dangerous: true }))) return;
     try {
       await deletePaste(paste.id, paste._etag ?? "*");
       if (page) page = { ...page, items: page.items.filter(item => item.id !== paste.id), total_items: page.total_items - 1 };

@@ -86,6 +86,13 @@ test("paste view and administration", { tag: "@visual" }, async ({ page }) => {
   await expect(page).toHaveScreenshot("admin-pastes-desktop.png", screenshot);
   await page.goto("/admin/settings");
   await expect(page).toHaveScreenshot("admin-settings-desktop.png", screenshot);
+  await page.goto("/admin/invitations");
+  await expect(page).toHaveScreenshot("admin-invitations-desktop.png", screenshot);
+  await page.getByRole("button", { name: "Create invitation" }).click();
+  await expect(page).toHaveScreenshot("admin-invitation-dialog-desktop.png", screenshot);
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "History" }).click();
+  await expect(page).toHaveScreenshot("admin-invitation-history-desktop.png", screenshot);
 });
 
 test("dark account page", { tag: "@visual" }, async ({ page }) => {

@@ -152,11 +152,11 @@ test("folders can be created, renamed, and deleted from the workspace menu", asy
   expect((await renameRequest).postDataJSON()).toEqual({ name: "Utilities" });
   await expect(page.getByRole("link", { name: /Utilities/ })).toBeVisible();
 
-  page.once("dialog", dialog => dialog.accept());
   const deleteRequest = page.waitForRequest(request =>
     request.url().endsWith("/api/v1/folders/5") && request.method() === "DELETE");
   await page.getByRole("button", { name: "Manage Utilities" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete folder" }).click();
   await deleteRequest;
 });
 

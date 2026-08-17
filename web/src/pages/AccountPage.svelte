@@ -4,6 +4,7 @@
   import Icon from "../components/Icon.svelte";
   import Link from "../components/Link.svelte";
   import { formatDate } from "../format";
+  import { confirmAction } from "../confirmations";
   import { showNotice } from "../notices";
   import { holdNavigation } from "../navigation";
   import { appState } from "../state";
@@ -44,7 +45,7 @@
   }
 
   async function remove(key: ApiKey): Promise<void> {
-    if (!confirm("Delete this API key permanently?")) return;
+    if (!(await confirmAction({ title: "Delete API key?", message: `The key “${key.name}” will stop working immediately.`, confirmLabel: "Delete key", dangerous: true }))) return;
     try {
       await deleteApiKey(key.id);
       keys = keys.filter(candidate => candidate.id !== key.id);

@@ -339,6 +339,39 @@
 .dashboard-status { display: flex; align-items: center; gap: var(--space-2); margin: 0; color: var(--color-muted); }
 .dashboard-status svg { color: var(--color-accent); }
 .dashboard-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.section-tabs {
+  display: flex;
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--color-line);
+}
+.section-tabs a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 2px var(--space-2);
+  border-bottom: 2px solid transparent;
+  color: var(--color-muted);
+  font-weight: 700;
+  text-decoration: none;
+}
+.section-tabs a[aria-current="page"] { border-color: var(--color-accent); color: var(--color-text); }
+.section-tabs a span { font-variant-numeric: tabular-nums; }
+.invitation-management { gap: var(--space-4); }
+.invitation-filters { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(150px, auto) auto; gap: var(--space-2); }
+.invitation-filters input,
+.invitation-filters select { width: 100%; height: var(--control-height); }
+.invitation-row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(220px, 1fr) auto; align-items: center; gap: var(--space-4); }
+.invitation-identity,
+.invitation-lifecycle { display: grid; gap: var(--space-1); min-width: 0; }
+.invitation-lifecycle { justify-items: start; }
+.invitation-lifecycle code { color: var(--color-muted); font-size: 11px; }
+.invitation-dialog { width: min(560px, calc(100vw - 32px)); }
+.invitation-dialog .field > span { display: flex; justify-content: space-between; }
+.invitation-dialog .field small { color: var(--color-muted); font-weight: 400; }
+.invitation-dialog .muted { margin: var(--space-2) 0 0; font-size: 12px; }
+.copy-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); }
+.copy-field input { min-width: 0; }
+.invitation-comment { display: grid; gap: var(--space-1); margin-bottom: 0; }
 .compact-data-list { border: 0; }
 .compact-data-list .data-row { padding-inline: 0; text-decoration: none; }
 .compact-data-list .data-row:first-child { padding-top: 0; }

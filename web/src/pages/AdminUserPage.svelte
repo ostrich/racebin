@@ -9,6 +9,7 @@
   import PasswordConfirmDialog from "../components/PasswordConfirmDialog.svelte";
   import Link from "../components/Link.svelte";
   import { formatByteSize, formatDate } from "../format";
+  import { confirmAction } from "../confirmations";
   import { showNotice } from "../notices";
   import { holdNavigation } from "../navigation";
   import type { AdminUser } from "../types";
@@ -50,7 +51,7 @@
   }
 
   async function revoke(kind: "sessions" | "api-keys", label: string): Promise<void> {
-    if (!user || !confirm(`${label} for ${user.username}?`)) return;
+    if (!user || !(await confirmAction({ title: `${label}?`, message: `Apply this action to ${user.username}?`, confirmLabel: label, dangerous: true }))) return;
     try {
       await (kind === "sessions" ? revokeUserSessions(user.id) : revokeUserApiKeys(user.id));
       await load(); showNotice(`${label} completed.`);
@@ -58,9 +59,9 @@
     catch (reason) { showNotice(reason instanceof Error ? reason.message : `Unable to ${label.toLowerCase()}`, "error"); }
   }
 
-  function toggleEnabled(): void {
+  async function toggleEnabled(): Promise<void> {
     if (!user) return;
-    if (user.enabled && !confirm(`Disable ${user.username}? Their sessions will be revoked.`)) return;
+    if (user.enabled && !(await confirmAction({ title: `Disable ${user.username}?`, message: "The account will be disabled and all of its sessions will be revoked.", confirmLabel: "Disable account", dangerous: true }))) return;
     void patch({ enabled: !user.enabled });
   }
 
@@ -78,7 +79,7 @@
   }
 
   async function makeOwner(): Promise<void> {
-    if (!user || !confirm(`Transfer site ownership to ${user.username}?` ) || !(await confirmPassword())) return;
+    if (!user || !(await confirmAction({ title: `Transfer ownership to ${user.username}?`, message: "This account will become the site owner. Your account will remain an administrator.", confirmLabel: "Continue", dangerous: true })) || !(await confirmPassword())) return;
     try { await transferOwnership(user.id); location.assign("/admin"); }
     catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to transfer ownership", "error"); }
   }

@@ -168,11 +168,11 @@ test("paste managers can delete from the paste view", async ({ page }) => {
   const deleteButton = page.getByRole("button", { name: "Delete", exact: true });
   await expect(deleteButton).toBeVisible();
 
-  page.once("dialog", dialog => dialog.accept());
   const deletion = page.waitForRequest(request =>
     request.url().endsWith("/api/v1/pastes/sample-paste") && request.method() === "DELETE"
   );
   await deleteButton.click();
+  await page.getByRole("button", { name: "Delete paste" }).click();
   const request = await deletion;
   expect(request.headers()["if-match"]).toBe("*");
   await expect(page).toHaveURL(/\/pastes$/);

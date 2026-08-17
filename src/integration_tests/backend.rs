@@ -164,18 +164,29 @@ pub(super) async fn backend_contract(repo: Repository) {
         2
     );
 
-    let invitation = accounts::create_invitation(&repo, 1).await.unwrap();
+    let invitation = accounts::create_invitation(&repo, 1, Some("For a reader"))
+        .await
+        .unwrap();
     let invalid_invitation =
         accounts::redeem_invitation(&repo, "invalid-token", "valid-name", "short")
             .await
             .unwrap_err();
     assert_eq!(invalid_invitation.code, "invalid_invitation");
     assert_eq!(
-        accounts::list_invitations(&repo).await.unwrap()[0]
+        accounts::list_invitations(&repo, false, None, None, 1, 25)
+            .await
+            .unwrap()
+            .items[0]
             .token
             .as_deref(),
         Some(invitation.as_str())
     );
+    let matching = accounts::list_invitations(&repo, false, Some("reader"), None, 1, 25)
+        .await
+        .unwrap();
+    assert_eq!(matching.total_items, 1);
+    assert_eq!(matching.items[0].comment.as_deref(), Some("For a reader"));
+    assert!(!matching.items[0].created_by_username.is_empty());
     let invited = accounts::redeem_invitation(
         &repo,
         &invitation,
@@ -184,13 +195,38 @@ pub(super) async fn backend_contract(repo: Repository) {
     )
     .await
     .unwrap();
-    let invitations = accounts::list_invitations(&repo).await.unwrap();
+    let invitations = accounts::list_invitations(&repo, true, None, None, 1, 25)
+        .await
+        .unwrap()
+        .items;
     assert_eq!(
         invitations[0].redeemed_by_username.as_deref(),
         Some("invited-user")
     );
     assert!(invitations[0].token.is_none());
+    assert!(invitations[0].redeemed_at.is_some());
     assert_eq!(invited.username, "invited-user");
+    assert!(accounts::update_invitation_comment(
+        &repo,
+        invitations[0].id,
+        Some("Redeemed invitation")
+    )
+    .await
+    .unwrap());
+    assert_eq!(
+        accounts::list_invitations(
+            &repo,
+            true,
+            Some("redeemed invitation"),
+            Some("redeemed"),
+            1,
+            25
+        )
+        .await
+        .unwrap()
+        .total_items,
+        1
+    );
 
     let scopes = vec!["paste:read".to_string(), "paste:list".to_string()];
     let invalid_key = api_keys::create(&repo, Some(2), "", &scopes)

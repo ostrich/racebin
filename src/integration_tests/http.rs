@@ -1235,6 +1235,7 @@ mod tests {
                 .uri("/api/v1/admin/invitations")
                 .insert_header(("Authorization", format!("Bearer {invitation_token}")))
                 .insert_header(("Host", "attacker.example"))
+                .set_json(serde_json::json!({"comment": "Integration test invitation"}))
                 .to_request(),
         )
         .await;
@@ -1258,7 +1259,15 @@ mod tests {
         .await;
         assert_eq!(invitation_list.status(), StatusCode::OK);
         let invitation_list: Value = test::read_body_json(invitation_list).await;
-        assert!(invitation_list[0]["expires_at"].as_str().is_some());
+        assert!(invitation_list["items"][0]["expires_at"].as_str().is_some());
+        assert_eq!(
+            invitation_list["items"][0]["comment"],
+            "Integration test invitation"
+        );
+        assert_eq!(
+            invitation_list["items"][0]["created_by_username"],
+            "http-user"
+        );
 
         let (_, user_admin_token) = api_keys::create(
             &repository,

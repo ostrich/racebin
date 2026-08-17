@@ -7,6 +7,7 @@
   import Pagination from "../components/Pagination.svelte";
   import PasteFilters from "../components/PasteFilters.svelte";
   import PasteRows from "../components/PasteRows.svelte";
+  import { confirmAction } from "../confirmations";
   import { showNotice } from "../notices";
   import { cachedQuery, loadQuery } from "../queryCache";
   import { holdNavigation, navigate } from "../navigation";
@@ -139,7 +140,7 @@
   }
 
   async function deleteFolder(id: number, name: string): Promise<void> {
-    if (!confirm(`Delete “${name}”? Its pastes will move to Uncategorized.`)) return;
+    if (!(await confirmAction({ title: `Delete “${name}”?`, message: "The folder will be deleted and its pastes will move to Uncategorized.", confirmLabel: "Delete folder", dangerous: true }))) return;
     try {
       await deleteFolderRequest(id);
       if (currentFolderId === id) await navigate("/pastes?unfiled=true");

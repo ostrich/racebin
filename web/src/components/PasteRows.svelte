@@ -1,6 +1,7 @@
 <script lang="ts">
   import { deletePaste } from "../api";
   import { formatByteSize, formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
+  import { confirmAction } from "../confirmations";
   import { showNotice } from "../notices";
   import type { Paste } from "../types";
   import type { PasteListView } from "../uiPreferences";
@@ -47,7 +48,7 @@
   }
 
   async function remove(paste: Paste): Promise<void> {
-    if (!confirm("Delete this paste permanently?")) return;
+    if (!(await confirmAction({ title: "Delete paste?", message: "This paste and its attachments will be permanently deleted.", confirmLabel: "Delete paste", dangerous: true }))) return;
     try {
       await deletePaste(paste.id, paste._etag ?? "*");
       visible = visible.filter(candidate => candidate.id !== paste.id);

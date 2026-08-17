@@ -7,6 +7,7 @@
   import TaskItem from "@tiptap/extension-task-item";
   import StarterKit from "@tiptap/starter-kit";
   import { showNotice } from "../notices";
+  import { confirmAction } from "../confirmations";
   import Icon from "./Icon.svelte";
   import { RichTextPasteNormalization } from "./RichTextPasteNormalization";
   import type { IconName } from "./icons";
@@ -66,7 +67,7 @@
     { command: "undo", label: "Undo", icon: "undo-2" },
     { command: "redo", label: "Redo", icon: "redo-2" }
   ];
-  function run(command: string): void {
+  async function run(command: string): Promise<void> {
     if (commandDisabled(command)) return;
     const chain = editor.chain().focus();
     switch (command) {
@@ -87,7 +88,7 @@
       case "horizontal-rule": chain.setHorizontalRule().run(); break;
       case "undo": chain.undo().run(); break;
       case "redo": chain.redo().run(); break;
-      case "clear-formatting": if (confirm("Clear all formatting from this rich-text paste?")) chain.selectAll().unsetAllMarks().clearNodes().run(); break;
+      case "clear-formatting": if (await confirmAction({ title: "Clear all formatting?", message: "All rich-text formatting will be removed from this paste.", confirmLabel: "Clear formatting", dangerous: true })) chain.selectAll().unsetAllMarks().clearNodes().run(); break;
       case "link": {
         const current = editor.getAttributes("link").href as string | undefined;
         const href = prompt("Link URL", current ?? "https://");

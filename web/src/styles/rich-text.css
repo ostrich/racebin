@@ -228,22 +228,3 @@
   font-size: 11px;
   white-space: nowrap;
 }
-.conversion-dialog {
-  width: min(680px, calc(100vw - 32px));
-  padding: 26px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--color-surface);
-  color: inherit;
-}
-.conversion-dialog::backdrop {
-  background: var(--color-overlay);
-}
-.conversion-dialog pre {
-  max-height: 45vh;
-  padding: 16px;
-  overflow: auto;
-  border: 1px solid var(--line);
-  background: var(--color-code-gutter);
-  white-space: pre-wrap;
-}

@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { createInvitation as createInvitationRequest, listAdminUsers } from "../api";
+  import { listAdminUsers } from "../api";
   import Icon from "../components/Icon.svelte";
   import AdminNav from "../components/AdminNav.svelte";
   import Link from "../components/Link.svelte";
+  import InvitationDialog from "../components/InvitationDialog.svelte";
   import { formatByteSize, formatDate } from "../format";
-  import { showNotice } from "../notices";
   import { appState } from "../state";
   import { holdNavigation } from "../navigation";
   import type { AdminUser } from "../types";
@@ -16,6 +16,7 @@
   let status = $state("");
   let sort = $state("username");
   let error = $state("");
+  let invitationDialog: InvitationDialog;
   const initialLoadReady = holdNavigation();
   let filtered = $derived(users.filter(user =>
     (!search || user.username.toLowerCase().includes(search.toLowerCase())) &&
@@ -36,19 +37,14 @@
       .finally(initialLoadReady);
   });
 
-  async function createInvitation(): Promise<void> {
-    try {
-      const invitation = await createInvitationRequest();
-      await navigator.clipboard.writeText(new URL(invitation.url, location.origin).href);
-      showNotice("Invitation link copied.");
-    } catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to create invitation", "error"); }
-  }
 </script>
+
+<InvitationDialog bind:this={invitationDialog}/>
 
 <section class="page-layout">
   <div class="page-heading">
     <div><p class="eyebrow"><Link href="/admin">Administration</Link></p><h1>Users</h1></div>
-    {#if $appState.config.invitations_enabled}<button class="button primary" type="button" onclick={createInvitation}><Icon name="plus"/> Create invitation</button>{/if}
+    {#if $appState.config.invitations_enabled}<button class="button primary" type="button" onclick={() => invitationDialog.open()}><Icon name="plus"/> Create invitation</button>{/if}
   </div>
   <div class="section-layout"><AdminNav/><div class="section-content">
   <div class="panel admin-user-filters">

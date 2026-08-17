@@ -29,12 +29,12 @@
   }
 </script>
 
-<dialog bind:this={dialog} class="conversion-dialog" oncancel={(event) => {
+<dialog bind:this={dialog} class="site-dialog" aria-labelledby="confirmation-dialog-title" oncancel={(event) => {
   event.preventDefault();
   finish(false);
 }}>
-  <h2>{title}</h2>
-  <p class="muted">{message}</p>
+  <h2 id="confirmation-dialog-title">{title}</h2>
+  <p class="dialog-message">{message}</p>
   <div class="actions">
     <button class="button" type="button" onclick={() => finish(false)}>Cancel</button>
     <button class:danger={dangerous} class:primary={!dangerous} class="button" type="button"

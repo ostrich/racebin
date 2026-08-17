@@ -14,7 +14,12 @@ export type Conversion = Schema["ConversionOutput"];
 export type LoginInput = Schema["LoginInput"];
 export type KeyInput = Schema["KeyInput"];
 export type UserUpdate = Schema["UserUpdate"];
-export type Invitation = Omit<Schema["InvitationResource"], "expires_at"> & { expires_at: number };
+export type Invitation = Omit<Schema["InvitationResource"], "created_at" | "expires_at" | "redeemed_at"> & {
+  created_at: number;
+  expires_at: number;
+  redeemed_at?: number;
+};
+export type InvitationCreated = Schema["InvitationCreatedResponse"];
 export type FlatCreateInput = Omit<Schema["FlatCreateRequest"], "file">;
 
 async function normalized<T>(result: Promise<ApiResult<unknown>>): Promise<T> {
@@ -146,10 +151,14 @@ export const revokeUserSessions = (userId: number) =>
   transport<void>(`/admin/users/${id(userId)}/sessions`, { method: "DELETE" });
 export const revokeUserApiKeys = (userId: number) =>
   transport<void>(`/admin/users/${id(userId)}/api-keys`, { method: "DELETE" });
-export const listInvitations = () => normalized<Invitation[]>(transport<Schema["InvitationResource"][]>("/admin/invitations"));
-export const createInvitation = () => normalized<Schema["InvitationCreatedResponse"]>(
-  transport<Schema["InvitationCreatedResponse"]>("/admin/invitations", { method: "POST" })
+export const listInvitations = (query = new URLSearchParams()) => normalized<Page<Invitation>>(
+  transport<Schema["InvitationPage"]>(`/admin/invitations?${query}`)
 );
+export const createInvitation = (comment?: string) => normalized<Schema["InvitationCreatedResponse"]>(
+  transport<Schema["InvitationCreatedResponse"]>("/admin/invitations", { method: "POST", json: { comment } })
+);
+export const updateInvitationComment = (invitationId: number, comment?: string) =>
+  transport<void>(`/admin/invitations/${id(invitationId)}`, { method: "PATCH", json: { comment } });
 export const revokeInvitation = (invitationId: number) =>
   transport<void>(`/admin/invitations/${id(invitationId)}`, { method: "DELETE" });
 export const listAdminApiKeys = () => normalized<ApiKey[]>(transport<Schema["ApiKeyResource"][]>("/admin/api-keys"));

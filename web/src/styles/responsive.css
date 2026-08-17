@@ -58,6 +58,16 @@
   }
 }
 @media (max-width: 760px) {
+  .invitation-filters,
+  .invitation-row {
+    grid-template-columns: 1fr;
+  }
+  .invitation-row .row-actions {
+    justify-self: start;
+  }
+  .copy-field {
+    grid-template-columns: 1fr;
+  }
   .paste-row-footer {
     align-items: flex-start;
     flex-direction: column;

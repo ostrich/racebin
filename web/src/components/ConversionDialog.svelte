@@ -18,10 +18,10 @@
   }
 </script>
 
-<dialog bind:this={dialog} class="conversion-dialog" oncancel={(event) => {
+<dialog bind:this={dialog} class="site-dialog" aria-labelledby="conversion-dialog-title" oncancel={(event) => {
   event.preventDefault(); finish(false);
 }}>
-  <h2>Convert to {target.replace("_", " ")}?</h2>
+  <h2 id="conversion-dialog-title">Convert to {target.replace("_", " ")}?</h2>
   <p class="muted">{target === "text" ? "Formatting will be removed when you save." : "Review the converted text before continuing."}</p>
   <pre>{preview}</pre>
   <div class="actions">

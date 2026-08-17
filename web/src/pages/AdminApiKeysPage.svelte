@@ -3,6 +3,7 @@
   import { deleteAdminApiKey, listAdminApiKeys, listAdminUsers, updateAdminApiKey } from "../api";
   import AdminNav from "../components/AdminNav.svelte";
   import Icon from "../components/Icon.svelte";
+  import { confirmAction } from "../confirmations";
   import { holdNavigation } from "../navigation";
   import { showNotice } from "../notices";
   import type { AdminUser, ApiKey } from "../types";
@@ -41,7 +42,7 @@
   }
 
   async function remove(key: ApiKey): Promise<void> {
-    if (!confirm(`Delete ${key.name}?`)) return;
+    if (!(await confirmAction({ title: "Delete API key?", message: `The key “${key.name}” will stop working immediately.`, confirmLabel: "Delete key", dangerous: true }))) return;
     try {
       await deleteAdminApiKey(key.id);
       await load();

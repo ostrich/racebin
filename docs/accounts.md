@@ -32,8 +32,16 @@ client-address limit is meaningful; see [setup.md](setup.md).
 Administrators create 24-hour invitations from `/admin/invitations` when the
 owner has enabled invitations. A recipient chooses a
 username and password when redeeming the one-use link. The administration page
-shows whether an invitation is active, redeemed, revoked, or expired, including
-the redeeming username when applicable.
+separates usable invitations from paginated history. History can be searched
+and filtered by terminal status. Records identify the administrator who created
+the invitation, its creation and expiration times, and the redeeming user and
+time when applicable.
+
+Creating an invitation is an explicit two-step interaction. An administrator
+may first record a private note describing the intended recipient or purpose;
+after creation, Racebin displays the full URL and copies it only when the
+administrator selects **Copy link**. Notes are visible only in administration
+interfaces and can be edited later.
 
 Racebin retains an active invitation's token so its full URL can be copied
 again. The recoverable token is cleared when the invitation is redeemed or

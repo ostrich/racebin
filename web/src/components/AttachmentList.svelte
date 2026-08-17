@@ -2,6 +2,7 @@
   import { deleteAttachment } from "../api";
   import { formatByteSize } from "../format";
   import { showNotice } from "../notices";
+  import { confirmAction } from "../confirmations";
   import type { Attachment } from "../types";
   import Icon from "./Icon.svelte";
 
@@ -25,7 +26,12 @@
     const suffix = editing
       ? "\n\nThis takes effect immediately, even if you cancel editing."
       : "";
-    if (!confirm(`Delete this attachment permanently?${suffix}`)) return;
+    if (!(await confirmAction({
+      title: "Delete attachment?",
+      message: `This attachment will be permanently deleted.${suffix}`,
+      confirmLabel: "Delete attachment",
+      dangerous: true
+    }))) return;
     try {
       const result = await deleteAttachment(pasteId, attachment.id, etag ?? "*");
       ondelete?.(attachment, result.etag);
