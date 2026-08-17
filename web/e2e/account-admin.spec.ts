@@ -56,6 +56,7 @@ test("account and admin ownership data render as structured controls", async ({ 
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Site settings" })).toBeVisible();
   await expect(page.getByLabel("Site name")).toHaveValue("Racebin");
+  await expect(page.getByLabel("Language")).toHaveText(/Auto detect/);
   await page.getByRole("link", { name: "Audit log", exact: true }).click();
   await expect(page.getByText("instance settings_changed")).toBeVisible();
   await page.goto("/admin/users/2");

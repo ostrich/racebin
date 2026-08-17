@@ -6,6 +6,7 @@
     type InstanceSettings
   } from "../api";
   import AdminNav from "../components/AdminNav.svelte";
+  import { availableLanguageOptions } from "../highlighting";
   import { holdNavigation } from "../navigation";
   import { showNotice } from "../notices";
   import { loadCapabilities } from "../session";
@@ -14,6 +15,7 @@
   let settings = $state<InstanceSettings | null>(null);
   let error = $state("");
   let saving = $state(false);
+  let languageOptions = $derived(availableLanguageOptions($appState.languages));
   const initialLoadReady = holdNavigation();
 
   onMount(() => {
@@ -79,7 +81,7 @@
             <div><h2>New-paste defaults</h2><p class="muted">These values prefill new pastes; users can still change them.</p></div>
             <div class="settings-grid">
               <label class="field"><span>Format</span><select bind:value={settings.default_format}><option value="text">Text</option><option value="markdown">Rich text</option></select></label>
-              <label class="field"><span>Language</span><select bind:value={settings.default_language}>{#each $appState.languages.filter(language => language.id !== "auto") as language}<option value={language.id}>{language.label}</option>{/each}</select></label>
+              <label class="field"><span>Language</span><select bind:value={settings.default_language}>{#each languageOptions as language}<option value={language.id}>{language.label}</option>{/each}</select></label>
               <label class="field"><span>Visibility</span><select bind:value={settings.default_visibility}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label>
               <label class="field"><span>Expiration</span><select value={settings.default_expiration_seconds ?? ""} onchange={changeExpiration}><option value="">Never</option><option value="3600">1 hour</option><option value="43200">12 hours</option><option value="86400">24 hours</option><option value="604800">1 week</option><option value="2592000">1 month</option><option value="31536000">1 year</option></select></label>
             </div>
