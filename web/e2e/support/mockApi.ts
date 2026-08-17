@@ -271,7 +271,12 @@ export async function mockApi(
         created_at: createdAt, created_by_username: "test-admin", expires_at: expiresAt,
         status: "redeemed", url: null, redeemed_by_username: "reader", redeemed_at: createdAt
       };
-      const items = url.searchParams.get("view") === "history" ? [redeemed] : [active];
+      const redeemedWithLink = {
+        id: 2, token_prefix: "earlier", comment: "Release reviewer",
+        created_at: createdAt, created_by_username: "test-admin", expires_at: expiresAt,
+        status: "redeemed", url: "/invitations/earlier-token", redeemed_by_username: "writer", redeemed_at: createdAt
+      };
+      const items = url.searchParams.get("view") === "history" ? [redeemed, redeemedWithLink] : [active];
       return json(route, { items, pagination: { page: 1, page_size: 25, total_items: items.length, total_pages: 1 } });
     }
     if (url.pathname.startsWith("/api/v1/admin/invitations/")) return route.fulfill({ status: 204 });

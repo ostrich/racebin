@@ -125,6 +125,32 @@ test("page headings use consistent eyebrow-to-title spacing", async ({ page }) =
   expect(await headingGap()).toBeCloseTo(standardGap, 1);
 });
 
+test("page-level actions share one heading alignment", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  for (const route of [
+    "/pastes",
+    "/account",
+    "/help",
+    "/admin/users",
+    "/admin/users/1",
+    "/admin/invitations",
+    "/admin/settings",
+  ]) {
+    await page.goto(route);
+    const alignment = await page.locator(".page-heading").evaluate(heading => {
+      const actions = heading.querySelector<HTMLElement>(".page-heading-actions");
+      if (!actions) throw new Error("Page heading has no standard action container");
+      const headingBox = heading.getBoundingClientRect();
+      const actionBox = actions.getBoundingClientRect();
+      return Math.abs(
+        (headingBox.top + headingBox.height / 2) -
+        (actionBox.top + actionBox.height / 2)
+      );
+    });
+    expect(alignment, `${route} should center its page action`).toBeLessThan(1);
+  }
+});
+
 test("primary pages share one heading-to-content boundary", async ({ page }) => {
   const routes = [
     "/pastes",

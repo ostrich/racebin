@@ -59,7 +59,7 @@
   <div class="section-layout">
     <AdminNav/>
     <div class="section-content">
-      <label class="field search-control"><span>Search</span><input type="search" placeholder="Name, owner, prefix, or privilege" bind:value={search}></label>
+      <div class="list-filter-bar"><label class="field list-filter-search"><span>Search</span><input type="search" placeholder="Name, owner, prefix, or privilege" bind:value={search}></label></div>
       {#if error}
         <section class="empty"><p>{error}</p></section>
       {:else}

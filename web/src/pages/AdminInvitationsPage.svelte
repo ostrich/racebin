@@ -99,7 +99,7 @@
 <section class="page-layout" aria-busy={loading}>
   <div class="page-heading">
     <div><p class="eyebrow">Administration</p><h1>Invitations</h1></div>
-    {#if $appState.config.invitations_enabled}<button class="button primary" onclick={() => invitationDialog.open()}><Icon name="plus"/> Create invitation</button>{/if}
+    {#if $appState.config.invitations_enabled}<div class="page-heading-actions"><button class="button primary" onclick={() => invitationDialog.open()}><Icon name="plus"/> Create invitation</button></div>{/if}
   </div>
   <div class="section-layout">
     <AdminNav/>
@@ -112,16 +112,16 @@
         <Link href={tabUrl("history")} aria-current={view === "history" ? "page" : undefined}>History</Link>
       </nav>
       {#if view === "history"}
-        <form class="invitation-filters" onsubmit={applyFilters}>
-          <label><span class="visually-hidden">Search invitation history</span><input bind:value={search} placeholder="Search note, creator, recipient, or token…"></label>
-          <label><span class="visually-hidden">Status</span><select name="status" value={query.get("status") ?? ""} onchange={(event) => {
+        <form class="list-filter-bar invitation-filters" onsubmit={applyFilters}>
+          <label class="field list-filter-search"><span>Search</span><input type="search" bind:value={search} placeholder="Note, creator, recipient, or token"></label>
+          <button class="button primary" type="submit"><Icon name="search"/> Search</button>
+          <label class="field"><span>Status</span><select name="status" value={query.get("status") ?? ""} onchange={(event) => {
             const params = new URLSearchParams(query);
             const value = event.currentTarget.value;
             if (value) params.set("status", value); else params.delete("status");
             params.delete("page");
             void navigate(`/admin/invitations?${params}`);
           }}><option value="">All statuses</option><option value="redeemed">Redeemed</option><option value="revoked">Revoked</option><option value="expired">Expired</option></select></label>
-          <button class="button" type="submit"><Icon name="search"/> Search</button>
         </form>
       {/if}
       {#if error}

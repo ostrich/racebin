@@ -50,7 +50,7 @@
       <p class="eyebrow">Owner</p>
       <h1>Site settings</h1>
     </div>
-    <button class="button primary" disabled={saving || !settings} onclick={save}>Save settings</button>
+    <div class="page-heading-actions"><button class="button primary" disabled={saving || !settings} onclick={save}>Save settings</button></div>
   </div>
   <div class="section-layout">
     <AdminNav/>

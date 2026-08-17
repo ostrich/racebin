@@ -44,11 +44,11 @@
 <section class="page-layout">
   <div class="page-heading">
     <div><p class="eyebrow"><Link href="/admin">Administration</Link></p><h1>Users</h1></div>
-    {#if $appState.config.invitations_enabled}<button class="button primary" type="button" onclick={() => invitationDialog.open()}><Icon name="plus"/> Create invitation</button>{/if}
+    {#if $appState.config.invitations_enabled}<div class="page-heading-actions"><button class="button primary" type="button" onclick={() => invitationDialog.open()}><Icon name="plus"/> Create invitation</button></div>{/if}
   </div>
   <div class="section-layout"><AdminNav/><div class="section-content">
-  <div class="panel admin-user-filters">
-    <label class="field search-control"><span>Search</span><input type="search" placeholder="Username" bind:value={search}></label>
+  <div class="list-filter-bar admin-user-filters">
+    <label class="field list-filter-search"><span>Search</span><input type="search" placeholder="Username" bind:value={search}></label>
     <label class="field"><span>Role</span><select bind:value={role}><option value="">Any role</option><option value="user">User</option><option value="admin">Administrator</option><option value="owner">Owner</option></select></label>
     <label class="field"><span>Status</span><select bind:value={status}><option value="">Any status</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></label>
     <label class="field"><span>Sort</span><select bind:value={sort}><option value="username">Username</option><option value="created">Newest</option><option value="login">Last login</option><option value="pastes">Paste count</option><option value="storage">Storage</option></select></label>

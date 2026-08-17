@@ -58,9 +58,18 @@
   }
 }
 @media (max-width: 760px) {
-  .invitation-filters,
-  .invitation-row {
+  .data-row.invitation-row {
     grid-template-columns: 1fr;
+  }
+  .list-filter-bar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+  .list-filter-search {
+    flex-basis: 100%;
+  }
+  .invitation-filters {
+    align-items: end;
   }
   .invitation-row .row-actions {
     justify-self: start;

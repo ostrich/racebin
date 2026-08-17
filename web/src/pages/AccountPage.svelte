@@ -79,7 +79,7 @@
 <section class="page-layout">
   <div class="page-heading">
     <div><p class="eyebrow">Settings</p><h1>Account</h1></div>
-    <Link class="button" href="/account/password">Change password</Link>
+    <div class="page-heading-actions"><Link class="button" href="/account/password">Change password</Link></div>
   </div>
   <section class="panel">
     <h2>API keys</h2><p class="muted">Tokens are shown once when created.</p>

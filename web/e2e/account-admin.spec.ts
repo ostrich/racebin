@@ -40,6 +40,16 @@ test("account and admin ownership data render as structured controls", async ({ 
   expect((await noteUpdate).postDataJSON()).toEqual({ comment: "Updated invitation note" });
   await page.getByRole("link", { name: "History" }).click();
   await expect(page.getByText(/Redeemed by reader/)).toBeVisible();
+  await page.getByLabel("Status").selectOption("redeemed");
+  const invitationRows = page.locator(".invitation-row");
+  await expect(invitationRows).toHaveCount(2);
+  const rowGeometry = await invitationRows.evaluateAll(rows => rows.map(row => {
+    const lifecycle = row.querySelector(".invitation-lifecycle")!.getBoundingClientRect();
+    const actions = row.querySelector(".row-actions")!.getBoundingClientRect();
+    return { lifecycleLeft: lifecycle.left, actionsRight: actions.right };
+  }));
+  expect(rowGeometry[0].lifecycleLeft).toBe(rowGeometry[1].lifecycleLeft);
+  expect(rowGeometry[0].actionsRight).toBe(rowGeometry[1].actionsRight);
   await page.getByRole("link", { name: "API keys", exact: true }).click();
   await expect(page.getByText("test-admin · abcd", { exact: true })).toBeVisible();
   await expect(page.getByText("paste:write", { exact: true })).toBeVisible();
@@ -51,7 +61,8 @@ test("account and admin ownership data render as structured controls", async ({ 
   await page.goto("/admin/users/2");
   await page.getByLabel("Role").selectOption("admin");
   await page.getByRole("button", { name: "Save role" }).click();
-  await page.getByLabel("Password").fill("correct password");
-  await page.getByRole("button", { name: "Continue" }).click();
+  const passwordDialog = page.getByRole("dialog", { name: "Confirm your password" });
+  await passwordDialog.getByLabel("Password", { exact: true }).fill("correct password");
+  await passwordDialog.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByText("Role updated.")).toBeVisible();
 });

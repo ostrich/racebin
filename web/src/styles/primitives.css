@@ -45,7 +45,12 @@
 .field-label small {
   margin-left: 5px;
 }
-:where(.control, .field > :is(input:not([type="file"]), select, textarea)) {
+:where(
+  .control,
+  input:not([type="file"], [type="checkbox"], [type="radio"]),
+  select,
+  textarea
+) {
   min-height: var(--control-height);
   border: 1px solid var(--color-control-border);
   border-radius: var(--radius-sm);
@@ -53,7 +58,7 @@
   color: var(--color-text);
   padding: 9px 11px;
 }
-:where(input.control, select.control, .field > :is(input:not([type="file"]), select)) {
+:where(input:not([type="file"], [type="checkbox"], [type="radio"]), select) {
   height: var(--control-height);
 }
 .split {
@@ -93,6 +98,14 @@
 .section-heading h2 {
   margin: 0;
   overflow-wrap: anywhere;
+}
+.page-heading-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }
 .section-heading {
   margin-bottom: 26px;
@@ -173,5 +186,8 @@
 @media (max-width: 760px) {
   .page-heading {
     align-items: flex-start;
+  }
+  .page-heading-actions {
+    justify-content: flex-start;
   }
 }

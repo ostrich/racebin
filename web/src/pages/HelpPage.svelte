@@ -40,7 +40,7 @@
 <section class="help-page page-layout">
   <div class="page-heading">
     <div><p class="eyebrow">Help</p><h1>Using Racebin</h1></div>
-    <a class="button" href={`${apiBase}/openapi.json`}>OpenAPI JSON</a>
+    <div class="page-heading-actions"><a class="button" href={`${apiBase}/openapi.json`}>OpenAPI JSON</a></div>
   </div>
   <div class="help-layout">
     <aside class="panel help-index sticky-sidebar" aria-label="Help topics">

@@ -173,7 +173,7 @@
   <div class="page-layout paste-list-intro">
   <div class="page-heading">
     <div><p class="eyebrow">{mine ? "Workspace" : "Public"}</p><h1>{mine ? currentFolderName : "Explore"}</h1></div>
-    {#if mine}<Link class="button primary" href={`/pastes/new${currentFolderId ? `?folder_id=${currentFolderId}` : ""}`}><Icon name="plus"/> New paste</Link>{/if}
+    {#if mine}<div class="page-heading-actions"><Link class="button primary" href={`/pastes/new${currentFolderId ? `?folder_id=${currentFolderId}` : ""}`}><Icon name="plus"/> New paste</Link></div>{/if}
   </div>
   <PasteFilters params={appliedQuery} mode={mine ? "mine" : "explore"}/>
   </div>

@@ -158,7 +158,7 @@
   onkeydown={(event) => { if (event.key === "Escape") closeSort(true); }}/>
 
 <div class="paste-filter-form">
-  <div class="paste-filter-toolbar">
+  <div class="paste-filter-toolbar list-filter-bar">
     <form class="paste-search"
       onsubmit={(event) => { event.preventDefault(); void submitSearch(event); }}>
       <label class="field"><span>Search</span><input name="search" value={params.get("search") ?? ""}

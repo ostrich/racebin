@@ -92,7 +92,7 @@
             {/if}
           </p>
         </div>
-        <div class="actions">
+        <div class="actions page-heading-actions">
           {#if paste.format === "markdown"}
             <div class="paste-view-options markdown-wrap-slot">
               {#if showWrapOption}
