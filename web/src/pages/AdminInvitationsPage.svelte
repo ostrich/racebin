@@ -48,7 +48,7 @@
 
 <section class="stack page-stack">
   <div class="page-heading">
-    <div><p class="eyebrow">Administration</p><h1>Invitations</h1><p class="muted">Control who can create an account.</p></div>
+    <div><p class="eyebrow">Administration</p><h1>Invitations</h1></div>
     {#if $appState.config.invitations_enabled}<button class="button primary" onclick={create}><Icon name="plus"/> Create invitation</button>{/if}
   </div>
   <div class="section-layout">

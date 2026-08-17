@@ -80,6 +80,8 @@ test("paste view and administration", { tag: "@visual" }, async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/pastes/sample-paste");
   await expect(page).toHaveScreenshot("paste-view-desktop.png", screenshot);
+  await page.goto("/admin");
+  await expect(page).toHaveScreenshot("admin-overview-desktop.png", screenshot);
   await page.goto("/admin/pastes");
   await expect(page).toHaveScreenshot("admin-pastes-desktop.png", screenshot);
   await page.goto("/admin/settings");

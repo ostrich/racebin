@@ -53,7 +53,7 @@
 
 <section class="stack page-stack">
   <div class="page-heading">
-    <div><p class="eyebrow">Administration</p><h1>API keys</h1><p class="muted">Review keys that can act on behalf of users.</p></div>
+    <div><p class="eyebrow">Administration</p><h1>API keys</h1></div>
   </div>
   <div class="section-layout">
     <AdminNav/>

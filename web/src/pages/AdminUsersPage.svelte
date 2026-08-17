@@ -47,7 +47,7 @@
 
 <section class="stack page-stack">
   <div class="page-heading">
-    <div><p class="eyebrow"><Link href="/admin">Administration</Link></p><h1>Users</h1><p class="muted">Manage account access and recovery.</p></div>
+    <div><p class="eyebrow"><Link href="/admin">Administration</Link></p><h1>Users</h1></div>
     {#if $appState.config.invitations_enabled}<button class="button primary" type="button" onclick={createInvitation}><Icon name="plus"/> Create invitation</button>{/if}
   </div>
   <div class="section-layout"><AdminNav/><div class="section-content">

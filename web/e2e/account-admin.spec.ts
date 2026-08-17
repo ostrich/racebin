@@ -13,6 +13,10 @@ test("account and admin ownership data render as structured controls", async ({ 
   await expect(page.getByText(/paste:read, paste:write/)).toBeVisible();
   await expect(page.getByLabel("user:manage")).toBeVisible();
   await page.getByRole("link", { name: "Admin", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Site summary" })).toContainText("Users2");
+  await expect(page.getByRole("region", { name: "Site summary" })).toContainText("Pastes4");
+  await expect(page.getByRole("heading", { name: "Recent activity" })).toBeVisible();
+  await expect(page.getByText("Everything looks normal.")).toBeVisible();
   await page.getByRole("link", { name: "Invitations", exact: true }).click();
   await expect(page.getByText("Redeemed by reader")).toBeVisible();
   const origin = new URL(page.url()).origin;

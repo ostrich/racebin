@@ -49,7 +49,6 @@
     <div>
       <p class="eyebrow">Owner</p>
       <h1>Site settings</h1>
-      <p class="muted">Defaults and features that apply to this installation.</p>
     </div>
     <button class="button primary" disabled={saving || !settings} onclick={save}>Save settings</button>
   </div>

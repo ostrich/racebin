@@ -125,6 +125,22 @@ test("page headings use consistent eyebrow-to-title spacing", async ({ page }) =
   expect(await headingGap()).toBeCloseTo(standardGap, 1);
 });
 
+test("page headings use one shared boundary before their content", async ({ page }) => {
+  const boundaryGap = async (headingSelector: string, contentSelector: string) => {
+    const heading = await page.locator(headingSelector).boundingBox();
+    const content = await page.locator(contentSelector).boundingBox();
+    if (!heading || !content) throw new Error("Expected visible heading and page content");
+    return content.y - heading.y - heading.height;
+  };
+
+  await page.goto("/pastes");
+  const workspaceGap = await boundaryGap(".paste-list-intro > .page-heading", ".paste-filter-form");
+  await expect(page.locator(".paste-filter-form")).toHaveCSS("border-top-style", "none");
+
+  await page.goto("/admin/pastes");
+  expect(await boundaryGap(".page-stack > .page-heading", ".section-layout")).toBeCloseTo(workspaceGap, 1);
+});
+
 test("filter expansion preserves the search toolbar boundary", async ({
   page,
 }) => {

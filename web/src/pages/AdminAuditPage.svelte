@@ -24,7 +24,7 @@
 
 <section class="stack page-stack">
   <div class="page-heading">
-    <div><p class="eyebrow">Owner</p><h1>Audit log</h1><p class="muted">Recent sensitive administrative actions.</p></div>
+    <div><p class="eyebrow">Owner</p><h1>Audit log</h1></div>
   </div>
   <div class="section-layout">
     <AdminNav/>
