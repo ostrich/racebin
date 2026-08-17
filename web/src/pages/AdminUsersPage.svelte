@@ -43,7 +43,7 @@
 
 <section class="page-layout">
   <div class="page-heading">
-    <div><p class="eyebrow"><Link href="/admin">Administration</Link></p><h1>Users</h1></div>
+    <div><p class="eyebrow">Administration</p><h1>Users</h1></div>
     {#if $appState.config.invitations_enabled}<div class="page-heading-actions"><button class="button primary" type="button" onclick={() => invitationDialog.open()}><Icon name="plus"/> Create invitation</button></div>{/if}
   </div>
   <div class="section-layout"><AdminNav/><div class="section-content">

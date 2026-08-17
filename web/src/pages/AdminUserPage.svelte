@@ -91,7 +91,7 @@
   {#if error}<section class="empty"><h1>Unable to load user</h1><p>{error}</p><Link class="button" href="/admin/users">Back to users</Link></section>
   {:else if !user}<p class="muted">Loading user…</p>
   {:else}
-    <div class="page-heading"><div><p class="eyebrow"><Link href="/admin/users">Users</Link></p><h1>{user.username}</h1><div class="badge-group"><span class="badge">{user.role === "owner" ? "Owner" : user.role === "admin" ? "Administrator" : "User"}</span><span class:danger={!user.enabled} class="badge">{user.enabled ? "Enabled" : "Disabled"}</span></div></div><div class="page-heading-actions"><Link class="button" href={`/admin/pastes?owner_id=${user.id}`}>View pastes</Link></div></div>
+    <div class="page-heading"><div><p class="eyebrow">Users</p><h1>{user.username}</h1><div class="badge-group"><span class="badge">{user.role === "owner" ? "Owner" : user.role === "admin" ? "Administrator" : "User"}</span><span class:danger={!user.enabled} class="badge">{user.enabled ? "Enabled" : "Disabled"}</span></div></div><div class="page-heading-actions"><Link class="button" href={`/admin/pastes?owner_id=${user.id}`}>View pastes</Link></div></div>
     <div class="section-layout"><AdminNav/><div class="section-content">
     <div class="admin-user-metrics">
       <article class="panel"><span>Pastes</span><strong>{user.paste_count}</strong><small>{formatByteSize(user.storage_bytes)} stored</small></article>
