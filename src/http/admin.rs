@@ -831,10 +831,7 @@ pub(crate) async fn admin_create_invitation(
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty());
-    if comment
-        .as_deref()
-        .is_some_and(|value| value.chars().count() > 200)
-    {
+    if comment.is_some_and(|value| value.chars().count() > 200) {
         return error(
             StatusCode::UNPROCESSABLE_ENTITY,
             "invalid_comment",
