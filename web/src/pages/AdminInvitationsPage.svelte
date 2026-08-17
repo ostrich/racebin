@@ -115,7 +115,7 @@
         <form class="list-filter-bar invitation-filters" onsubmit={applyFilters}>
           <label class="field list-filter-search"><span>Search</span><input type="search" bind:value={search} placeholder="Note, creator, recipient, or token"></label>
           <button class="button primary" type="submit"><Icon name="search"/> Search</button>
-          <label class="field"><span>Status</span><select name="status" value={query.get("status") ?? ""} onchange={(event) => {
+          <label class="field list-filter-select"><span>Status</span><select name="status" value={query.get("status") ?? ""} onchange={(event) => {
             const params = new URLSearchParams(query);
             const value = event.currentTarget.value;
             if (value) params.set("status", value); else params.delete("status");

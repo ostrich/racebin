@@ -197,21 +197,21 @@
     <form class="filter-panel" id="paste-filter-panel" aria-label="Paste filters"
       onsubmit={(event) => { event.preventDefault(); void submitFilters(event); }}>
       <div class="advanced-filter-grid">
-        <label class="field"><span>Format</span><select name="format" value={params.get("format") ?? ""}>
+        <label class="field list-filter-select"><span>Format</span><select name="format" value={params.get("format") ?? ""}>
           <option value="">Any</option>
           {#each $appState.config.formats as format}<option value={format}>{format === "markdown" ? "Rich text" : "Text"}</option>{/each}
         </select></label>
         {#if mode !== "explore"}
-          <label class="field"><span>Visibility</span><select name="visibility" value={params.get("visibility") ?? ""}>
+          <label class="field list-filter-select"><span>Visibility</span><select name="visibility" value={params.get("visibility") ?? ""}>
             <option value="">Any</option>
             {#each $appState.config.visibility_modes as visibility}<option value={visibility}>{visibility.charAt(0).toUpperCase() + visibility.slice(1)}</option>{/each}
           </select></label>
         {/if}
-        <label class="field"><span>Attachments</span><select name="has_attachments" value={params.get("has_attachments") ?? ""}>
+        <label class="field list-filter-select"><span>Attachments</span><select name="has_attachments" value={params.get("has_attachments") ?? ""}>
           <option value="">Any</option><option value="true">With attachments</option>
           <option value="false">Without attachments</option>
         </select></label>
-        <label class="field"><span>Language</span><select name="language" value={params.get("language") ?? ""}>
+        <label class="field list-filter-select"><span>Language</span><select name="language" value={params.get("language") ?? ""}>
           <option value="">Any</option>
           {#each languageOptions.filter(language => language.id !== "auto") as language}
             <option value={language.id}>{language.label}</option>
@@ -222,7 +222,7 @@
         {/if}
         <label class="field"><span>Created after</span><input type="date" name="created_after" value={dateValue(params.get("created_after"))}/></label>
         <label class="field"><span>Created before</span><input type="date" name="created_before" value={dateValue(params.get("created_before"))}/></label>
-        <label class="field"><span>Expiration</span><select name="expiration" value={params.get("expiration") ?? ""}>
+        <label class="field list-filter-select"><span>Expiration</span><select name="expiration" value={params.get("expiration") ?? ""}>
           <option value="">Any</option><option value="never">Never</option><option value="scheduled">Scheduled</option>
         </select></label>
         <label class="field"><span>Minimum views</span><input type="number" min="0" name="min_reads" value={params.get("min_reads") ?? ""}/></label>
@@ -231,7 +231,7 @@
           value={params.get("min_size_bytes") ? Number(params.get("min_size_bytes")) / 1024 : ""}/></label>
         <label class="field"><span>Maximum size (KiB)</span><input type="number" min="0" step="0.1" name="max_size_kib"
           value={params.get("max_size_bytes") ? Number(params.get("max_size_bytes")) / 1024 : ""}/></label>
-        <label class="field"><span>View limit</span><select name="read_limit" value={params.get("read_limit") ?? ""}>
+        <label class="field list-filter-select"><span>View limit</span><select name="read_limit" value={params.get("read_limit") ?? ""}>
           <option value="">Any</option><option value="unlimited">Unlimited</option><option value="limited">Limited</option>
         </select></label>
       </div>

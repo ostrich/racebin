@@ -211,6 +211,37 @@ test("filter expansion preserves the search toolbar boundary", async ({
   await expect(toolbar).toHaveCSS("border-bottom-style", "solid");
 });
 
+test("filter selects follow their widest option instead of their grid track", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/pastes");
+  await page.getByRole("button", { name: /^Filters/ }).click();
+
+  const measurements = await page.locator(".list-filter-select select").evaluateAll(selects =>
+    selects.map(element => {
+      const select = element as HTMLSelectElement;
+      const style = getComputedStyle(select);
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d")!;
+      context.font = style.font;
+      const textWidth = Math.max(...[...select.options].map(option => context.measureText(option.text).width));
+      const fixedWidth = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)
+        + Number.parseFloat(style.borderLeftWidth) + Number.parseFloat(style.borderRightWidth);
+      return {
+        actual: select.getBoundingClientRect().width,
+        textAndBox: textWidth + fixedWidth,
+        track: (select.closest(".advanced-filter-grid")!.getBoundingClientRect().width - 36) / 4,
+      };
+    }),
+  );
+
+  for (const measurement of measurements) {
+    // Native select chrome (principally the disclosure arrow) is browser-owned.
+    expect(measurement.actual).toBeGreaterThanOrEqual(measurement.textAndBox + 12);
+    expect(measurement.actual).toBeLessThanOrEqual(measurement.textAndBox + 48);
+  }
+  expect(measurements.some(measurement => measurement.actual < measurement.track)).toBe(true);
+});
+
 test("standard form controls use the shared control height", async ({
   page,
 }) => {
