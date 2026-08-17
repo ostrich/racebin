@@ -25,31 +25,83 @@ part of one process.
 ## System overview
 
 ```mermaid
-flowchart LR
-    Browser["Browser<br>Svelte application"]
-    Client["API client"]
-    Actix["Actix Web server"]
-    HTTP["HTTP handlers<br>/api/v1"]
-    Service["Domain services"]
-    Repository["SQLx repository"]
-    Database[("SQLite or PostgreSQL")]
-    Files[("Attachment files")]
-    Assets["Embedded frontend assets"]
+flowchart TB
+    subgraph Clients
+        Browser["Browser<br>Svelte application"]
+        Client["CLI, desktop, uploader,<br>or other API client"]
+    end
 
-    Browser -->|JSON, multipart, cookies| Actix
-    Client -->|JSON, multipart, bearer token| Actix
-    Actix --> HTTP
-    Actix --> Assets
-    HTTP --> Service
-    HTTP -->|file streaming| Files
-    Service --> Repository
+    subgraph Binary["Racebin server binary"]
+        direction TB
+        Boundary["Actix HTTP boundary<br>routing, middleware, authentication"]
+        Assets["Embedded browser application<br>HTML, CSS, JavaScript, fonts"]
+        Handlers["API handlers<br>request and response translation"]
+        Domain["Paste and account services<br>authorization and business rules"]
+        Repository["Repository<br>transactions and SQLx queries"]
+
+        Boundary -->|browser routes and assets| Assets
+        Boundary -->|/api/v1| Handlers
+        Handlers --> Domain
+        Domain --> Repository
+    end
+
+    Database[("SQLite or PostgreSQL")]
+    Files[("Attachment data directory")]
+
+    Browser -->|same-origin HTTP| Boundary
+    Client -->|HTTP with bearer key| Boundary
     Repository --> Database
-    Service -->|attachment metadata| Database
+    Handlers -->|upload and download streams| Files
+    Domain -->|transactional promotion and cleanup| Files
 ```
 
-The browser application never accesses storage directly. It uses the same
-`/api/v1` endpoints exposed to external API clients. Actix serves that API,
-the compiled frontend, attachment data, archives, and optional QR codes.
+The box around the server components is an important boundary: all of them are
+compiled into or run within one process. They are modules, not separately
+deployed services. The database and attachment directory together are the
+persistent data set.
+
+The browser application never accesses storage directly. After Actix serves
+the embedded application, it uses the same `/api/v1` endpoints exposed to
+external clients. Actix also serves attachment downloads, archives, and
+optional QR codes after the domain layer authorizes the request.
+
+### Request lifecycle
+
+The system diagram shows ownership; the following sequence shows how a normal
+API operation moves through those boundaries:
+
+```mermaid
+sequenceDiagram
+    participant C as Browser or API client
+    participant H as Actix boundary and handler
+    participant S as Domain service
+    participant R as Repository
+    participant D as Database
+    participant F as Attachment directory
+
+    C->>H: HTTP request
+    H->>H: Parse input and resolve principal
+    H->>S: Typed operation
+    S->>S: Validate authorization and invariants
+    S->>R: Query or transactional write
+    R->>D: Backend-specific SQL through SQLx
+    D-->>R: Rows or commit result
+    R-->>S: Domain data
+    opt Upload or download includes attachment bytes
+        H->>F: Stream staged upload or authorized download
+    end
+    opt Mutation promotes or removes attachment bytes
+        S->>F: Coordinate file change with metadata transaction
+    end
+    S-->>H: Domain result or typed error
+    H-->>C: JSON, file stream, or problem details
+```
+
+Not every request touches every participant. Static assets stop at the HTTP
+boundary, metadata-only operations do not touch attachment storage, and CLI
+commands may call repository or account operations without passing through
+HTTP. The authorization and data invariants remain in the domain/account
+layers so these alternate entry points cannot bypass them.
 
 ## Runtime composition
 
@@ -367,7 +419,10 @@ properties. Components own their internal layout, while pages own only the
 arrangement between components. Fixed dimensions and sticky offsets must come
 from tokens when they participate in shared alignment. This keeps layout
 behavior consistent and prevents page-specific overrides from becoming a
-second design system.
+second design system. Primary route pages use the shared `page-layout` and
+`page-heading` contract so their title origin, eyebrow rhythm, and
+first-content boundary remain consistent even when the content itself uses a
+sidebar.
 
 `npm run check:css` applies standards linting and project-specific boundaries:
 literal colors and theme selectors are confined to the token sheet,
