@@ -48,6 +48,9 @@ test("desktop paste workspace", { tag: "@visual" }, async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/pastes");
   await expect(page).toHaveScreenshot("workspace-desktop.png", screenshot);
+  await page.getByRole("button", { name: /^My pastes/ }).click();
+  await expect(page).toHaveScreenshot("workspace-folders-desktop.png", screenshot);
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Compact", exact: true }).click();
   await expect(page).toHaveScreenshot("workspace-compact-desktop.png", screenshot);
   await page.getByRole("button", { name: "Normal", exact: true }).click();

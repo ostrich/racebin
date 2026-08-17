@@ -1,8 +1,9 @@
 <script lang="ts">
   import { createFolder as createFolderRequest, deleteFolder as deleteFolderRequest,
     listFolders, listPastes, movePastes, renameFolder as renameFolderRequest } from "../api";
+  import FolderNameDialog from "../components/FolderNameDialog.svelte";
+  import FolderPicker from "../components/FolderPicker.svelte";
   import Icon from "../components/Icon.svelte";
-  import FolderNav from "../components/FolderNav.svelte";
   import Link from "../components/Link.svelte";
   import Pagination from "../components/Pagination.svelte";
   import PasteFilters from "../components/PasteFilters.svelte";
@@ -61,7 +62,7 @@
   let reloadToken = $state(0);
   let selected = $state(new Set<string>());
   let selectAllCheckbox = $state<HTMLInputElement>();
-  let moveFolder = $state("");
+  let folderNameDialog: FolderNameDialog;
   let currentFolderId = $derived(appliedQuery.get("folder_id") ? Number(appliedQuery.get("folder_id")) : null);
   let unfiled = $derived(appliedQuery.get("unfiled") === "true");
   let folderNames = $derived(new Map((folders?.items ?? []).map(folder => [folder.id, folder.name])));
@@ -121,8 +122,8 @@
   });
 
   async function createFolder(): Promise<void> {
-    const name = prompt("Folder name");
-    if (!name?.trim()) return;
+    const name = await folderNameDialog.ask({ title: "Create folder", submitLabel: "Create folder" });
+    if (!name) return;
     try {
       const folder = await createFolderRequest(name);
       await navigate(`/pastes?folder_id=${folder.id}`);
@@ -130,12 +131,12 @@
   }
 
   async function renameFolder(id: number, current: string): Promise<void> {
-    const name = prompt("Folder name", current);
-    if (!name?.trim() || name.trim() === current) return;
+    const name = await folderNameDialog.ask({ title: "Rename folder", value: current, submitLabel: "Rename" });
+    if (!name || name === current) return;
     try {
       await renameFolderRequest(id, name);
       if (folders) folders = { ...folders, items: folders.items.map(folder =>
-        folder.id === id ? { ...folder, name: name.trim() } : folder) };
+        folder.id === id ? { ...folder, name } : folder) };
     } catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to rename folder", "error"); }
   }
 
@@ -148,12 +149,26 @@
     } catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to delete folder", "error"); }
   }
 
-  async function moveSelected(): Promise<void> {
+  function folderUrl(id?: number, uncategorized = false): string {
+    const params = new URLSearchParams(appliedQuery);
+    params.delete("page");
+    params.delete("folder_id");
+    params.delete("unfiled");
+    if (id) params.set("folder_id", String(id));
+    if (uncategorized) params.set("unfiled", "true");
+    return `/pastes${params.size ? `?${params}` : ""}`;
+  }
+
+  function browseFolder(folderId: number | null, browseUnfiled: boolean): void {
+    void navigate(folderId ? folderUrl(folderId) : folderUrl(undefined, browseUnfiled));
+  }
+
+  async function moveSelected(folderId: number | null): Promise<void> {
     if (!selected.size) return;
     try {
       await movePastes({
         ids: [...selected],
-        folder_id: moveFolder ? Number(moveFolder) : null
+        folder_id: folderId
       });
       selected = new Set();
       reloadToken += 1;
@@ -163,12 +178,9 @@
   }
 </script>
 
-<section class:paste-workspace={mine} aria-busy={loading}
-  class:folder-sidebar-collapsed={mine && $uiPreferences.folderSidebarCollapsed}>
-  {#if mine && folders}
-    <FolderNav overview={folders} {currentFolderId} {unfiled}
-      oncreate={createFolder} onrename={renameFolder} ondelete={deleteFolder}/>
-  {/if}
+<FolderNameDialog bind:this={folderNameDialog}/>
+
+<section class:paste-workspace={mine} aria-busy={loading}>
   <div class="paste-workspace-main">
   <div class="page-layout paste-list-intro">
   <div class="page-heading">
@@ -178,28 +190,30 @@
   <PasteFilters params={appliedQuery} mode={mine ? "mine" : "explore"}/>
   </div>
   {#if page}
-    {#if mine && page.items.length}
+    {#if mine && folders}
       <div class="paste-selection-bar">
         <div class="paste-view-controls">
-          <div class="paste-view-switch" role="group" aria-label="Paste view">
-            <button type="button" aria-pressed={$uiPreferences.pasteListView === "normal"}
-              onclick={() => setPasteListView("normal")}>Normal</button>
-            <button type="button" aria-pressed={$uiPreferences.pasteListView === "compact"}
-              onclick={() => setPasteListView("compact")}>Compact</button>
+          <div class="paste-library-controls">
+            <FolderPicker overview={folders} mode="browse" label={currentFolderName}
+              {currentFolderId} {unfiled} onselect={browseFolder}
+              oncreate={createFolder} onrename={renameFolder} ondelete={deleteFolder}/>
+            <div class="paste-view-switch" role="group" aria-label="Paste view">
+              <button type="button" aria-pressed={$uiPreferences.pasteListView === "normal"}
+                onclick={() => setPasteListView("normal")}>Normal</button>
+              <button type="button" aria-pressed={$uiPreferences.pasteListView === "compact"}
+                onclick={() => setPasteListView("compact")}>Compact</button>
+            </div>
           </div>
           <span class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</span>
         </div>
         <div class="paste-selection-controls">
           <div class="paste-bulk-actions">
-            <select bind:value={moveFolder} aria-label="Move selected to folder">
-              <option value="">Uncategorized</option>
-              {#each folders?.items ?? [] as folder}<option value={folder.id}>{folder.name}</option>{/each}
-            </select>
-            <button class="button move-selected-button" type="button" disabled={!selected.size}
-              onclick={() => void moveSelected()}>Move {selected.size || ""}</button>
+            <FolderPicker overview={folders} mode="move"
+              label={selected.size ? `Move ${selected.size}` : "Move"} disabled={!selected.size}
+              onselect={(folderId) => { void moveSelected(folderId); }}/>
           </div>
           <label class="select-all-pastes"><input bind:this={selectAllCheckbox} type="checkbox"
-            checked={selected.size === page.items.length}
+            disabled={!page.items.length} checked={page.items.length > 0 && selected.size === page.items.length}
             onchange={(event) => { selected = event.currentTarget.checked
               ? new Set(page?.items.map(item => item.id)) : new Set(); }}/> Select all on page</label>
         </div>

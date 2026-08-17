@@ -1260,62 +1260,11 @@
   cursor: default;
 }
 .paste-workspace {
-  display: grid;
-  grid-template-areas: "folders main";
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: var(--space-8);
-  align-items: start;
-  transition:
-    grid-template-columns 0.16s ease,
-    gap 0.16s ease;
+  display: block;
 }
 .paste-workspace-main {
-  grid-area: main;
+  container-type: inline-size;
   min-width: 0;
-}
-.folder-nav {
-  grid-area: folders;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  padding: 14px;
-}
-.folder-nav-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.folder-nav button {
-  border: 0;
-  background: transparent;
-  color: var(--accent);
-  padding: 4px;
-  cursor: pointer;
-  font-size: 12px;
-}
-.folder-nav nav {
-  display: grid;
-  height: auto;
-  gap: 2px;
-}
-.folder-nav nav a {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px;
-  border-radius: 4px;
-  text-decoration: none;
-  color: inherit;
-  font-size: 14px;
-  font-weight: 600;
-}
-.folder-nav nav a.current {
-  background: var(--color-current-surface);
-  color: var(--color-current-text);
-}
-.folder-mobile-select {
-  display: none;
 }
 .paste-bulk-actions {
   display: flex;
@@ -1323,20 +1272,6 @@
   justify-content: flex-end;
   gap: 10px;
   margin: 10px 0;
-}
-.paste-bulk-actions label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 13px;
-}
-.paste-bulk-actions select {
-  min-height: 36px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--color-surface);
-  padding: 6px;
 }
 .paste-main:has(> input[type="checkbox"]) {
   display: grid;

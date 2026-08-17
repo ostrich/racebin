@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   initializeUiPreferences,
   setColorTheme,
-  setFolderSidebarCollapsed,
   setPasteListView,
   uiPreferences
 } from "./uiPreferences";
@@ -28,13 +27,6 @@ describe("UI preferences", () => {
     initializeUiPreferences(storage);
   });
 
-  it("loads the folder sidebar preference before rendering", () => {
-    storage.setItem("racebin.folderSidebarCollapsed", "true");
-    initializeUiPreferences(storage);
-
-    expect(get(uiPreferences).folderSidebarCollapsed).toBe(true);
-  });
-
   it("loads a valid compact paste-list preference", () => {
     storage.setItem("racebin.pasteListView", "compact");
     initializeUiPreferences(storage);
@@ -49,26 +41,14 @@ describe("UI preferences", () => {
     expect(get(uiPreferences).pasteListView).toBe("normal");
   });
 
-  it("updates memory and storage together", () => {
-    setFolderSidebarCollapsed(true, storage);
-
-    expect(get(uiPreferences).folderSidebarCollapsed).toBe(true);
-    expect(storage.getItem("racebin.folderSidebarCollapsed")).toBe("true");
-  });
-
-  it("updates either preference without resetting the other", () => {
-    setFolderSidebarCollapsed(true, storage);
+  it("updates the list view without resetting the theme", () => {
     setPasteListView("compact", storage);
 
     expect(get(uiPreferences)).toEqual({
-      folderSidebarCollapsed: true,
       pasteListView: "compact",
       colorTheme: "auto"
     });
     expect(storage.getItem("racebin.pasteListView")).toBe("compact");
-
-    setFolderSidebarCollapsed(false, storage);
-    expect(get(uiPreferences).pasteListView).toBe("compact");
   });
 
   it("persists explicit themes and returns to the system theme", () => {

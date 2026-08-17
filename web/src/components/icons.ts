@@ -9,6 +9,7 @@ import Ellipsis from "@lucide/svelte/icons/ellipsis";
 import Eraser from "@lucide/svelte/icons/eraser";
 import FileText from "@lucide/svelte/icons/file-text";
 import FileCode from "@lucide/svelte/icons/file-code";
+import Folder from "@lucide/svelte/icons/folder";
 import KeyRound from "@lucide/svelte/icons/key-round";
 import Link from "@lucide/svelte/icons/link";
 import Link2 from "@lucide/svelte/icons/link-2";
@@ -56,6 +57,7 @@ export const icons = {
   eraser: Eraser,
   "file-code": FileCode,
   "file-text": FileText,
+  folder: Folder,
   "key-round": KeyRound,
   link: Link,
   "link-2": Link2,

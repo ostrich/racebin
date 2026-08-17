@@ -5,14 +5,18 @@ test("folders filter the workspace and carry into new pastes", async ({ page }) 
   await mockApi(page, true, { items: [{ ...paste, folder_id: 5 }] });
   await page.goto("/pastes?folder_id=5");
   await expect(page.getByRole("heading", { name: "Scripts" })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Paste folders" })
-    .getByRole("link", { name: /Scripts/ })).toHaveClass(/current/);
+  await page.getByRole("button", { name: /^Scripts/ }).click();
+  await expect(page.getByRole("dialog", { name: "Browse folders" })
+    .getByRole("button", { name: /^Scripts 1$/ })).toHaveClass(/current/);
+  await page.keyboard.press("Escape");
   const selectedPaste = page.getByRole("checkbox", { name: /Select JavaScript example/ });
   await selectedPaste.check();
   const moveRequest = page.waitForRequest(request =>
     request.url().endsWith("/api/v1/pastes") && request.method() === "PATCH"
   );
   await page.getByRole("button", { name: "Move 1" }).click();
+  await page.getByRole("dialog", { name: "Move selected pastes" })
+    .getByRole("button", { name: /Uncategorized/ }).click();
   expect((await moveRequest).postDataJSON()).toEqual({
     ids: ["sample-paste"],
     folder_id: null
@@ -23,18 +27,13 @@ test("folders filter the workspace and carry into new pastes", async ({ page }) 
   await expect(page.getByLabel("Folder")).toHaveValue("5");
 });
 
-test("workspace boundaries align and the folder sidebar collapses persistently", async ({ page }) => {
+test("workspace boundaries align without reserving a folder sidebar", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes");
   await expect(page.locator(".paste-list")).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Paste folders" })).toBeVisible();
   const geometry = await page.evaluate(() => {
     const right = (selector: string) =>
       document.querySelector(selector)!.getBoundingClientRect().right;
-    const counts = [...document.querySelectorAll(".folder-nav-row>a small")]
-      .map(element => element.getBoundingClientRect().right);
-    const longName = [...document.querySelectorAll<HTMLElement>(".folder-nav-row>a span")]
-      .find(element => element.textContent === "sample-folder")!;
     return {
       rights: [
         right(".paste-workspace-main"),
@@ -44,41 +43,15 @@ test("workspace boundaries align and the folder sidebar collapses persistently",
         right(".paste-bulk-actions"),
         right(".paste-list")
       ],
-      counts,
-      longNameFits: longName.scrollWidth <= longName.clientWidth,
-      contentWidth: document.querySelector(".paste-workspace-main")!.getBoundingClientRect().width
+      workspaceLeft: document.querySelector(".paste-workspace")!.getBoundingClientRect().left,
+      mainLeft: document.querySelector(".paste-workspace-main")!.getBoundingClientRect().left
     };
   });
   expect(Math.max(...geometry.rights) - Math.min(...geometry.rights)).toBeLessThan(1);
-  expect(Math.max(...geometry.counts) - Math.min(...geometry.counts)).toBeLessThan(1);
-  expect(geometry.longNameFits).toBe(true);
-
-  await page.getByRole("button", { name: "Collapse folders" }).click();
-  await expect(page.locator(".paste-workspace")).toHaveClass(/folder-sidebar-collapsed/);
-  await expect(page.getByRole("button", { name: "Expand folders" })).toBeVisible();
-  const collapsedWidth = await page.locator(".paste-workspace-main").evaluate(
-    element => element.getBoundingClientRect().width
-  );
-  expect(collapsedWidth).toBeGreaterThan(geometry.contentWidth);
-  expect(await page.evaluate(() => localStorage.getItem("racebin.folderSidebarCollapsed"))).toBe("true");
-  await page.addInitScript(() => {
-    const observed: string[] = [];
-    Object.assign(window, { __workspaceInitialClasses: observed });
-    new MutationObserver(() => {
-      if (observed.length) return;
-      const workspace = document.querySelector(".paste-workspace");
-      if (workspace) observed.push(workspace.className);
-    }).observe(document, { childList: true, subtree: true });
-  });
-  await page.reload();
-  await expect(page.getByRole("button", { name: "Expand folders" })).toBeVisible();
-  expect(await page.evaluate(() =>
-    (window as Window & { __workspaceInitialClasses: string[] }).__workspaceInitialClasses[0]
-  )).toContain("folder-sidebar-collapsed");
+  expect(geometry.mainLeft).toBe(geometry.workspaceLeft);
 });
 
-test("cold workspace navigation keeps main content in its final grid area", async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("racebin.folderSidebarCollapsed", "true"));
+test("cold workspace navigation keeps main content in its final position", async ({ page }) => {
   await mockApi(page, true, { delay: 200 });
   await page.goto("/pastes/new");
   await page.getByRole("link", { name: "My pastes" }).click();
@@ -91,11 +64,11 @@ test("cold workspace navigation keeps main content in its final grid area", asyn
     return {
       left: mainBounds.left,
       width: mainBounds.width,
-      followsSidebarColumn: mainBounds.left > bounds.left,
+      sharesWorkspaceEdge: mainBounds.left === bounds.left,
       occupiesMainColumn: mainBounds.width > bounds.width / 2
     };
   });
-  expect(loadingGeometry.followsSidebarColumn).toBe(true);
+  expect(loadingGeometry.sharesWorkspaceEdge).toBe(true);
   expect(loadingGeometry.occupiesMainColumn).toBe(true);
 
   await expect(page.locator(".paste-list")).toBeVisible();
@@ -107,68 +80,51 @@ test("cold workspace navigation keeps main content in its final grid area", asyn
   expect(loadedGeometry.width).toBeCloseTo(loadingGeometry.width, 5);
 });
 
-test("folder sidebar remains fixed at its initial position while scrolling", async ({ page }) => {
-  const items = Array.from({ length: 40 }, (_, index) => ({
-    ...paste,
-    id: `scroll-paste-${index}`,
-    title: `Scroll paste ${index + 1}`
-  }));
-  await mockApi(page, true, { items });
-  await page.goto("/pastes");
-  const sidebar = page.getByRole("complementary", { name: "Paste folders" });
-  const initialTop = await sidebar.evaluate(element => element.getBoundingClientRect().top);
-  await page.evaluate(() => window.scrollTo(0, 300));
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(300);
-  const scrolledTop = await sidebar.evaluate(element => element.getBoundingClientRect().top);
-  expect(scrolledTop).toBe(initialTop);
-});
-
-test("folders can be created, renamed, and deleted from the workspace menu", async ({ page }) => {
+test("folders can be searched, created, renamed, and deleted from the picker", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes?folder_id=5");
 
-  page.once("dialog", dialog => dialog.accept("Notes"));
   const createRequest = page.waitForRequest(request =>
     request.url().endsWith("/api/v1/folders") && request.method() === "POST");
-  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("button", { name: /^Scripts/ }).click();
+  const picker = page.getByRole("dialog", { name: "Browse folders" });
+  await picker.getByPlaceholder("Filter folders").fill("sample");
+  await expect(picker.getByRole("button", { name: /^sample-folder 18$/ })).toBeVisible();
+  await expect(picker.getByRole("button", { name: /^Scripts 1$/ })).toBeHidden();
+  await picker.getByRole("button", { name: "New folder" }).click();
+  await page.getByRole("dialog").getByLabel("Folder name").fill("Notes");
+  await page.getByRole("button", { name: "Create folder" }).click();
   expect((await createRequest).postDataJSON()).toEqual({ name: "Notes" });
   await expect(page).toHaveURL(/folder_id=6/);
 
   await page.goto("/pastes?folder_id=5");
-  page.once("dialog", dialog => dialog.accept("Utilities"));
   const renameRequest = page.waitForRequest(request =>
     request.url().endsWith("/api/v1/folders/5") && request.method() === "PATCH");
+  await page.getByRole("button", { name: /^Scripts/ }).click();
   const manage = page.getByRole("button", { name: "Manage Scripts" });
   await manage.click();
-  await expect(page.getByRole("menu")).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: "Rename" })).toBeFocused();
-  await page.keyboard.press("ArrowDown");
-  await expect(page.getByRole("menuitem", { name: "Delete" })).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("menu")).toHaveCount(0);
-  await expect(manage).toBeFocused();
-  await manage.click();
-  await page.getByRole("menuitem", { name: "Rename" }).click();
+  await page.getByRole("button", { name: "Rename" }).click();
+  await page.getByRole("dialog").getByLabel("Folder name").fill("Utilities");
+  await page.getByRole("button", { name: "Rename", exact: true }).click();
   expect((await renameRequest).postDataJSON()).toEqual({ name: "Utilities" });
-  await expect(page.getByRole("link", { name: /Utilities/ })).toBeVisible();
+  await page.getByRole("button", { name: /^Utilities/ }).click();
+  await expect(page.getByRole("dialog", { name: "Browse folders" })
+    .getByRole("button", { name: /^Utilities 1$/ })).toBeVisible();
 
   const deleteRequest = page.waitForRequest(request =>
     request.url().endsWith("/api/v1/folders/5") && request.method() === "DELETE");
   await page.getByRole("button", { name: "Manage Utilities" }).click();
-  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await page.getByRole("dialog", { name: "Browse folders" })
+    .getByRole("button", { name: "Delete", exact: true }).click();
   await page.getByRole("button", { name: "Delete folder" }).click();
   await deleteRequest;
 });
 
 test("mobile folder and filter controls do not overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
-  await page.addInitScript(() =>
-    localStorage.setItem("racebin.folderSidebarCollapsed", "true")
-  );
   await mockApi(page, true);
   await page.goto("/pastes");
-  await expect(page.locator(".folder-mobile-select select")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Expand folders" })).toBeHidden();
+  await expect(page.getByRole("button", { name: /^My pastes/ })).toBeVisible();
   const layout = await page.evaluate(() => ({
     documentWidth: document.documentElement.scrollWidth,
     viewportWidth: document.documentElement.clientWidth,

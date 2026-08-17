@@ -149,13 +149,15 @@ test("paste checkboxes support range selection and indeterminate select-all", as
   await expect(selectAll).toBeChecked();
   await expect(page.getByRole("button", { name: "Move 6" })).toBeEnabled();
   await selectAll.uncheck();
-  await expect(page.locator(".move-selected-button")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Move", exact: true })).toBeDisabled();
 
   await first.check();
   await fourth.click({ modifiers: ["Shift"] });
   const moveRequest = page.waitForRequest(request =>
     request.url().endsWith("/api/v1/pastes") && request.method() === "PATCH");
   await page.getByRole("button", { name: "Move 4" }).click();
+  await page.getByRole("dialog", { name: "Move selected pastes" })
+    .getByRole("button", { name: /Uncategorized/ }).click();
   expect((await moveRequest).postDataJSON()).toEqual({
     ids: ["range-paste-0", "range-paste-1", "range-paste-2", "range-paste-3"],
     folder_id: null
@@ -177,10 +179,10 @@ test("bulk controls retain their geometry as selection changes", async ({ page }
       return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width };
     };
     return {
+      browse: bounds(".paste-view-controls .folder-picker-trigger"),
       view: bounds(".paste-view-switch"),
       count: bounds(".result-count"),
-      destination: bounds("select"),
-      move: bounds(".move-selected-button"),
+      move: bounds(".paste-selection-controls .folder-picker-trigger"),
       selectAll: bounds(".select-all-pastes")
     };
   });
@@ -191,8 +193,9 @@ test("bulk controls retain their geometry as selection changes", async ({ page }
   const all = await geometry();
   expect(one).toEqual(empty);
   expect(all).toEqual(empty);
-  expect(empty.view.top).toBe(empty.destination.top);
-  expect(empty.view.bottom).toBe(empty.destination.bottom);
+  expect(empty.browse.top).toBe(empty.view.top);
+  expect(empty.view.top).toBe(empty.move.top);
+  expect(empty.view.bottom).toBe(empty.move.bottom);
   expect(empty.count.top).toBe(empty.selectAll.top);
   expect(empty.selectAll.top).toBeGreaterThanOrEqual(empty.move.bottom);
 });
@@ -267,7 +270,7 @@ test("selection and its range anchor reset with list navigation", async ({ page 
   await page.getByRole("checkbox", { name: "Select Reset paste 1" }).check();
   await page.getByRole("button", { name: "Sort: Newest" }).click();
   await page.getByRole("menuitemradio", { name: "Oldest" }).click();
-  await expect(page.locator(".move-selected-button")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Move", exact: true })).toBeDisabled();
   await page.getByRole("checkbox", { name: "Select Reset paste 3" }).click({ modifiers: ["Shift"] });
   await expect(page.getByRole("button", { name: "Move 1" })).toBeEnabled();
 });
@@ -291,7 +294,7 @@ test("query navigation retains list pages until their replacement is ready", asy
   await page.getByLabel("Search").fill("filtered");
   await page.getByRole("button", { name: "Search" }).click();
   await page.waitForTimeout(50);
-  await expect(page.getByRole("complementary", { name: "Paste folders" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^My pastes/ })).toBeVisible();
   await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
   expect(await page.evaluate(() =>
     (window as Window & { __retainedList: Element }).__retainedList
@@ -326,9 +329,13 @@ test("the newest query response wins when list requests overlap", async ({ page 
     }
   });
   await page.goto("/pastes");
-  await page.getByRole("link", { name: /Scripts/ }).click();
+  await page.getByRole("button", { name: /^My pastes/ }).click();
+  await page.getByRole("dialog", { name: "Browse folders" })
+    .getByRole("button", { name: /^Scripts 1$/ }).click();
   await page.waitForTimeout(20);
-  await page.getByRole("link", { name: /Uncategorized/ }).click();
+  await page.getByRole("button", { name: /^Scripts/ }).click();
+  await page.getByRole("dialog", { name: "Browse folders" })
+    .getByRole("button", { name: /^Uncategorized 0$/ }).click();
   await expect(page.getByRole("link", { name: "Fast result" })).toBeVisible();
   await page.waitForTimeout(300);
   await expect(page.getByRole("link", { name: "Fast result" })).toBeVisible();
@@ -351,7 +358,9 @@ test("list geometry remains stable when the document starts or stops overflowing
     const bounds = element.getBoundingClientRect();
     return { left: bounds.left, right: bounds.right };
   });
-  await page.getByRole("link", { name: /Scripts/ }).click();
+  await page.getByRole("button", { name: /^My pastes/ }).click();
+  await page.getByRole("dialog", { name: "Browse folders" })
+    .getByRole("button", { name: /^Scripts 1$/ }).click();
   await expect(page.getByRole("link", { name: "Overflow paste 39" })).toBeVisible();
   const after = await page.locator(".paste-workspace-main").evaluate(element => {
     const bounds = element.getBoundingClientRect();

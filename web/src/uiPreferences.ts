@@ -1,6 +1,5 @@
 import { get, writable } from "svelte/store";
 
-const folderSidebarStorageKey = "racebin.folderSidebarCollapsed";
 const pasteListViewStorageKey = "racebin.pasteListView";
 const colorThemeStorageKey = "racebin.colorTheme";
 const systemTheme = typeof matchMedia === "function"
@@ -11,13 +10,11 @@ export type PasteListView = "normal" | "compact";
 export type ColorTheme = "auto" | "dark" | "light";
 
 export type UiPreferences = {
-  folderSidebarCollapsed: boolean;
   pasteListView: PasteListView;
   colorTheme: ColorTheme;
 };
 
 const defaults: UiPreferences = {
-  folderSidebarCollapsed: false,
   pasteListView: "normal",
   colorTheme: "auto"
 };
@@ -25,18 +22,16 @@ const defaults: UiPreferences = {
 export const uiPreferences = writable<UiPreferences>(defaults);
 
 export function initializeUiPreferences(storage: Storage = localStorage): void {
-  let folderSidebarCollapsed = defaults.folderSidebarCollapsed;
   let pasteListView = defaults.pasteListView;
   let colorTheme = defaults.colorTheme;
   try {
-    folderSidebarCollapsed = storage.getItem(folderSidebarStorageKey) === "true";
     if (storage.getItem(pasteListViewStorageKey) === "compact") pasteListView = "compact";
     const storedTheme = storage.getItem(colorThemeStorageKey);
     if (storedTheme === "dark" || storedTheme === "light") colorTheme = storedTheme;
   } catch {
     // Storage can be unavailable in privacy-restricted browsing contexts.
   }
-  uiPreferences.set({ folderSidebarCollapsed, pasteListView, colorTheme });
+  uiPreferences.set({ pasteListView, colorTheme });
   applyColorTheme(colorTheme);
 }
 
@@ -68,21 +63,6 @@ systemTheme?.addEventListener("change", () => {
   const { colorTheme } = get(uiPreferences);
   if (colorTheme === "auto") applyColorTheme(colorTheme);
 });
-
-export function setFolderSidebarCollapsed(
-  folderSidebarCollapsed: boolean,
-  storage: Storage = localStorage
-): void {
-  uiPreferences.update(preferences => ({
-    ...preferences,
-    folderSidebarCollapsed
-  }));
-  try {
-    storage.setItem(folderSidebarStorageKey, String(folderSidebarCollapsed));
-  } catch {
-    // The in-memory preference remains usable when persistence is unavailable.
-  }
-}
 
 export function setPasteListView(
   pasteListView: PasteListView,
