@@ -647,8 +647,8 @@ pub(super) async fn backend_contract(repo: Repository) {
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO invitations(token_hash,created_by_user_id,expires_at,redeemed,revoked)
-         VALUES('expired-invitation',1,$1,0,0)",
+        "INSERT INTO invitations(token_hash,created_by_user_id,created_at,expires_at,redeemed,revoked)
+         VALUES('expired-invitation',1,1,$1,0,0)",
     )
     .bind(crate::time::unix_timestamp() - 3_000_000)
     .execute(repo.pool())

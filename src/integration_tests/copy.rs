@@ -170,8 +170,8 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     .unwrap();
     assert!(next_session > 60);
     let next_invite: i64 = sqlx::query_scalar(
-        "INSERT INTO invitations(token_hash,created_by_user_id,expires_at,redeemed,revoked)
-         VALUES('after-copy-invitation',42,9999999999,0,0) RETURNING id",
+        "INSERT INTO invitations(token_hash,created_by_user_id,created_at,expires_at,redeemed,revoked)
+         VALUES('after-copy-invitation',42,1,9999999999,0,0) RETURNING id",
     )
     .fetch_one(destination.pool())
     .await
