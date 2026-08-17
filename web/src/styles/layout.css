@@ -1,5 +1,9 @@
 /* Application components. Shared foundations live in styles/. */
 
+.segmented-control button:hover:not(:disabled, .active, [aria-pressed="true"]) {
+  background: var(--color-surface-subtle);
+}
+
 .site-header {
   height: var(--header-height);
   border-bottom: 1px solid var(--color-line);
@@ -355,6 +359,7 @@
   text-decoration: none;
 }
 .section-tabs a[aria-current="page"] { border-color: var(--color-accent); color: var(--color-text); }
+.section-tabs a:hover:not([aria-current="page"]) { color: var(--color-text); }
 .section-tabs a span { font-variant-numeric: tabular-nums; }
 .invitation-management { gap: var(--space-4); }
 .invitation-filters input { width: 100%; height: var(--control-height); }
@@ -443,10 +448,6 @@
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
-}
-.invitation-actions .icon-button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 .help-layout {
   display: grid;

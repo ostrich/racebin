@@ -320,7 +320,7 @@
         <div class="field content-field"><span>Content</span>
           <div class="content-editor content-editor-rich" style={`height:${editorHeight}px`}
             use:trackEditorResize>
-            <div class="rich-text-mode" role="group" aria-label="Rich-text editing mode">
+            <div class="rich-text-mode segmented-control" role="group" aria-label="Rich-text editing mode">
               <button type="button" class:active={richMode === "visual"} onclick={() => { void showVisualEditor(); }}>Visual</button>
               <button type="button" class:active={richMode === "markdown"} onclick={() => { richMode = "markdown"; }}>Markdown</button>
             </div>

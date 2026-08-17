@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 import { mockApi } from "./support/mockApi";
 
 test.beforeEach(async ({ page }) => {
@@ -340,6 +340,54 @@ test("disabled form controls and action buttons share one visual state", async (
   const move = await appearance('.folder-picker-trigger:has-text("Move")');
   expect(language).toEqual(move);
   expect(language).toMatchObject({ cursor: "not-allowed", opacity: "1" });
+});
+
+test("interactive control families use consistent hover states", async ({ page }) => {
+  const appearance = (locator: Locator) => locator.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, border: style.borderColor, color: style.color };
+  });
+
+  await page.goto("/pastes");
+  const ordinary = page.getByRole("button", { name: "Filters" });
+  const selectedSegment = page.getByRole("button", { name: "Normal", exact: true });
+  const segment = page.getByRole("button", { name: "Compact", exact: true });
+  const ordinaryBefore = await appearance(ordinary);
+  await ordinary.hover();
+  const ordinaryHover = await appearance(ordinary);
+  const selectedSegmentBefore = await appearance(selectedSegment);
+  await selectedSegment.hover();
+  expect(await appearance(selectedSegment)).toEqual(selectedSegmentBefore);
+  const segmentBefore = await appearance(segment);
+  await segment.hover();
+  const segmentHover = await appearance(segment);
+
+  await page.goto("/pastes/new");
+  const select = page.getByRole("combobox", { name: "Type", exact: true });
+  const selectBefore = await appearance(select);
+  await select.hover();
+  const selectHover = await appearance(select);
+  await select.selectOption("markdown");
+  const toolbar = page.getByRole("button", { name: "Bold" });
+  const toolbarBefore = await appearance(toolbar);
+  await toolbar.hover();
+  const toolbarHover = await appearance(toolbar);
+
+  await page.goto("/admin/invitations");
+  const tab = page.getByRole("link", { name: "History" });
+  const tabBefore = await appearance(tab);
+  await tab.hover();
+  const tabHover = await appearance(tab);
+
+  expect(ordinaryHover.background).not.toBe(ordinaryBefore.background);
+  expect(toolbarHover.background).toBe(ordinaryHover.background);
+  expect(ordinaryHover.border).toBe(ordinaryBefore.border);
+  expect(toolbarHover.border).toBe(toolbarBefore.border);
+  expect(segmentHover.background).toBe(ordinaryHover.background);
+  expect(segmentHover.border).toBe(segmentBefore.border);
+  expect(selectHover.background).toBe(selectBefore.background);
+  expect(selectHover.border).not.toBe(selectBefore.border);
+  expect(tabHover.color).not.toBe(tabBefore.color);
 });
 
 test("paste editor uses the page width without stretching metadata controls", async ({ page }) => {

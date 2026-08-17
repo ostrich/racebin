@@ -102,7 +102,7 @@
                 </label>
               {/if}
             </div>
-            <div class="paste-view-options markdown-view-options" role="group" aria-label="Paste representation">
+            <div class="paste-view-options markdown-view-options segmented-control" role="group" aria-label="Paste representation">
               <button type="button" class:active={markdownView === "rendered"} onclick={() => { markdownView = "rendered"; }}>Rendered</button>
               <button type="button" class:active={markdownView === "markdown"} onclick={() => { markdownView = "markdown"; }}>Markdown</button>
             </div>

@@ -200,7 +200,7 @@
             label={selected.size ? `Move ${selected.size}` : "Move"} disabled={!selected.size}
             onselect={(folderId) => { void moveSelected(folderId); }}/>
         </div>
-        <div class="paste-view-switch" role="group" aria-label="Paste view">
+        <div class="paste-view-switch segmented-control" role="group" aria-label="Paste view">
           <button type="button" aria-pressed={$uiPreferences.pasteListView === "normal"}
             onclick={() => setPasteListView("normal")}>Normal</button>
           <button type="button" aria-pressed={$uiPreferences.pasteListView === "compact"}
