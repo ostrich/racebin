@@ -320,6 +320,28 @@ test("form controls and composite editors share one complete focus ring", async 
   expect(darkRing.color).not.toBe(inputRing.color);
 });
 
+test("disabled form controls and action buttons share one visual state", async ({ page }) => {
+  const appearance = (selector: string) => page.locator(selector).evaluate(element => {
+    const style = getComputedStyle(element);
+    return {
+      background: style.backgroundColor,
+      border: style.borderColor,
+      color: style.color,
+      cursor: style.cursor,
+      opacity: style.opacity,
+    };
+  });
+
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  const language = await appearance("#language-input");
+
+  await page.goto("/pastes");
+  const move = await appearance('.folder-picker-trigger:has-text("Move")');
+  expect(language).toEqual(move);
+  expect(language).toMatchObject({ cursor: "not-allowed", opacity: "1" });
+});
+
 test("paste editor uses the page width without stretching metadata controls", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/pastes/new");

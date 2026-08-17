@@ -180,11 +180,13 @@
   background: var(--color-accent-hover);
 }
 .button:disabled,
-.icon-button:disabled {
+.icon-button:disabled,
+:where(input:not([type="file"], [type="checkbox"], [type="radio"]), select, textarea):disabled {
   border-color: var(--color-control-border);
   background: var(--color-surface-subtle);
   color: var(--color-muted);
   cursor: not-allowed;
+  opacity: 1;
 }
 .button.danger,
 .icon-button.danger {
