@@ -80,7 +80,7 @@
         {#if mode === "browse"}
           <button class:current={currentFolderId === null && !unfiled} class="folder-picker-choice"
             type="button" onclick={() => choose(null)}>
-            <span>All pastes</span><small>{overview.total_count}</small>
+            <span>My pastes</span><small>{overview.total_count}</small>
           </button>
         {/if}
         <button class:current={mode === "browse" && unfiled} class="folder-picker-choice"

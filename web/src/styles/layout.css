@@ -1266,13 +1266,6 @@
   container-type: inline-size;
   min-width: 0;
 }
-.paste-bulk-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  margin: 10px 0;
-}
 .paste-main:has(> input[type="checkbox"]) {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

@@ -179,10 +179,10 @@ test("bulk controls retain their geometry as selection changes", async ({ page }
       return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width };
     };
     return {
-      browse: bounds(".paste-view-controls .folder-picker-trigger"),
+      browse: bounds(".paste-folder-controls .folder-picker:first-child .folder-picker-trigger"),
       view: bounds(".paste-view-switch"),
       count: bounds(".result-count"),
-      move: bounds(".paste-selection-controls .folder-picker-trigger"),
+      move: bounds(".paste-folder-controls .folder-picker:last-child .folder-picker-trigger"),
       selectAll: bounds(".select-all-pastes")
     };
   });
@@ -193,10 +193,12 @@ test("bulk controls retain their geometry as selection changes", async ({ page }
   const all = await geometry();
   expect(one).toEqual(empty);
   expect(all).toEqual(empty);
-  expect(empty.browse.top).toBe(empty.view.top);
+  expect(empty.browse.top).toBe(empty.move.top);
+  expect(empty.browse.bottom).toBe(empty.move.bottom);
   expect(empty.view.top).toBe(empty.move.top);
   expect(empty.view.bottom).toBe(empty.move.bottom);
-  expect(empty.count.top).toBe(empty.selectAll.top);
+  expect((empty.count.top + empty.count.bottom) / 2)
+    .toBeCloseTo((empty.selectAll.top + empty.selectAll.bottom) / 2, 5);
   expect(empty.selectAll.top).toBeGreaterThanOrEqual(empty.move.bottom);
 });
 

@@ -40,7 +40,7 @@ test("workspace boundaries align without reserving a folder sidebar", async ({ p
         right(".page-heading"),
         right(".paste-filter-form"),
         right(".paste-filter-toolbar"),
-        right(".paste-bulk-actions"),
+        right(".paste-selection-bar"),
         right(".paste-list")
       ],
       workspaceLeft: document.querySelector(".paste-workspace")!.getBoundingClientRect().left,
@@ -92,6 +92,12 @@ test("folders can be searched, created, renamed, and deleted from the picker", a
   await expect(picker.getByRole("button", { name: /^sample-folder 18$/ })).toBeVisible();
   await expect(picker.getByRole("button", { name: /^Scripts 1$/ })).toBeHidden();
   await picker.getByRole("button", { name: "New folder" }).click();
+  const dialogGeometry = await page.getByRole("dialog").evaluate(dialog => {
+    const input = dialog.querySelector("input")!.getBoundingClientRect();
+    const actions = dialog.querySelector(".actions")!.getBoundingClientRect();
+    return { inputBottom: input.bottom, actionsTop: actions.top };
+  });
+  expect(dialogGeometry.actionsTop - dialogGeometry.inputBottom).toBeGreaterThanOrEqual(8);
   await page.getByRole("dialog").getByLabel("Folder name").fill("Notes");
   await page.getByRole("button", { name: "Create folder" }).click();
   expect((await createRequest).postDataJSON()).toEqual({ name: "Notes" });

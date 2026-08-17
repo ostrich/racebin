@@ -192,31 +192,25 @@
   {#if page}
     {#if mine && folders}
       <div class="paste-selection-bar">
-        <div class="paste-view-controls">
-          <div class="paste-library-controls">
-            <FolderPicker overview={folders} mode="browse" label={currentFolderName}
-              {currentFolderId} {unfiled} onselect={browseFolder}
-              oncreate={createFolder} onrename={renameFolder} ondelete={deleteFolder}/>
-            <div class="paste-view-switch" role="group" aria-label="Paste view">
-              <button type="button" aria-pressed={$uiPreferences.pasteListView === "normal"}
-                onclick={() => setPasteListView("normal")}>Normal</button>
-              <button type="button" aria-pressed={$uiPreferences.pasteListView === "compact"}
-                onclick={() => setPasteListView("compact")}>Compact</button>
-            </div>
-          </div>
-          <span class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</span>
+        <div class="paste-folder-controls">
+          <FolderPicker overview={folders} mode="browse" label={currentFolderName}
+            {currentFolderId} {unfiled} onselect={browseFolder}
+            oncreate={createFolder} onrename={renameFolder} ondelete={deleteFolder}/>
+          <FolderPicker overview={folders} mode="move"
+            label={selected.size ? `Move ${selected.size}` : "Move"} disabled={!selected.size}
+            onselect={(folderId) => { void moveSelected(folderId); }}/>
         </div>
-        <div class="paste-selection-controls">
-          <div class="paste-bulk-actions">
-            <FolderPicker overview={folders} mode="move"
-              label={selected.size ? `Move ${selected.size}` : "Move"} disabled={!selected.size}
-              onselect={(folderId) => { void moveSelected(folderId); }}/>
-          </div>
-          <label class="select-all-pastes"><input bind:this={selectAllCheckbox} type="checkbox"
-            disabled={!page.items.length} checked={page.items.length > 0 && selected.size === page.items.length}
-            onchange={(event) => { selected = event.currentTarget.checked
-              ? new Set(page?.items.map(item => item.id)) : new Set(); }}/> Select all on page</label>
+        <div class="paste-view-switch" role="group" aria-label="Paste view">
+          <button type="button" aria-pressed={$uiPreferences.pasteListView === "normal"}
+            onclick={() => setPasteListView("normal")}>Normal</button>
+          <button type="button" aria-pressed={$uiPreferences.pasteListView === "compact"}
+            onclick={() => setPasteListView("compact")}>Compact</button>
         </div>
+        <label class="select-all-pastes"><input bind:this={selectAllCheckbox} type="checkbox"
+          disabled={!page.items.length} checked={page.items.length > 0 && selected.size === page.items.length}
+          onchange={(event) => { selected = event.currentTarget.checked
+            ? new Set(page?.items.map(item => item.id)) : new Set(); }}/> Select all on page</label>
+        <span class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</span>
       </div>
     {:else}
       <p class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</p>

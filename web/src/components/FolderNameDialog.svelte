@@ -31,7 +31,7 @@
 
 <dialog bind:this={dialog} class="site-dialog" aria-labelledby="folder-name-dialog-title"
   oncancel={(event) => { event.preventDefault(); finish(null); }}>
-  <form onsubmit={(event) => {
+  <form class="dialog-form" onsubmit={(event) => {
     event.preventDefault();
     const name = value.trim();
     if (name) finish(name);

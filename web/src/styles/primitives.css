@@ -130,7 +130,18 @@
 .site-dialog::backdrop { background: var(--color-overlay); }
 .site-dialog h2 { margin-top: 0; }
 .site-dialog .dialog-message { margin-bottom: var(--space-4); color: var(--color-muted); }
-.site-dialog > .actions { justify-content: flex-end; margin-top: var(--space-5); }
+.dialog-form {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.dialog-form > * { margin-block: 0; }
+.dialog-form .field > :where(input, select, textarea) { width: 100%; min-width: 0; }
+.site-dialog > .actions,
+.site-dialog > .dialog-form > .actions {
+  justify-content: flex-end;
+  margin-top: var(--space-1);
+}
 .site-dialog pre {
   max-height: 45vh;
   padding: var(--space-4);
@@ -164,9 +175,16 @@
   background: var(--color-accent);
   color: var(--color-on-accent);
 }
-.button.primary:hover,
-.icon-button.primary:hover {
+.button.primary:hover:not(:disabled),
+.icon-button.primary:hover:not(:disabled) {
   background: var(--color-accent-hover);
+}
+.button:disabled,
+.icon-button:disabled {
+  border-color: var(--color-control-border);
+  background: var(--color-surface-subtle);
+  color: var(--color-muted);
+  cursor: not-allowed;
 }
 .button.danger,
 .icon-button.danger {
