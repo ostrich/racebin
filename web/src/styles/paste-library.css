@@ -207,9 +207,10 @@
 .folder-picker-list { min-height: 0; overflow-y: auto; }
 .folder-picker-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 34px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
 }
+.folder-picker-row.manageable { grid-template-columns: minmax(0, 1fr) 34px; }
 .folder-picker-choice {
   display: flex;
   align-items: center;

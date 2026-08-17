@@ -88,7 +88,7 @@
           <span>Uncategorized</span><small>{overview.unfiled_count}</small>
         </button>
         {#each filteredFolders as folder (folder.id)}
-          <div class="folder-picker-row">
+          <div class="folder-picker-row" class:manageable={mode === "browse"}>
             <button class:current={mode === "browse" && currentFolderId === folder.id}
               class="folder-picker-choice" type="button" onclick={() => choose(folder.id)}>
               <span>{folder.name}</span><small>{folder.paste_count}</small>

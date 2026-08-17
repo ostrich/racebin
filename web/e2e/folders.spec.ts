@@ -27,6 +27,19 @@ test("folders filter the workspace and carry into new pastes", async ({ page }) 
   await expect(page.getByLabel("Folder")).toHaveValue("5");
 });
 
+test("move destinations align folder counts without browse-action space", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes");
+  await page.getByRole("checkbox", { name: /Select JavaScript example/ }).check();
+  await page.getByRole("button", { name: "Move 1" }).click();
+
+  const countEdges = await page.getByRole("dialog", { name: "Move selected pastes" })
+    .locator(".folder-picker-choice small")
+    .evaluateAll(counts => counts.map(count => count.getBoundingClientRect().right));
+  expect(countEdges.length).toBeGreaterThan(1);
+  expect(Math.max(...countEdges) - Math.min(...countEdges)).toBeLessThan(1);
+});
+
 test("workspace boundaries align without reserving a folder sidebar", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes");
