@@ -125,20 +125,48 @@ test("page headings use consistent eyebrow-to-title spacing", async ({ page }) =
   expect(await headingGap()).toBeCloseTo(standardGap, 1);
 });
 
-test("page headings use one shared boundary before their content", async ({ page }) => {
-  const boundaryGap = async (headingSelector: string, contentSelector: string) => {
-    const heading = await page.locator(headingSelector).boundingBox();
-    const content = await page.locator(contentSelector).boundingBox();
-    if (!heading || !content) throw new Error("Expected visible heading and page content");
-    return content.y - heading.y - heading.height;
-  };
+test("primary pages share one heading-to-content boundary", async ({ page }) => {
+  const routes = [
+    "/pastes",
+    "/explore",
+    "/pastes/new",
+    "/pastes/sample-paste",
+    "/account",
+    "/help",
+    "/admin",
+    "/admin/pastes",
+    "/admin/users",
+    "/admin/users/1",
+    "/admin/invitations",
+    "/admin/api-keys",
+    "/admin/settings",
+    "/admin/audit",
+  ];
+
+  let headingTop: number | undefined;
+  for (const route of routes) {
+    await page.goto(route);
+    const heading = page.locator(".page-heading");
+    await expect(heading, `${route} should render its page heading`).toBeVisible();
+    const geometry = await heading.evaluate(element => {
+      const content = element.nextElementSibling;
+      if (!(content instanceof HTMLElement)) throw new Error("Page heading has no content sibling");
+      const headingBox = element.getBoundingClientRect();
+      const contentBox = content.getBoundingClientRect();
+      return {
+        parentClass: element.parentElement?.className,
+        top: headingBox.top,
+        gap: contentBox.top - headingBox.bottom,
+      };
+    });
+    expect(String(geometry.parentClass), `${route} should use the shared page layout`).toContain("page-layout");
+    headingTop ??= geometry.top;
+    expect(geometry.top, `${route} heading top`).toBeCloseTo(headingTop, 1);
+    expect(geometry.gap, `${route} heading boundary`).toBeCloseTo(20, 1);
+  }
 
   await page.goto("/pastes");
-  const workspaceGap = await boundaryGap(".paste-list-intro > .page-heading", ".paste-filter-form");
   await expect(page.locator(".paste-filter-form")).toHaveCSS("border-top-style", "none");
-
-  await page.goto("/admin/pastes");
-  expect(await boundaryGap(".page-stack > .page-heading", ".section-layout")).toBeCloseTo(workspaceGap, 1);
 });
 
 test("filter expansion preserves the search toolbar boundary", async ({

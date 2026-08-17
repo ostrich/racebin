@@ -169,7 +169,7 @@
       oncreate={createFolder} onrename={renameFolder} ondelete={deleteFolder}/>
   {/if}
   <div class="paste-workspace-main">
-  <div class="stack page-stack paste-list-intro">
+  <div class="page-layout paste-list-intro">
   <div class="page-heading">
     <div><p class="eyebrow">{mine ? "Workspace" : "Public"}</p><h1>{mine ? currentFolderName : "Explore"}</h1></div>
     {#if mine}<Link class="button primary" href={`/pastes/new${currentFolderId ? `?folder_id=${currentFolderId}` : ""}`}><Icon name="plus"/> New paste</Link>{/if}

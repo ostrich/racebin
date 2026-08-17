@@ -46,7 +46,7 @@
   }
 </script>
 
-<section class="stack page-stack">
+<section class="page-layout">
   <div class="page-heading">
     <div><p class="eyebrow">Administration</p><h1>Invitations</h1></div>
     {#if $appState.config.invitations_enabled}<button class="button primary" onclick={create}><Icon name="plus"/> Create invitation</button>{/if}

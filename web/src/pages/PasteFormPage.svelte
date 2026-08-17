@@ -311,7 +311,7 @@
 {:else if error}
   <section class="empty"><h1>Unable to edit this paste</h1><p>{error}</p><Link class="button" href="/pastes">Return to pastes</Link></section>
 {:else}
-  <section class="editor">
+  <section class="editor page-layout">
     <div class="page-heading"><div><p class="eyebrow">{paste ? "Edit" : "Create"}</p><h1>{paste ? pasteDisplayTitle(paste) : "New paste"}</h1></div></div>
     <form onsubmit={(event) => { event.preventDefault(); void submit(); }}>
       <label class="field title-field"><span>Title</span><input bind:value={title} maxlength={$appState.config.max_title_characters} placeholder="Optional title"/></label>

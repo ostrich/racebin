@@ -22,7 +22,7 @@
   });
 </script>
 
-<section class="stack page-stack">
+<section class="page-layout">
   <div class="page-heading">
     <div><p class="eyebrow">Owner</p><h1>Audit log</h1></div>
   </div>

@@ -76,7 +76,7 @@
 </script>
 
 {#if paste}
-  <article class="paste-view">
+  <article class="paste-view page-layout">
       <div class="page-heading">
         <div>
           <p class="eyebrow">{paste.visibility} · {pasteFormatLabel(paste)}</p>

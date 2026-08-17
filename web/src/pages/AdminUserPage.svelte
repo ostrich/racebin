@@ -86,7 +86,7 @@
 
 <PasswordConfirmDialog bind:this={passwordDialog}/>
 
-<section class="stack page-stack">
+<section class="page-layout">
   {#if error}<section class="empty"><h1>Unable to load user</h1><p>{error}</p><Link class="button" href="/admin/users">Back to users</Link></section>
   {:else if !user}<p class="muted">Loading user…</p>
   {:else}

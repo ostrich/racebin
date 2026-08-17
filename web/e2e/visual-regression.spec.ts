@@ -94,3 +94,9 @@ test("dark account page", { tag: "@visual" }, async ({ page }) => {
   await page.goto("/account");
   await expect(page).toHaveScreenshot("account-dark-desktop.png", screenshot);
 });
+
+test("help page", { tag: "@visual" }, async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/help");
+  await expect(page).toHaveScreenshot("help-desktop.png", screenshot);
+});

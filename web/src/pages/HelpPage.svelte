@@ -37,7 +37,7 @@
   }
 </script>
 
-<section class="help-page">
+<section class="help-page page-layout">
   <div class="page-heading">
     <div><p class="eyebrow">Help</p><h1>Using Racebin</h1></div>
     <a class="button" href={`${apiBase}/openapi.json`}>OpenAPI JSON</a>

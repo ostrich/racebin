@@ -8,8 +8,12 @@
 .stack > .button {
   justify-self: start;
 }
-.page-stack {
+.page-layout {
+  display: grid;
   gap: var(--space-5);
+}
+.page-layout > * {
+  margin-block: 0;
 }
 .sticky-sidebar {
   position: sticky;

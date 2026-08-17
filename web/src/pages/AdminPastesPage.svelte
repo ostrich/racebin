@@ -113,7 +113,7 @@
   }
 </script>
 
-<section class="stack page-stack" aria-busy={loading}>
+<section class="page-layout" aria-busy={loading}>
   <div class="page-heading"><div><p class="eyebrow">Administration</p><h1>All pastes</h1></div></div>
   <div class="section-layout"><AdminNav/><div class="section-content">
   <PasteFilters params={appliedQuery} mode="admin" {ownerNames}/>
