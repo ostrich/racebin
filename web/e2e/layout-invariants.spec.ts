@@ -151,6 +151,26 @@ test("page-level actions share one heading alignment", async ({ page }) => {
   }
 });
 
+test("desktop side navigation uses the standard sticky header clearance", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 700 });
+  for (const [route, label] of [
+    ["/help", "Help topics"],
+    ["/admin", "Administration"],
+  ] as const) {
+    await page.goto(route);
+    const geometry = await page.getByRole("complementary", { name: label }).evaluate(element => {
+      const styles = getComputedStyle(document.documentElement);
+      return {
+        stickyTop: Number.parseFloat(getComputedStyle(element).top),
+        expectedTop:
+          Number.parseFloat(styles.getPropertyValue("--header-height")) +
+          Number.parseFloat(styles.getPropertyValue("--space-4")),
+      };
+    });
+    expect(geometry.stickyTop, `${label} sticky offset`).toBe(geometry.expectedTop);
+  }
+});
+
 test("primary pages share one heading-to-content boundary", async ({ page }) => {
   const routes = [
     "/pastes",

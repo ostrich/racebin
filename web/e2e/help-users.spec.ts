@@ -62,10 +62,11 @@ test("help navigation aligns with its content and clears the sticky header", asy
   const stickyPosition = await navigation.evaluate(element => ({
     actual: element.getBoundingClientRect().top,
     expected: Number.parseFloat(getComputedStyle(element).top),
-    headerBottom: document.querySelector("header")!.getBoundingClientRect().bottom
+    headerBottom: document.querySelector("header")!.getBoundingClientRect().bottom,
+    standardGap: Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--space-4"))
   }));
   expect(stickyPosition.actual).toBe(stickyPosition.expected);
-  expect(stickyPosition.actual).toBeGreaterThan(stickyPosition.headerBottom);
+  expect(stickyPosition.actual - stickyPosition.headerBottom).toBe(stickyPosition.standardGap);
 
   await page.getByRole("link", { name: "Key privileges" }).click();
   await expect(page).toHaveURL(/\/help#scopes$/);
