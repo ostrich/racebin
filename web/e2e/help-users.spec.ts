@@ -39,6 +39,18 @@ test("help navigation aligns with its content and clears the sticky header", asy
   await page.goto("/help");
   const navigation = page.getByRole("complementary", { name: "Help topics" });
   const content = page.locator(".help-content > .panel").first();
+  await expect(navigation.getByRole("link")).toHaveText([
+    "Site basics",
+    "API keys",
+    "Command examples",
+    "Key privileges"
+  ]);
+  await expect(page.locator(".help-content > .panel > h2")).toHaveText([
+    "Site basics",
+    "API keys",
+    "Command examples",
+    "Key privileges"
+  ]);
   const initial = await Promise.all([
     navigation.evaluate(element => element.getBoundingClientRect().top),
     content.evaluate(element => element.getBoundingClientRect().top)
@@ -55,7 +67,7 @@ test("help navigation aligns with its content and clears the sticky header", asy
   expect(stickyPosition.actual).toBe(stickyPosition.expected);
   expect(stickyPosition.actual).toBeGreaterThan(stickyPosition.headerBottom);
 
-  await page.getByRole("link", { name: "Scopes" }).click();
+  await page.getByRole("link", { name: "Key privileges" }).click();
   await expect(page).toHaveURL(/\/help#scopes$/);
   await expect(page.locator("#scopes")).toBeInViewport();
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(1_000);

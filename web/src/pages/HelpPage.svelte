@@ -44,33 +44,12 @@
   </div>
   <div class="help-layout">
     <aside class="panel help-index sticky-sidebar" aria-label="Help topics">
-      <Link href="#api-keys">API keys</Link><Link href="#examples">Examples</Link><Link href="#scopes">Scopes</Link><Link href="#basics">Site basics</Link>
+      <Link href="#basics">Site basics</Link>
+      <Link href="#api-keys">API keys</Link>
+      <Link href="#examples">Command examples</Link>
+      <Link href="#scopes">Key privileges</Link>
     </aside>
     <div class="help-content">
-      <section class="panel" id="api-keys">
-        <h2>API keys</h2>
-        <p>Create a key under <Link href="/account">Account</Link>, choose only the privileges your tool needs, and copy it when it is shown. Racebin cannot display the full key again.</p>
-        <p>Store it in an environment variable instead of putting it directly in a script:</p>
-        <pre><code>export RACEBIN_API_KEY='rbk_…'</code></pre>
-        <p>Send the key with every API request as <code>Authorization: Bearer $RACEBIN_API_KEY</code>. Treat it like a password and revoke it from your account if it is exposed.</p>
-      </section>
-      <section class="panel" id="examples">
-        <h2>Command examples</h2>
-        <p>These commands use this Racebin installation automatically.</p>
-        <div class="help-examples">
-          {#each examples as [title, value]}
-            <article><div><h3>{title}</h3><button class="button" type="button" onclick={() => copy(value)}>Copy</button></div><pre><code>{value}</code></pre></article>
-          {/each}
-        </div>
-      </section>
-      <section class="panel" id="scopes">
-        <h2>Key privileges</h2>
-        <dl class="scope-list">
-          {#each $appState.config.scopes as scope}
-            <div><dt><code>{scope.id}</code></dt><dd>{scope.description}</dd></div>
-          {/each}
-        </dl>
-      </section>
       <section class="panel" id="basics">
         <h2>Site basics</h2>
         <p>Racebin keeps text, formatted documents, and attachments together under one shareable link. You need an account to create and manage pastes, but the people you share with usually do not.</p>
@@ -123,6 +102,30 @@
             <p>Check the visibility, expiration, and attached files. Remove passwords, private keys, access tokens, and other secrets; an unlisted URL can still be forwarded to someone else.</p>
           </aside>
         </div>
+      </section>
+      <section class="panel" id="api-keys">
+        <h2>API keys</h2>
+        <p>Create a key under <Link href="/account">Account</Link>, choose only the privileges your tool needs, and copy it when it is shown. Racebin cannot display the full key again.</p>
+        <p>Store it in an environment variable instead of putting it directly in a script:</p>
+        <pre><code>export RACEBIN_API_KEY='rbk_…'</code></pre>
+        <p>Send the key with every API request as <code>Authorization: Bearer $RACEBIN_API_KEY</code>. Treat it like a password and revoke it from your account if it is exposed.</p>
+      </section>
+      <section class="panel" id="examples">
+        <h2>Command examples</h2>
+        <p>These commands use this Racebin installation automatically.</p>
+        <div class="help-examples">
+          {#each examples as [title, value]}
+            <article><div><h3>{title}</h3><button class="button" type="button" onclick={() => copy(value)}>Copy</button></div><pre><code>{value}</code></pre></article>
+          {/each}
+        </div>
+      </section>
+      <section class="panel" id="scopes">
+        <h2>Key privileges</h2>
+        <dl class="scope-list">
+          {#each $appState.config.scopes as scope}
+            <div><dt><code>{scope.id}</code></dt><dd>{scope.description}</dd></div>
+          {/each}
+        </dl>
       </section>
     </div>
   </div>
