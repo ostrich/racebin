@@ -27,17 +27,17 @@ part of one process.
 ```mermaid
 flowchart TB
     subgraph Clients
-        Browser["Browser<br>Svelte application"]
-        Client["CLI, desktop, uploader,<br>or other API client"]
+        Browser["Browser<br/>Svelte application"]
+        Client["CLI, desktop,<br/>uploader, or other<br/>API client"]
     end
 
     subgraph Binary["Racebin server binary"]
         direction TB
-        Boundary["Actix HTTP boundary<br>routing, middleware, authentication"]
-        Assets["Embedded browser application<br>HTML, CSS, JavaScript, fonts"]
-        Handlers["API handlers<br>request and response translation"]
-        Domain["Paste and account services<br>authorization and business rules"]
-        Repository["Repository<br>transactions and SQLx queries"]
+        Boundary["Actix HTTP boundary<br/>Routing and middleware<br/>Authentication"]
+        Assets["Embedded browser app<br/>HTML, CSS, JavaScript<br/>Fonts"]
+        Handlers["API handlers<br/>Request and response<br/>translation"]
+        Domain["Domain services<br/>Authorization and<br/>business rules"]
+        Repository["Repository<br/>Transactions and<br/>SQLx queries"]
 
         Boundary -->|browser routes and assets| Assets
         Boundary -->|/api/v1| Handlers
