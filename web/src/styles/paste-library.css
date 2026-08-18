@@ -23,7 +23,7 @@
   padding: 3px;
   border: 1px solid var(--color-control-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface-subtle);
+  background: var(--color-code-gutter);
   justify-self: end;
 }
 .paste-view-switch button {

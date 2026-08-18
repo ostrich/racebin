@@ -139,7 +139,7 @@
   cursor: pointer;
 }
 .rich-text-toolbar button:hover:not(:disabled) {
-  background: var(--color-surface-subtle);
+  background: var(--color-control-hover);
 }
 .rich-text-toolbar button.active {
   border-color: var(--accent);

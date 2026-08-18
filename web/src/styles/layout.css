@@ -1,7 +1,7 @@
 /* Application components. Shared foundations live in styles/. */
 
 .segmented-control button:hover:not(:disabled, .active, [aria-pressed="true"]) {
-  background: var(--color-surface-subtle);
+  background: var(--color-control-hover);
 }
 
 .site-header {

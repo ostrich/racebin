@@ -172,7 +172,7 @@ select:hover:not(:disabled) { border-color: var(--color-control-border-hover); }
 }
 .button:hover:not(:disabled),
 .icon-button:hover:not(:disabled) {
-  background: var(--color-surface-subtle);
+  background: var(--color-control-hover);
 }
 .button.primary,
 .icon-button.primary {

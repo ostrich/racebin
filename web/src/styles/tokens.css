@@ -9,6 +9,7 @@
   --color-line: #d9dde2;
   --color-control-border: #bfc6ce;
   --color-control-border-hover: #87919d;
+  --color-control-hover: #d5e7e5;
   --color-accent: #0b6e69;
   --color-accent-hover: #075650;
   --color-danger: #b42318;
@@ -83,6 +84,7 @@
     --color-line: #343d43;
     --color-control-border: #343d43;
     --color-control-border-hover: #68737a;
+    --color-control-hover: #24413f;
     --color-hero-surface: #18312f;
     --color-code-surface: #0d1117;
     --color-code-gutter: #161b22;

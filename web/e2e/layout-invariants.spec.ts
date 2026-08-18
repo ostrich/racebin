@@ -352,6 +352,7 @@ test("interactive control families use consistent hover states", async ({ page }
   const ordinary = page.getByRole("button", { name: "Filters" });
   const selectedSegment = page.getByRole("button", { name: "Normal", exact: true });
   const segment = page.getByRole("button", { name: "Compact", exact: true });
+  const segmentTrack = page.getByRole("group", { name: "Paste view" });
   const ordinaryBefore = await appearance(ordinary);
   await ordinary.hover();
   const ordinaryHover = await appearance(ordinary);
@@ -359,6 +360,7 @@ test("interactive control families use consistent hover states", async ({ page }
   await selectedSegment.hover();
   expect(await appearance(selectedSegment)).toEqual(selectedSegmentBefore);
   const segmentBefore = await appearance(segment);
+  const segmentTrackAppearance = await appearance(segmentTrack);
   await segment.hover();
   const segmentHover = await appearance(segment);
 
@@ -367,6 +369,10 @@ test("interactive control families use consistent hover states", async ({ page }
   const selectBefore = await appearance(select);
   await select.hover();
   const selectHover = await appearance(select);
+  const attachmentZone = await appearance(page.getByRole("group", { name: "Attachment drop zone" }));
+  const chooseFiles = page.getByRole("button", { name: "Choose files" });
+  await chooseFiles.hover();
+  const chooseFilesHover = await appearance(chooseFiles);
   await select.selectOption("markdown");
   const toolbar = page.getByRole("button", { name: "Bold" });
   const toolbarBefore = await appearance(toolbar);
@@ -384,9 +390,12 @@ test("interactive control families use consistent hover states", async ({ page }
   expect(ordinaryHover.border).toBe(ordinaryBefore.border);
   expect(toolbarHover.border).toBe(toolbarBefore.border);
   expect(segmentHover.background).toBe(ordinaryHover.background);
+  expect(segmentHover.background).not.toBe(segmentTrackAppearance.background);
   expect(segmentHover.border).toBe(segmentBefore.border);
   expect(selectHover.background).toBe(selectBefore.background);
   expect(selectHover.border).not.toBe(selectBefore.border);
+  expect(chooseFilesHover.background).toBe(ordinaryHover.background);
+  expect(chooseFilesHover.background).not.toBe(attachmentZone.background);
   expect(tabHover.color).not.toBe(tabBefore.color);
 });
 
