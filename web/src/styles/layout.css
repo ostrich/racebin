@@ -1,7 +1,7 @@
 /* Application components. Shared foundations live in styles/. */
 
 .segmented-control button:hover:not(:disabled, .active, [aria-pressed="true"]) {
-  background: var(--color-control-hover);
+  background: var(--color-surface-subtle);
 }
 
 .site-header {
@@ -642,7 +642,7 @@
   padding: var(--space-3);
   border: 1px dashed var(--color-line);
   border-radius: var(--radius-sm);
-  background: var(--color-surface-subtle);
+  background: var(--color-code-gutter);
 }
 .attachment-drop-zone.dragging {
   border-color: var(--color-focus-ring);
