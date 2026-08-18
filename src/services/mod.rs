@@ -11,6 +11,7 @@ mod service;
 pub mod settings;
 mod validation;
 
+pub(crate) use api_keys::ApiKeyListOptions;
 pub use html_import::html_to_document;
 pub use markdown::{render_markdown, text_to_markdown, MarkdownOutput};
 pub use model::{

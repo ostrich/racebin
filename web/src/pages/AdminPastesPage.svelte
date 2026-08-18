@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { deletePaste, listAdminPastes, listAdminUsers } from "../api";
+  import { deletePaste, listAdminPastes } from "../api";
   import Icon from "../components/Icon.svelte";
   import AdminNav from "../components/AdminNav.svelte";
   import Link from "../components/Link.svelte";
@@ -11,7 +11,7 @@
   import { cachedQuery, loadQuery } from "../queryCache";
   import { holdNavigation } from "../navigation";
   import { appState } from "../state";
-  import type { Page, Paste, User } from "../types";
+  import type { Page, Paste } from "../types";
 
   let { query }: { query: URLSearchParams } = $props();
   function pastePath(requestedQuery: URLSearchParams): string {
@@ -32,27 +32,23 @@
 
   function initialState(): {
     page: Page<Paste> | null;
-    users: User[];
     query: URLSearchParams;
   } {
     const requestedQuery = new URLSearchParams(query);
     const cachedPage = cachedQuery<Page<Paste>>(pastePath(requestedQuery));
-    const cachedUsers = cachedQuery<User[]>("/admin/users");
-    const complete = Boolean(cachedPage && cachedUsers);
+    const complete = Boolean(cachedPage);
     return {
       page: complete ? cachedPage ?? null : null,
-      users: complete ? cachedUsers ?? [] : [],
       query: complete ? requestedQuery : new URLSearchParams()
     };
   }
 
   const initial = initialState();
   let page = $state<Page<Paste> | null>(initial.page);
-  let users = $state<User[]>(initial.users);
   let appliedQuery = $state(initial.query);
   let loading = $state(false);
   let error = $state("");
-  let ownerNames = $derived(new Map(users.map(user => [user.id, user.username])));
+  let ownerNames = $derived(new Map(page?.items.filter(paste => paste.owner_id && paste.owner_username).map(paste => [paste.owner_id!, paste.owner_username!]) ?? []));
   let loadGeneration = 0;
   let initialRouteReady: (() => void) | null = holdNavigation();
 
@@ -64,20 +60,14 @@
     loading = true;
     const requestedPastePath = pastePath(requestedQuery);
     const cachedPage = cachedQuery<Page<Paste>>(requestedPastePath);
-    const cachedUsers = cachedQuery<User[]>("/admin/users");
-    if (cachedPage && cachedUsers) {
+    if (cachedPage) {
       page = cachedPage;
-      users = cachedUsers;
       appliedQuery = requestedQuery;
       error = "";
     }
-    void Promise.all([
-      loadQuery(requestedPastePath, () => listAdminPastes(new URLSearchParams(requestedPastePath.split("?")[1]))),
-      loadQuery("/admin/users", () => listAdminUsers())
-    ]).then(([result, loadedUsers]) => {
+    void loadQuery(requestedPastePath, () => listAdminPastes(new URLSearchParams(requestedPastePath.split("?")[1]))).then(result => {
       if (generation !== loadGeneration) return;
       page = result;
-      users = loadedUsers;
       appliedQuery = requestedQuery;
       error = "";
     }).catch(reason => {
@@ -129,7 +119,7 @@
             <div class="paste-identity-meta"><code>{paste.id}</code><time datetime={new Date(paste.created_at * 1000).toISOString()}>{formatDate(paste.created_at)}</time></div></div>
           <div class="admin-paste-owner">
             {#if paste.owner_id === null}<span class="muted">No owner</span>
-            {:else}<Link href={filterUrl("owner_id", String(paste.owner_id))}><strong>{ownerNames.get(paste.owner_id) ?? `User #${paste.owner_id}`}</strong><small>User #{paste.owner_id}</small></Link>{/if}
+            {:else}<Link href={filterUrl("owner_id", String(paste.owner_id))}><strong>{paste.owner_username ?? `User #${paste.owner_id}`}</strong><small>User #{paste.owner_id}</small></Link>{/if}
           </div>
           <div class="paste-meta">
             <Link class="meta-badge" href={filterUrl(paste.format === "text" ? "language" : "format", paste.format === "text" ? paste.language : paste.format)}>{pasteFormatLabel(paste)}</Link>

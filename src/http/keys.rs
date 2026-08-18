@@ -10,8 +10,10 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
 
 #[utoipa::path(
     get, path = "/account/api-keys", tag = "api keys",
+    params(ApiKeyQuery),
     responses(
-        (status = 200, description = "API keys owned by the authenticated user", body = [crate::http::contract::ApiKeyResource]),
+        (status = 200, description = "Paginated API keys owned by the authenticated user", body = crate::http::contract::ApiKeyPage),
+        (status = 400, description = "Invalid filter, sort, or pagination parameter", body = crate::http::errors::ProblemDetails),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "Insufficient permission", body = crate::http::errors::ProblemDetails),
         (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
@@ -19,19 +21,97 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
     security(("bearerAuth" = []), ("sessionCookie" = []))
 )]
 #[get("/account/api-keys")]
-pub(crate) async fn list_keys(req: HttpRequest, services: web::Data<PasteService>) -> HttpResponse {
+pub(crate) async fn list_keys(
+    req: HttpRequest,
+    services: web::Data<PasteService>,
+    query: web::Query<ApiKeyQuery>,
+) -> HttpResponse {
     let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(v) => v,
         Err(r) => return r,
     };
-    match services.list_api_keys(&value).await {
-        Ok(v) => HttpResponse::Ok().json(
-            v.into_iter()
+    let query = query.into_inner();
+    let (page, page_size) = match crate::http::dto::page_parameters(query.page, query.page_size, 25)
+    {
+        Ok(value) => value,
+        Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
+    };
+    let enabled = match query.status.as_deref() {
+        None | Some("all") => None,
+        Some("enabled") => Some(true),
+        Some("disabled") => Some(false),
+        Some(_) => {
+            return error(
+                StatusCode::BAD_REQUEST,
+                "invalid_query",
+                "Status must be enabled or disabled",
+            )
+        }
+    };
+    let sort = query.sort.as_deref().unwrap_or("created");
+    if !matches!(sort, "created" | "name" | "used") {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "invalid_query",
+            "Unknown API-key sort field",
+        );
+    }
+    let descending = query.direction.as_deref().unwrap_or("desc") == "desc";
+    if !matches!(query.direction.as_deref(), None | Some("asc" | "desc")) {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "invalid_query",
+            "Direction must be asc or desc",
+        );
+    }
+    match services
+        .list_api_keys(
+            &value,
+            &crate::services::ApiKeyListOptions {
+                search: query.search.as_deref(),
+                enabled,
+                sort,
+                descending,
+                page,
+                page_size,
+            },
+        )
+        .await
+    {
+        Ok(v) => HttpResponse::Ok().json(contract::ApiKeyPage {
+            items: v
+                .items
+                .into_iter()
                 .map(contract::ApiKeyResource::from)
-                .collect::<Vec<_>>(),
-        ),
+                .collect(),
+            pagination: crate::http::dto::Pagination {
+                page: v.page,
+                page_size: v.page_size,
+                total_items: v.total_items,
+                total_pages: crate::http::dto::total_pages(v.total_items, v.page_size),
+            },
+        }),
         Err(e) => domain_error(e),
     }
+}
+
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub(crate) struct ApiKeyQuery {
+    /// Search key name, token prefix, and scope.
+    search: Option<String>,
+    /// Restrict results to `enabled` or `disabled` keys.
+    status: Option<String>,
+    /// Order by `created`, `name`, or `used`.
+    sort: Option<String>,
+    /// Sort in `asc` or `desc` order.
+    direction: Option<String>,
+    /// One-based result page.
+    #[param(minimum = 1, default = 1)]
+    page: Option<u32>,
+    /// Results per page, from 1 through 100.
+    #[param(minimum = 1, maximum = 100, default = 25)]
+    page_size: Option<u32>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]

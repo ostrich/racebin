@@ -938,6 +938,7 @@ mod tests {
         assert!(session(true).allows(Permission::ManageUsers));
         assert!(session(true).allows(Permission::ConfigureInstance));
         let key = Principal::ApiKey(ApiKey {
+            owner_username: None,
             id: 1,
             user_id: Some(1),
             name: "admin".into(),
@@ -978,6 +979,7 @@ mod tests {
 
     fn key(scopes: &str) -> Principal {
         Principal::ApiKey(ApiKey {
+            owner_username: None,
             id: 1,
             user_id: Some(7),
             name: "test".to_string(),

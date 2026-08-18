@@ -43,7 +43,8 @@ The Rust suite includes:
 - SQLite-to-PostgreSQL copy validation, rollback, attachment checks, and
   identity-sequence continuation;
 - HTTP integration tests for sessions, CSRF, scopes, ownership,
-  administration, canonical Markdown, HTML import, and the attachment lifecycle; and
+  administration, paginated list bounds and filtering, canonical Markdown,
+  HTML import, and the attachment lifecycle; and
 - OpenAPI structural and behavioral contract assertions.
 
 ## Frontend gates

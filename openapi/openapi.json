@@ -1,6 +1,73 @@
 {
   "components": {
     "schemas": {
+      "AdminSummaryResource": {
+        "properties": {
+          "active_invitation_count": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "active_session_count": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "expiring_invitation_count": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "password_change_required_count": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "paste_count": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "storage_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "user_count": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_count",
+          "paste_count",
+          "storage_bytes",
+          "active_session_count",
+          "active_invitation_count",
+          "expiring_invitation_count",
+          "password_change_required_count"
+        ],
+        "type": "object"
+      },
+      "AdminUserPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminUserResource"
+            },
+            "type": "array"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "items",
+          "pagination"
+        ],
+        "type": "object"
+      },
       "AdminUserResource": {
         "properties": {
           "active_api_key_count": {
@@ -135,6 +202,24 @@
         ],
         "type": "object"
       },
+      "ApiKeyPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiKeyResource"
+            },
+            "type": "array"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "items",
+          "pagination"
+        ],
+        "type": "object"
+      },
       "ApiKeyResource": {
         "properties": {
           "created_at": {
@@ -158,6 +243,12 @@
           },
           "name": {
             "type": "string"
+          },
+          "owner_username": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "scopes": {
             "items": {
@@ -296,6 +387,24 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "AuditEventPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEventResource"
+            },
+            "type": "array"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "items",
+          "pagination"
         ],
         "type": "object"
       },
@@ -586,6 +695,10 @@
             "minimum": 0,
             "type": "integer"
           },
+          "max_folders_per_user": {
+            "minimum": 0,
+            "type": "integer"
+          },
           "max_page_size": {
             "format": "int32",
             "minimum": 1,
@@ -652,6 +765,7 @@
           "default_visibility",
           "max_attachment_size_bytes",
           "max_attachments_per_paste",
+          "max_folders_per_user",
           "attachments_enabled",
           "qr_codes_enabled",
           "formats",
@@ -1782,6 +1896,12 @@
               "null"
             ]
           },
+          "owner_username": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "read_count": {
             "format": "int64",
             "minimum": 0,
@@ -2079,19 +2199,102 @@
     "/account/api-keys": {
       "get": {
         "operationId": "list_keys",
+        "parameters": [
+          {
+            "description": "Search key name, token prefix, and scope.",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Restrict results to `enabled` or `disabled` keys.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Order by `created`, `name`, or `used`.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "created",
+              "enum": [
+                "created",
+                "title",
+                "reads",
+                "expires",
+                "size"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sort in `asc` or `desc` order.",
+            "in": "query",
+            "name": "direction",
+            "required": false,
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "One-based result page.",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "format": "int32",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Results per page, from 1 through 100.",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "format": "int32",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ApiKeyResource"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/ApiKeyPage"
                 }
               }
             },
-            "description": "API keys owned by the authenticated user"
+            "description": "Paginated API keys owned by the authenticated user"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid filter, sort, or pagination parameter"
           },
           "401": {
             "content": {
@@ -2492,19 +2695,102 @@
     "/admin/api-keys": {
       "get": {
         "operationId": "admin_keys",
+        "parameters": [
+          {
+            "description": "Search key name, owner, token prefix, and scope.",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Restrict results to `enabled` or `disabled` keys.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Order by `created`, `name`, `owner`, or `used`.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "created",
+              "enum": [
+                "created",
+                "title",
+                "reads",
+                "expires",
+                "size"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sort in `asc` or `desc` order.",
+            "in": "query",
+            "name": "direction",
+            "required": false,
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "One-based result page.",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "format": "int32",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Results per page, from 1 through 100.",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "format": "int32",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ApiKeyResource"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/ApiKeyPage"
                 }
               }
             },
-            "description": "All API keys"
+            "description": "Paginated API keys"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid filter, sort, or pagination parameter"
           },
           "401": {
             "content": {
@@ -2736,19 +3022,72 @@
     "/admin/audit-events": {
       "get": {
         "operationId": "admin_audit_events",
+        "parameters": [
+          {
+            "description": "Search actor, action, target type, target label, and target ID.",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "One-based result page.",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "format": "int32",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Results per page, from 1 through 100.",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "format": "int32",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AuditEventResource"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/AuditEventPage"
                 }
               }
             },
-            "description": "Recent owner audit events"
+            "description": "Paginated owner audit events"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid pagination parameter"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Authentication required"
           },
           "403": {
             "content": {
@@ -2759,6 +3098,16 @@
               }
             },
             "description": "Owner browser session required"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal error"
           }
         },
         "security": [
@@ -2804,6 +3153,7 @@
             }
           },
           {
+            "description": "One-based result page.",
             "in": "query",
             "name": "page",
             "required": false,
@@ -2815,6 +3165,7 @@
             }
           },
           {
+            "description": "Results per page, from 1 through 100.",
             "in": "query",
             "name": "page_size",
             "required": false,
@@ -3579,22 +3930,175 @@
         ]
       }
     },
-    "/admin/users": {
+    "/admin/summary": {
       "get": {
-        "operationId": "admin_users",
+        "operationId": "admin_summary",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AdminUserResource"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/AdminSummaryResource"
                 }
               }
             },
-            "description": "Administrative user summaries"
+            "description": "Administrative aggregate counts"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Administrator required"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "tags": [
+          "administration"
+        ],
+        "x-racebin-scopes": [
+          "user:manage"
+        ]
+      }
+    },
+    "/admin/users": {
+      "get": {
+        "operationId": "admin_users",
+        "parameters": [
+          {
+            "description": "Case-insensitive username search.",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Restrict results to `user`, `admin`, or `owner`.",
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Restrict results to `enabled` or `disabled` accounts.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Order by `username`, `created`, `login`, `pastes`, or `storage`.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "created",
+              "enum": [
+                "created",
+                "title",
+                "reads",
+                "expires",
+                "size"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sort in `asc` or `desc` order.",
+            "in": "query",
+            "name": "direction",
+            "required": false,
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "One-based result page.",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "format": "int32",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Results per page, from 1 through 100.",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "format": "int32",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserPage"
+                }
+              }
+            },
+            "description": "Paginated administrative user summaries"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid filter, sort, or pagination parameter"
           },
           "401": {
             "content": {

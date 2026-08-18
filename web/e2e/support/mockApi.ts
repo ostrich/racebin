@@ -19,6 +19,7 @@ const config = {
   default_expiration_seconds: null,
   max_attachment_size_bytes: 20 * 1024 * 1024,
   max_attachments_per_paste: 32,
+  max_folders_per_user: 200,
   attachments_enabled: true,
   qr_codes_enabled: false,
   formats: ["text", "markdown"],
@@ -78,6 +79,7 @@ export const paste = {
   raw_url: "/api/v1/pastes/sample-paste/raw",
   source_url: "/api/v1/pastes/sample-paste/source" as string | null,
   owner_id: 1,
+  owner_username: "test-admin",
   folder_id: null,
   title: "JavaScript example",
   content: "const answer = 42;\nconsole.log(answer);",
@@ -223,13 +225,23 @@ export async function mockApi(
         : { body: { format: "text", content: paste.content, language: "plaintext" } });
     }
     if (url.pathname === "/api/v1/account/api-keys") {
-      return json(route, [{
+      const items = [{
         id: 4, user_id: 1, name: "Automation", token_prefix: "abcd",
+        owner_username: "test-admin",
         scopes: ["paste:read", "paste:write"], enabled: true,
         created_at: createdAt, last_used_at: null
-      }]);
+      }];
+      if (route.request().method() === "POST") return json(route, { key: items[0], token: "rbk_test_secret" }, 201);
+      return json(route, { items, pagination: { page: 1, page_size: 25, total_items: 1, total_pages: 1 } });
     }
-    if (url.pathname === "/api/v1/admin/users") return json(route, [user, managedUser]);
+    if (url.pathname === "/api/v1/admin/summary") return json(route, {
+      user_count: 2, paste_count: 4, storage_bytes: 8192, active_session_count: 2,
+      active_invitation_count: 1, expiring_invitation_count: 0, password_change_required_count: 0
+    });
+    if (url.pathname === "/api/v1/admin/users") {
+      const items = [user, managedUser];
+      return json(route, { items, pagination: { page: 1, page_size: 25, total_items: items.length, total_pages: 1 } });
+    }
     if (url.pathname === "/api/v1/admin/users/1") {
       if (route.request().method() === "PATCH") return json(route, {});
       return json(route, user);
@@ -252,9 +264,12 @@ export async function mockApi(
       if (response.delay) await new Promise(resolve => setTimeout(resolve, response.delay));
       return json(route, {
         items: response.items,
-        page: Number(url.searchParams.get("page") ?? 1),
-        page_size: 100,
-        total_items: response.items.length
+        pagination: {
+          page: Number(url.searchParams.get("page") ?? 1),
+          page_size: 100,
+          total_items: response.items.length,
+          total_pages: response.items.length ? 1 : 0
+        }
       });
     }
     if (url.pathname === "/api/v1/admin/invitations") {
@@ -280,22 +295,23 @@ export async function mockApi(
       return json(route, { items, pagination: { page: 1, page_size: 25, total_items: items.length, total_pages: 1 } });
     }
     if (url.pathname.startsWith("/api/v1/admin/invitations/")) return route.fulfill({ status: 204 });
-    if (url.pathname === "/api/v1/admin/api-keys") return json(route, [{
+    if (url.pathname === "/api/v1/admin/api-keys") return json(route, { items: [{
       id: 4, user_id: 1, name: "Automation", token_prefix: "abcd",
+      owner_username: "test-admin",
       scopes: ["paste:read", "paste:write"], enabled: true,
       created_at: createdAt, last_used_at: null
-    }]);
+    }], pagination: { page: 1, page_size: 25, total_items: 1, total_pages: 1 } });
     if (url.pathname === "/api/v1/admin/settings") return json(route, {
       site_name: "Racebin", home_mode: "standard", public_explore_enabled: true,
       invitations_enabled: true, attachments_enabled: true, qr_codes_enabled: false,
       default_format: "text", default_language: "plaintext", default_visibility: "unlisted",
       default_expiration_seconds: null
     });
-    if (url.pathname === "/api/v1/admin/audit-events") return json(route, [{
+    if (url.pathname === "/api/v1/admin/audit-events") return json(route, { items: [{
       id: 1, actor_username: "test-admin", actor_api_key_id: null,
       action: "instance.settings_changed", target_type: "instance", target_id: "1",
       target_label: null, details: {}, created_at: createdAt
-    }]);
+    }], pagination: { page: 1, page_size: 25, total_items: 1, total_pages: 1 } });
     if (url.pathname === "/api/v1/pastes") {
       if (route.request().method() === "POST") return json(route, paste, 201);
       const response = options.pastePage?.(url) ?? {
@@ -305,9 +321,12 @@ export async function mockApi(
       if (response.delay) await new Promise(resolve => setTimeout(resolve, response.delay));
       return json(route, {
         items: response.items,
-        page: Number(url.searchParams.get("page") ?? 1),
-        page_size: 50,
-        total_items: response.items.length
+        pagination: {
+          page: Number(url.searchParams.get("page") ?? 1),
+          page_size: 50,
+          total_items: response.items.length,
+          total_pages: response.items.length ? 1 : 0
+        }
       });
     }
     return json(route, {});

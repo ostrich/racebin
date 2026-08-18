@@ -85,11 +85,37 @@ pub async fn record(
     .execute(repo.pool()).await.map(|_| ()).map_err(DomainError::from)
 }
 
-pub async fn list(repo: &Repository, limit: i64) -> DomainResult<Vec<AuditEvent>> {
-    sqlx::query_as(
+pub async fn list_page(
+    repo: &Repository,
+    search: Option<&str>,
+    page: u32,
+    page_size: u32,
+) -> DomainResult<super::Page<AuditEvent>> {
+    let search = search
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| format!("%{}%", value.trim().to_lowercase()))
+        .unwrap_or_default();
+    let condition = " WHERE ($1='' OR LOWER(actor_username) LIKE $1 OR LOWER(action) LIKE $1
+        OR LOWER(target_type) LIKE $1 OR LOWER(COALESCE(target_label,'')) LIKE $1 OR LOWER(COALESCE(target_id,'')) LIKE $1)";
+    let total_items = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(format!(
+        "SELECT COUNT(*) FROM audit_events{condition}"
+    )))
+    .bind(&search)
+    .fetch_one(repo.pool())
+    .await
+    .map_err(DomainError::from)?;
+    let items = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT id,actor_user_id,actor_username,actor_api_key_id,action,target_type,target_id,target_label,details,created_at
-         FROM audit_events ORDER BY created_at DESC,id DESC LIMIT $1",
-    )
-    .bind(limit.clamp(1, 100))
-    .fetch_all(repo.pool()).await.map_err(DomainError::from)
+         FROM audit_events{condition} ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3"
+    )))
+    .bind(search)
+    .bind(i64::from(page_size))
+    .bind(i64::from(page.saturating_sub(1)) * i64::from(page_size))
+    .fetch_all(repo.pool()).await.map_err(DomainError::from)?;
+    Ok(super::Page {
+        items,
+        page,
+        page_size,
+        total_items,
+    })
 }

@@ -3,9 +3,9 @@
   import {
     listAdminUsers,
     listAuditEvents,
-    listInvitations,
+    getAdminSummary,
+    type AdminSummary,
     type AuditEvent,
-    type Invitation
   } from "../api";
   import AdminNav from "../components/AdminNav.svelte";
   import Icon from "../components/Icon.svelte";
@@ -16,32 +16,29 @@
   import { appState } from "../state";
   import type { AdminUser } from "../types";
 
-  let users = $state<AdminUser[]>([]);
-  let invitations = $state<Invitation[]>([]);
+  let summary = $state<AdminSummary | null>(null);
+  let recentUsers = $state<AdminUser[]>([]);
   let events = $state<AuditEvent[]>([]);
   let error = $state("");
   let invitationDialog: InvitationDialog;
   const initialLoadReady = holdNavigation();
 
-  const pasteCount = $derived(users.reduce((total, user) => total + user.paste_count, 0));
-  const storageBytes = $derived(users.reduce((total, user) => total + user.storage_bytes, 0));
-  const activeSessions = $derived(users.reduce((total, user) => total + user.active_session_count, 0));
   const isOwner = $derived($appState.session.user?.role === "owner");
-  const passwordResets = $derived(users.filter(user => user.password_change_required).length);
-  const expiringInvitations = $derived(invitations.filter(invitation => invitation.status === "active" && invitation.expires_at <= Math.floor(Date.now() / 1000) + 4 * 60 * 60).length);
-  const invitationsUnavailable = $derived(isOwner && !$appState.config.invitations_enabled && invitations.some(invitation => invitation.status === "active"));
+  const passwordResets = $derived(summary?.password_change_required_count ?? 0);
+  const expiringInvitations = $derived(summary?.expiring_invitation_count ?? 0);
+  const invitationsUnavailable = $derived(isOwner && !$appState.config.invitations_enabled && (summary?.active_invitation_count ?? 0) > 0);
   const actionCount = $derived(passwordResets + expiringInvitations + (invitationsUnavailable ? 1 : 0));
 
   onMount(() => {
-    const requests: [Promise<AdminUser[]>, Promise<Invitation[]>, Promise<AuditEvent[]>] = [
-      listAdminUsers(),
-      listInvitations(new URLSearchParams({ view: "active", page_size: "100" })).then(page => page.items),
-      isOwner ? listAuditEvents() : Promise.resolve([])
+    const requests: [Promise<AdminSummary>, Promise<AdminUser[]>, Promise<AuditEvent[]>] = [
+      getAdminSummary(),
+      listAdminUsers(new URLSearchParams({ sort: "created", direction: "desc", page_size: "5" })).then(page => page.items),
+      isOwner ? listAuditEvents(new URLSearchParams({ page_size: "5" })).then(page => page.items) : Promise.resolve([])
     ];
     void Promise.all(requests)
-      .then(([loadedUsers, loadedInvitations, loadedEvents]) => {
-        users = loadedUsers;
-        invitations = loadedInvitations;
+      .then(([loadedSummary, loadedUsers, loadedEvents]) => {
+        summary = loadedSummary;
+        recentUsers = loadedUsers;
         events = loadedEvents;
       })
       .catch(reason => { error = reason instanceof Error ? reason.message : "Unable to load administration overview"; })
@@ -49,7 +46,7 @@
   });
 
   async function reloadInvitations(): Promise<void> {
-    invitations = (await listInvitations(new URLSearchParams({ view: "active", page_size: "100" }))).items;
+    summary = await getAdminSummary();
   }
 
   function activityLabel(action: string): string {
@@ -87,10 +84,10 @@
         <section class="empty"><h2>Unable to load overview</h2><p>{error}</p></section>
       {:else}
         <section class="admin-summary" aria-label="Site summary">
-          <article class="panel"><span>Users</span><strong>{users.length}</strong></article>
-          <article class="panel"><span>Pastes</span><strong>{pasteCount}</strong></article>
-          <article class="panel"><span>Stored data</span><strong>{formatByteSize(storageBytes)}</strong></article>
-          <article class="panel"><span>Active sessions</span><strong>{activeSessions}</strong></article>
+          <article class="panel"><span>Users</span><strong>{summary?.user_count ?? 0}</strong></article>
+          <article class="panel"><span>Pastes</span><strong>{summary?.paste_count ?? 0}</strong></article>
+          <article class="panel"><span>Stored data</span><strong>{formatByteSize(summary?.storage_bytes ?? 0)}</strong></article>
+          <article class="panel"><span>Active sessions</span><strong>{summary?.active_session_count ?? 0}</strong></article>
         </section>
 
         <section class="panel dashboard-section">
@@ -116,7 +113,7 @@
                 {:else}<article class="data-row"><div><strong>{activityLabel(event.action)}</strong><small>{event.actor_username} · {formatDate(event.created_at)}{event.target_label ? ` · ${event.target_label}` : ""}</small></div></article>{/if}
               {:else}<div class="empty"><p>No administrative activity yet.</p></div>{/each}
             {:else}
-              {#each [...users].sort((left, right) => right.created_at - left.created_at).slice(0, 5) as user (user.id)}
+              {#each recentUsers as user (user.id)}
                 <Link class="data-row" href={`/admin/users/${user.id}`}><div><strong>{user.username}</strong><small>Joined {formatDate(user.created_at)}</small></div><span class="badge">{user.role === "admin" ? "Administrator" : "User"}</span></Link>
               {:else}<div class="empty"><p>No accounts yet.</p></div>{/each}
             {/if}

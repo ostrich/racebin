@@ -71,6 +71,24 @@ impl PasteService {
         let owner = folder_principal(principal, "paste:write")?;
         let name = validate_folder_name(name)?;
         let name_key = folder_name_key(name);
+        let _write_guard = self.storage.lock_writes().await;
+        let mut transaction = self
+            .storage
+            .pool()
+            .begin()
+            .await
+            .map_err(DomainError::internal)?;
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM folders WHERE owner_id=$1")
+            .bind(owner)
+            .fetch_one(&mut *transaction)
+            .await
+            .map_err(DomainError::internal)?;
+        if count >= crate::limits::MAX_FOLDERS_PER_USER as i64 {
+            return Err(DomainError::validation_code(
+                "folder_limit",
+                "Folder limit reached",
+            ));
+        }
         let id: i64 = sqlx::query_scalar(
             "INSERT INTO folders(owner_id,name,name_key,created_at) VALUES($1,$2,$3,$4) RETURNING id",
         )
@@ -78,9 +96,10 @@ impl PasteService {
         .bind(name)
         .bind(name_key)
         .bind(unix_timestamp())
-        .fetch_one(self.storage.pool())
+        .fetch_one(&mut *transaction)
         .await
         .map_err(folder_database_error)?;
+        transaction.commit().await.map_err(DomainError::internal)?;
         self.folder_by_id(owner, id)
             .await?
             .ok_or_else(|| DomainError::internal("Folder creation failed"))

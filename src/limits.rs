@@ -4,3 +4,4 @@ pub const MAX_PAGE_SIZE: u32 = 100;
 pub const DEFAULT_PAGE_SIZE: u32 = 30;
 pub const MAX_ATTACHMENTS_PER_PASTE: usize = 32;
 pub const MAX_BULK_PASTES: usize = 100;
+pub const MAX_FOLDERS_PER_USER: usize = 200;

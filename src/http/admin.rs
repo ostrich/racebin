@@ -24,12 +24,9 @@ async fn require_manageable_key(
     principal: &Principal,
     key_id: i64,
 ) -> Result<(), HttpResponse> {
-    let keys = api_keys::list(&services.storage)
+    let key = api_keys::get(&services.storage, key_id)
         .await
-        .map_err(domain_error)?;
-    let key = keys
-        .into_iter()
-        .find(|key| key.id == key_id)
+        .map_err(domain_error)?
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "not_found", "API key not found"))?;
     if let Some(user_id) = key.user_id {
         require_manageable_user(services, principal, user_id).await?;
@@ -40,6 +37,7 @@ async fn require_manageable_key(
 pub(super) fn configure(config: &mut web::ServiceConfig) {
     config
         .service(admin_users)
+        .service(admin_summary)
         .service(admin_user)
         .service(admin_update_user)
         .service(admin_update_user_role)
@@ -60,10 +58,57 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
         .service(admin_delete_key);
 }
 
+#[derive(Serialize, utoipa::ToSchema)]
+pub(crate) struct AdminSummaryResource {
+    #[schema(minimum = 0)]
+    user_count: i64,
+    #[schema(minimum = 0)]
+    paste_count: i64,
+    #[schema(minimum = 0)]
+    storage_bytes: i64,
+    #[schema(minimum = 0)]
+    active_session_count: i64,
+    #[schema(minimum = 0)]
+    active_invitation_count: i64,
+    #[schema(minimum = 0)]
+    expiring_invitation_count: i64,
+    #[schema(minimum = 0)]
+    password_change_required_count: i64,
+}
+
+#[utoipa::path(get, path="/admin/summary", tag="administration", responses((status=200,description="Administrative aggregate counts",body=AdminSummaryResource),(status=401,description="Authentication required",body=crate::http::errors::ProblemDetails),(status=403,description="Administrator required",body=crate::http::errors::ProblemDetails),(status=500,description="Internal error",body=crate::http::errors::ProblemDetails)), security(("bearerAuth"=[]),("sessionCookie"=[])))]
+#[get("/admin/summary")]
+pub(crate) async fn admin_summary(
+    req: HttpRequest,
+    services: web::Data<PasteService>,
+) -> HttpResponse {
+    let value = match principal(&services, &req).await.and_then(require_auth) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    if let Err(response) = require_admin(&value, "user:manage") {
+        return response;
+    }
+    match accounts::admin_summary(&services.storage).await {
+        Ok(value) => HttpResponse::Ok().json(AdminSummaryResource {
+            user_count: value.user_count,
+            paste_count: value.paste_count,
+            storage_bytes: value.storage_bytes,
+            active_session_count: value.active_session_count,
+            active_invitation_count: value.active_invitation_count,
+            expiring_invitation_count: value.expiring_invitation_count,
+            password_change_required_count: value.password_change_required_count,
+        }),
+        Err(error) => domain_error(error),
+    }
+}
+
 #[utoipa::path(
     get, path = "/admin/users", tag = "administration",
+    params(AdminUserQuery),
     responses(
-        (status = 200, description = "Administrative user summaries", body = [crate::http::contract::AdminUserResource]),
+        (status = 200, description = "Paginated administrative user summaries", body = crate::http::contract::AdminUserPage),
+        (status = 400, description = "Invalid filter, sort, or pagination parameter", body = crate::http::errors::ProblemDetails),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "Administrator with user:manage required", body = crate::http::errors::ProblemDetails),
         (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
@@ -73,6 +118,7 @@ pub(super) fn configure(config: &mut web::ServiceConfig) {
 pub(crate) async fn admin_users(
     req: HttpRequest,
     services: web::Data<PasteService>,
+    query: web::Query<AdminUserQuery>,
 ) -> HttpResponse {
     let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(v) => v,
@@ -81,15 +127,105 @@ pub(crate) async fn admin_users(
     if let Err(r) = require_admin(&value, "user:manage") {
         return r;
     }
-    match accounts::list_admin_users(&services.storage).await {
-        Ok(users) => HttpResponse::Ok().json(
-            users
+    let query = query.into_inner();
+    let role = query.role.as_deref();
+    if !matches!(role, None | Some("user" | "admin" | "owner")) {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "invalid_query",
+            "Unknown user role",
+        );
+    }
+    let enabled = match query.status.as_deref() {
+        None | Some("all") => None,
+        Some("enabled") => Some(true),
+        Some("disabled") => Some(false),
+        Some(_) => {
+            return error(
+                StatusCode::BAD_REQUEST,
+                "invalid_query",
+                "Unknown user status",
+            )
+        }
+    };
+    let sort = query.sort.as_deref().unwrap_or("username");
+    if !matches!(
+        sort,
+        "username" | "created" | "login" | "pastes" | "storage"
+    ) {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "invalid_query",
+            "Unknown user sort field",
+        );
+    }
+    let descending =
+        query
+            .direction
+            .as_deref()
+            .unwrap_or(if sort == "username" { "asc" } else { "desc" })
+            == "desc";
+    if !matches!(query.direction.as_deref(), None | Some("asc" | "desc")) {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "invalid_query",
+            "Direction must be asc or desc",
+        );
+    }
+    let (page, page_size) = match dto::page_parameters(query.page, query.page_size, 25) {
+        Ok(value) => value,
+        Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
+    };
+    match accounts::list_admin_users(
+        &services.storage,
+        &accounts::AdminUserListQuery {
+            search: query.search.as_deref(),
+            role,
+            enabled,
+            sort,
+            descending,
+            page,
+            page_size,
+        },
+    )
+    .await
+    {
+        Ok(users) => HttpResponse::Ok().json(contract::AdminUserPage {
+            items: users
+                .items
                 .into_iter()
                 .map(contract::AdminUserResource::from)
-                .collect::<Vec<_>>(),
-        ),
+                .collect(),
+            pagination: dto::Pagination {
+                page: users.page,
+                page_size: users.page_size,
+                total_items: users.total_items,
+                total_pages: dto::total_pages(users.total_items, users.page_size),
+            },
+        }),
         Err(e) => domain_error(e),
     }
+}
+
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub(crate) struct AdminUserQuery {
+    /// Case-insensitive username search.
+    search: Option<String>,
+    /// Restrict results to `user`, `admin`, or `owner`.
+    role: Option<String>,
+    /// Restrict results to `enabled` or `disabled` accounts.
+    status: Option<String>,
+    /// Order by `username`, `created`, `login`, `pastes`, or `storage`.
+    sort: Option<String>,
+    /// Sort in `asc` or `desc` order.
+    direction: Option<String>,
+    /// One-based result page.
+    #[param(minimum = 1, default = 1)]
+    page: Option<u32>,
+    /// Results per page, from 1 through 100.
+    #[param(minimum = 1, maximum = 100, default = 25)]
+    page_size: Option<u32>,
 }
 
 #[utoipa::path(
@@ -157,11 +293,26 @@ pub(crate) async fn admin_pastes(
     match services.list_pastes(&value, &query, true).await {
         Ok(page) => {
             let total_pages = dto::total_pages(page.total_items, page.page_size);
+            let owner_names = match accounts::usernames_by_ids(
+                &services.storage,
+                page.items.iter().filter_map(|paste| paste.owner_id),
+            )
+            .await
+            {
+                Ok(names) => names,
+                Err(error) => return domain_error(error),
+            };
             HttpResponse::Ok().json(dto::PastePage {
                 items: page
                     .items
                     .into_iter()
-                    .map(|paste| dto::summary(&req, &value, paste, true))
+                    .map(|paste| {
+                        let owner_username =
+                            paste.owner_id.and_then(|id| owner_names.get(&id).cloned());
+                        let mut summary = dto::summary(&req, &value, paste, true);
+                        summary.owner_username = owner_username;
+                        summary
+                    })
                     .collect(),
                 pagination: dto::Pagination {
                     page: page.page,
@@ -489,11 +640,18 @@ pub(crate) struct AuditEventResource {
     created_at: String,
 }
 
-#[utoipa::path(get, path="/admin/audit-events", tag="administration", responses((status=200,description="Recent owner audit events",body=[AuditEventResource]),(status=403,description="Owner browser session required",body=crate::http::errors::ProblemDetails)), security(("sessionCookie"=[])))]
+#[derive(Serialize, utoipa::ToSchema)]
+pub(crate) struct AuditEventPage {
+    items: Vec<AuditEventResource>,
+    pagination: dto::Pagination,
+}
+
+#[utoipa::path(get, path="/admin/audit-events", tag="administration", params(AuditEventQuery), responses((status=200,description="Paginated owner audit events",body=AuditEventPage),(status=400,description="Invalid pagination parameter",body=crate::http::errors::ProblemDetails),(status=401,description="Authentication required",body=crate::http::errors::ProblemDetails),(status=403,description="Owner browser session required",body=crate::http::errors::ProblemDetails),(status=500,description="Internal error",body=crate::http::errors::ProblemDetails)), security(("sessionCookie"=[])))]
 #[get("/admin/audit-events")]
 pub(crate) async fn admin_audit_events(
     req: HttpRequest,
     services: web::Data<PasteService>,
+    query: web::Query<AuditEventQuery>,
 ) -> HttpResponse {
     let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(v) => v,
@@ -502,9 +660,22 @@ pub(crate) async fn admin_audit_events(
     if let Err(r) = auth::require_owner_session(&value) {
         return r;
     }
-    match crate::services::audit::list(&services.storage, 100).await {
-        Ok(items) => HttpResponse::Ok().json(
-            items
+    let query = query.into_inner();
+    let (page, page_size) = match dto::page_parameters(query.page, query.page_size, 25) {
+        Ok(value) => value,
+        Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
+    };
+    match crate::services::audit::list_page(
+        &services.storage,
+        query.search.as_deref(),
+        page,
+        page_size,
+    )
+    .await
+    {
+        Ok(result) => HttpResponse::Ok().json(AuditEventPage {
+            items: result
+                .items
                 .into_iter()
                 .map(|v| AuditEventResource {
                     id: v.id,
@@ -517,10 +688,29 @@ pub(crate) async fn admin_audit_events(
                     details: serde_json::from_str(&v.details).unwrap_or(serde_json::Value::Null),
                     created_at: dto::format_timestamp(v.created_at),
                 })
-                .collect::<Vec<_>>(),
-        ),
+                .collect(),
+            pagination: dto::Pagination {
+                page: result.page,
+                page_size: result.page_size,
+                total_items: result.total_items,
+                total_pages: dto::total_pages(result.total_items, result.page_size),
+            },
+        }),
         Err(e) => domain_error(e),
     }
+}
+
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub(crate) struct AuditEventQuery {
+    /// Search actor, action, target type, target label, and target ID.
+    search: Option<String>,
+    /// One-based result page.
+    #[param(minimum = 1, default = 1)]
+    page: Option<u32>,
+    /// Results per page, from 1 through 100.
+    #[param(minimum = 1, maximum = 100, default = 25)]
+    page_size: Option<u32>,
 }
 
 #[utoipa::path(
@@ -681,6 +871,7 @@ pub(crate) async fn admin_revoke_user_keys(
     params(InvitationQuery),
     responses(
         (status = 200, description = "Paginated active invitations or terminal invitation history", body = crate::http::contract::InvitationPage),
+        (status = 400, description = "Invalid view, status, search, or pagination parameter", body = crate::http::errors::ProblemDetails),
         (status = 400, description = "Invalid invitation filter", body = crate::http::errors::ProblemDetails),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "Administrator with invitation:manage required", body = crate::http::errors::ProblemDetails),
@@ -729,8 +920,10 @@ pub(crate) async fn admin_invitations(
             "Unknown invitation status",
         );
     }
-    let page = query.page.unwrap_or(1).max(1);
-    let page_size = query.page_size.unwrap_or(25).clamp(1, 100);
+    let (page, page_size) = match dto::page_parameters(query.page, query.page_size, 25) {
+        Ok(value) => value,
+        Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
+    };
     match accounts::list_invitations(
         &services.storage,
         history,
@@ -779,8 +972,10 @@ pub(crate) struct InvitationQuery {
     /// Restrict history to one terminal status.
     #[param(value_type = String)]
     status: Option<String>,
+    /// One-based result page.
     #[param(minimum = 1, default = 1)]
     page: Option<u32>,
+    /// Results per page, from 1 through 100.
     #[param(minimum = 1, maximum = 100, default = 25)]
     page_size: Option<u32>,
 }
@@ -972,8 +1167,10 @@ pub(crate) async fn admin_revoke_invitation(
 
 #[utoipa::path(
     get, path = "/admin/api-keys", tag = "administration",
+    params(AdminApiKeyQuery),
     responses(
-        (status = 200, description = "All API keys", body = [crate::http::contract::ApiKeyResource]),
+        (status = 200, description = "Paginated API keys", body = crate::http::contract::ApiKeyPage),
+        (status = 400, description = "Invalid filter, sort, or pagination parameter", body = crate::http::errors::ProblemDetails),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "Administrator with api_key:manage required", body = crate::http::errors::ProblemDetails),
         (status = 500, description = "Internal error", body = crate::http::errors::ProblemDetails)
@@ -983,6 +1180,7 @@ pub(crate) async fn admin_revoke_invitation(
 pub(crate) async fn admin_keys(
     req: HttpRequest,
     services: web::Data<PasteService>,
+    query: web::Query<AdminApiKeyQuery>,
 ) -> HttpResponse {
     let value = match principal(&services, &req).await.and_then(require_auth) {
         Ok(v) => v,
@@ -991,30 +1189,88 @@ pub(crate) async fn admin_keys(
     if let Err(r) = require_admin(&value, "api_key:manage") {
         return r;
     }
-    match api_keys::list(&services.storage).await {
-        Ok(mut keys) => {
-            if !value.is_owner() {
-                let privileged_users = match accounts::list_users(&services.storage).await {
-                    Ok(users) => users
-                        .into_iter()
-                        .filter(|user| user.is_admin())
-                        .map(|user| user.id)
-                        .collect::<std::collections::HashSet<_>>(),
-                    Err(error) => return domain_error(error),
-                };
-                keys.retain(|key| {
-                    key.user_id
-                        .is_none_or(|user_id| !privileged_users.contains(&user_id))
-                });
-            }
-            HttpResponse::Ok().json(
-                keys.into_iter()
-                    .map(contract::ApiKeyResource::from)
-                    .collect::<Vec<_>>(),
+    let query = query.into_inner();
+    let enabled = match query.status.as_deref() {
+        None | Some("all") => None,
+        Some("enabled") => Some(true),
+        Some("disabled") => Some(false),
+        Some(_) => {
+            return error(
+                StatusCode::BAD_REQUEST,
+                "invalid_query",
+                "Unknown API-key status",
             )
         }
+    };
+    let sort = query.sort.as_deref().unwrap_or("created");
+    if !matches!(sort, "created" | "name" | "owner" | "used") {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "invalid_query",
+            "Unknown API-key sort field",
+        );
+    }
+    let descending = query.direction.as_deref().unwrap_or("desc") == "desc";
+    if !matches!(query.direction.as_deref(), None | Some("asc" | "desc")) {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "invalid_query",
+            "Direction must be asc or desc",
+        );
+    }
+    let (page, page_size) = match dto::page_parameters(query.page, query.page_size, 25) {
+        Ok(value) => value,
+        Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
+    };
+    match api_keys::list_page(
+        &services.storage,
+        &api_keys::ApiKeyListQuery {
+            user_id: None,
+            include_privileged: value.is_owner(),
+            search: query.search.as_deref(),
+            enabled,
+            sort,
+            descending,
+            page,
+            page_size,
+        },
+    )
+    .await
+    {
+        Ok(keys) => HttpResponse::Ok().json(contract::ApiKeyPage {
+            items: keys
+                .items
+                .into_iter()
+                .map(contract::ApiKeyResource::from)
+                .collect(),
+            pagination: dto::Pagination {
+                page: keys.page,
+                page_size: keys.page_size,
+                total_items: keys.total_items,
+                total_pages: dto::total_pages(keys.total_items, keys.page_size),
+            },
+        }),
         Err(e) => domain_error(e),
     }
+}
+
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub(crate) struct AdminApiKeyQuery {
+    /// Search key name, owner, token prefix, and scope.
+    search: Option<String>,
+    /// Restrict results to `enabled` or `disabled` keys.
+    status: Option<String>,
+    /// Order by `created`, `name`, `owner`, or `used`.
+    sort: Option<String>,
+    /// Sort in `asc` or `desc` order.
+    direction: Option<String>,
+    /// One-based result page.
+    #[param(minimum = 1, default = 1)]
+    page: Option<u32>,
+    /// Results per page, from 1 through 100.
+    #[param(minimum = 1, maximum = 100, default = 25)]
+    page_size: Option<u32>,
 }
 
 #[utoipa::path(

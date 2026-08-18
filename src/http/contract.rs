@@ -128,6 +128,7 @@ pub(crate) struct ApiKeyResource {
     pub id: i64,
     #[schema(minimum = 1)]
     pub user_id: Option<i64>,
+    pub owner_username: Option<String>,
     pub name: String,
     pub token_prefix: String,
     #[schema(value_type = std::collections::HashSet<String>, min_items = 1)]
@@ -144,6 +145,7 @@ impl From<ApiKey> for ApiKeyResource {
         Self {
             id: key.id,
             user_id: key.user_id,
+            owner_username: key.owner_username,
             name: key.name,
             token_prefix: key.token_prefix,
             scopes: key.scopes,
@@ -152,6 +154,12 @@ impl From<ApiKey> for ApiKeyResource {
             enabled: key.enabled,
         }
     }
+}
+
+#[derive(Serialize, ToSchema)]
+pub(crate) struct ApiKeyPage {
+    pub items: Vec<ApiKeyResource>,
+    pub pagination: super::dto::Pagination,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -195,6 +203,12 @@ impl From<AdminUser> for AdminUserResource {
             active_api_key_count: user.active_api_key_count,
         }
     }
+}
+
+#[derive(Serialize, ToSchema)]
+pub(crate) struct AdminUserPage {
+    pub items: Vec<AdminUserResource>,
+    pub pagination: super::dto::Pagination,
 }
 
 #[derive(Serialize, ToSchema)]

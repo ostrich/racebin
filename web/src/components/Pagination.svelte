@@ -3,7 +3,7 @@
   import Link from "./Link.svelte";
 
   let { page, params }: { page: Page<unknown>; params?: URLSearchParams } = $props();
-  let pages = $derived(Math.max(1, Math.ceil(page.total_items / page.page_size)));
+  let pages = $derived(Math.max(1, page.total_pages));
 
   function pageUrl(number: number): string {
     const next = new URLSearchParams(params ?? location.search);

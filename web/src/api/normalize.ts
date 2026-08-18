@@ -40,6 +40,7 @@ function pasteFromWire(value: WirePaste, etag?: string | null): Paste {
     archive_url: resource?.archive_url ?? undefined,
     _etag: etag ?? undefined,
     owner_id: value.owner_id ?? null,
+    owner_username: "owner_username" in value ? value.owner_username ?? undefined : undefined,
     folder_id: value.folder_id ?? null,
     title: value.title,
     content: body?.content ?? ("excerpt" in value ? value.excerpt ?? "" : ""),
@@ -76,7 +77,8 @@ export function normalizePayload(value: unknown, etag?: string | null): unknown 
       ...(pagination ? {
         page: pagination.page,
         page_size: pagination.page_size,
-        total_items: pagination.total_items
+        total_items: pagination.total_items,
+        total_pages: pagination.total_pages
       } : {})
     };
   }

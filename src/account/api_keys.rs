@@ -21,6 +21,7 @@ pub const VALID_SCOPES: &[&str] = &[
 pub struct ApiKey {
     pub id: i64,
     pub user_id: Option<i64>,
+    pub owner_username: Option<String>,
     pub name: String,
     pub token_prefix: String,
     pub scopes: Vec<String>,
@@ -74,6 +75,7 @@ async fn from_row(repo: &Repository, row: sqlx::any::AnyRow) -> DomainResult<Api
     Ok(ApiKey {
         id,
         user_id: row.try_get("user_id").map_err(DomainError::from)?,
+        owner_username: row.try_get("owner_username").map_err(DomainError::from)?,
         name: row.try_get("name").map_err(DomainError::from)?,
         token_prefix: row.try_get("token_prefix").map_err(DomainError::from)?,
         scopes: scopes_for(repo.pool(), id).await?,
@@ -139,6 +141,7 @@ pub async fn create(
         ApiKey {
             id,
             user_id,
+            owner_username: None,
             name: name.to_string(),
             token_prefix,
             scopes,
@@ -155,7 +158,7 @@ pub async fn authenticate(repo: &Repository, token: &str) -> DomainResult<Option
         return Ok(None);
     }
     let row = sqlx::query(
-        "SELECT k.id,k.user_id,k.name,k.token_prefix,k.created_at,k.last_used_at,k.enabled
+        "SELECT k.id,k.user_id,k.name,k.token_prefix,k.created_at,k.last_used_at,k.enabled,u.username AS owner_username
          FROM api_keys k LEFT JOIN users u ON u.id=k.user_id
          WHERE k.token_hash=$1 AND k.enabled=1
            AND (k.user_id IS NULL OR u.enabled=1)",
@@ -180,37 +183,91 @@ pub async fn authenticate(repo: &Repository, token: &str) -> DomainResult<Option
     Ok(Some(key))
 }
 
-async fn list_where(repo: &Repository, user_id: Option<i64>) -> DomainResult<Vec<ApiKey>> {
-    let rows = if let Some(user_id) = user_id {
-        sqlx::query(
-            "SELECT id,user_id,name,token_prefix,created_at,last_used_at,enabled
-             FROM api_keys WHERE user_id=$1 ORDER BY created_at DESC",
-        )
-        .bind(user_id)
-        .fetch_all(repo.pool())
-        .await
-    } else {
-        sqlx::query(
-            "SELECT id,user_id,name,token_prefix,created_at,last_used_at,enabled
-             FROM api_keys ORDER BY created_at DESC",
-        )
-        .fetch_all(repo.pool())
-        .await
-    }
+pub struct ApiKeyListQuery<'a> {
+    pub user_id: Option<i64>,
+    pub include_privileged: bool,
+    pub search: Option<&'a str>,
+    pub enabled: Option<bool>,
+    pub sort: &'a str,
+    pub descending: bool,
+    pub page: u32,
+    pub page_size: u32,
+}
+
+pub async fn list_page(
+    repo: &Repository,
+    query: &ApiKeyListQuery<'_>,
+) -> DomainResult<crate::services::Page<ApiKey>> {
+    let search = query
+        .search
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| format!("%{}%", value.trim().to_lowercase()))
+        .unwrap_or_default();
+    let owner_id = query.user_id.unwrap_or(0);
+    let enabled_value = query.enabled.map_or(-1, i64::from);
+    let privileged = i64::from(query.include_privileged);
+    let where_clause = " WHERE ($1=0 OR k.user_id=$1)
+        AND ($2=1 OR u.id IS NULL OR (u.role<>'admin' AND u.is_owner=0))
+        AND ($3='' OR LOWER(k.name) LIKE $3 OR LOWER(k.token_prefix) LIKE $3 OR LOWER(COALESCE(u.username,'')) LIKE $3
+             OR EXISTS (SELECT 1 FROM api_key_scopes s WHERE s.api_key_id=k.id AND LOWER(s.scope) LIKE $3))
+        AND ($4=-1 OR k.enabled=$4)";
+    let total_items = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(format!(
+        "SELECT COUNT(*) FROM api_keys k LEFT JOIN users u ON u.id=k.user_id{where_clause}"
+    )))
+    .bind(owner_id)
+    .bind(privileged)
+    .bind(&search)
+    .bind(enabled_value)
+    .fetch_one(repo.pool())
+    .await
     .map_err(DomainError::from)?;
-    let mut keys = Vec::with_capacity(rows.len());
+    let sort_field = match query.sort {
+        "name" => "LOWER(k.name)",
+        "owner" => "LOWER(COALESCE(u.username,''))",
+        "used" => "COALESCE(k.last_used_at,0)",
+        _ => "k.created_at",
+    };
+    let direction = if query.descending { "DESC" } else { "ASC" };
+    let sql = sqlx::AssertSqlSafe(format!(
+        "SELECT k.id,k.user_id,k.name,k.token_prefix,k.created_at,k.last_used_at,k.enabled,u.username AS owner_username
+         FROM api_keys k LEFT JOIN users u ON u.id=k.user_id{where_clause}
+         ORDER BY {sort_field} {direction},k.id {direction} LIMIT $5 OFFSET $6"
+    ));
+    let rows = sqlx::query(sql)
+        .bind(owner_id)
+        .bind(privileged)
+        .bind(search)
+        .bind(enabled_value)
+        .bind(i64::from(query.page_size))
+        .bind(i64::from(query.page.saturating_sub(1)) * i64::from(query.page_size))
+        .fetch_all(repo.pool())
+        .await
+        .map_err(DomainError::from)?;
+    let mut items = Vec::with_capacity(rows.len());
     for row in rows {
-        keys.push(from_row(repo, row).await?);
+        items.push(from_row(repo, row).await?);
     }
-    Ok(keys)
+    Ok(crate::services::Page {
+        items,
+        page: query.page,
+        page_size: query.page_size,
+        total_items,
+    })
 }
 
-pub async fn list(repo: &Repository) -> DomainResult<Vec<ApiKey>> {
-    list_where(repo, None).await
-}
-
-pub async fn list_for_user(repo: &Repository, user_id: i64) -> DomainResult<Vec<ApiKey>> {
-    list_where(repo, Some(user_id)).await
+pub async fn get(repo: &Repository, id: i64) -> DomainResult<Option<ApiKey>> {
+    let row = sqlx::query(
+        "SELECT k.id,k.user_id,k.name,k.token_prefix,k.created_at,k.last_used_at,k.enabled,u.username AS owner_username
+         FROM api_keys k LEFT JOIN users u ON u.id=k.user_id WHERE k.id=$1",
+    )
+    .bind(id)
+    .fetch_optional(repo.pool())
+    .await
+    .map_err(DomainError::from)?;
+    match row {
+        Some(row) => from_row(repo, row).await.map(Some),
+        None => Ok(None),
+    }
 }
 
 pub async fn set_enabled_for_user(

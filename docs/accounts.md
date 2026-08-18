@@ -99,6 +99,13 @@ log. Administrative API-key scopes remain available for routine operations,
 but owner-only operations require a browser session. Role changes and ownership
 transfer also require password confirmation from the last ten minutes.
 
+All growing administration collections are filtered and paginated by the
+server. Their filters and current page live in the URL, so reload, history, and
+shared administrative links preserve the current view. The overview uses a
+dedicated aggregate summary rather than fetching complete collections merely
+to compute counts. Folder navigation is deliberately bounded instead of
+paginated; the current limit is advertised through the capabilities endpoint.
+
 ## Operator CLI
 
 The permanent bootstrap and recovery commands operate directly on the selected

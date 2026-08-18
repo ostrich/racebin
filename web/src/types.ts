@@ -33,6 +33,7 @@ export type Paste = {
   archive_url?: string;
   _etag?: string;
   owner_id: number | null;
+  owner_username?: string;
   folder_id: number | null;
   title: string;
   content: string;
@@ -75,11 +76,13 @@ export type Page<T> = {
   page: number;
   page_size: number;
   total_items: number;
+  total_pages: number;
 };
 
 export type ApiKey = {
   id: number;
   user_id: number | null;
+  owner_username: string | null;
   name: string;
   token_prefix: string;
   scopes: string[];
@@ -103,6 +106,7 @@ export type Config = {
   default_expiration_seconds: number | null;
   max_attachment_size_bytes: number;
   max_attachments_per_paste: number;
+  max_folders_per_user: number;
   attachments_enabled: boolean;
   qr_codes_enabled: boolean;
   formats: Array<"text" | "markdown">;

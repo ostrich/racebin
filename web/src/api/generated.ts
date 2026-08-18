@@ -196,6 +196,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["admin_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/users": {
         parameters: {
             query?: never;
@@ -636,6 +652,26 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AdminSummaryResource: {
+            /** Format: int64 */
+            active_invitation_count: number;
+            /** Format: int64 */
+            active_session_count: number;
+            /** Format: int64 */
+            expiring_invitation_count: number;
+            /** Format: int64 */
+            password_change_required_count: number;
+            /** Format: int64 */
+            paste_count: number;
+            /** Format: int64 */
+            storage_bytes: number;
+            /** Format: int64 */
+            user_count: number;
+        };
+        AdminUserPage: {
+            items: components["schemas"]["AdminUserResource"][];
+            pagination: components["schemas"]["Pagination"];
+        };
         AdminUserResource: {
             /** Format: int64 */
             active_api_key_count: number;
@@ -673,6 +709,10 @@ export interface components {
             name: string;
             scopes: string[];
         };
+        ApiKeyPage: {
+            items: components["schemas"]["ApiKeyResource"][];
+            pagination: components["schemas"]["Pagination"];
+        };
         ApiKeyResource: {
             /** Format: date-time */
             created_at: string;
@@ -682,6 +722,7 @@ export interface components {
             /** Format: date-time */
             last_used_at?: string | null;
             name: string;
+            owner_username?: string | null;
             scopes: string[];
             token_prefix: string;
             /** Format: int64 */
@@ -718,6 +759,10 @@ export interface components {
         };
         AttachmentUploadResponse: {
             items: components["schemas"]["AttachmentUploadItem"][];
+        };
+        AuditEventPage: {
+            items: components["schemas"]["AuditEventResource"][];
+            pagination: components["schemas"]["Pagination"];
         };
         AuditEventResource: {
             action: string;
@@ -791,6 +836,7 @@ export interface components {
             max_attachment_size_bytes: number;
             max_attachments_per_paste: number;
             max_content_size_bytes: number;
+            max_folders_per_user: number;
             /** Format: int32 */
             max_page_size: number;
             max_title_characters: number;
@@ -1128,6 +1174,7 @@ export interface components {
             last_read_at?: string | null;
             /** Format: int64 */
             owner_id?: number | null;
+            owner_username?: string | null;
             /** Format: int64 */
             read_count: number;
             /** Format: int64 */
@@ -1233,20 +1280,42 @@ export interface operations {
     };
     list_keys: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Search key name, token prefix, and scope. */
+                search?: string;
+                /** @description Restrict results to `enabled` or `disabled` keys. */
+                status?: string;
+                /** @description Order by `created`, `name`, or `used`. */
+                sort?: "created" | "title" | "reads" | "expires" | "size";
+                /** @description Sort in `asc` or `desc` order. */
+                direction?: "asc" | "desc";
+                /** @description One-based result page. */
+                page?: number;
+                /** @description Results per page, from 1 through 100. */
+                page_size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description API keys owned by the authenticated user */
+            /** @description Paginated API keys owned by the authenticated user */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiKeyResource"][];
+                    "application/json": components["schemas"]["ApiKeyPage"];
+                };
+            };
+            /** @description Invalid filter, sort, or pagination parameter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Authentication required */
@@ -1528,20 +1597,42 @@ export interface operations {
     };
     admin_keys: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Search key name, owner, token prefix, and scope. */
+                search?: string;
+                /** @description Restrict results to `enabled` or `disabled` keys. */
+                status?: string;
+                /** @description Order by `created`, `name`, `owner`, or `used`. */
+                sort?: "created" | "title" | "reads" | "expires" | "size";
+                /** @description Sort in `asc` or `desc` order. */
+                direction?: "asc" | "desc";
+                /** @description One-based result page. */
+                page?: number;
+                /** @description Results per page, from 1 through 100. */
+                page_size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description All API keys */
+            /** @description Paginated API keys */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiKeyResource"][];
+                    "application/json": components["schemas"]["ApiKeyPage"];
+                };
+            };
+            /** @description Invalid filter, sort, or pagination parameter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Authentication required */
@@ -1699,24 +1790,58 @@ export interface operations {
     };
     admin_audit_events: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Search actor, action, target type, target label, and target ID. */
+                search?: string;
+                /** @description One-based result page. */
+                page?: number;
+                /** @description Results per page, from 1 through 100. */
+                page_size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Recent owner audit events */
+            /** @description Paginated owner audit events */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuditEventResource"][];
+                    "application/json": components["schemas"]["AuditEventPage"];
+                };
+            };
+            /** @description Invalid pagination parameter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Owner browser session required */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1735,7 +1860,9 @@ export interface operations {
                 search?: string;
                 /** @description Restrict history to one terminal status. */
                 status: string;
+                /** @description One-based result page. */
                 page?: number;
+                /** @description Results per page, from 1 through 100. */
                 page_size?: number;
             };
             header?: never;
@@ -2172,7 +2299,7 @@ export interface operations {
             };
         };
     };
-    admin_users: {
+    admin_summary: {
         parameters: {
             query?: never;
             header?: never;
@@ -2181,13 +2308,84 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Administrative user summaries */
+            /** @description Administrative aggregate counts */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminUserResource"][];
+                    "application/json": components["schemas"]["AdminSummaryResource"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Administrator required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    admin_users: {
+        parameters: {
+            query?: {
+                /** @description Case-insensitive username search. */
+                search?: string;
+                /** @description Restrict results to `user`, `admin`, or `owner`. */
+                role?: string;
+                /** @description Restrict results to `enabled` or `disabled` accounts. */
+                status?: string;
+                /** @description Order by `username`, `created`, `login`, `pastes`, or `storage`. */
+                sort?: "created" | "title" | "reads" | "expires" | "size";
+                /** @description Sort in `asc` or `desc` order. */
+                direction?: "asc" | "desc";
+                /** @description One-based result page. */
+                page?: number;
+                /** @description Results per page, from 1 through 100. */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated administrative user summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserPage"];
+                };
+            };
+            /** @description Invalid filter, sort, or pagination parameter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Authentication required */

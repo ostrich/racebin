@@ -1,4 +1,71 @@
 use super::*;
+use std::collections::{HashMap, HashSet};
+
+#[derive(Clone, Debug)]
+pub struct AdminSummary {
+    pub user_count: i64,
+    pub paste_count: i64,
+    pub storage_bytes: i64,
+    pub active_session_count: i64,
+    pub active_invitation_count: i64,
+    pub expiring_invitation_count: i64,
+    pub password_change_required_count: i64,
+}
+
+pub async fn admin_summary(repo: &Repository) -> DomainResult<AdminSummary> {
+    let text_size = if repo.kind() == DatabaseKind::Postgres {
+        "CAST(octet_length(p.content) AS BIGINT)"
+    } else {
+        "length(CAST(p.content AS BLOB))"
+    };
+    let now = unix_timestamp();
+    let user_count = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+        .fetch_one(repo.pool())
+        .await
+        .map_err(DomainError::from)?;
+    let paste_count = sqlx::query_scalar("SELECT COUNT(*) FROM pastes")
+        .fetch_one(repo.pool())
+        .await
+        .map_err(DomainError::from)?;
+    let storage_bytes = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT CAST(COALESCE(SUM({text_size} + COALESCE((SELECT SUM(a.size_bytes) FROM attachments a WHERE a.paste_id=p.id),0)),0) AS BIGINT) FROM pastes p"
+    ))).fetch_one(repo.pool()).await.map_err(DomainError::from)?;
+    let active_session_count =
+        sqlx::query_scalar("SELECT COUNT(*) FROM sessions WHERE expires_at>$1")
+            .bind(now)
+            .fetch_one(repo.pool())
+            .await
+            .map_err(DomainError::from)?;
+    let active_invitation_count = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM invitations WHERE redeemed=0 AND revoked=0 AND expires_at>$1",
+    )
+    .bind(now)
+    .fetch_one(repo.pool())
+    .await
+    .map_err(DomainError::from)?;
+    let expiring_invitation_count = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM invitations WHERE redeemed=0 AND revoked=0 AND expires_at>$1 AND expires_at<=$2",
+    )
+    .bind(now)
+    .bind(now + 4 * 60 * 60)
+    .fetch_one(repo.pool())
+    .await
+    .map_err(DomainError::from)?;
+    let password_change_required_count =
+        sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE password_change_required=1")
+            .fetch_one(repo.pool())
+            .await
+            .map_err(DomainError::from)?;
+    Ok(AdminSummary {
+        user_count,
+        paste_count,
+        storage_bytes,
+        active_session_count,
+        active_invitation_count,
+        expiring_invitation_count,
+        password_change_required_count,
+    })
+}
 
 fn admin_user_query(repo: &Repository) -> String {
     let text_size = if repo.kind() == DatabaseKind::Postgres {
@@ -17,15 +84,72 @@ fn admin_user_query(repo: &Repository) -> String {
     )
 }
 
-pub async fn list_admin_users(repo: &Repository) -> DomainResult<Vec<AdminUser>> {
-    sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "{} ORDER BY lower(u.username)",
-        admin_user_query(repo)
+pub struct AdminUserListQuery<'a> {
+    pub search: Option<&'a str>,
+    pub role: Option<&'a str>,
+    pub enabled: Option<bool>,
+    pub sort: &'a str,
+    pub descending: bool,
+    pub page: u32,
+    pub page_size: u32,
+}
+
+pub async fn list_admin_users(
+    repo: &Repository,
+    query: &AdminUserListQuery<'_>,
+) -> DomainResult<crate::services::Page<AdminUser>> {
+    let search = query
+        .search
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| format!("%{}%", value.trim().to_lowercase()));
+    let search_value = search.as_deref().unwrap_or("");
+    let role_value = query.role.unwrap_or("");
+    let enabled_value = query.enabled.map_or(-1, i64::from);
+    let count_where = " WHERE ($1='' OR LOWER(u.username) LIKE $1)
+        AND ($2='' OR ($2='owner' AND u.is_owner=1) OR ($2<>'owner' AND u.role=$2 AND u.is_owner=0))
+        AND ($3=-1 OR u.enabled=$3)";
+    let list_where = " WHERE ($2='' OR LOWER(u.username) LIKE $2)
+        AND ($3='' OR ($3='owner' AND u.is_owner=1) OR ($3<>'owner' AND u.role=$3 AND u.is_owner=0))
+        AND ($4=-1 OR u.enabled=$4)";
+    let sort_field = match query.sort {
+        "created" => "u.created_at",
+        "login" => "COALESCE(u.last_login_at,0)",
+        "pastes" => "paste_count",
+        "storage" => "storage_bytes",
+        _ => "LOWER(u.username)",
+    };
+    let direction = if query.descending { "DESC" } else { "ASC" };
+
+    let total_items = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(format!(
+        "SELECT COUNT(*) FROM users u{count_where}"
     )))
-    .bind(unix_timestamp())
-    .fetch_all(repo.pool())
+    .bind(search_value)
+    .bind(role_value)
+    .bind(enabled_value)
+    .fetch_one(repo.pool())
     .await
-    .map_err(DomainError::from)
+    .map_err(DomainError::from)?;
+
+    let sql = format!(
+        "{}{list_where} ORDER BY {sort_field} {direction},u.id {direction} LIMIT $5 OFFSET $6",
+        admin_user_query(repo)
+    );
+    let items = sqlx::query_as(sqlx::AssertSqlSafe(sql))
+        .bind(unix_timestamp())
+        .bind(search_value)
+        .bind(role_value)
+        .bind(enabled_value)
+        .bind(i64::from(query.page_size))
+        .bind(i64::from(query.page.saturating_sub(1)) * i64::from(query.page_size))
+        .fetch_all(repo.pool())
+        .await
+        .map_err(DomainError::from)?;
+    Ok(crate::services::Page {
+        items,
+        page: query.page,
+        page_size: query.page_size,
+        total_items,
+    })
 }
 
 pub async fn admin_user(repo: &Repository, id: i64) -> DomainResult<Option<AdminUser>> {
@@ -38,6 +162,32 @@ pub async fn admin_user(repo: &Repository, id: i64) -> DomainResult<Option<Admin
     .fetch_optional(repo.pool())
     .await
     .map_err(DomainError::from)
+}
+
+pub async fn usernames_by_ids(
+    repo: &Repository,
+    ids: impl IntoIterator<Item = i64>,
+) -> DomainResult<HashMap<i64, String>> {
+    let ids = ids.into_iter().collect::<HashSet<_>>();
+    if ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let mut query =
+        sqlx::QueryBuilder::<sqlx::Any>::new("SELECT id,username FROM users WHERE id IN (");
+    let mut separated = query.separated(",");
+    for id in ids {
+        separated.push_bind(id);
+    }
+    separated.push_unseparated(")");
+    query
+        .build()
+        .fetch_all(repo.pool())
+        .await
+        .map_err(DomainError::from)?
+        .into_iter()
+        .map(|row| Ok((row.try_get("id")?, row.try_get("username")?)))
+        .collect::<Result<HashMap<_, _>, sqlx::Error>>()
+        .map_err(DomainError::from)
 }
 
 pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> DomainResult<()> {

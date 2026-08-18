@@ -374,6 +374,15 @@ cached data while revalidating. Page request generations prevent an older
 response from replacing a newer query, while navigation readiness determines
 only when the new page is structurally ready for focus and scroll restoration.
 
+Growing collection endpoints return a common page envelope and perform search,
+filtering, ordering, counting, and slicing in SQL. The browser stores those
+parameters in the route query string and renders the shared pagination control.
+Administrative rows carry the display data they require, such as an owner
+username, rather than making the UI fetch an unbounded related collection and
+join it in memory. Dashboard totals come from a purpose-built aggregate summary
+endpoint. Small navigation collections, currently folders, are capped and
+publish their limit through server capabilities.
+
 Notable browser-side technologies are:
 
 - **Tiptap/ProseMirror** for structured rich-text editing;

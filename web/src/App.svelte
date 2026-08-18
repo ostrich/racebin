@@ -110,7 +110,7 @@
       {:else if route.name === "edit-paste"}
         <PasteFormPage pasteId={route.pasteId}/>
       {:else if route.name === "account"}
-        <AccountPage/>
+        <AccountPage query={$locationState.query}/>
       {:else if route.name === "password"}
         <PasswordPage/>
       {:else if route.name === "admin"}
@@ -118,17 +118,17 @@
       {:else if route.name === "admin-pastes"}
         <AdminPastesPage query={$locationState.query}/>
       {:else if route.name === "admin-users"}
-        <AdminUsersPage/>
+        <AdminUsersPage query={$locationState.query}/>
       {:else if route.name === "admin-user"}
         <AdminUserPage userId={route.userId}/>
       {:else if route.name === "admin-invitations"}
         <AdminInvitationsPage query={$locationState.query}/>
       {:else if route.name === "admin-api-keys"}
-        <AdminApiKeysPage/>
+        <AdminApiKeysPage query={$locationState.query}/>
       {:else if route.name === "admin-settings"}
         <AdminSettingsPage/>
       {:else if route.name === "admin-audit"}
-        <AdminAuditPage/>
+        <AdminAuditPage query={$locationState.query}/>
       {:else if route.name === "help"}
         <HelpPage/>
       {:else if route.name === "password-reset"}

@@ -185,6 +185,8 @@ pub(crate) struct PasteSummary {
     #[schema(minimum = 1)]
     pub owner_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner_username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(minimum = 1)]
     pub folder_id: Option<i64>,
     #[schema(format = DateTime)]
@@ -234,6 +236,45 @@ pub(crate) fn total_pages(total_items: i64, page_size: u32) -> u32 {
         .unwrap_or_default()
         .div_ceil(u64::from(page_size));
     u32::try_from(pages).unwrap_or(u32::MAX)
+}
+
+pub(crate) fn page_parameters(
+    page: Option<u32>,
+    page_size: Option<u32>,
+    default_page_size: u32,
+) -> Result<(u32, u32), &'static str> {
+    let page = page.unwrap_or(1);
+    let page_size = page_size.unwrap_or(default_page_size);
+    if page == 0 {
+        return Err("page must be at least 1");
+    }
+    if !(1..=crate::limits::MAX_PAGE_SIZE).contains(&page_size) {
+        return Err("page_size must be between 1 and 100");
+    }
+    Ok((page, page_size))
+}
+
+#[cfg(test)]
+mod pagination_tests {
+    use super::page_parameters;
+
+    #[test]
+    fn pagination_defaults_and_validates_bounds() {
+        assert_eq!(page_parameters(None, None, 25), Ok((1, 25)));
+        assert_eq!(page_parameters(Some(2), Some(100), 25), Ok((2, 100)));
+        assert_eq!(
+            page_parameters(Some(0), None, 25),
+            Err("page must be at least 1")
+        );
+        assert_eq!(
+            page_parameters(None, Some(0), 25),
+            Err("page_size must be between 1 and 100")
+        );
+        assert_eq!(
+            page_parameters(None, Some(101), 25),
+            Err("page_size must be between 1 and 100")
+        );
+    }
 }
 
 impl CreatePasteRequest {
@@ -426,6 +467,7 @@ pub(crate) fn summary(
         language: (paste.content_kind == "text").then_some(paste.language),
         visibility: paste.visibility,
         owner_id: own.then_some(paste.owner_id).flatten(),
+        owner_username: None,
         folder_id: own.then_some(paste.folder_id).flatten(),
         created_at: format_timestamp(paste.created_at),
         updated_at: format_timestamp(paste.updated_at),

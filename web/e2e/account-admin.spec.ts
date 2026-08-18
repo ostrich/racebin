@@ -67,3 +67,36 @@ test("account and admin ownership data render as structured controls", async ({ 
   await passwordDialog.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByText("Role updated.")).toBeVisible();
 });
+
+test("administrative lists keep server-side filters and pagination in the URL", async ({ page }) => {
+  await mockApi(page, true);
+  const requests: URL[] = [];
+  await page.route("**/api/v1/admin/users?*", async route => {
+    const url = new URL(route.request().url());
+    requests.push(url);
+    const pageNumber = Number(url.searchParams.get("page") ?? 1);
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        items: [{
+          id: pageNumber, username: `user-${pageNumber}`, role: "user", enabled: true,
+          password_change_required: false, created_at: "2023-11-14T22:13:20Z",
+          last_login_at: null, paste_count: 0, storage_bytes: 0,
+          active_session_count: 0, api_key_count: 0, active_api_key_count: 0
+        }],
+        pagination: { page: pageNumber, page_size: 25, total_items: 26, total_pages: 2 }
+      })
+    });
+  });
+
+  await page.goto("/admin/users?search=user");
+  await expect(page.getByText("Page 1 of 2")).toBeVisible();
+  expect(requests.at(-1)?.searchParams.get("search")).toBe("user");
+  expect(requests.at(-1)?.searchParams.get("page_size")).toBe("25");
+  await page.getByRole("link", { name: "Next" }).click();
+  await expect(page).toHaveURL(/search=user.*page=2|page=2.*search=user/);
+  await expect(page.getByText("user-2")).toBeVisible();
+  await page.getByLabel("Status").selectOption("disabled");
+  await expect(page).toHaveURL(/status=disabled/);
+  expect(new URL(page.url()).searchParams.has("page")).toBe(false);
+});

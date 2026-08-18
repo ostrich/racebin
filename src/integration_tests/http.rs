@@ -1287,7 +1287,31 @@ mod tests {
         .await;
         assert_eq!(admin_users.status(), StatusCode::OK);
         let admin_users: Value = test::read_body_json(admin_users).await;
-        assert!(admin_users[0]["created_at"].as_str().is_some());
+        assert!(admin_users["items"][0]["created_at"].as_str().is_some());
+        assert!(admin_users["pagination"]["total_items"].as_i64().is_some());
+        let filtered_admin_users = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/v1/admin/users?search=http-user&page=1&page_size=1")
+                .insert_header(("Authorization", format!("Bearer {user_admin_token}")))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(filtered_admin_users.status(), StatusCode::OK);
+        let filtered_admin_users: Value = test::read_body_json(filtered_admin_users).await;
+        assert_eq!(filtered_admin_users["pagination"]["page_size"], 1);
+        assert_eq!(filtered_admin_users["pagination"]["total_items"], 1);
+        assert_eq!(filtered_admin_users["items"][0]["username"], "http-user");
+
+        let invalid_admin_page = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/v1/admin/users?page=0")
+                .insert_header(("Authorization", format!("Bearer {user_admin_token}")))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(invalid_admin_page.status(), StatusCode::BAD_REQUEST);
 
         for _ in 0..5 {
             let failed_login = test::call_service(

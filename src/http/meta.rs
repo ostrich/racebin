@@ -35,6 +35,7 @@ use utoipa::{Modify, OpenApi};
         crate::http::keys::update_key,
         crate::http::keys::delete_key,
         crate::http::admin::admin_users,
+        crate::http::admin::admin_summary,
         crate::http::admin::admin_user,
         crate::http::admin::admin_pastes,
         crate::http::admin::admin_update_user,
@@ -521,6 +522,7 @@ fn operation_scopes(operation_id: &str) -> &'static [&'static str] {
         "list_keys" | "create_key" | "update_key" | "delete_key" => &["api_key:manage"],
         "admin_pastes" => &["paste:manage"],
         "admin_users"
+        | "admin_summary"
         | "admin_user"
         | "admin_update_user"
         | "admin_create_password_reset"
@@ -556,6 +558,7 @@ struct Capabilities {
     default_expiration_seconds: Option<i64>,
     max_attachment_size_bytes: usize,
     max_attachments_per_paste: usize,
+    max_folders_per_user: usize,
     attachments_enabled: bool,
     qr_codes_enabled: bool,
     formats: [&'static str; 2],
@@ -745,6 +748,7 @@ async fn get_capabilities(services: web::Data<PasteService>) -> impl Responder {
             .attachment_size_limit_bytes()
             .expect("attachment limit is validated at startup"),
         max_attachments_per_paste: crate::limits::MAX_ATTACHMENTS_PER_PASTE,
+        max_folders_per_user: crate::limits::MAX_FOLDERS_PER_USER,
         attachments_enabled: settings.attachments_enabled,
         qr_codes_enabled: settings.qr_codes_enabled,
         formats: ["text", "markdown"],
@@ -877,6 +881,7 @@ mod tests {
             "/pastes/{paste_id}/archive",
             "/pastes/{paste_id}/qr",
             "/admin/users",
+            "/admin/summary",
             "/admin/users/{id}",
             "/admin/users/{id}/password-reset",
             "/admin/users/{id}/sessions",
@@ -937,6 +942,7 @@ mod tests {
             "update_key",
             "delete_key",
             "admin_users",
+            "admin_summary",
             "admin_user",
             "admin_pastes",
             "admin_update_user",
@@ -1293,6 +1299,48 @@ mod tests {
         );
         assert!(value["components"]["schemas"]["PasteSort"].is_null());
         assert!(value["components"]["schemas"]["SortDirection"].is_null());
+    }
+
+    #[test]
+    fn growing_administrative_collections_publish_page_contracts() {
+        let value = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        for (path, schema, filters) in [
+            (
+                "/admin/users",
+                "AdminUserPage",
+                &["search", "role", "status", "sort", "direction"][..],
+            ),
+            (
+                "/admin/api-keys",
+                "ApiKeyPage",
+                &["search", "status", "sort", "direction"][..],
+            ),
+            (
+                "/account/api-keys",
+                "ApiKeyPage",
+                &["search", "status", "sort", "direction"][..],
+            ),
+            ("/admin/audit-events", "AuditEventPage", &["search"][..]),
+        ] {
+            let operation = &value["paths"][path]["get"];
+            assert_eq!(
+                operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+                format!("#/components/schemas/{schema}")
+            );
+            let parameters = operation["parameters"].as_array().unwrap();
+            for name in filters.iter().chain(["page", "page_size"].iter()) {
+                let parameter = parameters
+                    .iter()
+                    .find(|parameter| parameter["name"] == *name)
+                    .unwrap_or_else(|| panic!("{path} is missing {name}"));
+                assert!(
+                    parameter["description"]
+                        .as_str()
+                        .is_some_and(|description| !description.is_empty()),
+                    "{path} parameter {name} is undocumented"
+                );
+            }
+        }
     }
 
     #[test]

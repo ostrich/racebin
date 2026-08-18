@@ -245,7 +245,25 @@ pub(super) async fn backend_contract(repo: Repository) {
             .id,
         key.id
     );
-    assert_eq!(api_keys::list_for_user(&repo, 2).await.unwrap().len(), 1);
+    assert_eq!(
+        api_keys::list_page(
+            &repo,
+            &api_keys::ApiKeyListQuery {
+                user_id: Some(2),
+                include_privileged: true,
+                search: None,
+                enabled: None,
+                sort: "created",
+                descending: true,
+                page: 1,
+                page_size: 25,
+            },
+        )
+        .await
+        .unwrap()
+        .total_items,
+        1
+    );
     assert!(api_keys::set_enabled_for_user(&repo, key.id, 2, false)
         .await
         .unwrap());
@@ -717,7 +735,112 @@ pub(super) async fn backend_contract(repo: Repository) {
     assert_eq!(managed.username, "paste-owner");
     assert!(managed.paste_count > 0);
     assert!(managed.api_key_count > 0);
-    assert!(accounts::list_admin_users(&repo).await.unwrap().len() >= 2);
+    assert!(
+        accounts::list_admin_users(
+            &repo,
+            &accounts::AdminUserListQuery {
+                search: None,
+                role: None,
+                enabled: None,
+                sort: "username",
+                descending: false,
+                page: 1,
+                page_size: 25,
+            }
+        )
+        .await
+        .unwrap()
+        .items
+        .len()
+            >= 2
+    );
+    let first_user_page = accounts::list_admin_users(
+        &repo,
+        &accounts::AdminUserListQuery {
+            search: None,
+            role: None,
+            enabled: None,
+            sort: "username",
+            descending: false,
+            page: 1,
+            page_size: 1,
+        },
+    )
+    .await
+    .unwrap();
+    let second_user_page = accounts::list_admin_users(
+        &repo,
+        &accounts::AdminUserListQuery {
+            search: None,
+            role: None,
+            enabled: None,
+            sort: "username",
+            descending: false,
+            page: 2,
+            page_size: 1,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(first_user_page.total_items, second_user_page.total_items);
+    assert_ne!(first_user_page.items[0].id, second_user_page.items[0].id);
+    assert_eq!(
+        accounts::list_admin_users(
+            &repo,
+            &accounts::AdminUserListQuery {
+                search: Some("paste-owner"),
+                role: Some("user"),
+                enabled: Some(true),
+                sort: "username",
+                descending: false,
+                page: 1,
+                page_size: 25,
+            },
+        )
+        .await
+        .unwrap()
+        .items
+        .len(),
+        1
+    );
+
+    let key_page = api_keys::list_page(
+        &repo,
+        &api_keys::ApiKeyListQuery {
+            user_id: Some(2),
+            include_privileged: true,
+            search: Some("survives"),
+            enabled: Some(true),
+            sort: "name",
+            descending: false,
+            page: 1,
+            page_size: 1,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(key_page.total_items, 1);
+    assert_eq!(
+        key_page.items[0].owner_username.as_deref(),
+        Some("paste-owner")
+    );
+
+    let summary = accounts::admin_summary(&repo).await.unwrap();
+    assert!(summary.user_count >= 2);
+    assert!(summary.paste_count > 0);
+    assert!(summary.storage_bytes > 0);
+    sqlx::query(
+        "INSERT INTO audit_events(actor_user_id,actor_username,action,target_type,target_label,details,created_at)
+         VALUES($1,$2,$3,$4,$5,$6,$7)",
+    )
+    .bind(1_i64).bind("administrator").bind("test.paginated").bind("user")
+    .bind("paste-owner").bind("{}").bind(crate::time::unix_timestamp())
+    .execute(repo.pool()).await.unwrap();
+    let audit_page = crate::services::audit::list_page(&repo, Some("paginated"), 1, 1)
+        .await
+        .unwrap();
+    assert_eq!(audit_page.total_items, 1);
+    assert_eq!(audit_page.items[0].action, "test.paginated");
 
     for index in 0..5 {
         accounts::record_login_failure(
@@ -790,6 +913,26 @@ pub(super) async fn backend_contract(repo: Repository) {
         .await
         .unwrap()
         .is_none());
+
+    let mut folder_transaction = repo.pool().begin().await.unwrap();
+    for index in 0..crate::limits::MAX_FOLDERS_PER_USER {
+        let name = format!("bounded-folder-{index}");
+        sqlx::query("INSERT INTO folders(owner_id,name,name_key,created_at) VALUES($1,$2,$3,$4)")
+            .bind(2_i64)
+            .bind(&name)
+            .bind(&name)
+            .bind(crate::time::unix_timestamp())
+            .execute(&mut *folder_transaction)
+            .await
+            .unwrap();
+    }
+    folder_transaction.commit().await.unwrap();
+    let folder_limit = services
+        .create_folder(&owner, "one-folder-too-many")
+        .await
+        .unwrap_err();
+    assert_eq!(folder_limit.code, "folder_limit");
+
     assert!(services
         .delete_paste(&owner, &unlisted.id, None)
         .await

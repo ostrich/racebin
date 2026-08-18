@@ -23,6 +23,7 @@ export const appState = writable<AppState>({
     default_expiration_seconds: null,
     max_attachment_size_bytes: 0,
     max_attachments_per_paste: 0,
+    max_folders_per_user: 200,
     attachments_enabled: true,
     qr_codes_enabled: false,
     formats: ["text", "markdown"],

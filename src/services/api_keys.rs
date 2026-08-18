@@ -2,6 +2,15 @@ use crate::account::api_keys;
 
 use super::{DomainError, DomainResult, PasteService, Principal};
 
+pub struct ApiKeyListOptions<'a> {
+    pub search: Option<&'a str>,
+    pub enabled: Option<bool>,
+    pub sort: &'a str,
+    pub descending: bool,
+    pub page: u32,
+    pub page_size: u32,
+}
+
 fn key_owner(principal: &Principal) -> DomainResult<i64> {
     let owner = principal
         .user_id()
@@ -16,8 +25,22 @@ impl PasteService {
     pub async fn list_api_keys(
         &self,
         principal: &Principal,
-    ) -> DomainResult<Vec<api_keys::ApiKey>> {
-        api_keys::list_for_user(&self.storage, key_owner(principal)?).await
+        query: &ApiKeyListOptions<'_>,
+    ) -> DomainResult<super::Page<api_keys::ApiKey>> {
+        api_keys::list_page(
+            &self.storage,
+            &api_keys::ApiKeyListQuery {
+                user_id: Some(key_owner(principal)?),
+                include_privileged: true,
+                search: query.search,
+                enabled: query.enabled,
+                sort: query.sort,
+                descending: query.descending,
+                page: query.page,
+                page_size: query.page_size,
+            },
+        )
+        .await
     }
 
     pub async fn create_api_key(

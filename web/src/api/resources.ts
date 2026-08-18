@@ -120,7 +120,9 @@ export const movePastes = (input: Schema["MovePastesInput"]) => normalized<Paste
   transport<Schema["PasteRevisionResponse"]>("/pastes", { method: "PATCH", json: input })
 );
 
-export const listApiKeys = () => normalized<ApiKey[]>(transport<Schema["ApiKeyResource"][]>("/account/api-keys"));
+export const listApiKeys = (query = new URLSearchParams()) => normalized<Page<ApiKey>>(
+  transport<Schema["ApiKeyPage"]>(`/account/api-keys?${query}`)
+);
 export const createApiKey = (input: KeyInput) => normalized<{ key: ApiKey; token: string }>(
   transport<Schema["ApiKeyCreatedResponse"]>("/account/api-keys", { method: "POST", json: input })
 );
@@ -129,7 +131,9 @@ export const updateApiKey = (keyId: number, enabled: boolean) =>
 export const deleteApiKey = (keyId: number) =>
   transport<void>(`/account/api-keys/${id(keyId)}`, { method: "DELETE" });
 
-export const listAdminUsers = () => normalized<AdminUser[]>(transport<Schema["AdminUserResource"][]>("/admin/users"));
+export const listAdminUsers = (query = new URLSearchParams()) => normalized<Page<AdminUser>>(
+  transport<Schema["AdminUserPage"]>(`/admin/users?${query}`)
+);
 export const getAdminUser = (userId: number) => normalized<AdminUser>(transport<Schema["AdminUserResource"]>(`/admin/users/${id(userId)}`));
 export const updateAdminUser = (userId: number, input: UserUpdate) =>
   transport<void>(`/admin/users/${id(userId)}`, { method: "PATCH", json: input });
@@ -139,11 +143,15 @@ export const transferOwnership = (userId: number) =>
   transport<void>("/admin/ownership-transfer", { method: "POST", json: { user_id: userId } });
 export type InstanceSettings = Schema["InstanceSettingsResource"];
 export type AuditEvent = Schema["AuditEventResource"];
+export type AdminSummary = Schema["AdminSummaryResource"];
 export const getInstanceSettings = () => normalized<InstanceSettings>(transport<InstanceSettings>("/admin/settings"));
 export const replaceInstanceSettings = (settings: InstanceSettings) => normalized<InstanceSettings>(
   transport<InstanceSettings>("/admin/settings", { method: "PUT", json: settings })
 );
-export const listAuditEvents = () => normalized<AuditEvent[]>(transport<AuditEvent[]>("/admin/audit-events"));
+export const getAdminSummary = () => normalized<AdminSummary>(transport<AdminSummary>("/admin/summary"));
+export const listAuditEvents = (query = new URLSearchParams()) => normalized<Page<AuditEvent>>(
+  transport<Schema["AuditEventPage"]>(`/admin/audit-events?${query}`)
+);
 export const createPasswordReset = (userId: number) => normalized<Schema["LinkResponse"]>(
   transport<Schema["LinkResponse"]>(`/admin/users/${id(userId)}/password-reset`, { method: "POST" })
 );
@@ -161,7 +169,9 @@ export const updateInvitationComment = (invitationId: number, comment?: string) 
   transport<void>(`/admin/invitations/${id(invitationId)}`, { method: "PATCH", json: { comment } });
 export const revokeInvitation = (invitationId: number) =>
   transport<void>(`/admin/invitations/${id(invitationId)}`, { method: "DELETE" });
-export const listAdminApiKeys = () => normalized<ApiKey[]>(transport<Schema["ApiKeyResource"][]>("/admin/api-keys"));
+export const listAdminApiKeys = (query = new URLSearchParams()) => normalized<Page<ApiKey>>(
+  transport<Schema["ApiKeyPage"]>(`/admin/api-keys?${query}`)
+);
 export const updateAdminApiKey = (keyId: number, enabled: boolean) =>
   transport<void>(`/admin/api-keys/${id(keyId)}`, { method: "PATCH", json: { enabled } });
 export const deleteAdminApiKey = (keyId: number) =>

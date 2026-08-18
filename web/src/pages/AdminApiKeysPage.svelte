@@ -1,35 +1,58 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { deleteAdminApiKey, listAdminApiKeys, listAdminUsers, updateAdminApiKey } from "../api";
+  import { deleteAdminApiKey, listAdminApiKeys, updateAdminApiKey } from "../api";
   import AdminNav from "../components/AdminNav.svelte";
   import Icon from "../components/Icon.svelte";
+  import Pagination from "../components/Pagination.svelte";
   import { confirmAction } from "../confirmations";
-  import { holdNavigation } from "../navigation";
+  import { holdNavigation, navigate } from "../navigation";
   import { showNotice } from "../notices";
-  import type { AdminUser, ApiKey } from "../types";
+  import type { ApiKey, Page } from "../types";
 
-  let keys = $state<ApiKey[]>([]);
-  let users = $state<AdminUser[]>([]);
+  let { query }: { query: URLSearchParams } = $props();
+  let page = $state<Page<ApiKey> | null>(null);
   let error = $state("");
   let search = $state("");
-  const initialLoadReady = holdNavigation();
-  let filtered = $derived(keys.filter(key =>
-    `${key.name} ${key.token_prefix} ${ownerName(key)} ${key.scopes.join(" ")}`
-      .toLowerCase().includes(search.toLowerCase())
-  ));
+  let initialLoadReady: (() => void) | null = holdNavigation();
+  let generation = 0;
 
-  async function load(): Promise<void> {
-    [keys, users] = await Promise.all([listAdminApiKeys(), listAdminUsers()]);
+  async function load(source = query): Promise<void> {
+    const current = ++generation;
+    const params = new URLSearchParams(source);
+    params.set("page_size", "25");
+    const value = await listAdminApiKeys(params);
+    if (current === generation) {
+      page = value;
+      error = "";
+    }
   }
 
-  onMount(() => {
-    void load()
+  $effect(() => {
+    const source = new URLSearchParams(query);
+    const ready = initialLoadReady;
+    initialLoadReady = null;
+    search = query.get("search") ?? "";
+    void load(source)
       .catch(reason => { error = reason instanceof Error ? reason.message : "Unable to load API keys"; })
-      .finally(initialLoadReady);
+      .finally(() => ready?.());
   });
 
   function ownerName(key: ApiKey): string {
-    return users.find(user => user.id === key.user_id)?.username ?? "No owner";
+    return key.owner_username ?? "No owner";
+  }
+
+  async function applySearch(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    const params = new URLSearchParams(query);
+    if (search.trim()) params.set("search", search.trim()); else params.delete("search");
+    params.delete("page");
+    await navigate(`/admin/api-keys?${params}`);
+  }
+
+  function setFilter(key: string, value: string): void {
+    const params = new URLSearchParams(query);
+    if (value) params.set(key, value); else params.delete(key);
+    params.delete("page");
+    void navigate(`/admin/api-keys?${params}`);
   }
 
   async function toggle(key: ApiKey): Promise<void> {
@@ -59,12 +82,19 @@
   <div class="section-layout">
     <AdminNav/>
     <div class="section-content">
-      <div class="list-filter-bar"><label class="field list-filter-search"><span>Search</span><input type="search" placeholder="Name, owner, prefix, or privilege" bind:value={search}></label></div>
+      <form class="list-filter-bar" onsubmit={applySearch}>
+        <label class="field list-filter-search"><span>Search</span><input type="search" placeholder="Name, owner, prefix, or privilege" bind:value={search}></label>
+        <button class="button primary" type="submit"><Icon name="search"/> Search</button>
+        <label class="field list-filter-select"><span>Status</span><select value={query.get("status") ?? ""} onchange={event => setFilter("status", event.currentTarget.value)}><option value="">Any status</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></label>
+        <label class="field list-filter-select"><span>Sort</span><select value={query.get("sort") ?? "created"} onchange={event => setFilter("sort", event.currentTarget.value)}><option value="created">Created</option><option value="name">Name</option><option value="owner">Owner</option><option value="used">Last used</option></select></label>
+        <label class="field list-filter-select"><span>Direction</span><select value={query.get("direction") ?? "desc"} onchange={event => setFilter("direction", event.currentTarget.value)}><option value="desc">Descending</option><option value="asc">Ascending</option></select></label>
+      </form>
       {#if error}
         <section class="empty"><p>{error}</p></section>
-      {:else}
+      {:else if page}
+        <p class="result-count">{page.total_items} API keys</p>
         <div class="panel data-list">
-          {#each filtered as key (key.id)}
+          {#each page.items as key (key.id)}
             <article class="data-row">
               <div>
                 <strong>{key.name}</strong>
@@ -80,7 +110,8 @@
             <div class="empty"><p>No API keys match.</p></div>
           {/each}
         </div>
-      {/if}
+        <Pagination {page} params={query}/>
+      {:else}<p class="muted">Loading API keys…</p>{/if}
     </div>
   </div>
 </section>

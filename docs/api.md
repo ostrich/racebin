@@ -303,6 +303,25 @@ Administrative paste listing uses the same filters, pagination envelope, and
 paste summary representation at `GET /api/v1/admin/pastes`. Its summaries add
 owner information rather than exposing the server's internal storage model.
 
+The other potentially growing collections use the same `{items, pagination}`
+envelope and one-based `page`/`page_size` parameters. User-owned and
+administrative API-key lists support `search`, `status`, `sort`, and
+`direction`; administrative user lists support username search plus role,
+status, sort, and direction; invitation history and the owner audit log support
+server-side search. The OpenAPI operation for each list defines its exact enum
+values and default order.
+
+`GET /api/v1/admin/summary` supplies the bounded aggregate counts used by the
+administration overview. Clients do not need to download entire user,
+invitation, paste, or audit collections to build a dashboard. Administrative
+paste results and API-key results include `owner_username`, avoiding a second
+unbounded user-list request to label each row.
+
+Folders remain an intentionally small, non-paginated navigation collection.
+The per-user maximum is published as `max_folders_per_user` by
+`GET /api/v1/capabilities`; creation returns `folder_limit` after that bound is
+reached.
+
 ## Content conversion
 
 `POST /api/v1/content-conversions` converts between plain text and Markdown:
