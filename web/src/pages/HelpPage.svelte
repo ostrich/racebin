@@ -112,7 +112,7 @@
       </section>
       <section class="panel" id="examples">
         <h2>Command examples</h2>
-        <p>These commands use this Racebin installation automatically.</p>
+        <p>Copy an example, then replace placeholders such as <code>PASTE_ID</code> and local filenames before running it.</p>
         <div class="help-examples">
           {#each examples as [title, value]}
             <article><div><h3>{title}</h3><button class="button" type="button" onclick={() => copy(value)}>Copy</button></div><pre><code>{value}</code></pre></article>
