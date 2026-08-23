@@ -78,9 +78,11 @@ test("owner settings stay behind a browser-session boundary and produce audit hi
 
   const audit = await request.get("/api/v1/admin/audit-events");
   expect(audit.ok()).toBe(true);
-  expect(await audit.json()).toEqual(expect.arrayContaining([
-    expect.objectContaining({ action: "instance.settings_changed", target_type: "instance" })
-  ]));
+  expect(await audit.json()).toEqual(expect.objectContaining({
+    items: expect.arrayContaining([
+      expect.objectContaining({ action: "instance.settings_changed", target_type: "instance" })
+    ])
+  }));
 
   const restored = await request.put("/api/v1/admin/settings", {
     headers: { "X-CSRF-Token": csrf },
