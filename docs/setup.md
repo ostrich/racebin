@@ -120,19 +120,16 @@ containing spaces and keep it readable only by root and the service group. Run
 | `--database-url` | `RACEBIN_DATABASE_URL` | SQLite at `<data-dir>/database.sqlite` |
 | `--public-url` | `RACEBIN_PUBLIC_URL` | unset |
 | `--trusted-proxies` | `RACEBIN_TRUSTED_PROXIES` | unset |
-| `--site-name` | `RACEBIN_SITE_NAME` | `Racebin` |
-| `--plain-home` | `RACEBIN_PLAIN_HOME` | `false` |
-| `--attachments` | `RACEBIN_ATTACHMENTS` | `true` |
 | `--max-attachment-size-mb` | `RACEBIN_MAX_ATTACHMENT_SIZE_MB` | `2048` |
-| `--qr-codes` | `RACEBIN_QR_CODES` | `false` |
 | `--insecure-cookie` | `RACEBIN_INSECURE_COOKIE` | `false` |
 
-`RACEBIN_SITE_NAME`, `RACEBIN_PLAIN_HOME`, `RACEBIN_ATTACHMENTS`, and
-`RACEBIN_QR_CODES` seed the database the first time this version starts. After
-that first start, the owner manages those values under **Admin → Site settings**
-and the database is authoritative. The environment remains responsible for
-deployment concerns such as bind addresses, storage paths, limits, proxy trust,
-cookies, and the canonical public URL.
+Site name, homepage mode, public exploration, invitations, attachments, QR
+codes, and paste defaults are database settings managed under **Admin → Site
+settings**. The environment is responsible only for deployment concerns such
+as bind addresses, storage paths, limits, proxy trust, cookies, and the
+canonical public URL. The `--site-name`, `--plain-home`, `--attachments`, and
+`--qr-codes` startup options remain available only to seed a brand-new database;
+do not keep them in the service environment after initialization.
 
 Disabling attachments in site settings disables new uploads; it does not erase existing
 attachment data or prevent authorized downloads. Racebin also enforces fixed
@@ -153,8 +150,6 @@ RACEBIN_PORT=7042
 RACEBIN_DATA_DIR=/var/lib/racebin
 RACEBIN_PUBLIC_URL=https://paste.example.com
 RACEBIN_TRUSTED_PROXIES=127.0.0.1,::1
-RACEBIN_SITE_NAME=Racebin
-RACEBIN_ATTACHMENTS=true
 RACEBIN_MAX_ATTACHMENT_SIZE_MB=2048
 ```
 

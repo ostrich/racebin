@@ -1,5 +1,5 @@
 ## Racebin configuration
-## Commented values are defaults.
+## Runtime and infrastructure settings only. Site behavior is managed in the owner UI.
 
 ## Listener
 RACEBIN_BIND=127.0.0.1
@@ -12,15 +12,12 @@ RACEBIN_DATA_DIR=/var/lib/racebin
 # Comma-separated immediate proxy addresses whose X-Forwarded-For value is trusted.
 # RACEBIN_TRUSTED_PROXIES=127.0.0.1,::1
 
-## Initial browser settings (seeded once, then managed by the owner in the UI)
-# RACEBIN_SITE_NAME=Racebin
-# RACEBIN_PLAIN_HOME=false
-
-## Initial feature settings (seeded once, then managed by the owner in the UI)
-# RACEBIN_ATTACHMENTS=true
+## Operational limits and transport security
 # RACEBIN_MAX_ATTACHMENT_SIZE_MB=2048
-# RACEBIN_QR_CODES=false
 # RACEBIN_INSECURE_COOKIE=false
+
+## Site name, homepage mode, public exploration, invitations, attachments, QR codes,
+## and paste defaults are managed in the Racebin administration UI.
 
 ## Accounts are managed with:
 ## racebin account create USERNAME [--admin] --data-dir /var/lib/racebin
