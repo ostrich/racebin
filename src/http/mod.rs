@@ -26,7 +26,6 @@ mod cookies;
 mod errors;
 mod folders;
 pub(crate) mod openapi;
-mod paste_payload;
 mod pastes;
 
 #[derive(Deserialize, utoipa::ToSchema)]

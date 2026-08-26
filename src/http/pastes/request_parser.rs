@@ -1,5 +1,5 @@
-use super::pastes::{FlatCreateRequest, RawCreateQuery, StagedFile};
 use super::*;
+use super::{FlatCreateRequest, RawCreateQuery, StagedFile};
 use crate::crypto::lower_hex;
 use crate::http::contract::CreatePasteRequest;
 use sha2::{Digest, Sha256};
