@@ -3,8 +3,8 @@ mod tests {
     use super::super::attachment;
     use actix_web::{cookie::Cookie, http::StatusCode, test, web, App};
     use racebin::account::{self as accounts, api_keys};
+    use racebin::database::Database;
     use racebin::http::configure;
-    use racebin::repository::Repository;
     use racebin::services::{PasteInput, PasteService, Principal};
     use serde_json::{json, Value};
     use std::io::Read;
@@ -16,7 +16,7 @@ mod tests {
             "sqlite://{}?mode=rwc",
             data_dir.join("database.sqlite").display()
         );
-        let repository = Repository::open(&url, &data_dir).await.unwrap();
+        let repository = Database::open(&url, &data_dir).await.unwrap();
         repository.migrate().await.unwrap();
         racebin::services::settings::initialize(&repository, &racebin::args::ARGS)
             .await

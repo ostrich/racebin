@@ -19,7 +19,7 @@ async fn postgres_backend_contract_concurrency_and_copy() {
     };
     let scratch = std::env::temp_dir().join(format!("racebin-postgres-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&scratch).unwrap();
-    let bootstrap = Repository::open(&url, &scratch).await.unwrap();
+    let bootstrap = Database::open(&url, &scratch).await.unwrap();
     sqlx::query("DROP SCHEMA public CASCADE")
         .execute(bootstrap.pool())
         .await
@@ -30,7 +30,7 @@ async fn postgres_backend_contract_concurrency_and_copy() {
         .unwrap();
     drop(bootstrap);
 
-    let repo = Repository::open(&url, &scratch).await.unwrap();
+    let repo = Database::open(&url, &scratch).await.unwrap();
     repo.migrate().await.unwrap();
     backend_contract(repo.clone()).await;
     concurrency_contract(repo.clone()).await;
@@ -40,7 +40,7 @@ async fn postgres_backend_contract_concurrency_and_copy() {
         "TRUNCATE audit_events,instance_settings,attachments,pastes,folders,api_key_scopes,api_keys,password_reset_tokens,sessions,invitations,users
          RESTART IDENTITY CASCADE",
     )
-    .execute(Repository::open(&url, &scratch).await.unwrap().pool())
+    .execute(Database::open(&url, &scratch).await.unwrap().pool())
     .await
     .unwrap();
     database_copy_contract(&url, &scratch).await;

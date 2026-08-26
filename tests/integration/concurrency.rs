@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) async fn concurrency_contract(repo: Repository) {
+pub(super) async fn concurrency_contract(repo: Database) {
     sqlx::query("UPDATE users SET role='user' WHERE role='admin'")
         .execute(repo.pool())
         .await

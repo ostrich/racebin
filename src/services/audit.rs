@@ -2,8 +2,8 @@ use serde::Serialize;
 use sqlx::{any::AnyRow, FromRow, Row};
 
 use crate::account::api_keys::ApiKey;
+use crate::database::Database;
 use crate::domain_error::{DomainError, DomainResult};
-use crate::repository::Repository;
 use crate::time::unix_timestamp;
 
 use super::Principal;
@@ -54,7 +54,7 @@ fn actor(principal: &Principal) -> Option<(i64, Option<String>, Option<i64>)> {
 }
 
 pub async fn record(
-    repo: &Repository,
+    repo: &Database,
     principal: &Principal,
     action: &str,
     target_type: &str,
@@ -86,7 +86,7 @@ pub async fn record(
 }
 
 pub async fn list_page(
-    repo: &Repository,
+    repo: &Database,
     search: Option<&str>,
     page: u32,
     page_size: u32,

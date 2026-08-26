@@ -4,7 +4,7 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     let source_dir = data_dir.join("copy-source");
     std::fs::create_dir_all(&source_dir).unwrap();
     let source_url = sqlite_url(&source_dir);
-    let source = Repository::open(&source_url, &source_dir).await.unwrap();
+    let source = Database::open(&source_url, &source_dir).await.unwrap();
     source.migrate().await.unwrap();
     insert_user(&source, 42, "copied-user", "admin").await;
     sqlx::query("UPDATE users SET last_login_at=1234 WHERE id=42")
@@ -77,7 +77,7 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     copy_database(&source_url, postgres_url, &source_dir)
         .await
         .unwrap();
-    let destination = Repository::open(postgres_url, &source_dir).await.unwrap();
+    let destination = Database::open(postgres_url, &source_dir).await.unwrap();
     let copied: (i64, String) = sqlx::query_as("SELECT id,username FROM users")
         .fetch_one(destination.pool())
         .await
@@ -210,7 +210,7 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     let missing_dir = data_dir.join("missing-source");
     std::fs::create_dir_all(&missing_dir).unwrap();
     let missing_url = sqlite_url(&missing_dir);
-    let missing = Repository::open(&missing_url, &missing_dir).await.unwrap();
+    let missing = Database::open(&missing_url, &missing_dir).await.unwrap();
     missing.migrate().await.unwrap();
     insert_user(&missing, 1, "missing-owner", "user").await;
     sqlx::query(
@@ -236,7 +236,7 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     let invalid_dir = data_dir.join("invalid-source");
     std::fs::create_dir_all(&invalid_dir).unwrap();
     let invalid_url = sqlite_url(&invalid_dir);
-    let invalid = Repository::open(&invalid_url, &invalid_dir).await.unwrap();
+    let invalid = Database::open(&invalid_url, &invalid_dir).await.unwrap();
     invalid.migrate().await.unwrap();
     let mut connection = invalid.pool().acquire().await.unwrap();
     sqlx::query("PRAGMA ignore_check_constraints=ON")
@@ -256,7 +256,7 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     assert!(copy_database(&invalid_url, postgres_url, &invalid_dir)
         .await
         .is_err());
-    let destination = Repository::open(postgres_url, data_dir).await.unwrap();
+    let destination = Database::open(postgres_url, data_dir).await.unwrap();
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM users")
         .fetch_one(destination.pool())
         .await

@@ -61,7 +61,7 @@ async fn sqlite_query_indexes_match_repository_workloads() {
 async fn sqlite_redirect_records_become_plaintext_pastes() {
     let data_dir = std::env::temp_dir().join(format!("racebin-redirect-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&data_dir).unwrap();
-    let repo = Repository::open(&sqlite_url(&data_dir), &data_dir)
+    let repo = Database::open(&sqlite_url(&data_dir), &data_dir)
         .await
         .unwrap();
     for migration in [

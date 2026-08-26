@@ -1,7 +1,7 @@
 use super::*;
 
 pub async fn create_invitation(
-    repo: &Repository,
+    repo: &Database,
     created_by_user_id: i64,
     comment: Option<&str>,
 ) -> DomainResult<String> {
@@ -24,7 +24,7 @@ pub async fn create_invitation(
 }
 
 pub async fn list_invitations(
-    repo: &Repository,
+    repo: &Database,
     history: bool,
     search: Option<&str>,
     status: Option<&str>,
@@ -93,7 +93,7 @@ pub async fn list_invitations(
     })
 }
 
-pub async fn revoke_invitation(repo: &Repository, id: i64) -> DomainResult<bool> {
+pub async fn revoke_invitation(repo: &Database, id: i64) -> DomainResult<bool> {
     sqlx::query("UPDATE invitations SET revoked=1,token=NULL WHERE id=$1 AND redeemed=0")
         .bind(id)
         .execute(repo.pool())
@@ -103,7 +103,7 @@ pub async fn revoke_invitation(repo: &Repository, id: i64) -> DomainResult<bool>
 }
 
 pub async fn update_invitation_comment(
-    repo: &Repository,
+    repo: &Database,
     id: i64,
     comment: Option<&str>,
 ) -> DomainResult<bool> {
@@ -117,7 +117,7 @@ pub async fn update_invitation_comment(
 }
 
 pub async fn redeem_invitation(
-    repo: &Repository,
+    repo: &Database,
     token: &str,
     username: &str,
     password: &str,

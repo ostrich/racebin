@@ -19,14 +19,14 @@ pub enum DatabaseKind {
 }
 
 #[derive(Clone)]
-pub struct Repository {
+pub struct Database {
     pool: AnyPool,
     kind: DatabaseKind,
     write_lock: Arc<Mutex<()>>,
     pub data_dir: PathBuf,
 }
 
-impl Repository {
+impl Database {
     pub async fn open(database_url: &str, data_dir: impl AsRef<Path>) -> Result<Self, String> {
         INSTALL_DRIVERS.call_once(install_default_drivers);
         let kind = database_kind(database_url)?;
@@ -250,4 +250,5 @@ pub fn database_kind(url: &str) -> Result<DatabaseKind, String> {
     }
 }
 
-include!("repository/tests.rs");
+#[cfg(test)]
+mod tests;

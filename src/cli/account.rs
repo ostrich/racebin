@@ -1,5 +1,5 @@
 use crate::account as accounts;
-use crate::repository::Repository;
+use crate::database::Database;
 use std::fs;
 
 fn password(arguments: &[String]) -> Result<String, String> {
@@ -25,7 +25,7 @@ fn option(arguments: &[String], name: &str) -> Option<String> {
         .cloned()
 }
 
-async fn user_id(repository: &Repository, username: &str) -> Result<i64, String> {
+async fn user_id(repository: &Database, username: &str) -> Result<i64, String> {
     sqlx::query_scalar("SELECT id FROM users WHERE username=$1")
         .bind(username)
         .fetch_optional(repository.pool())
@@ -46,7 +46,7 @@ pub(crate) async fn run_if_requested() -> Result<bool, String> {
     let database_url = option(&arguments, "--database-url")
         .or_else(|| std::env::var("RACEBIN_DATABASE_URL").ok())
         .unwrap_or_else(|| format!("sqlite://{data_dir}/database.sqlite?mode=rwc"));
-    let repository = Repository::open(&database_url, &data_dir).await?;
+    let repository = Database::open(&database_url, &data_dir).await?;
     repository.migrate().await?;
     let command = arguments.get(2).map(String::as_str).unwrap_or("help");
     match command {

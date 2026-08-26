@@ -1,6 +1,6 @@
 use crate::account::{self as accounts, api_keys};
 use crate::crypto::sha256_hex;
-use crate::repository::Repository;
+use crate::database::Database;
 use sqlx::{Any, Executor};
 use uuid::Uuid;
 
@@ -12,7 +12,7 @@ use crate::time::unix_timestamp;
 
 #[derive(Clone)]
 pub struct PasteService {
-    pub storage: Repository,
+    pub storage: Database,
 }
 
 #[derive(Clone, Debug)]
@@ -139,7 +139,7 @@ impl Principal {
 }
 
 impl PasteService {
-    pub fn new(storage: Repository) -> Self {
+    pub fn new(storage: Database) -> Self {
         Self { storage }
     }
 
@@ -184,7 +184,7 @@ impl PasteService {
         }
         let folder_id = query.folder_id;
         let unfiled = query.unfiled.map(i64::from);
-        let text_size = if self.storage.kind() == crate::repository::DatabaseKind::Postgres {
+        let text_size = if self.storage.kind() == crate::database::DatabaseKind::Postgres {
             "CAST(octet_length(content) AS BIGINT)"
         } else {
             "length(CAST(content AS BLOB))"
@@ -397,7 +397,7 @@ impl PasteService {
                 }));
             }
         }
-        let lock = if self.storage.kind() == crate::repository::DatabaseKind::Postgres {
+        let lock = if self.storage.kind() == crate::database::DatabaseKind::Postgres {
             " FOR UPDATE"
         } else {
             ""
@@ -914,7 +914,7 @@ mod tests {
     use super::{Attachment, Paste, PasteService, Permission, Principal};
     use crate::account::api_keys::ApiKey;
     use crate::account::{SessionUser, User};
-    use crate::repository::Repository;
+    use crate::database::Database;
     use crate::services::validation::can_read;
 
     #[test]
@@ -1008,7 +1008,7 @@ mod tests {
             "sqlite://{}?mode=rwc",
             path.join("database.sqlite").display()
         );
-        let repository = Repository::open(&url, &path).await.unwrap();
+        let repository = Database::open(&url, &path).await.unwrap();
         repository.migrate().await.unwrap();
         sqlx::query(
             "INSERT INTO users(id,username,password_hash,role,created_at)

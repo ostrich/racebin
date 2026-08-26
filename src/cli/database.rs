@@ -1,4 +1,4 @@
-use crate::repository::copy_database;
+use crate::database::copy_database;
 
 pub(crate) async fn run_if_requested() -> Result<bool, String> {
     let arguments: Vec<String> = std::env::args().collect();

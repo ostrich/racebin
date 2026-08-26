@@ -2,8 +2,8 @@ use rand::{distr::Alphanumeric, RngExt};
 use sqlx::{Any, Row};
 
 use crate::crypto::sha256_hex;
+use crate::database::Database;
 use crate::domain_error::{DomainError, DomainResult};
-use crate::repository::Repository;
 use crate::time::unix_timestamp;
 
 pub const VALID_SCOPES: &[&str] = &[
@@ -70,7 +70,7 @@ async fn scopes_for(
         .map_err(DomainError::from)
 }
 
-async fn from_row(repo: &Repository, row: sqlx::any::AnyRow) -> DomainResult<ApiKey> {
+async fn from_row(repo: &Database, row: sqlx::any::AnyRow) -> DomainResult<ApiKey> {
     let id = row.try_get("id").map_err(DomainError::from)?;
     Ok(ApiKey {
         id,
@@ -89,7 +89,7 @@ async fn from_row(repo: &Repository, row: sqlx::any::AnyRow) -> DomainResult<Api
 }
 
 pub async fn create(
-    repo: &Repository,
+    repo: &Database,
     user_id: Option<i64>,
     name: &str,
     scopes: &[String],
@@ -153,7 +153,7 @@ pub async fn create(
     ))
 }
 
-pub async fn authenticate(repo: &Repository, token: &str) -> DomainResult<Option<ApiKey>> {
+pub async fn authenticate(repo: &Database, token: &str) -> DomainResult<Option<ApiKey>> {
     if !token.starts_with("rbk_") {
         return Ok(None);
     }
@@ -195,7 +195,7 @@ pub struct ApiKeyListQuery<'a> {
 }
 
 pub async fn list_page(
-    repo: &Repository,
+    repo: &Database,
     query: &ApiKeyListQuery<'_>,
 ) -> DomainResult<crate::services::Page<ApiKey>> {
     let search = query
@@ -255,7 +255,7 @@ pub async fn list_page(
     })
 }
 
-pub async fn get(repo: &Repository, id: i64) -> DomainResult<Option<ApiKey>> {
+pub async fn get(repo: &Database, id: i64) -> DomainResult<Option<ApiKey>> {
     let row = sqlx::query(
         "SELECT k.id,k.user_id,k.name,k.token_prefix,k.created_at,k.last_used_at,k.enabled,u.username AS owner_username
          FROM api_keys k LEFT JOIN users u ON u.id=k.user_id WHERE k.id=$1",
@@ -271,7 +271,7 @@ pub async fn get(repo: &Repository, id: i64) -> DomainResult<Option<ApiKey>> {
 }
 
 pub async fn set_enabled_for_user(
-    repo: &Repository,
+    repo: &Database,
     id: i64,
     user_id: i64,
     enabled: bool,
@@ -286,7 +286,7 @@ pub async fn set_enabled_for_user(
         .map_err(DomainError::from)
 }
 
-pub async fn delete_for_user(repo: &Repository, id: i64, user_id: i64) -> DomainResult<bool> {
+pub async fn delete_for_user(repo: &Database, id: i64, user_id: i64) -> DomainResult<bool> {
     sqlx::query("DELETE FROM api_keys WHERE id=$1 AND user_id=$2")
         .bind(id)
         .bind(user_id)
@@ -296,7 +296,7 @@ pub async fn delete_for_user(repo: &Repository, id: i64, user_id: i64) -> Domain
         .map_err(DomainError::from)
 }
 
-pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> DomainResult<bool> {
+pub async fn set_enabled(repo: &Database, id: i64, enabled: bool) -> DomainResult<bool> {
     sqlx::query("UPDATE api_keys SET enabled=$2 WHERE id=$1")
         .bind(id)
         .bind(i64::from(enabled))
@@ -306,7 +306,7 @@ pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> DomainRes
         .map_err(DomainError::from)
 }
 
-pub async fn delete(repo: &Repository, id: i64) -> DomainResult<bool> {
+pub async fn delete(repo: &Database, id: i64) -> DomainResult<bool> {
     sqlx::query("DELETE FROM api_keys WHERE id=$1")
         .bind(id)
         .execute(repo.pool())
@@ -315,7 +315,7 @@ pub async fn delete(repo: &Repository, id: i64) -> DomainResult<bool> {
         .map_err(DomainError::from)
 }
 
-pub async fn delete_all_for_user(repo: &Repository, user_id: i64) -> DomainResult<u64> {
+pub async fn delete_all_for_user(repo: &Database, user_id: i64) -> DomainResult<u64> {
     sqlx::query("DELETE FROM api_keys WHERE user_id=$1")
         .bind(user_id)
         .execute(repo.pool())

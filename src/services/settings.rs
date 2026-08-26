@@ -1,8 +1,8 @@
 use sqlx::{any::AnyRow, FromRow, Row};
 
 use crate::args::Args;
+use crate::database::Database;
 use crate::domain_error::{DomainError, DomainResult};
-use crate::repository::Repository;
 use crate::time::unix_timestamp;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -40,7 +40,7 @@ impl<'r> FromRow<'r, AnyRow> for InstanceSettings {
     }
 }
 
-pub async fn initialize(repo: &Repository, args: &Args) -> DomainResult<InstanceSettings> {
+pub async fn initialize(repo: &Database, args: &Args) -> DomainResult<InstanceSettings> {
     let now = unix_timestamp();
     sqlx::query(
         "INSERT INTO instance_settings(
@@ -61,7 +61,7 @@ pub async fn initialize(repo: &Repository, args: &Args) -> DomainResult<Instance
     get(repo).await
 }
 
-pub async fn get(repo: &Repository) -> DomainResult<InstanceSettings> {
+pub async fn get(repo: &Database) -> DomainResult<InstanceSettings> {
     sqlx::query_as(
         "SELECT site_name,home_mode,public_explore_enabled,invitations_enabled,
                 attachments_enabled,qr_codes_enabled,default_format,default_language,
@@ -75,7 +75,7 @@ pub async fn get(repo: &Repository) -> DomainResult<InstanceSettings> {
 }
 
 pub async fn replace(
-    repo: &Repository,
+    repo: &Database,
     actor_id: i64,
     value: &InstanceSettings,
 ) -> DomainResult<InstanceSettings> {

@@ -2,7 +2,7 @@ use super::*;
 
 const ATTEMPT_WINDOW_SECONDS: i64 = 900;
 
-async fn retry_after(repo: &Repository, keys: &[(&str, String, i64)]) -> DomainResult<Option<u64>> {
+async fn retry_after(repo: &Database, keys: &[(&str, String, i64)]) -> DomainResult<Option<u64>> {
     let now = unix_timestamp();
     let cutoff = now - ATTEMPT_WINDOW_SECONDS;
     sqlx::query("DELETE FROM auth_attempts WHERE occurred_at<=$1")
@@ -31,7 +31,7 @@ async fn retry_after(repo: &Repository, keys: &[(&str, String, i64)]) -> DomainR
 }
 
 pub async fn login_retry_after(
-    repo: &Repository,
+    repo: &Database,
     username: &str,
     client: &str,
 ) -> DomainResult<Option<u64>> {
@@ -46,7 +46,7 @@ pub async fn login_retry_after(
 }
 
 pub async fn record_login_failure(
-    repo: &Repository,
+    repo: &Database,
     username: &str,
     client: &str,
 ) -> DomainResult<()> {
@@ -67,7 +67,7 @@ pub async fn record_login_failure(
     tx.commit().await.map_err(DomainError::from)
 }
 
-pub async fn clear_login_failures(repo: &Repository, username: &str) -> DomainResult<()> {
+pub async fn clear_login_failures(repo: &Database, username: &str) -> DomainResult<()> {
     sqlx::query("DELETE FROM auth_attempts WHERE kind='login_account' AND subject=$1")
         .bind(username.to_ascii_lowercase())
         .execute(repo.pool())
@@ -76,11 +76,11 @@ pub async fn clear_login_failures(repo: &Repository, username: &str) -> DomainRe
         .map_err(DomainError::from)
 }
 
-pub async fn invitation_retry_after(repo: &Repository, client: &str) -> DomainResult<Option<u64>> {
+pub async fn invitation_retry_after(repo: &Database, client: &str) -> DomainResult<Option<u64>> {
     retry_after(repo, &[("invitation_address", client.to_string(), 20)]).await
 }
 
-pub async fn record_invitation_failure(repo: &Repository, client: &str) -> DomainResult<()> {
+pub async fn record_invitation_failure(repo: &Database, client: &str) -> DomainResult<()> {
     sqlx::query(
         "INSERT INTO auth_attempts(kind,subject,occurred_at)
          VALUES('invitation_address',$1,$2)",
@@ -94,13 +94,13 @@ pub async fn record_invitation_failure(repo: &Repository, client: &str) -> Domai
 }
 
 pub async fn password_reset_retry_after(
-    repo: &Repository,
+    repo: &Database,
     client: &str,
 ) -> DomainResult<Option<u64>> {
     retry_after(repo, &[("password_reset_address", client.to_string(), 20)]).await
 }
 
-pub async fn record_password_reset_failure(repo: &Repository, client: &str) -> DomainResult<()> {
+pub async fn record_password_reset_failure(repo: &Database, client: &str) -> DomainResult<()> {
     sqlx::query(
         "INSERT INTO auth_attempts(kind,subject,occurred_at)
          VALUES('password_reset_address',$1,$2)",

@@ -12,7 +12,7 @@ pub struct AdminSummary {
     pub password_change_required_count: i64,
 }
 
-pub async fn admin_summary(repo: &Repository) -> DomainResult<AdminSummary> {
+pub async fn admin_summary(repo: &Database) -> DomainResult<AdminSummary> {
     let text_size = if repo.kind() == DatabaseKind::Postgres {
         "CAST(octet_length(p.content) AS BIGINT)"
     } else {
@@ -67,7 +67,7 @@ pub async fn admin_summary(repo: &Repository) -> DomainResult<AdminSummary> {
     })
 }
 
-fn admin_user_query(repo: &Repository) -> String {
+fn admin_user_query(repo: &Database) -> String {
     let text_size = if repo.kind() == DatabaseKind::Postgres {
         "CAST(octet_length(p.content) AS BIGINT)"
     } else {
@@ -95,7 +95,7 @@ pub struct AdminUserListQuery<'a> {
 }
 
 pub async fn list_admin_users(
-    repo: &Repository,
+    repo: &Database,
     query: &AdminUserListQuery<'_>,
 ) -> DomainResult<crate::services::Page<AdminUser>> {
     let search = query
@@ -152,7 +152,7 @@ pub async fn list_admin_users(
     })
 }
 
-pub async fn admin_user(repo: &Repository, id: i64) -> DomainResult<Option<AdminUser>> {
+pub async fn admin_user(repo: &Database, id: i64) -> DomainResult<Option<AdminUser>> {
     sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{} WHERE u.id=$2",
         admin_user_query(repo)
@@ -165,7 +165,7 @@ pub async fn admin_user(repo: &Repository, id: i64) -> DomainResult<Option<Admin
 }
 
 pub async fn usernames_by_ids(
-    repo: &Repository,
+    repo: &Database,
     ids: impl IntoIterator<Item = i64>,
 ) -> DomainResult<HashMap<i64, String>> {
     let ids = ids.into_iter().collect::<HashSet<_>>();
@@ -190,16 +190,16 @@ pub async fn usernames_by_ids(
         .map_err(DomainError::from)
 }
 
-pub async fn set_enabled(repo: &Repository, id: i64, enabled: bool) -> DomainResult<()> {
+pub async fn set_enabled(repo: &Database, id: i64, enabled: bool) -> DomainResult<()> {
     update_user(repo, id, Some(enabled), None).await
 }
 
-pub async fn set_role(repo: &Repository, id: i64, admin: bool) -> DomainResult<()> {
+pub async fn set_role(repo: &Database, id: i64, admin: bool) -> DomainResult<()> {
     update_user(repo, id, None, Some(admin)).await
 }
 
 pub async fn update_user(
-    repo: &Repository,
+    repo: &Database,
     id: i64,
     enabled: Option<bool>,
     admin: Option<bool>,
@@ -284,7 +284,7 @@ pub async fn update_user(
 }
 
 pub async fn transfer_ownership(
-    repo: &Repository,
+    repo: &Database,
     current_owner_id: i64,
     target_id: i64,
 ) -> DomainResult<()> {
@@ -343,7 +343,7 @@ pub async fn transfer_ownership(
 }
 
 pub async fn set_password(
-    repo: &Repository,
+    repo: &Database,
     id: i64,
     password: &str,
     force: bool,
@@ -371,7 +371,7 @@ pub async fn set_password(
 }
 
 pub async fn create_password_reset(
-    repo: &Repository,
+    repo: &Database,
     user_id: i64,
     created_by_user_id: i64,
 ) -> DomainResult<String> {
@@ -415,7 +415,7 @@ pub async fn create_password_reset(
     Ok(token)
 }
 
-pub async fn reset_password(repo: &Repository, token: &str, password: &str) -> DomainResult<()> {
+pub async fn reset_password(repo: &Database, token: &str, password: &str) -> DomainResult<()> {
     let token_hash = hash(token);
     let valid: Option<i64> = sqlx::query_scalar(
         "SELECT r.user_id FROM password_reset_tokens r JOIN users u ON u.id=r.user_id
@@ -474,7 +474,7 @@ pub async fn reset_password(repo: &Repository, token: &str, password: &str) -> D
     tx.commit().await.map_err(DomainError::from)
 }
 
-pub async fn revoke_sessions(repo: &Repository, user_id: i64) -> DomainResult<bool> {
+pub async fn revoke_sessions(repo: &Database, user_id: i64) -> DomainResult<bool> {
     let exists: Option<i64> = sqlx::query_scalar("SELECT id FROM users WHERE id=$1")
         .bind(user_id)
         .fetch_optional(repo.pool())

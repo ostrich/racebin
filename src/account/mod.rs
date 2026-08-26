@@ -6,8 +6,8 @@ use sqlx::{FromRow, Row};
 use std::sync::LazyLock;
 
 use crate::crypto::sha256_hex;
+use crate::database::{Database, DatabaseKind};
 use crate::domain_error::{DomainError, DomainResult};
-use crate::repository::{DatabaseKind, Repository};
 use crate::time::unix_timestamp;
 
 mod administration;
@@ -206,7 +206,7 @@ pub(crate) fn validate_username(username: &str) -> DomainResult<&str> {
 }
 
 pub async fn verify_user(
-    repo: &Repository,
+    repo: &Database,
     username: &str,
     password: &str,
 ) -> DomainResult<Option<User>> {
@@ -250,7 +250,7 @@ pub async fn verify_user(
 }
 
 pub async fn create_session(
-    repo: &Repository,
+    repo: &Database,
     user_id: i64,
     remember: bool,
 ) -> DomainResult<(String, String, i64)> {
@@ -297,7 +297,7 @@ pub async fn create_session(
     Ok((token, csrf, expires_at))
 }
 
-pub async fn session_user(repo: &Repository, token: &str) -> DomainResult<Option<SessionUser>> {
+pub async fn session_user(repo: &Database, token: &str) -> DomainResult<Option<SessionUser>> {
     #[derive(FromRow)]
     struct SessionRow {
         id: i64,
@@ -344,7 +344,7 @@ pub async fn session_user(repo: &Repository, token: &str) -> DomainResult<Option
     }))
 }
 
-pub async fn delete_session(repo: &Repository, token: &str) -> DomainResult<()> {
+pub async fn delete_session(repo: &Database, token: &str) -> DomainResult<()> {
     sqlx::query("DELETE FROM sessions WHERE token_hash=$1")
         .bind(hash(token))
         .execute(repo.pool())
@@ -353,7 +353,7 @@ pub async fn delete_session(repo: &Repository, token: &str) -> DomainResult<()> 
         .map_err(DomainError::from)
 }
 
-pub async fn mark_session_reauthenticated(repo: &Repository, token: &str) -> DomainResult<()> {
+pub async fn mark_session_reauthenticated(repo: &Database, token: &str) -> DomainResult<()> {
     let result = sqlx::query(
         "UPDATE sessions SET reauthenticated_at=$2 WHERE token_hash=$1 AND expires_at>$2",
     )
@@ -371,7 +371,7 @@ pub async fn mark_session_reauthenticated(repo: &Repository, token: &str) -> Dom
     Ok(())
 }
 
-pub async fn list_users(repo: &Repository) -> DomainResult<Vec<User>> {
+pub async fn list_users(repo: &Database) -> DomainResult<Vec<User>> {
     sqlx::query_as(
         "SELECT id,username,role,is_owner,enabled,password_change_required
          FROM users ORDER BY username",

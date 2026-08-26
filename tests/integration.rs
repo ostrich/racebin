@@ -1,5 +1,5 @@
 use racebin::account::{self as accounts, api_keys};
-use racebin::repository::{copy_database, DatabaseKind, Repository};
+use racebin::database::{copy_database, Database, DatabaseKind};
 use racebin::services::{NewAttachment, PasteInput, PasteQuery, PasteService, Principal};
 
 fn attachment(filename: &str, storage_key: &str, size_bytes: i64) -> NewAttachment {
@@ -31,17 +31,17 @@ fn sqlite_url(data_dir: &Path) -> String {
     )
 }
 
-async fn sqlite_repository(label: &str) -> (Repository, PathBuf) {
+async fn sqlite_repository(label: &str) -> (Database, PathBuf) {
     let data_dir = std::env::temp_dir().join(format!("racebin-{label}-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&data_dir).unwrap();
-    let repository = Repository::open(&sqlite_url(&data_dir), &data_dir)
+    let repository = Database::open(&sqlite_url(&data_dir), &data_dir)
         .await
         .unwrap();
     repository.migrate().await.unwrap();
     (repository, data_dir)
 }
 
-async fn insert_user(repo: &Repository, id: i64, username: &str, role: &str) {
+async fn insert_user(repo: &Database, id: i64, username: &str, role: &str) {
     sqlx::query(
         "INSERT INTO users(id,username,password_hash,role,enabled,password_change_required,created_at)
          VALUES($1,$2,$3,$4,1,0,$5)",

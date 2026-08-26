@@ -1,4 +1,4 @@
-use super::{DatabaseKind, Repository};
+use super::{Database, DatabaseKind};
 use sqlx::Row;
 use std::path::Path;
 
@@ -8,8 +8,8 @@ pub async fn copy_database(
     data_dir: impl AsRef<Path>,
 ) -> Result<(), String> {
     let data_dir = data_dir.as_ref();
-    let source = Repository::open(source_url, data_dir).await?;
-    let destination = Repository::open(destination_url, data_dir).await?;
+    let source = Database::open(source_url, data_dir).await?;
+    let destination = Database::open(destination_url, data_dir).await?;
     if source.kind == destination.kind && source_url == destination_url {
         return Err("source and destination databases must differ".to_string());
     }

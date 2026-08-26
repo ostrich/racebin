@@ -4,7 +4,7 @@ use log::LevelFilter;
 use std::time::Duration;
 
 use crate::args::ARGS;
-use crate::{cli, http, repository, services, time};
+use crate::{cli, database, http, services, time};
 
 const ACCESS_LOG_FORMAT: &str = "%a \"%{METHOD}xi\" %s %b \"%{User-Agent}i\" %T";
 
@@ -43,7 +43,7 @@ pub async fn run() -> std::io::Result<()> {
         .map_err(std::io::Error::other)?;
     prepare_data_dir(std::path::Path::new(&ARGS.data_dir))?;
     let database_url = ARGS.effective_database_url();
-    let repository = repository::Repository::open(&database_url, &ARGS.data_dir)
+    let repository = database::Database::open(&database_url, &ARGS.data_dir)
         .await
         .map_err(std::io::Error::other)?;
     repository.migrate().await.map_err(std::io::Error::other)?;

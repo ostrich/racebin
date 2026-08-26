@@ -1,7 +1,7 @@
 use super::*;
 use racebin::services::ErrorKind;
 
-pub(super) async fn backend_contract(repo: Repository) {
+pub(super) async fn backend_contract(repo: Database) {
     let initial_settings = racebin::services::settings::initialize(&repo, &racebin::args::ARGS)
         .await
         .unwrap();
