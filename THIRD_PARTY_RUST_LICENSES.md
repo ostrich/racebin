@@ -8,11 +8,11 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [actix-files](https://github.com/actix/actix-web) | 0.6.10 | MIT OR Apache-2.0 |
 | [actix-http](https://github.com/actix/actix-web) | 3.13.3 | MIT OR Apache-2.0 |
 | [actix-macros](https://github.com/actix/actix-net.git) | 0.2.4 | MIT OR Apache-2.0 |
-| [actix-multipart](https://github.com/actix/actix-web) | 0.8.0 | MIT OR Apache-2.0 |
+| [actix-multipart](https://github.com/actix/actix-web) | 0.8.1 | MIT OR Apache-2.0 |
 | [actix-multipart-derive](https://github.com/actix/actix-web) | 0.8.0 | MIT OR Apache-2.0 |
 | [actix-router](https://github.com/actix/actix-web) | 0.5.4 | MIT OR Apache-2.0 |
-| [actix-rt](https://github.com/actix/actix-net) | 2.11.0 | MIT OR Apache-2.0 |
-| [actix-server](https://github.com/actix/actix-net/tree/main/actix-server) | 2.7.0 | MIT OR Apache-2.0 |
+| [actix-rt](https://github.com/actix/actix-net) | 2.12.0 | MIT OR Apache-2.0 |
+| [actix-server](https://github.com/actix/actix-net/tree/main/actix-server) | 2.9.0 | MIT OR Apache-2.0 |
 | [actix-service](https://github.com/actix/actix-net) | 2.0.3 | MIT OR Apache-2.0 |
 | [actix-utils](https://github.com/actix/actix-net) | 3.0.1 | MIT OR Apache-2.0 |
 | [actix-web](https://github.com/actix/actix-web) | 4.14.1 | MIT OR Apache-2.0 |
@@ -50,7 +50,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [bytesize](https://github.com/bytesize-rs/bytesize) | 2.7.0 | Apache-2.0 |
 | [bytestring](https://github.com/actix/actix-net) | 1.5.1 | MIT OR Apache-2.0 |
 | [caseless](https://github.com/unicode-rs/rust-caseless) | 0.2.2 | MIT |
-| [cc](https://github.com/rust-lang/cc-rs) | 1.4.3 | MIT OR Apache-2.0 |
+| [cc](https://github.com/rust-lang/cc-rs) | 1.4.4 | MIT OR Apache-2.0 |
 | [cfg-if](https://github.com/rust-lang/cfg-if) | 1.0.4 | MIT OR Apache-2.0 |
 | [cfg_aliases](https://github.com/katharostech/cfg_aliases) | 0.2.2 | MIT |
 | [chacha20](https://github.com/RustCrypto/stream-ciphers) | 0.10.1 | MIT OR Apache-2.0 |
@@ -68,7 +68,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [cpufeatures](https://github.com/RustCrypto/utils) | 0.3.0 | MIT OR Apache-2.0 |
 | [crc](https://github.com/mrhooray/crc-rs.git) | 3.4.0 | MIT OR Apache-2.0 |
 | [crc-catalog](https://github.com/akhilles/crc-catalog.git) | 2.5.0 | MIT OR Apache-2.0 |
-| [crc32fast](https://github.com/srijs/rust-crc32fast) | 1.5.0 | MIT OR Apache-2.0 |
+| [crc32fast](https://github.com/srijs/rust-crc32fast) | 1.5.1 | MIT OR Apache-2.0 |
 | [crossbeam-queue](https://github.com/crossbeam-rs/crossbeam) | 0.3.13 | MIT OR Apache-2.0 |
 | [crossbeam-utils](https://github.com/crossbeam-rs/crossbeam) | 0.8.22 | MIT OR Apache-2.0 |
 | [crypto-common](https://github.com/RustCrypto/traits) | 0.1.7 | MIT OR Apache-2.0 |
@@ -87,7 +87,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [dotenvy](https://github.com/allan2/dotenvy) | 0.15.7 | MIT |
 | [dtoa](https://github.com/dtolnay/dtoa) | 1.0.11 | MIT OR Apache-2.0 |
 | [dtoa-short](https://github.com/upsuper/dtoa-short) | 0.3.5 | MPL-2.0 |
-| [either](https://github.com/rayon-rs/either) | 1.17.0 | MIT OR Apache-2.0 |
+| [either](https://github.com/rayon-rs/either) | 1.18.0 | MIT OR Apache-2.0 |
 | [encoding_rs](https://github.com/hsivonen/encoding_rs) | 0.8.35 | (Apache-2.0 OR MIT) AND BSD-3-Clause |
 | [entities](https://github.com/p-jackson/entities) | 1.0.1 | MIT |
 | [env_filter](https://github.com/rust-cli/env_logger) | 2.0.0 | MIT OR Apache-2.0 |
@@ -119,7 +119,6 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [getrandom](https://github.com/rust-random/getrandom) | 0.2.17 | MIT OR Apache-2.0 |
 | [getrandom](https://github.com/rust-random/getrandom) | 0.3.4 | MIT OR Apache-2.0 |
 | [getrandom](https://github.com/rust-random/getrandom) | 0.4.3 | MIT OR Apache-2.0 |
-| [h2](https://github.com/hyperium/h2) | 0.3.27 | MIT |
 | [hashbrown](https://github.com/rust-lang/hashbrown) | 0.16.1 | MIT OR Apache-2.0 |
 | [hashbrown](https://github.com/rust-lang/hashbrown) | 0.17.1 | MIT OR Apache-2.0 |
 | [hashlink](https://github.com/djc/hashlink) | 0.11.1 | MIT OR Apache-2.0 |
@@ -140,7 +139,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [icu_normalizer_data](https://github.com/unicode-org/icu4x) | 2.3.0 | Unicode-3.0 |
 | [icu_properties](https://github.com/unicode-org/icu4x) | 2.3.0 | Unicode-3.0 |
 | [icu_properties_data](https://github.com/unicode-org/icu4x) | 2.3.0 | Unicode-3.0 |
-| [icu_provider](https://github.com/unicode-org/icu4x) | 2.3.0 | Unicode-3.0 |
+| [icu_provider](https://github.com/unicode-org/icu4x) | 2.3.1 | Unicode-3.0 |
 | [ident_case](https://github.com/TedDriggs/ident_case) | 1.0.1 | MIT OR Apache-2.0 |
 | [idna](https://github.com/servo/rust-url/) | 1.1.0 | MIT OR Apache-2.0 |
 | [idna_adapter](https://github.com/hsivonen/idna_adapter) | 1.2.2 | Apache-2.0 OR MIT |
@@ -159,7 +158,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [litemap](https://github.com/unicode-org/icu4x) | 0.8.3 | Unicode-3.0 |
 | [local-waker](https://github.com/actix/actix-net) | 0.1.4 | MIT OR Apache-2.0 |
 | [lock_api](https://github.com/Amanieu/parking_lot) | 0.4.14 | MIT OR Apache-2.0 |
-| [log](https://github.com/rust-lang/log) | 0.4.33 | MIT OR Apache-2.0 |
+| [log](https://github.com/rust-lang/log) | 0.4.34 | MIT OR Apache-2.0 |
 | [maplit](https://github.com/bluss/maplit) | 1.0.2 | MIT OR Apache-2.0 |
 | [markup5ever](https://github.com/servo/html5ever) | 0.39.0 | MIT OR Apache-2.0 |
 | [markup5ever_rcdom](https://github.com/servo/html5ever) | 0.39.0+unofficial | MIT OR Apache-2.0 |
@@ -223,7 +222,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [rustix](https://github.com/bytecodealliance/rustix) | 1.1.4 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | [rustls](https://github.com/rustls/rustls) | 0.23.43 | Apache-2.0 OR ISC OR MIT |
 | [rustls-pki-types](https://github.com/rustls/pki-types) | 1.15.1 | MIT OR Apache-2.0 |
-| [rustls-webpki](https://github.com/rustls/webpki) | 0.103.14 | ISC |
+| [rustls-webpki](https://github.com/rustls/webpki) | 0.103.15 | ISC |
 | [rusty-fork](https://github.com/altsysrq/rusty-fork) | 0.3.1 | MIT OR Apache-2.0 |
 | [ryu](https://github.com/dtolnay/ryu) | 1.0.23 | Apache-2.0 OR BSL-1.0 |
 | [scopeguard](https://github.com/bluss/scopeguard) | 1.2.0 | MIT OR Apache-2.0 |
@@ -257,7 +256,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [strsim](https://github.com/rapidfuzz/strsim-rs) | 0.11.1 | MIT |
 | [subtle](https://github.com/dalek-cryptography/subtle) | 2.6.1 | BSD-3-Clause |
 | [syn](https://github.com/dtolnay/syn) | 2.0.119 | MIT OR Apache-2.0 |
-| [syn](https://github.com/dtolnay/syn) | 3.0.3 | MIT OR Apache-2.0 |
+| [syn](https://github.com/dtolnay/syn) | 3.0.4 | MIT OR Apache-2.0 |
 | [synstructure](https://github.com/mystor/synstructure) | 0.13.2 | MIT |
 | [tempfile](https://github.com/Stebalien/tempfile) | 3.27.0 | MIT OR Apache-2.0 |
 | [tendril](https://github.com/servo/html5ever) | 0.5.1 | MIT OR Apache-2.0 |
@@ -292,7 +291,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [utf8parse](https://github.com/alacritty/vte) | 0.2.2 | Apache-2.0 OR MIT |
 | [utoipa](https://github.com/juhaku/utoipa) | 5.5.0 | MIT OR Apache-2.0 |
 | [utoipa-gen](https://github.com/juhaku/utoipa) | 5.5.0 | MIT OR Apache-2.0 |
-| [uuid](https://github.com/uuid-rs/uuid) | 1.24.1 | Apache-2.0 OR MIT |
+| [uuid](https://github.com/uuid-rs/uuid) | 1.25.0 | Apache-2.0 OR MIT |
 | [v_htmlescape](https://github.com/botika/v_escape) | 0.15.8 | MIT OR Apache-2.0 |
 | [vcpkg](https://github.com/mcgoo/vcpkg-rs) | 0.2.15 | MIT OR Apache-2.0 |
 | [version_check](https://github.com/SergioBenitez/version_check) | 0.9.5 | MIT OR Apache-2.0 |
@@ -325,8 +324,8 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [zerofrom-derive](https://github.com/unicode-org/icu4x) | 0.1.7 | Unicode-3.0 |
 | [zeroize](https://github.com/RustCrypto/utils) | 1.9.0 | Apache-2.0 OR MIT |
 | [zerotrie](https://github.com/unicode-org/icu4x) | 0.2.5 | Unicode-3.0 |
-| [zerovec](https://github.com/unicode-org/icu4x) | 0.11.7 | Unicode-3.0 |
-| [zerovec-derive](https://github.com/unicode-org/icu4x) | 0.11.4 | Unicode-3.0 |
+| [zerovec](https://github.com/unicode-org/icu4x) | 0.11.8 | Unicode-3.0 |
+| [zerovec-derive](https://github.com/unicode-org/icu4x) | 0.11.6 | Unicode-3.0 |
 | [zip](https://github.com/zip-rs/zip2) | 8.6.0 | MIT |
 | [zlib-rs](https://github.com/trifectatechfoundation/zlib-rs) | 0.6.7 | Zlib |
 | [zmij](https://github.com/dtolnay/zmij) | 1.0.23 | MIT |
