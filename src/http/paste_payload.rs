@@ -36,8 +36,8 @@ pub(super) async fn parse_non_multipart(
             let mut content = String::from_utf8(bytes.to_vec())
                 .map_err(|_| error(StatusCode::BAD_REQUEST, "invalid_text", "Text input must be UTF-8"))?;
             if content_type == "text/html" {
-                content = crate::services::html_to_document(&content)
-                    .and_then(|document| crate::services::document_to_markdown(&document))
+                content = crate::pastes::html_to_document(&content)
+                    .and_then(|document| crate::pastes::document_to_markdown(&document))
                     .map_err(|message| error(StatusCode::UNPROCESSABLE_ENTITY, "invalid_paste", message))?;
             }
             let mut query = FlatCreateRequest::from(query);
@@ -60,7 +60,7 @@ pub(super) async fn parse_multipart(
     payload: web::Payload,
     services: &PasteService,
 ) -> Result<(CreatePasteRequest, Vec<StagedFile>), HttpResponse> {
-    let attachments_enabled = crate::services::settings::get(&services.storage)
+    let attachments_enabled = crate::instance::settings::get(&services.storage)
         .await
         .map_err(domain_error)?
         .attachments_enabled;
@@ -233,9 +233,9 @@ pub(super) async fn parse_multipart(
 pub(super) async fn promote_created_files(
     services: &PasteService,
     principal: &Principal,
-    paste: &mut crate::services::Paste,
+    paste: &mut crate::pastes::Paste,
     staged: &mut [StagedFile],
-) -> crate::services::DomainResult<()> {
+) -> crate::pastes::DomainResult<()> {
     let directory = services
         .storage
         .data_dir
@@ -243,7 +243,7 @@ pub(super) async fn promote_created_files(
         .join(&paste.id);
     tokio::fs::create_dir_all(&directory)
         .await
-        .map_err(|error| crate::services::DomainError::internal(error.to_string()))?;
+        .map_err(|error| crate::pastes::DomainError::internal(error.to_string()))?;
     let mut promoted = Vec::new();
     for file in staged.iter_mut() {
         let destination = super::attachments::attachment_path(
@@ -251,19 +251,19 @@ pub(super) async fn promote_created_files(
             &paste.id,
             &file.storage_key,
         )
-        .map_err(crate::services::DomainError::internal)?;
+        .map_err(crate::pastes::DomainError::internal)?;
         if let Err(error) = tokio::fs::rename(&file.temporary, &destination).await {
             for path in promoted {
                 let _ = tokio::fs::remove_file(path).await;
             }
-            return Err(crate::services::DomainError::internal(error.to_string()));
+            return Err(crate::pastes::DomainError::internal(error.to_string()));
         }
         file.temporary = PathBuf::new();
         promoted.push(destination);
     }
     let inputs = staged
         .iter()
-        .map(|file| crate::services::NewAttachment {
+        .map(|file| crate::pastes::NewAttachment {
             filename: file.filename.clone(),
             storage_key: file.storage_key.clone(),
             size_bytes: file.size_bytes,
@@ -289,7 +289,7 @@ pub(super) async fn promote_created_files(
 
 async fn remove_unreferenced_attachment_files(
     services: &PasteService,
-    paste: &crate::services::Paste,
+    paste: &crate::pastes::Paste,
 ) {
     let directory = services
         .storage

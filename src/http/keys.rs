@@ -67,7 +67,7 @@ pub(crate) async fn list_keys(
     match services
         .list_api_keys(
             &value,
-            &crate::services::ApiKeyListOptions {
+            &crate::pastes::ApiKeyListOptions {
                 search: query.search.as_deref(),
                 enabled,
                 sort,

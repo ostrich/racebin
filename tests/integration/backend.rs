@@ -1,8 +1,8 @@
 use super::*;
-use racebin::services::ErrorKind;
+use racebin::pastes::ErrorKind;
 
 pub(super) async fn backend_contract(repo: Database) {
-    let initial_settings = racebin::services::settings::initialize(&repo, &racebin::args::ARGS)
+    let initial_settings = racebin::instance::settings::initialize(&repo, &racebin::args::ARGS)
         .await
         .unwrap();
     assert_eq!(
@@ -36,7 +36,7 @@ pub(super) async fn backend_contract(repo: Database) {
     let mut changed_settings = initial_settings.clone();
     changed_settings.site_name = "Contract site".into();
     changed_settings.public_explore_enabled = false;
-    let changed_settings = racebin::services::settings::replace(&repo, 1, &changed_settings)
+    let changed_settings = racebin::instance::settings::replace(&repo, 1, &changed_settings)
         .await
         .unwrap();
     assert_eq!(changed_settings.site_name, "Contract site");
@@ -839,7 +839,7 @@ pub(super) async fn backend_contract(repo: Database) {
     .bind(1_i64).bind("administrator").bind("test.paginated").bind("user")
     .bind("paste-owner").bind("{}").bind(racebin::time::unix_timestamp())
     .execute(repo.pool()).await.unwrap();
-    let audit_page = racebin::services::audit::list_page(&repo, Some("paginated"), 1, 1)
+    let audit_page = racebin::instance::audit::list_page(&repo, Some("paginated"), 1, 1)
         .await
         .unwrap();
     assert_eq!(audit_page.total_items, 1);

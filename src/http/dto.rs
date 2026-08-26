@@ -1,5 +1,5 @@
 use super::*;
-use crate::services::{render_markdown, Attachment, Paste};
+use crate::pastes::{render_markdown, Attachment, Paste};
 use serde::{Deserialize, Serialize};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use utoipa::ToSchema;

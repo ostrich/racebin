@@ -1,4 +1,4 @@
-use crate::account::SESSION_COOKIE;
+use crate::accounts::SESSION_COOKIE;
 use crate::args::ARGS;
 use actix_web::cookie::{Cookie, SameSite};
 

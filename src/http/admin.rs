@@ -287,7 +287,7 @@ pub(crate) async fn admin_pastes(
         Ok(query) => query,
         Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
     };
-    if let Err(error) = crate::services::validate_paste_query(&query) {
+    if let Err(error) = crate::pastes::validate_paste_query(&query) {
         return domain_error(error);
     }
     match services.list_pastes(&value, &query, true).await {
@@ -397,7 +397,7 @@ pub(crate) async fn admin_update_user(
     let result = accounts::update_user(&services.storage, *id, body.enabled, None).await;
     match result {
         Ok(()) => {
-            let _ = crate::services::audit::record(
+            let _ = crate::instance::audit::record(
                 &services.storage,
                 &value,
                 "user.access_changed",
@@ -452,7 +452,7 @@ pub(crate) async fn admin_update_user_role(
     };
     match accounts::set_role(&services.storage, *id, admin).await {
         Ok(()) => {
-            let _ = crate::services::audit::record(
+            let _ = crate::instance::audit::record(
                 &services.storage,
                 &value,
                 "user.role_changed",
@@ -497,7 +497,7 @@ pub(crate) async fn admin_transfer_ownership(
         .await
     {
         Ok(()) => {
-            let _ = crate::services::audit::record(
+            let _ = crate::instance::audit::record(
                 &services.storage,
                 &value,
                 "ownership.transferred",
@@ -528,8 +528,8 @@ pub(crate) struct InstanceSettingsResource {
     default_expiration_seconds: Option<i64>,
 }
 
-impl From<crate::services::settings::InstanceSettings> for InstanceSettingsResource {
-    fn from(v: crate::services::settings::InstanceSettings) -> Self {
+impl From<crate::instance::settings::InstanceSettings> for InstanceSettingsResource {
+    fn from(v: crate::instance::settings::InstanceSettings) -> Self {
         Self {
             site_name: v.site_name,
             home_mode: v.home_mode,
@@ -558,7 +558,7 @@ pub(crate) async fn admin_settings(
     if let Err(r) = auth::require_owner_session(&value) {
         return r;
     }
-    match crate::services::settings::get(&services.storage).await {
+    match crate::instance::settings::get(&services.storage).await {
         Ok(v) => HttpResponse::Ok().json(InstanceSettingsResource::from(v)),
         Err(e) => domain_error(e),
     }
@@ -588,11 +588,11 @@ pub(crate) async fn admin_replace_settings(
             "Configure a public URL before enabling QR codes",
         );
     }
-    let current = match crate::services::settings::get(&services.storage).await {
+    let current = match crate::instance::settings::get(&services.storage).await {
         Ok(v) => v,
         Err(e) => return domain_error(e),
     };
-    let next = crate::services::settings::InstanceSettings {
+    let next = crate::instance::settings::InstanceSettings {
         site_name: body.site_name.clone(),
         home_mode: body.home_mode.clone(),
         public_explore_enabled: body.public_explore_enabled,
@@ -606,11 +606,11 @@ pub(crate) async fn admin_replace_settings(
         updated_at: current.updated_at,
         updated_by_user_id: current.updated_by_user_id,
     };
-    match crate::services::settings::replace(&services.storage, value.user_id().unwrap(), &next)
+    match crate::instance::settings::replace(&services.storage, value.user_id().unwrap(), &next)
         .await
     {
         Ok(v) => {
-            let _ = crate::services::audit::record(
+            let _ = crate::instance::audit::record(
                 &services.storage,
                 &value,
                 "instance.settings_changed",
@@ -665,7 +665,7 @@ pub(crate) async fn admin_audit_events(
         Ok(value) => value,
         Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
     };
-    match crate::services::audit::list_page(
+    match crate::instance::audit::list_page(
         &services.storage,
         query.search.as_deref(),
         page,
@@ -749,7 +749,7 @@ pub(crate) async fn admin_create_password_reset(
     }
     match accounts::create_password_reset(&services.storage, *id, created_by_user_id).await {
         Ok(token) => {
-            let _ = crate::services::audit::record(
+            let _ = crate::instance::audit::record(
                 &services.storage,
                 &value,
                 "user.password_reset_created",
@@ -800,7 +800,7 @@ pub(crate) async fn admin_revoke_user_sessions(
     }
     match accounts::revoke_sessions(&services.storage, *id).await {
         Ok(true) => {
-            let _ = crate::services::audit::record(
+            let _ = crate::instance::audit::record(
                 &services.storage,
                 &value,
                 "user.sessions_revoked",
@@ -848,7 +848,7 @@ pub(crate) async fn admin_revoke_user_keys(
     match require_manageable_user(&services, &value, *id).await {
         Ok(_) => match api_keys::delete_all_for_user(&services.storage, *id).await {
             Ok(_) => {
-                let _ = crate::services::audit::record(
+                let _ = crate::instance::audit::record(
                     &services.storage,
                     &value,
                     "user.api_keys_revoked",
@@ -997,7 +997,7 @@ pub(crate) async fn admin_create_invitation(
     services: web::Data<PasteService>,
     body: web::Json<contract::InvitationCreateInput>,
 ) -> HttpResponse {
-    let invitations_enabled = match crate::services::settings::get(&services.storage).await {
+    let invitations_enabled = match crate::instance::settings::get(&services.storage).await {
         Ok(settings) => settings.invitations_enabled,
         Err(value) => return domain_error(value),
     };
@@ -1036,7 +1036,7 @@ pub(crate) async fn admin_create_invitation(
     match accounts::create_invitation(&services.storage, user_id, comment).await {
         Ok(token) => {
             let url = super::dto::absolute(&req, &format!("/invitations/{token}"));
-            let _ = crate::services::audit::record(
+            let _ = crate::instance::audit::record(
                 &services.storage,
                 &value,
                 "invitation.created",
@@ -1101,7 +1101,7 @@ pub(crate) async fn admin_update_invitation(
     }
     match accounts::update_invitation_comment(&services.storage, *id, comment.as_deref()).await {
         Ok(true) => {
-            let _ = crate::services::audit::record(
+            let _ = crate::instance::audit::record(
                 &services.storage,
                 &value,
                 "invitation.comment_updated",
@@ -1148,7 +1148,7 @@ pub(crate) async fn admin_revoke_invitation(
     }
     match accounts::revoke_invitation(&services.storage, *id).await {
         Ok(true) => {
-            let _ = crate::services::audit::record(
+            let _ = crate::instance::audit::record(
                 &services.storage,
                 &value,
                 "invitation.revoked",
@@ -1308,7 +1308,7 @@ pub(crate) async fn admin_update_key(
     }
     match api_keys::set_enabled(&services.storage, *id, body.enabled).await {
         Ok(true) => {
-            let _ = crate::services::audit::record(
+            let _ = crate::instance::audit::record(
                 &services.storage,
                 &value,
                 "api_key.access_changed",
@@ -1358,7 +1358,7 @@ pub(crate) async fn admin_delete_key(
     }
     match api_keys::delete(&services.storage, *id).await {
         Ok(true) => {
-            let _ = crate::services::audit::record(
+            let _ = crate::instance::audit::record(
                 &services.storage,
                 &value,
                 "api_key.deleted",

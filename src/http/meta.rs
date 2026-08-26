@@ -726,7 +726,7 @@ async fn get_openapi() -> impl Responder {
 #[utoipa::path(get, path = "/capabilities", tag = "discovery", responses((status = 200, description = "Runtime features, limits, and authorization scopes", body = Capabilities)), security(()))]
 #[get("/capabilities")]
 async fn get_capabilities(services: web::Data<PasteService>) -> impl Responder {
-    let settings = match crate::services::settings::get(&services.storage).await {
+    let settings = match crate::instance::settings::get(&services.storage).await {
         Ok(settings) => settings,
         Err(error) => return domain_error(error),
     };

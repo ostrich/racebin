@@ -1,6 +1,6 @@
-use crate::account::{self as accounts, api_keys};
+use crate::accounts::{self as accounts, api_keys};
 use crate::args::ARGS;
-use crate::services::{PasteInput, PasteQuery, PasteService, Principal};
+use crate::pastes::{PasteInput, PasteQuery, PasteService, Principal};
 use actix_files::NamedFile;
 use actix_multipart::Multipart;
 use actix_web::cookie::{Cookie, SameSite};

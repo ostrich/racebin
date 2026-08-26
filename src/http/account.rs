@@ -228,13 +228,13 @@ pub(crate) async fn login(
                     ))
                     .json(contract::SessionCreatedResponse {
                         permissions: if user.is_owner() {
-                            crate::services::OWNER_PERMISSIONS
+                            crate::pastes::OWNER_PERMISSIONS
                                 .iter()
-                                .chain(crate::services::ADMIN_PERMISSIONS)
+                                .chain(crate::pastes::ADMIN_PERMISSIONS)
                                 .map(|p| p.id().to_owned())
                                 .collect()
                         } else if user.is_admin() {
-                            crate::services::ADMIN_PERMISSIONS
+                            crate::pastes::ADMIN_PERMISSIONS
                                 .iter()
                                 .map(|p| p.id().to_owned())
                                 .collect()
@@ -462,7 +462,7 @@ pub(crate) async fn redeem_invitation(
     token: web::Path<String>,
     body: web::Json<InvitationInput>,
 ) -> HttpResponse {
-    let invitations_enabled = match crate::services::settings::get(&services.storage).await {
+    let invitations_enabled = match crate::instance::settings::get(&services.storage).await {
         Ok(settings) => settings.invitations_enabled,
         Err(value) => return domain_error(value),
     };

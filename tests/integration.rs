@@ -1,6 +1,6 @@
-use racebin::account::{self as accounts, api_keys};
+use racebin::accounts::{self as accounts, api_keys};
 use racebin::database::{copy_database, Database, DatabaseKind};
-use racebin::services::{NewAttachment, PasteInput, PasteQuery, PasteService, Principal};
+use racebin::pastes::{NewAttachment, PasteInput, PasteQuery, PasteService, Principal};
 
 fn attachment(filename: &str, storage_key: &str, size_bytes: i64) -> NewAttachment {
     NewAttachment {

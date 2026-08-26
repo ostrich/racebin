@@ -30,7 +30,7 @@ pub async fn list_invitations(
     status: Option<&str>,
     page: u32,
     page_size: u32,
-) -> DomainResult<crate::services::Page<Invitation>> {
+) -> DomainResult<crate::pastes::Page<Invitation>> {
     let now = unix_timestamp();
     let lifecycle = if history {
         "(i.redeemed=1 OR i.revoked=1 OR i.expires_at<=$1)"
@@ -85,7 +85,7 @@ pub async fn list_invitations(
         .fetch_all(repo.pool())
         .await
         .map_err(DomainError::from)?;
-    Ok(crate::services::Page {
+    Ok(crate::pastes::Page {
         items,
         page,
         page_size,

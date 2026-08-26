@@ -1,4 +1,4 @@
-use crate::account::{self as accounts, api_keys};
+use crate::accounts::{self as accounts, api_keys};
 use crate::crypto::sha256_hex;
 use crate::database::Database;
 use sqlx::{Any, Executor};
@@ -912,10 +912,10 @@ fn paste_size(paste: &Paste) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::{Attachment, Paste, PasteService, Permission, Principal};
-    use crate::account::api_keys::ApiKey;
-    use crate::account::{SessionUser, User};
+    use crate::accounts::api_keys::ApiKey;
+    use crate::accounts::{SessionUser, User};
     use crate::database::Database;
-    use crate::services::validation::can_read;
+    use crate::pastes::validation::can_read;
 
     #[test]
     fn owner_permissions_are_a_strict_session_only_superset() {

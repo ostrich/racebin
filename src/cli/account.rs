@@ -1,4 +1,4 @@
-use crate::account as accounts;
+use crate::accounts;
 use crate::database::Database;
 use std::fs;
 

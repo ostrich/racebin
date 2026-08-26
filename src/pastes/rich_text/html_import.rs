@@ -1,4 +1,4 @@
-use super::prosemirror_document::validate_document;
+use super::prosemirror::validate_document;
 use html5ever::{local_name, ns, parse_fragment, tendril::TendrilSink, QualName};
 use markup5ever_rcdom::{Handle, NodeData, RcDom};
 use serde_json::{json, Value};

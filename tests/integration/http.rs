@@ -2,10 +2,10 @@
 mod tests {
     use super::super::attachment;
     use actix_web::{cookie::Cookie, http::StatusCode, test, web, App};
-    use racebin::account::{self as accounts, api_keys};
+    use racebin::accounts::{self as accounts, api_keys};
     use racebin::database::Database;
     use racebin::http::configure;
-    use racebin::services::{PasteInput, PasteService, Principal};
+    use racebin::pastes::{PasteInput, PasteService, Principal};
     use serde_json::{json, Value};
     use std::io::Read;
     #[actix_web::test]
@@ -18,7 +18,7 @@ mod tests {
         );
         let repository = Database::open(&url, &data_dir).await.unwrap();
         repository.migrate().await.unwrap();
-        racebin::services::settings::initialize(&repository, &racebin::args::ARGS)
+        racebin::instance::settings::initialize(&repository, &racebin::args::ARGS)
             .await
             .unwrap();
         sqlx::query(

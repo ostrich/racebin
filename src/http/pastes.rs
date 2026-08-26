@@ -397,7 +397,7 @@ pub(crate) async fn list_pastes(
             "Authentication required for owner=me",
         );
     }
-    let public_explore_enabled = match crate::services::settings::get(&services.storage).await {
+    let public_explore_enabled = match crate::instance::settings::get(&services.storage).await {
         Ok(settings) => settings.public_explore_enabled,
         Err(value) => return domain_error(value),
     };
@@ -408,7 +408,7 @@ pub(crate) async fn list_pastes(
             "Public discovery is disabled",
         );
     }
-    if let Err(error) = crate::services::validate_paste_query(&query) {
+    if let Err(error) = crate::pastes::validate_paste_query(&query) {
         return domain_error(error);
     }
     let wants_private =
@@ -534,7 +534,7 @@ pub(crate) async fn create_paste(
         Ok(value) => value,
         Err(response) => return response,
     };
-    let settings = match crate::services::settings::get(&services.storage).await {
+    let settings = match crate::instance::settings::get(&services.storage).await {
         Ok(settings) => settings,
         Err(error) => return domain_error(error),
     };
@@ -962,17 +962,17 @@ pub(crate) async fn convert_paste_content(
     }
     let result = match (&body.source, body.target_format.as_str()) {
         (BodyInput::Text { content, .. }, "markdown") => Ok(BodyInput::Markdown {
-            content: crate::services::text_to_markdown(content),
+            content: crate::pastes::text_to_markdown(content),
         }),
         (BodyInput::Markdown { content }, "text") => {
-            crate::services::render_markdown(content).map(|rendered| BodyInput::Text {
+            crate::pastes::render_markdown(content).map(|rendered| BodyInput::Text {
                 content: rendered.plain_text,
                 language: Some("plaintext".into()),
             })
         }
         (source @ BodyInput::Text { .. }, "text") => Ok(source.clone()),
         (source @ BodyInput::Markdown { content }, "markdown") => {
-            crate::services::render_markdown(content).map(|_| source.clone())
+            crate::pastes::render_markdown(content).map(|_| source.clone())
         }
         _ => Err("Conversion supports only text and markdown".into()),
     };
@@ -989,7 +989,7 @@ pub(crate) async fn convert_paste_content(
 fn resource_response(
     req: &HttpRequest,
     principal: &Principal,
-    paste: crate::services::Paste,
+    paste: crate::pastes::Paste,
     include_body: bool,
     grant: Option<&str>,
 ) -> HttpResponse {
@@ -1008,7 +1008,7 @@ fn resource_response(
 fn content_response(
     req: &HttpRequest,
     principal: &Principal,
-    paste: crate::services::Paste,
+    paste: crate::pastes::Paste,
     grant: Option<&str>,
 ) -> HttpResponse {
     let tag = dto::etag(&paste);
@@ -1019,7 +1019,7 @@ fn content_response(
             .body(paste.content)
     } else if accepts(req, "text/plain") {
         let content = if paste.content_kind == "markdown" {
-            crate::services::render_markdown(&paste.content)
+            crate::pastes::render_markdown(&paste.content)
                 .map(|value| value.plain_text)
                 .unwrap_or_default()
         } else {
@@ -1041,7 +1041,7 @@ fn content_response(
             .insert_header((header::ETAG, tag))
             .content_type("text/html; charset=utf-8")
             .body(
-                crate::services::render_markdown(&paste.content)
+                crate::pastes::render_markdown(&paste.content)
                     .map(|value| value.html)
                     .unwrap_or_default(),
             )
@@ -1057,7 +1057,7 @@ fn content_response(
     response
 }
 
-fn raw_content_response(paste: crate::services::Paste) -> HttpResponse {
+fn raw_content_response(paste: crate::pastes::Paste) -> HttpResponse {
     let tag = dto::etag(&paste);
     if paste.content_kind == "markdown" {
         HttpResponse::Ok()
@@ -1113,7 +1113,7 @@ fn idempotency_key(req: &HttpRequest) -> Result<Option<String>, HttpResponse> {
 
 pub(crate) fn require_match(
     req: &HttpRequest,
-    paste: &crate::services::Paste,
+    paste: &crate::pastes::Paste,
 ) -> Result<Option<i64>, HttpResponse> {
     let Some(value) = req.headers().get(header::IF_MATCH) else {
         return Err(error(

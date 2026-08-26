@@ -1,4 +1,4 @@
-use crate::account::api_keys;
+use crate::accounts::api_keys;
 
 use super::{DomainError, DomainResult, PasteService, Principal};
 

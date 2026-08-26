@@ -630,8 +630,8 @@ fn append_text(node: &Value, output: &mut String, list_depth: usize) {
 
 #[cfg(test)]
 mod tests {
+    use super::super::html_import::html_to_document;
     use super::*;
-    use crate::services::html_import::html_to_document;
     use proptest::prelude::*;
 
     proptest! {
@@ -726,7 +726,7 @@ mod tests {
         assert!(output.contains("**INT. LAB - NIGHT**"));
         assert!(!output.contains("align"));
         assert!(output.contains("0. First beat"));
-        assert!(crate::services::render_markdown(&output).is_ok());
+        assert!(crate::pastes::render_markdown(&output).is_ok());
     }
 
     #[test]

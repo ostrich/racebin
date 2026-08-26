@@ -97,7 +97,7 @@ pub struct AdminUserListQuery<'a> {
 pub async fn list_admin_users(
     repo: &Database,
     query: &AdminUserListQuery<'_>,
-) -> DomainResult<crate::services::Page<AdminUser>> {
+) -> DomainResult<crate::pastes::Page<AdminUser>> {
     let search = query
         .search
         .filter(|value| !value.trim().is_empty())
@@ -144,7 +144,7 @@ pub async fn list_admin_users(
         .fetch_all(repo.pool())
         .await
         .map_err(DomainError::from)?;
-    Ok(crate::services::Page {
+    Ok(crate::pastes::Page {
         items,
         page: query.page,
         page_size: query.page_size,

@@ -1,12 +1,11 @@
 use serde::Serialize;
 use sqlx::{any::AnyRow, FromRow, Row};
 
-use crate::account::api_keys::ApiKey;
+use crate::accounts::api_keys::ApiKey;
 use crate::database::Database;
 use crate::domain_error::{DomainError, DomainResult};
+use crate::pastes::{Page, Principal};
 use crate::time::unix_timestamp;
-
-use super::Principal;
 
 #[derive(Clone, Debug)]
 pub struct AuditEvent {
@@ -90,7 +89,7 @@ pub async fn list_page(
     search: Option<&str>,
     page: u32,
     page_size: u32,
-) -> DomainResult<super::Page<AuditEvent>> {
+) -> DomainResult<Page<AuditEvent>> {
     let search = search
         .filter(|value| !value.trim().is_empty())
         .map(|value| format!("%{}%", value.trim().to_lowercase()))
@@ -112,7 +111,7 @@ pub async fn list_page(
     .bind(i64::from(page_size))
     .bind(i64::from(page.saturating_sub(1)) * i64::from(page_size))
     .fetch_all(repo.pool()).await.map_err(DomainError::from)?;
-    Ok(super::Page {
+    Ok(Page {
         items,
         page,
         page_size,

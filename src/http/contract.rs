@@ -1,5 +1,5 @@
-use crate::account::{api_keys::ApiKey, AdminUser, Invitation, User};
-use crate::services::{Attachment, Folder, FolderOverview};
+use crate::accounts::{api_keys::ApiKey, AdminUser, Invitation, User};
+use crate::pastes::{Attachment, Folder, FolderOverview};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

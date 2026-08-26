@@ -4,7 +4,7 @@ use log::LevelFilter;
 use std::time::Duration;
 
 use crate::args::ARGS;
-use crate::{cli, database, http, services, time};
+use crate::{cli, database, http, instance, pastes, time};
 
 const ACCESS_LOG_FORMAT: &str = "%a \"%{METHOD}xi\" %s %b \"%{User-Agent}i\" %T";
 
@@ -47,7 +47,7 @@ pub async fn run() -> std::io::Result<()> {
         .await
         .map_err(std::io::Error::other)?;
     repository.migrate().await.map_err(std::io::Error::other)?;
-    let settings = services::settings::initialize(&repository, &ARGS)
+    let settings = instance::settings::initialize(&repository, &ARGS)
         .await
         .map_err(|error| std::io::Error::other(error.to_string()))?;
     if settings.qr_codes_enabled && ARGS.public_url.is_none() {
@@ -83,7 +83,7 @@ pub async fn run() -> std::io::Result<()> {
             }
         }
     });
-    let state = web::Data::new(services::PasteService::new(repository));
+    let state = web::Data::new(pastes::PasteService::new(repository));
 
     log::info!("Racebin starting on http://{}:{}", ARGS.bind, ARGS.port);
     let server = HttpServer::new(move || {

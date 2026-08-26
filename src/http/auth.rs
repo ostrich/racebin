@@ -1,7 +1,7 @@
 use super::errors::{domain_error, error};
-use crate::account::{self as accounts, api_keys};
+use crate::accounts::{self as accounts, api_keys};
 use crate::args::ARGS;
-use crate::services::{DomainError, DomainResult, PasteService, Principal};
+use crate::pastes::{DomainError, DomainResult, PasteService, Principal};
 
 pub(super) fn client_address(req: &HttpRequest) -> String {
     let Some(peer) = req.peer_addr() else {

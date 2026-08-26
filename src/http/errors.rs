@@ -1,4 +1,4 @@
-use crate::services::{DomainError, ErrorKind};
+use crate::pastes::{DomainError, ErrorKind};
 use actix_web::http::{header, StatusCode};
 use actix_web::HttpResponse;
 use serde::Serialize;

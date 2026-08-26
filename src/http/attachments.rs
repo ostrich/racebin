@@ -100,7 +100,7 @@ pub(crate) async fn upload_attachments(
     paste_id: web::Path<String>,
     mut payload: Multipart,
 ) -> HttpResponse {
-    let attachments_enabled = match crate::services::settings::get(&services.storage).await {
+    let attachments_enabled = match crate::instance::settings::get(&services.storage).await {
         Ok(settings) => settings.attachments_enabled,
         Err(value) => return domain_error(value),
     };
@@ -244,7 +244,7 @@ pub(crate) async fn upload_attachments(
     let inputs = staged
         .iter()
         .map(
-            |(_, _, filename, storage_key, size_bytes)| crate::services::NewAttachment {
+            |(_, _, filename, storage_key, size_bytes)| crate::pastes::NewAttachment {
                 filename: filename.clone(),
                 storage_key: storage_key.clone(),
                 size_bytes: *size_bytes,
@@ -482,7 +482,7 @@ async fn paste_for_download(
     principal: &Principal,
     paste_id: &str,
     read_token: Option<&str>,
-) -> crate::services::DomainResult<Option<crate::services::Paste>> {
+) -> crate::pastes::DomainResult<Option<crate::pastes::Paste>> {
     if let Some(paste) = services.get_paste(principal, paste_id).await? {
         let owner = principal.is_admin() || principal.user_id() == paste.owner_id;
         if paste.read_limit.is_none() || owner {
@@ -512,7 +512,7 @@ pub(crate) async fn get_qr(
     services: web::Data<PasteService>,
     paste_id: web::Path<String>,
 ) -> HttpResponse {
-    let qr_codes_enabled = match crate::services::settings::get(&services.storage).await {
+    let qr_codes_enabled = match crate::instance::settings::get(&services.storage).await {
         Ok(settings) => settings.qr_codes_enabled,
         Err(value) => return domain_error(value),
     };

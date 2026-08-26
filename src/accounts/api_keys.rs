@@ -197,7 +197,7 @@ pub struct ApiKeyListQuery<'a> {
 pub async fn list_page(
     repo: &Database,
     query: &ApiKeyListQuery<'_>,
-) -> DomainResult<crate::services::Page<ApiKey>> {
+) -> DomainResult<crate::pastes::Page<ApiKey>> {
     let search = query
         .search
         .filter(|value| !value.trim().is_empty())
@@ -247,7 +247,7 @@ pub async fn list_page(
     for row in rows {
         items.push(from_row(repo, row).await?);
     }
-    Ok(crate::services::Page {
+    Ok(crate::pastes::Page {
         items,
         page: query.page,
         page_size: query.page_size,

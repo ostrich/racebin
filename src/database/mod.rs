@@ -119,9 +119,9 @@ impl Database {
                 .map_err(|_| format!("Rich-text paste {id} has no document"))?;
             let document = serde_json::from_str(&encoded)
                 .map_err(|error| format!("Rich-text paste {id} is invalid: {error}"))?;
-            let markdown = crate::services::document_to_markdown(&document)
+            let markdown = crate::pastes::document_to_markdown(&document)
                 .map_err(|error| format!("Cannot migrate paste {id}: {error}"))?;
-            crate::services::render_markdown(&markdown)
+            crate::pastes::render_markdown(&markdown)
                 .map_err(|error| format!("Cannot migrate paste {id}: {error}"))?;
             converted.push((id, markdown));
         }
