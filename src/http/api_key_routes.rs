@@ -31,11 +31,11 @@ pub(crate) async fn list_keys(
         Err(r) => return r,
     };
     let query = query.into_inner();
-    let (page, page_size) = match crate::http::dto::page_parameters(query.page, query.page_size, 25)
-    {
-        Ok(value) => value,
-        Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
-    };
+    let (page, page_size) =
+        match crate::http::contract::page_parameters(query.page, query.page_size, 25) {
+            Ok(value) => value,
+            Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
+        };
     let enabled = match query.status.as_deref() {
         None | Some("all") => None,
         Some("enabled") => Some(true),
@@ -84,11 +84,11 @@ pub(crate) async fn list_keys(
                 .into_iter()
                 .map(contract::ApiKeyResource::from)
                 .collect(),
-            pagination: crate::http::dto::Pagination {
+            pagination: crate::http::contract::Pagination {
                 page: v.page,
                 page_size: v.page_size,
                 total_items: v.total_items,
-                total_pages: crate::http::dto::total_pages(v.total_items, v.page_size),
+                total_pages: crate::http::contract::total_pages(v.total_items, v.page_size),
             },
         }),
         Err(e) => domain_error(e),

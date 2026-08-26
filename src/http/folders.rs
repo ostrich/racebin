@@ -193,7 +193,7 @@ fn revision_response(revisions: Vec<(String, i64)>) -> contract::PasteRevisionRe
         pastes: revisions
             .into_iter()
             .map(|(id, revision)| contract::PasteRevisionResource {
-                etag: dto::etag_revision(&id, revision),
+                etag: contract::etag_revision(&id, revision),
                 id,
             })
             .collect(),

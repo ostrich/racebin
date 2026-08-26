@@ -130,7 +130,7 @@ pub(crate) struct AuditEventResource {
 #[derive(Serialize, utoipa::ToSchema)]
 pub(crate) struct AuditEventPage {
     items: Vec<AuditEventResource>,
-    pagination: dto::Pagination,
+    pagination: contract::Pagination,
 }
 
 #[utoipa::path(get, path="/admin/audit-events", tag="administration", params(AuditEventQuery), responses((status=200,description="Paginated owner audit events",body=AuditEventPage),(status=400,description="Invalid pagination parameter",body=crate::http::errors::ProblemDetails),(status=401,description="Authentication required",body=crate::http::errors::ProblemDetails),(status=403,description="Owner browser session required",body=crate::http::errors::ProblemDetails),(status=500,description="Internal error",body=crate::http::errors::ProblemDetails)), security(("sessionCookie"=[])))]
@@ -148,7 +148,7 @@ pub(crate) async fn admin_audit_events(
         return r;
     }
     let query = query.into_inner();
-    let (page, page_size) = match dto::page_parameters(query.page, query.page_size, 25) {
+    let (page, page_size) = match contract::page_parameters(query.page, query.page_size, 25) {
         Ok(value) => value,
         Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
     };
@@ -173,14 +173,14 @@ pub(crate) async fn admin_audit_events(
                     target_id: v.target_id,
                     target_label: v.target_label,
                     details: serde_json::from_str(&v.details).unwrap_or(serde_json::Value::Null),
-                    created_at: dto::format_timestamp(v.created_at),
+                    created_at: contract::format_timestamp(v.created_at),
                 })
                 .collect(),
-            pagination: dto::Pagination {
+            pagination: contract::Pagination {
                 page: result.page,
                 page_size: result.page_size,
                 total_items: result.total_items,
-                total_pages: dto::total_pages(result.total_items, result.page_size),
+                total_pages: contract::total_pages(result.total_items, result.page_size),
             },
         }),
         Err(e) => domain_error(e),

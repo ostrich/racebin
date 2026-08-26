@@ -269,7 +269,7 @@ pub(crate) async fn upload_attachments(
         Err(value) => return domain_error(value),
     };
     HttpResponse::Created()
-        .insert_header((header::ETAG, super::dto::etag(&current)))
+        .insert_header((header::ETAG, contract::etag(&current)))
         .json(contract::AttachmentUploadResponse {
             items: attachments.into_iter().map(Into::into).collect(),
         })
@@ -389,7 +389,7 @@ pub(crate) async fn delete_attachment(
         .await
     {
         Ok(Some(revision)) => HttpResponse::NoContent()
-            .insert_header((header::ETAG, dto::etag_revision(&paste_id, revision)))
+            .insert_header((header::ETAG, contract::etag_revision(&paste_id, revision)))
             .finish(),
         Ok(None) => error(StatusCode::NOT_FOUND, "not_found", "Attachment not found"),
         Err(value) => domain_error(value),

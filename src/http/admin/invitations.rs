@@ -54,7 +54,7 @@ pub(crate) async fn admin_invitations(
             "Unknown invitation status",
         );
     }
-    let (page, page_size) = match dto::page_parameters(query.page, query.page_size, 25) {
+    let (page, page_size) = match contract::page_parameters(query.page, query.page_size, 25) {
         Ok(value) => value,
         Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
     };
@@ -75,20 +75,20 @@ pub(crate) async fn admin_invitations(
                 .map(|i| {
                     let status = i.status();
                     let url = if i.is_active() {
-                        i.token.as_ref().map(|token| {
-                            super::dto::absolute(&req, &format!("/invitations/{token}"))
-                        })
+                        i.token
+                            .as_ref()
+                            .map(|token| contract::absolute(&req, &format!("/invitations/{token}")))
                     } else {
                         None
                     };
                     contract::InvitationResource::from_invitation(i, url, status)
                 })
                 .collect(),
-            pagination: dto::Pagination {
+            pagination: contract::Pagination {
                 page: result.page,
                 page_size: result.page_size,
                 total_items: result.total_items,
-                total_pages: dto::total_pages(result.total_items, result.page_size),
+                total_pages: contract::total_pages(result.total_items, result.page_size),
             },
         }),
         Err(e) => domain_error(e),
@@ -169,7 +169,7 @@ pub(crate) async fn admin_create_invitation(
     }
     match accounts::create_invitation(&services.storage, user_id, comment).await {
         Ok(token) => {
-            let url = super::dto::absolute(&req, &format!("/invitations/{token}"));
+            let url = contract::absolute(&req, &format!("/invitations/{token}"));
             let _ = crate::instance::audit::record(
                 &services.storage,
                 &value,

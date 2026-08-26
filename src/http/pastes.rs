@@ -2,7 +2,7 @@ use super::paste_payload::{
     parse_multipart, parse_non_multipart, promote_created_files, request_fingerprint,
 };
 use super::*;
-use crate::http::dto::{
+use crate::http::contract::{
     self, BodyInput, CreatePasteRequest, Pagination, PastePage, UpdatePasteRequest,
 };
 
@@ -190,11 +190,11 @@ impl ApiPasteQuery {
             has_attachments: self.has_attachments,
             created_after: self
                 .created_after
-                .map(|value| dto::parse_timestamp(&value))
+                .map(|value| contract::parse_timestamp(&value))
                 .transpose()?,
             created_before: self
                 .created_before
-                .map(|value| dto::parse_timestamp(&value))
+                .map(|value| contract::parse_timestamp(&value))
                 .transpose()?,
             expiration: self.expiration.map(|value| value.as_str().into()),
             min_reads: self.min_reads,
@@ -422,12 +422,12 @@ pub(crate) async fn list_pastes(
     }
     match services.list_pastes(&principal, &query, false).await {
         Ok(page) => {
-            let total_pages = dto::total_pages(page.total_items, page.page_size);
+            let total_pages = contract::total_pages(page.total_items, page.page_size);
             HttpResponse::Ok().json(PastePage {
                 items: page
                     .items
                     .into_iter()
-                    .map(|paste| dto::summary(&req, &principal, paste, false))
+                    .map(|paste| contract::summary(&req, &principal, paste, false))
                     .collect(),
                 pagination: Pagination {
                     page: page.page,
@@ -465,7 +465,7 @@ pub(crate) async fn list_pastes(
     responses(
         (status = 201, description = "Paste created",
             content(
-                (crate::http::dto::PasteResource = "application/json"),
+                (crate::http::contract::PasteResource = "application/json"),
                 (String = "text/plain")
             ),
             headers(
@@ -595,8 +595,8 @@ pub(crate) async fn create_paste(
             );
         }
     }
-    let tag = dto::etag(&paste);
-    let resource = dto::resource(&req, &principal, paste, None);
+    let tag = contract::etag(&paste);
+    let resource = contract::resource(&req, &principal, paste, None);
     let mut response = if accepts(&req, "text/plain") {
         HttpResponse::Created()
             .content_type("text/plain; charset=utf-8")
@@ -624,7 +624,7 @@ pub(crate) async fn create_paste(
     get, path = "/pastes/{paste_id}", tag = "pastes",
     params(("paste_id" = String, Path, description = "Paste ID")),
     responses(
-        (status = 200, description = "Paste metadata without consuming a read", body = crate::http::dto::PasteMetadataResource,
+        (status = 200, description = "Paste metadata without consuming a read", body = crate::http::contract::PasteMetadataResource,
             headers(("ETag" = String, description = "Current paste entity tag"))),
         (status = 401, description = "Invalid bearer credential", body = crate::http::errors::ProblemDetails),
         (status = 404, description = "Paste not found or not visible", body = crate::http::errors::ProblemDetails),
@@ -656,7 +656,7 @@ pub(crate) async fn get_paste(
     responses(
         (status = 200, description = "Non-consuming owner or administrator source",
             content(
-                (crate::http::dto::PasteResource = "application/json"),
+                (crate::http::contract::PasteResource = "application/json"),
                 (String = "text/plain"),
                 (String = "text/markdown"),
                 (String = "text/html")
@@ -753,7 +753,7 @@ pub(crate) async fn get_paste_raw(
     responses(
         (status = 200, description = "Paste content; this may consume a limited read",
             content(
-                (crate::http::dto::PasteResource = "application/json"),
+                (crate::http::contract::PasteResource = "application/json"),
                 (String = "text/plain"),
                 (String = "text/html")
             ),
@@ -813,7 +813,7 @@ pub(crate) async fn read_paste(
         ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations")),
     request_body = UpdatePasteRequest,
     responses(
-        (status = 200, description = "Paste updated", body = crate::http::dto::PasteResource,
+        (status = 200, description = "Paste updated", body = crate::http::contract::PasteResource,
             headers(("ETag" = String, description = "New paste entity tag"))),
         (status = 422, description = "Invalid update", body = crate::http::errors::ProblemDetails),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
@@ -993,15 +993,15 @@ fn resource_response(
     include_body: bool,
     grant: Option<&str>,
 ) -> HttpResponse {
-    let tag = dto::etag(&paste);
+    let tag = contract::etag(&paste);
     if include_body {
         HttpResponse::Ok()
             .insert_header((header::ETAG, tag))
-            .json(dto::resource(req, principal, paste, grant))
+            .json(contract::resource(req, principal, paste, grant))
     } else {
         HttpResponse::Ok()
             .insert_header((header::ETAG, tag))
-            .json(dto::metadata_resource(req, principal, paste, grant))
+            .json(contract::metadata_resource(req, principal, paste, grant))
     }
 }
 
@@ -1011,7 +1011,7 @@ fn content_response(
     paste: crate::pastes::Paste,
     grant: Option<&str>,
 ) -> HttpResponse {
-    let tag = dto::etag(&paste);
+    let tag = contract::etag(&paste);
     let mut response = if accepts(req, "text/markdown") && paste.content_kind == "markdown" {
         HttpResponse::Ok()
             .insert_header((header::ETAG, tag))
@@ -1058,7 +1058,7 @@ fn content_response(
 }
 
 fn raw_content_response(paste: crate::pastes::Paste) -> HttpResponse {
-    let tag = dto::etag(&paste);
+    let tag = contract::etag(&paste);
     if paste.content_kind == "markdown" {
         HttpResponse::Ok()
             .insert_header((header::ETAG, tag))
@@ -1127,7 +1127,7 @@ pub(crate) fn require_match(
         Ok(None)
     } else if value
         .split(',')
-        .any(|candidate| candidate.trim() == dto::etag(paste))
+        .any(|candidate| candidate.trim() == contract::etag(paste))
     {
         Ok(Some(paste.revision))
     } else {

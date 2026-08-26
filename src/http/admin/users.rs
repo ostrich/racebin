@@ -114,7 +114,7 @@ pub(crate) async fn admin_users(
             "Direction must be asc or desc",
         );
     }
-    let (page, page_size) = match dto::page_parameters(query.page, query.page_size, 25) {
+    let (page, page_size) = match contract::page_parameters(query.page, query.page_size, 25) {
         Ok(value) => value,
         Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
     };
@@ -138,11 +138,11 @@ pub(crate) async fn admin_users(
                 .into_iter()
                 .map(contract::AdminUserResource::from)
                 .collect(),
-            pagination: dto::Pagination {
+            pagination: contract::Pagination {
                 page: users.page,
                 page_size: users.page_size,
                 total_items: users.total_items,
-                total_pages: dto::total_pages(users.total_items, users.page_size),
+                total_pages: contract::total_pages(users.total_items, users.page_size),
             },
         }),
         Err(e) => domain_error(e),
@@ -205,7 +205,7 @@ pub(crate) async fn admin_user(
     get, path = "/admin/pastes", tag = "administration",
     params(super::pastes::ApiPasteQuery, AdminPasteOwnerQuery),
     responses(
-        (status = 200, description = "Canonical paginated paste summaries including ownership", body = crate::http::dto::PastePage),
+        (status = 200, description = "Canonical paginated paste summaries including ownership", body = crate::http::contract::PastePage),
         (status = 400, description = "Invalid filter", body = crate::http::errors::ProblemDetails),
         (status = 401, description = "Authentication required", body = crate::http::errors::ProblemDetails),
         (status = 403, description = "Administrator with paste:manage required", body = crate::http::errors::ProblemDetails),
@@ -234,7 +234,7 @@ pub(crate) async fn admin_pastes(
     }
     match services.list_pastes(&value, &query, true).await {
         Ok(page) => {
-            let total_pages = dto::total_pages(page.total_items, page.page_size);
+            let total_pages = contract::total_pages(page.total_items, page.page_size);
             let owner_names = match accounts::usernames_by_ids(
                 &services.storage,
                 page.items.iter().filter_map(|paste| paste.owner_id),
@@ -244,19 +244,19 @@ pub(crate) async fn admin_pastes(
                 Ok(names) => names,
                 Err(error) => return domain_error(error),
             };
-            HttpResponse::Ok().json(dto::PastePage {
+            HttpResponse::Ok().json(contract::PastePage {
                 items: page
                     .items
                     .into_iter()
                     .map(|paste| {
                         let owner_username =
                             paste.owner_id.and_then(|id| owner_names.get(&id).cloned());
-                        let mut summary = dto::summary(&req, &value, paste, true);
+                        let mut summary = contract::summary(&req, &value, paste, true);
                         summary.owner_username = owner_username;
                         summary
                     })
                     .collect(),
-                pagination: dto::Pagination {
+                pagination: contract::Pagination {
                     page: page.page,
                     page_size: page.page_size,
                     total_items: page.total_items,
@@ -280,7 +280,7 @@ struct AdminPasteOwnerQuery {
 #[derive(Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 struct UserUpdate {
-    #[serde(default, deserialize_with = "dto::optional_non_null")]
+    #[serde(default, deserialize_with = "contract::optional_non_null")]
     enabled: Option<bool>,
 }
 

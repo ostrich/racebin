@@ -47,7 +47,7 @@ pub(crate) async fn admin_create_password_reset(
             )
             .await;
             HttpResponse::Created().json(contract::LinkResponse {
-                url: super::dto::absolute(&req, &format!("/password-reset/{token}")),
+                url: contract::absolute(&req, &format!("/password-reset/{token}")),
             })
         }
         Err(value) => domain_error(value),

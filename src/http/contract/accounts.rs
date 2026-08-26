@@ -149,8 +149,8 @@ impl From<ApiKey> for ApiKeyResource {
             name: key.name,
             token_prefix: key.token_prefix,
             scopes: key.scopes,
-            created_at: super::dto::format_timestamp(key.created_at),
-            last_used_at: key.last_used_at.map(super::dto::format_timestamp),
+            created_at: super::format_timestamp(key.created_at),
+            last_used_at: key.last_used_at.map(super::format_timestamp),
             enabled: key.enabled,
         }
     }
@@ -159,7 +159,7 @@ impl From<ApiKey> for ApiKeyResource {
 #[derive(Serialize, ToSchema)]
 pub(crate) struct ApiKeyPage {
     pub items: Vec<ApiKeyResource>,
-    pub pagination: super::dto::Pagination,
+    pub pagination: super::Pagination,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -194,8 +194,8 @@ impl From<AdminUser> for AdminUserResource {
             role: UserRole::from_user(&user.role, user.is_owner),
             enabled: user.enabled,
             password_change_required: user.password_change_required,
-            created_at: super::dto::format_timestamp(user.created_at),
-            last_login_at: user.last_login_at.map(super::dto::format_timestamp),
+            created_at: super::format_timestamp(user.created_at),
+            last_login_at: user.last_login_at.map(super::format_timestamp),
             paste_count: user.paste_count,
             storage_bytes: user.storage_bytes,
             active_session_count: user.active_session_count,
@@ -208,7 +208,7 @@ impl From<AdminUser> for AdminUserResource {
 #[derive(Serialize, ToSchema)]
 pub(crate) struct AdminUserPage {
     pub items: Vec<AdminUserResource>,
-    pub pagination: super::dto::Pagination,
+    pub pagination: super::Pagination,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -227,7 +227,7 @@ impl From<Folder> for FolderResource {
         Self {
             id: folder.id,
             name: folder.name,
-            created_at: super::dto::format_timestamp(folder.created_at),
+            created_at: super::format_timestamp(folder.created_at),
             paste_count: folder.paste_count,
         }
     }
@@ -299,7 +299,7 @@ pub(crate) struct InvitationResource {
 #[derive(Serialize, ToSchema)]
 pub(crate) struct InvitationPage {
     pub items: Vec<InvitationResource>,
-    pub pagination: super::dto::Pagination,
+    pub pagination: super::Pagination,
 }
 
 #[derive(Clone, Copy, Serialize, ToSchema)]
@@ -333,13 +333,13 @@ impl InvitationResource {
             id: invitation.id,
             token_prefix: invitation.token_prefix,
             comment: invitation.comment,
-            created_at: super::dto::format_timestamp(invitation.created_at),
+            created_at: super::format_timestamp(invitation.created_at),
             created_by_username: invitation.created_by_username,
-            expires_at: super::dto::format_timestamp(invitation.expires_at),
+            expires_at: super::format_timestamp(invitation.expires_at),
             status: InvitationStatus::from_storage(status),
             url,
             redeemed_by_username: invitation.redeemed_by_username,
-            redeemed_at: invitation.redeemed_at.map(super::dto::format_timestamp),
+            redeemed_at: invitation.redeemed_at.map(super::format_timestamp),
         }
     }
 }

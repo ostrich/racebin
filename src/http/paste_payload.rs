@@ -1,7 +1,7 @@
 use super::pastes::{FlatCreateRequest, RawCreateQuery, StagedFile};
 use super::*;
 use crate::crypto::lower_hex;
-use crate::http::dto::CreatePasteRequest;
+use crate::http::contract::CreatePasteRequest;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 

@@ -53,7 +53,7 @@ pub(crate) async fn admin_keys(
             "Direction must be asc or desc",
         );
     }
-    let (page, page_size) = match dto::page_parameters(query.page, query.page_size, 25) {
+    let (page, page_size) = match contract::page_parameters(query.page, query.page_size, 25) {
         Ok(value) => value,
         Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
     };
@@ -78,11 +78,11 @@ pub(crate) async fn admin_keys(
                 .into_iter()
                 .map(contract::ApiKeyResource::from)
                 .collect(),
-            pagination: dto::Pagination {
+            pagination: contract::Pagination {
                 page: keys.page,
                 page_size: keys.page_size,
                 total_items: keys.total_items,
-                total_pages: dto::total_pages(keys.total_items, keys.page_size),
+                total_pages: contract::total_pages(keys.total_items, keys.page_size),
             },
         }),
         Err(e) => domain_error(e),

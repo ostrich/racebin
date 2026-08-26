@@ -23,7 +23,6 @@ pub(crate) mod attachments;
 mod auth;
 mod contract;
 mod cookies;
-mod dto;
 mod errors;
 mod folders;
 pub(crate) mod openapi;
