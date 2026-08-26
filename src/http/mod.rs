@@ -26,7 +26,7 @@ mod dto;
 mod errors;
 mod folders;
 mod keys;
-pub(crate) mod meta;
+pub(crate) mod openapi;
 mod paste_payload;
 mod pastes;
 
@@ -64,11 +64,11 @@ pub fn configure(config: &mut web::ServiceConfig) {
             )
             .into()
         }))
-        .service(web::resource("/healthz").route(web::get().to(meta::health)))
-        .service(web::resource("/readyz").route(web::get().to(meta::ready)))
+        .service(web::resource("/healthz").route(web::get().to(openapi::health)))
+        .service(web::resource("/readyz").route(web::get().to(openapi::ready)))
         .service(
             web::scope("/api/v1")
-                .configure(meta::configure)
+                .configure(openapi::configure)
                 .configure(account::configure)
                 .configure(folders::configure)
                 .configure(pastes::configure)
