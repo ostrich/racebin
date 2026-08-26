@@ -34,7 +34,7 @@ below.
 
 The Rust suite includes:
 
-- repository and schema tests;
+- database-infrastructure and schema tests;
 - a shared SQLite/PostgreSQL backend contract for pastes, folders, accounts,
   sessions, invitations, password resets, API keys, expiration, and cascades;
 - concurrency tests for consuming reads, invitation/reset redemption,

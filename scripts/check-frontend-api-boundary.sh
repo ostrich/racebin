@@ -19,7 +19,8 @@ fi
 
 if grep -RInE --include='*.ts' --include='*.svelte' \
     "from ['\"][^'\"]*api/(transport|normalize)['\"]" \
-    web/src/pages web/src/components web/src/session.ts web/src/App.svelte
+    web/src/pages web/src/components web/src/app web/src/rich-text \
+    web/src/navigation web/src/App.svelte
 then
     echo "frontend caller bypasses the public API resource layer" >&2
     exit 1
