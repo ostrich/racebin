@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { listAdminUsers } from "../api";
-  import Icon from "../components/Icon.svelte";
-  import AdminNav from "../components/AdminNav.svelte";
-  import Link from "../components/Link.svelte";
-  import InvitationDialog from "../components/InvitationDialog.svelte";
-  import Pagination from "../components/Pagination.svelte";
-  import { formatByteSize, formatDate } from "../format";
-  import { appState } from "../app/state";
-  import { holdNavigation, navigate } from "../navigation";
-  import type { AdminUser, Page } from "../types";
+  import { listAdminUsers } from "../../api";
+  import Icon from "../../components/Icon.svelte";
+  import AdminNav from "../../components/AdminNav.svelte";
+  import Link from "../../components/Link.svelte";
+  import InvitationDialog from "../../components/InvitationDialog.svelte";
+  import Pagination from "../../components/Pagination.svelte";
+  import { formatByteSize, formatDate } from "../../format";
+  import { appState } from "../../app/state";
+  import { holdNavigation, navigate } from "../../navigation";
+  import type { AdminUser, Page } from "../../types";
 
   let { query }: { query: URLSearchParams } = $props();
   let page = $state<Page<AdminUser> | null>(null);

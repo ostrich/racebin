@@ -3,17 +3,17 @@
   import {
     createPasswordReset, getAdminUser, revokeUserApiKeys, revokeUserSessions,
     updateAdminUser, updateAdminUserRole, transferOwnership, reauthenticate, type UserUpdate
-  } from "../api";
-  import Icon from "../components/Icon.svelte";
-  import AdminNav from "../components/AdminNav.svelte";
-  import PasswordConfirmDialog from "../components/PasswordConfirmDialog.svelte";
-  import Link from "../components/Link.svelte";
-  import { formatByteSize, formatDate } from "../format";
-  import { confirmAction } from "../app/confirmations";
-  import { showNotice } from "../app/notices";
-  import { holdNavigation } from "../navigation";
-  import type { AdminUser } from "../types";
-  import { appState } from "../app/state";
+  } from "../../api";
+  import Icon from "../../components/Icon.svelte";
+  import AdminNav from "../../components/AdminNav.svelte";
+  import PasswordConfirmDialog from "../../components/PasswordConfirmDialog.svelte";
+  import Link from "../../components/Link.svelte";
+  import { formatByteSize, formatDate } from "../../format";
+  import { confirmAction } from "../../app/confirmations";
+  import { showNotice } from "../../app/notices";
+  import { holdNavigation } from "../../navigation";
+  import type { AdminUser } from "../../types";
+  import { appState } from "../../app/state";
 
   let { userId }: { userId: number } = $props();
   const initialLoadReady = holdNavigation();

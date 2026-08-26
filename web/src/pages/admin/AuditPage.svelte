@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { listAuditEvents, type AuditEvent } from "../api";
-  import AdminNav from "../components/AdminNav.svelte";
-  import Icon from "../components/Icon.svelte";
-  import Pagination from "../components/Pagination.svelte";
-  import { formatDate } from "../format";
-  import { holdNavigation, navigate } from "../navigation";
-  import type { Page } from "../types";
+  import { listAuditEvents, type AuditEvent } from "../../api";
+  import AdminNav from "../../components/AdminNav.svelte";
+  import Icon from "../../components/Icon.svelte";
+  import Pagination from "../../components/Pagination.svelte";
+  import { formatDate } from "../../format";
+  import { holdNavigation, navigate } from "../../navigation";
+  import type { Page } from "../../types";
 
   let { query }: { query: URLSearchParams } = $props();
   let page = $state<Page<AuditEvent> | null>(null);

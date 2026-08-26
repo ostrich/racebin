@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { deleteAdminApiKey, listAdminApiKeys, updateAdminApiKey } from "../api";
-  import AdminNav from "../components/AdminNav.svelte";
-  import Icon from "../components/Icon.svelte";
-  import Pagination from "../components/Pagination.svelte";
-  import { confirmAction } from "../app/confirmations";
-  import { holdNavigation, navigate } from "../navigation";
-  import { showNotice } from "../app/notices";
-  import type { ApiKey, Page } from "../types";
+  import { deleteAdminApiKey, listAdminApiKeys, updateAdminApiKey } from "../../api";
+  import AdminNav from "../../components/AdminNav.svelte";
+  import Icon from "../../components/Icon.svelte";
+  import Pagination from "../../components/Pagination.svelte";
+  import { confirmAction } from "../../app/confirmations";
+  import { holdNavigation, navigate } from "../../navigation";
+  import { showNotice } from "../../app/notices";
+  import type { ApiKey, Page } from "../../types";
 
   let { query }: { query: URLSearchParams } = $props();
   let page = $state<Page<ApiKey> | null>(null);

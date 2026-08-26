@@ -4,13 +4,13 @@
     getInstanceSettings,
     replaceInstanceSettings,
     type InstanceSettings
-  } from "../api";
-  import AdminNav from "../components/AdminNav.svelte";
-  import { availableLanguageOptions } from "../highlighting";
-  import { holdNavigation } from "../navigation";
-  import { showNotice } from "../app/notices";
-  import { loadCapabilities } from "../app/session";
-  import { appState } from "../app/state";
+  } from "../../api";
+  import AdminNav from "../../components/AdminNav.svelte";
+  import { availableLanguageOptions } from "../../highlighting";
+  import { holdNavigation } from "../../navigation";
+  import { showNotice } from "../../app/notices";
+  import { loadCapabilities } from "../../app/session";
+  import { appState } from "../../app/state";
 
   let settings = $state<InstanceSettings | null>(null);
   let error = $state("");

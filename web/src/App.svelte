@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import AccountPage from "./pages/AccountPage.svelte";
-  import AdminPage from "./pages/AdminPage.svelte";
-  import AdminPastesPage from "./pages/AdminPastesPage.svelte";
-  import AdminUserPage from "./pages/AdminUserPage.svelte";
-  import AdminUsersPage from "./pages/AdminUsersPage.svelte";
-  import AdminInvitationsPage from "./pages/AdminInvitationsPage.svelte";
-  import AdminApiKeysPage from "./pages/AdminApiKeysPage.svelte";
-  import AdminSettingsPage from "./pages/AdminSettingsPage.svelte";
-  import AdminAuditPage from "./pages/AdminAuditPage.svelte";
+  import AdminPage from "./pages/admin/DashboardPage.svelte";
+  import AdminPastesPage from "./pages/admin/PastesPage.svelte";
+  import AdminUserPage from "./pages/admin/UserPage.svelte";
+  import AdminUsersPage from "./pages/admin/UsersPage.svelte";
+  import AdminInvitationsPage from "./pages/admin/InvitationsPage.svelte";
+  import AdminApiKeysPage from "./pages/admin/ApiKeysPage.svelte";
+  import AdminSettingsPage from "./pages/admin/SettingsPage.svelte";
+  import AdminAuditPage from "./pages/admin/AuditPage.svelte";
   import HelpPage from "./pages/HelpPage.svelte";
   import HomePage from "./pages/HomePage.svelte";
   import InvitationPage from "./pages/InvitationPage.svelte";

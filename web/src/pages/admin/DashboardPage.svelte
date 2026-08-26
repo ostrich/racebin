@@ -6,15 +6,15 @@
     getAdminSummary,
     type AdminSummary,
     type AuditEvent,
-  } from "../api";
-  import AdminNav from "../components/AdminNav.svelte";
-  import Icon from "../components/Icon.svelte";
-  import InvitationDialog from "../components/InvitationDialog.svelte";
-  import Link from "../components/Link.svelte";
-  import { formatByteSize, formatDate } from "../format";
-  import { holdNavigation } from "../navigation";
-  import { appState } from "../app/state";
-  import type { AdminUser } from "../types";
+  } from "../../api";
+  import AdminNav from "../../components/AdminNav.svelte";
+  import Icon from "../../components/Icon.svelte";
+  import InvitationDialog from "../../components/InvitationDialog.svelte";
+  import Link from "../../components/Link.svelte";
+  import { formatByteSize, formatDate } from "../../format";
+  import { holdNavigation } from "../../navigation";
+  import { appState } from "../../app/state";
+  import type { AdminUser } from "../../types";
 
   let summary = $state<AdminSummary | null>(null);
   let recentUsers = $state<AdminUser[]>([]);

@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { listInvitations, revokeInvitation, type Invitation } from "../api";
-  import AdminNav from "../components/AdminNav.svelte";
-  import Icon from "../components/Icon.svelte";
-  import InvitationDialog from "../components/InvitationDialog.svelte";
-  import Link from "../components/Link.svelte";
-  import Pagination from "../components/Pagination.svelte";
-  import { confirmAction } from "../app/confirmations";
-  import { formatDate } from "../format";
-  import { holdNavigation, navigate } from "../navigation";
-  import { showNotice } from "../app/notices";
-  import { appState } from "../app/state";
-  import type { Page } from "../types";
+  import { listInvitations, revokeInvitation, type Invitation } from "../../api";
+  import AdminNav from "../../components/AdminNav.svelte";
+  import Icon from "../../components/Icon.svelte";
+  import InvitationDialog from "../../components/InvitationDialog.svelte";
+  import Link from "../../components/Link.svelte";
+  import Pagination from "../../components/Pagination.svelte";
+  import { confirmAction } from "../../app/confirmations";
+  import { formatDate } from "../../format";
+  import { holdNavigation, navigate } from "../../navigation";
+  import { showNotice } from "../../app/notices";
+  import { appState } from "../../app/state";
+  import type { Page } from "../../types";
 
   let { query }: { query: URLSearchParams } = $props();
   let page = $state<Page<Invitation> | null>(null);

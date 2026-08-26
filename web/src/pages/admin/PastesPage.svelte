@@ -1,17 +1,17 @@
 <script lang="ts">
-  import { deletePaste, listAdminPastes } from "../api";
-  import Icon from "../components/Icon.svelte";
-  import AdminNav from "../components/AdminNav.svelte";
-  import Link from "../components/Link.svelte";
-  import Pagination from "../components/Pagination.svelte";
-  import PasteFilters from "../components/PasteFilters.svelte";
-  import { formatByteSize, formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
-  import { confirmAction } from "../app/confirmations";
-  import { showNotice } from "../app/notices";
-  import { cachedQuery, loadQuery } from "../app/queryCache";
-  import { holdNavigation } from "../navigation";
-  import { appState } from "../app/state";
-  import type { Page, Paste } from "../types";
+  import { deletePaste, listAdminPastes } from "../../api";
+  import Icon from "../../components/Icon.svelte";
+  import AdminNav from "../../components/AdminNav.svelte";
+  import Link from "../../components/Link.svelte";
+  import Pagination from "../../components/Pagination.svelte";
+  import PasteFilters from "../../components/PasteFilters.svelte";
+  import { formatByteSize, formatDate, pasteDisplayTitle, pasteFormatLabel } from "../../format";
+  import { confirmAction } from "../../app/confirmations";
+  import { showNotice } from "../../app/notices";
+  import { cachedQuery, loadQuery } from "../../app/queryCache";
+  import { holdNavigation } from "../../navigation";
+  import { appState } from "../../app/state";
+  import type { Page, Paste } from "../../types";
 
   let { query }: { query: URLSearchParams } = $props();
   function pastePath(requestedQuery: URLSearchParams): string {
