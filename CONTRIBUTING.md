@@ -1,5 +1,37 @@
 # Contributing to Racebin
 
+## Source placement
+
+Racebin is one deployable application with explicit internal boundaries. Put
+new code with the responsibility it implements rather than in a generic
+utility or service module:
+
+- `src/main.rs` remains a minimal executable entry point; process composition
+  and startup belong in `src/app.rs`.
+- Reusable paste, account, and instance rules belong in `src/pastes/`,
+  `src/accounts/`, and `src/instance/`, respectively.
+- Database selection, migrations, copy operations, and shared persistence
+  infrastructure belong in `src/database/`.
+- `src/http/` is a transport boundary. Handlers parse requests, resolve
+  authentication, call domain operations, and serialize responses; reusable
+  authorization and business rules do not live only in handlers.
+- Cross-module Rust integration coverage belongs under `tests/integration/`.
+- Frontend lifecycle infrastructure belongs in `web/src/app/` or
+  `web/src/navigation/`; route components belong in `web/src/pages/`, shared
+  controls in `web/src/components/`, and rich-text behavior in
+  `web/src/rich-text/`.
+- All browser requests go through named operations in `web/src/api/`. Pages
+  and components do not call `fetch`, construct API URLs, or encode wire
+  payloads themselves.
+- Shared design primitives belong in the base style layers. Feature-specific
+  layout belongs in a focused stylesheet under `web/src/styles/`; avoid
+  page-local overrides of shared control geometry.
+
+Do not add compatibility facades for obsolete internal paths. Move every
+caller and remove the superseded module in the same coherent change. See
+[Architecture](docs/architecture.md#source-tree-map) for the complete tree and
+the reasoning behind these boundaries.
+
 ## API contract workflow
 
 Racebin treats its HTTP API as an architectural boundary shared by the server,

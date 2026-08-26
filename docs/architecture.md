@@ -105,17 +105,18 @@ layers so these alternate entry points cannot bypass them.
 
 ## Runtime composition
 
-`src/main.rs` is the composition root. At startup it:
+`src/main.rs` is deliberately minimal: it installs the asynchronous runtime
+and delegates to the library application. `src/app.rs` is the composition
+root. The application startup sequence:
 
-1. The minimal binary entry point delegates to the library application.
-2. Dispatches a requested database or account CLI command, if present.
-3. Validates server configuration and creates the data directory.
-4. Opens the configured database and selects its backend.
-5. Applies the matching SQLx migrations.
-6. Purges expired records and orphaned attachment directories.
-7. Starts an hourly expiration-cleanup task.
-8. Constructs one shared `PasteService`.
-9. Starts the Actix HTTP server with the configured worker count.
+1. Dispatches a requested database or account CLI command, if present.
+2. Validates server configuration and creates the data directory.
+3. Opens the configured database and selects its backend.
+4. Applies the matching SQLx migrations.
+5. Purges expired records and orphaned attachment directories.
+6. Starts an hourly expiration-cleanup task.
+7. Constructs one shared `PasteService`.
+8. Starts the Actix HTTP server with the configured worker count.
 
 Actix owns the asynchronous runtime. The service and repository are cheap,
 cloneable handles shared with each worker; SQLx owns the underlying connection
