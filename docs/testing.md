@@ -179,19 +179,34 @@ schema.
 
 ## CI workflow
 
-GitHub Actions runs three push/PR jobs and one scheduled broad job:
+GitHub Actions begins with a small, tested path classifier. It selects broad
+areas rather than individual tests and defaults unfamiliar paths to complete
+coverage:
 
-- **Rust** provisions PostgreSQL 18, checks retired naming, formatting, strict
-  Clippy, and the complete SQLite/PostgreSQL suite.
-- **Frontend** verifies generated API artifacts and the API boundary, builds
-  and verifies committed `web/dist`, enforces the CSS architecture, runs unit
-  tests and the deterministic browser gate, builds the Rust application, and
-  runs the disposable real-stack suite.
-- **Visual regression** runs after the frontend job succeeds in the pinned
-  Playwright container.
-- **Broad frontend (nightly)** runs the complete functional browser suite after
-  the normal frontend gate. It also runs when the workflow is dispatched
-  manually.
+- Backend, migration, dependency, and Rust test changes run **Rust**, which
+  provisions PostgreSQL 18 and runs naming, formatting, strict Clippy, and the
+  complete SQLite/PostgreSQL suite.
+- Frontend changes run **Frontend**, which checks the API boundary and CSS
+  architecture, builds and verifies `web/dist`, and runs unit tests plus the
+  deterministic browser gate.
+- HTTP/API and generated-contract changes additionally regenerate the OpenAPI
+  snapshot and TypeScript wire types.
+- Cross-boundary HTTP or frontend application changes additionally build the
+  Rust application and run the disposable real-stack suite.
+- Visual source, asset, dependency, test, or baseline changes run **Visual
+  regression** after the frontend job succeeds.
+- Documentation and package-recipe-only changes stop after classification.
+
+Push workflows run only for `master`; proposed branch changes run through the
+pull-request event, avoiding duplicate push and pull-request executions. The
+daily schedule runs only **Broad frontend (nightly)** instead of repeating all
+ordinary push jobs. A manual workflow dispatch deliberately selects every
+suite, including the broad browser suite.
+
+The classifier and its representative path tests live in
+`scripts/classify-ci-paths.sh` and `scripts/test-classify-ci-paths.sh`. Update
+both when introducing a new source area or changing a directory's ownership.
+`scripts/check-before-push.sh` tests the classifier locally.
 
 Playwright emits GitHub annotations for exact failed assertions. A compact
 failure summary is added to the workflow run, while traces and page-state

@@ -8,6 +8,7 @@ cd "$repo_root"
 printf '%s\n' '==> Checking Rust formatting and repository naming'
 cargo fmt -- --check
 sh scripts/check-naming.sh
+sh scripts/test-classify-ci-paths.sh
 
 printf '%s\n' '==> Checking the frontend contract, boundaries, and CSS architecture'
 cd web

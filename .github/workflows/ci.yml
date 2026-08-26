@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [master]
   pull_request:
   workflow_dispatch:
   schedule:
@@ -15,8 +16,75 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Select checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.classify.outputs.backend }}
+      frontend: ${{ steps.classify.outputs.frontend }}
+      api: ${{ steps.classify.outputs.api }}
+      real_stack: ${{ steps.classify.outputs.real_stack }}
+      visual: ${{ steps.classify.outputs.visual }}
+      broad: ${{ steps.classify.outputs.broad }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test change classification
+        run: scripts/test-classify-ci-paths.sh
+      - name: Classify changed paths
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BASE: ${{ github.event.before }}
+          PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          case "$EVENT_NAME" in
+            workflow_dispatch)
+              printf '%s\n' \
+                'backend=true' \
+                'frontend=true' \
+                'api=true' \
+                'real_stack=true' \
+                'visual=true' \
+                'broad=true' >> "$GITHUB_OUTPUT"
+              ;;
+            schedule)
+              printf '%s\n' \
+                'backend=false' \
+                'frontend=false' \
+                'api=false' \
+                'real_stack=false' \
+                'visual=false' \
+                'broad=true' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              base=$PUSH_BASE
+              [ "$EVENT_NAME" = pull_request ] && base=$PULL_REQUEST_BASE
+              git diff --name-only "$base" "$GITHUB_SHA" \
+                | scripts/classify-ci-paths.sh >> "$GITHUB_OUTPUT"
+              printf '%s\n' 'broad=false' >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+      - name: Summarize selection
+        run: |
+          {
+            printf '### CI selection\n\n'
+            printf '| Suite | Run |\n| --- | --- |\n'
+            printf '| Backend and PostgreSQL | %s |\n' '${{ steps.classify.outputs.backend }}'
+            printf '| Frontend | %s |\n' '${{ steps.classify.outputs.frontend }}'
+            printf '| API contract | %s |\n' '${{ steps.classify.outputs.api }}'
+            printf '| Real stack | %s |\n' '${{ steps.classify.outputs.real_stack }}'
+            printf '| Visual regression | %s |\n' '${{ steps.classify.outputs.visual }}'
+            printf '| Broad browser suite | %s |\n' '${{ steps.classify.outputs.broad }}'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   frontend:
     name: Frontend
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -31,10 +99,12 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.real_stack == 'true'
       - name: Install frontend dependencies
         run: npm ci
         working-directory: web
       - name: Verify API contract and generated types
+        if: needs.changes.outputs.api == 'true'
         run: npm run check:api
         working-directory: web
       - name: Verify frontend API boundary
@@ -60,8 +130,10 @@ jobs:
         if: failure()
         run: node scripts/summarize-playwright-results.mjs
       - name: Build the application stack
+        if: needs.changes.outputs.real_stack == 'true'
         run: cargo build --locked
       - name: Smoke-test the compiled frontend and disposable backend
+        if: needs.changes.outputs.real_stack == 'true'
         run: npm run test:real
         working-directory: web
       - name: Summarize real-stack failures
@@ -78,8 +150,8 @@ jobs:
 
   broad-frontend:
     name: Broad frontend (nightly)
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    needs: frontend
+    needs: changes
+    if: needs.changes.outputs.broad == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -116,7 +188,8 @@ jobs:
 
   visual:
     name: Visual regression
-    needs: frontend
+    needs: [changes, frontend]
+    if: always() && needs.changes.outputs.visual == 'true' && needs.frontend.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     container:
@@ -147,6 +220,8 @@ jobs:
 
   rust:
     name: Rust
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
