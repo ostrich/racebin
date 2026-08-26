@@ -414,7 +414,9 @@ later architectural layer.
 3. `web/src/styles/primitives.css` defines reusable layout and interaction
    primitives such as stacks, clusters, headings, buttons, labeled fields,
    and the control surface used by both native fields and composite widgets.
-4. `web/src/styles/layout.css` defines the shared shell and page compositions.
+4. `web/src/styles/shell.css`, `administration.css`, `paste-view.css`, and
+   `paste-controls.css` define feature-owned page compositions in explicit
+   cascade order.
 5. `web/src/styles/rich-text.css`, `folder-responsive.css`, and
    `paste-library.css` contain focused feature styling.
 6. `web/src/styles/utilities.css` contains the small, documented set of
@@ -537,7 +539,7 @@ upgrades, and troubleshooting.
 
 Tests are organized around architectural boundaries:
 
-- repository unit tests cover storage helpers and query behavior;
+- database unit tests cover storage helpers and query behavior;
 - a shared backend contract runs against SQLite and PostgreSQL;
 - concurrency tests exercise read limits, invitations, one-time password
   resets, administrator invariants, and attachment ordering;
@@ -559,20 +561,26 @@ PostgreSQL tests require a dedicated disposable database and reset its
 
 ```text
 src/
-  account/              account, session, invitation, and API-key logic
+  accounts/             identity, session, invitation, API-key, and administration logic
+  app.rs                server composition and process lifecycle
   cli/                  operator commands
-  http/                 Actix routes and transport concerns
-  integration_tests/    backend, concurrency, migration, copy, and HTTP suites
-  repository/           database-copy implementation and repository tests
-  services/             paste domain model, validation, conversion, and service
+  database/             backend selection, migrations, copy, and persistence tests
+  http/                 Actix routes, resource contracts, OpenAPI, and transport concerns
+  instance/             audit and runtime settings
+  lib.rs                reusable crate boundary
+  main.rs               minimal executable entry point
+  pastes/               paste domain model, authorization, operations, and rich text
+tests/
+  integration/          backend, concurrency, migration, copy, and HTTP suites
 web/
-  src/api/              generated wire types, transport, normalization, and named resources
-  src/components/       reusable Svelte controls
   src/app/              shared session, state, cache, notices, and preferences
   src/api/              the enforced HTTP client boundary and generated types
+  src/components/       reusable Svelte controls
   src/navigation/       routes, guards, history/scroll, and navigation runtime
-  src/rich-text/        rich-text editor, viewer, and paste normalization
   src/pages/            route-level Svelte components
+    admin/              administrative route components
+  src/rich-text/        rich-text editor, viewer, and paste normalization
+  src/styles/           ordered design layers and feature-owned layouts
   e2e/                  Playwright browser workflows
   dist/                 compiled frontend embedded by Cargo
 openapi/                normalized generated API contract
