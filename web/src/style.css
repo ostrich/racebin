@@ -3,7 +3,10 @@
 @import "./styles/base.css" layer(reset);
 @import "./styles/tokens.css" layer(tokens);
 @import "./styles/primitives.css" layer(foundations);
-@import "./styles/layout.css" layer(components);
+@import "./styles/shell.css" layer(components);
+@import "./styles/administration.css" layer(components);
+@import "./styles/paste-view.css" layer(components);
+@import "./styles/paste-controls.css" layer(components);
 @import "./styles/rich-text.css" layer(components);
 @import "./styles/paste-library.css" layer(components);
 @import "./styles/utilities.css" layer(utilities);
