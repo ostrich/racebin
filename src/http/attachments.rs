@@ -556,7 +556,37 @@ fn qr_png(value: &str) -> Result<Vec<u8>, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::qr_png;
+    use super::{attachment_path, qr_png, sanitize_upload_filename};
+    use std::path::Path;
+
+    #[test]
+    fn attachment_paths_reject_traversal_and_absolute_components() {
+        let root = Path::new("/tmp/racebin-test");
+        assert!(attachment_path(root, "safe-id", "safe-name").is_ok());
+        assert!(attachment_path(root, "..", "safe-name").is_err());
+        assert!(attachment_path(root, "safe-id", "../secret").is_err());
+        assert!(attachment_path(root, "safe-id", "/etc/passwd").is_err());
+        assert!(attachment_path(root, "safe-id", ".hidden").is_err());
+    }
+
+    #[test]
+    fn upload_filenames_are_reduced_to_safe_components() {
+        assert_eq!(sanitize_upload_filename("hello.txt"), "hello.txt");
+        assert_eq!(sanitize_upload_filename("../hello.txt"), "hello.txt");
+        assert_eq!(
+            sanitize_upload_filename(r"C:\Users\someone\hello.txt"),
+            "hello.txt"
+        );
+        assert_eq!(
+            sanitize_upload_filename(" bad:<name>?.txt "),
+            "bad__name__.txt"
+        );
+        assert_eq!(sanitize_upload_filename("..."), "");
+
+        let long = sanitize_upload_filename(&"é".repeat(200));
+        assert!(long.len() <= 255);
+        assert!(long.is_char_boundary(long.len()));
+    }
 
     #[test]
     fn qr_renderer_produces_a_png() {

@@ -1,45 +1,13 @@
 #[cfg(test)]
 mod tests {
     use super::super::attachment;
-    use crate::account::{self as accounts, api_keys};
-    use crate::http::attachments::{attachment_path, sanitize_upload_filename};
-    use crate::http::configure;
-    use crate::repository::Repository;
-    use crate::services::{PasteInput, PasteService, Principal};
     use actix_web::{cookie::Cookie, http::StatusCode, test, web, App};
+    use racebin::account::{self as accounts, api_keys};
+    use racebin::http::configure;
+    use racebin::repository::Repository;
+    use racebin::services::{PasteInput, PasteService, Principal};
     use serde_json::{json, Value};
     use std::io::Read;
-    use std::path::Path;
-
-    #[actix_web::test]
-    async fn attachment_paths_reject_traversal_and_absolute_components() {
-        let root = Path::new("/tmp/racebin-test");
-        assert!(attachment_path(root, "safe-id", "safe-name").is_ok());
-        assert!(attachment_path(root, "..", "safe-name").is_err());
-        assert!(attachment_path(root, "safe-id", "../secret").is_err());
-        assert!(attachment_path(root, "safe-id", "/etc/passwd").is_err());
-        assert!(attachment_path(root, "safe-id", ".hidden").is_err());
-    }
-
-    #[actix_web::test]
-    async fn upload_filenames_are_reduced_to_safe_components() {
-        assert_eq!(sanitize_upload_filename("hello.txt"), "hello.txt");
-        assert_eq!(sanitize_upload_filename("../hello.txt"), "hello.txt");
-        assert_eq!(
-            sanitize_upload_filename(r"C:\Users\someone\hello.txt"),
-            "hello.txt"
-        );
-        assert_eq!(
-            sanitize_upload_filename(" bad:<name>?.txt "),
-            "bad__name__.txt"
-        );
-        assert_eq!(sanitize_upload_filename("..."), "");
-
-        let long = sanitize_upload_filename(&"é".repeat(200));
-        assert!(long.len() <= 255);
-        assert!(long.is_char_boundary(long.len()));
-    }
-
     #[actix_web::test]
     async fn http_auth_authorization_visibility_and_attachment_lifecycle() {
         let data_dir = std::env::temp_dir().join(format!("racebin-http-{}", uuid::Uuid::new_v4()));
@@ -50,7 +18,7 @@ mod tests {
         );
         let repository = Repository::open(&url, &data_dir).await.unwrap();
         repository.migrate().await.unwrap();
-        crate::services::settings::initialize(&repository, &crate::args::ARGS)
+        racebin::services::settings::initialize(&repository, &racebin::args::ARGS)
             .await
             .unwrap();
         sqlx::query(
@@ -58,7 +26,7 @@ mod tests {
              VALUES(1,'http-user',$1,'user',1,0,$2)",
         )
         .bind(accounts::password_hash("correct horse battery staple").unwrap())
-        .bind(crate::time::unix_timestamp())
+        .bind(racebin::time::unix_timestamp())
         .execute(repository.pool())
         .await
         .unwrap();
@@ -67,7 +35,7 @@ mod tests {
              VALUES(2,'other-user',$1,'user',1,0,$2)",
         )
         .bind(accounts::password_hash("another correct horse battery staple").unwrap())
-        .bind(crate::time::unix_timestamp())
+        .bind(racebin::time::unix_timestamp())
         .execute(repository.pool())
         .await
         .unwrap();

@@ -1,13 +1,16 @@
 use super::*;
-use crate::services::ErrorKind;
+use racebin::services::ErrorKind;
 
 pub(super) async fn backend_contract(repo: Repository) {
-    let initial_settings = crate::services::settings::initialize(&repo, &crate::args::ARGS)
+    let initial_settings = racebin::services::settings::initialize(&repo, &racebin::args::ARGS)
         .await
         .unwrap();
     assert_eq!(
         initial_settings.site_name,
-        crate::args::ARGS.site_name.as_deref().unwrap_or("Racebin")
+        racebin::args::ARGS
+            .site_name
+            .as_deref()
+            .unwrap_or("Racebin")
     );
     insert_user(&repo, 1, "administrator", "admin").await;
     insert_user(&repo, 2, "paste-owner", "user").await;
@@ -33,7 +36,7 @@ pub(super) async fn backend_contract(repo: Repository) {
     let mut changed_settings = initial_settings.clone();
     changed_settings.site_name = "Contract site".into();
     changed_settings.public_explore_enabled = false;
-    let changed_settings = crate::services::settings::replace(&repo, 1, &changed_settings)
+    let changed_settings = racebin::services::settings::replace(&repo, 1, &changed_settings)
         .await
         .unwrap();
     assert_eq!(changed_settings.site_name, "Contract site");
@@ -74,7 +77,7 @@ pub(super) async fn backend_contract(repo: Repository) {
         .create_paste(&owner, &paste_input("attachment limit", "private"))
         .await
         .unwrap();
-    let maximum_attachments = (0..crate::limits::MAX_ATTACHMENTS_PER_PASTE)
+    let maximum_attachments = (0..racebin::limits::MAX_ATTACHMENTS_PER_PASTE)
         .map(|index| NewAttachment {
             filename: format!("attachment-{index}.txt"),
             storage_key: format!("attachment-store-{index}"),
@@ -104,7 +107,7 @@ pub(super) async fn backend_contract(repo: Repository) {
             .unwrap();
     assert_eq!(
         stored_count,
-        crate::limits::MAX_ATTACHMENTS_PER_PASTE as i64
+        racebin::limits::MAX_ATTACHMENTS_PER_PASTE as i64
     );
     let revision = services
         .get_source(&owner, &attachment_limit_paste.id)
@@ -396,7 +399,7 @@ pub(super) async fn backend_contract(repo: Repository) {
         .await
         .unwrap();
     let expired_input = PasteInput {
-        expires_at: Some(Some(crate::time::unix_timestamp())),
+        expires_at: Some(Some(racebin::time::unix_timestamp())),
         ..paste_input("already expired", "private")
     };
     assert_eq!(
@@ -414,7 +417,7 @@ pub(super) async fn backend_contract(repo: Repository) {
     assert_eq!(paste_count_after, paste_count_before);
     let invalid_update = PasteInput {
         title: Some("must not persist".to_string()),
-        expires_at: Some(Some(crate::time::unix_timestamp())),
+        expires_at: Some(Some(racebin::time::unix_timestamp())),
         ..PasteInput::default()
     };
     assert_eq!(
@@ -511,13 +514,13 @@ pub(super) async fn backend_contract(repo: Repository) {
     assert_ne!(first_page.items[0].id, second_page.items[0].id);
 
     let expired = PasteInput {
-        expires_at: Some(Some(crate::time::unix_timestamp() + 3600)),
+        expires_at: Some(Some(racebin::time::unix_timestamp() + 3600)),
         ..paste_input("expired", "public")
     };
     let expired = services.create_paste(&owner, &expired).await.unwrap();
     sqlx::query("UPDATE pastes SET expires_at=$2 WHERE id=$1")
         .bind(&expired.id)
-        .bind(crate::time::unix_timestamp() - 1)
+        .bind(racebin::time::unix_timestamp() - 1)
         .execute(repo.pool())
         .await
         .unwrap();
@@ -668,7 +671,7 @@ pub(super) async fn backend_contract(repo: Repository) {
         "INSERT INTO invitations(token_hash,created_by_user_id,created_at,expires_at,redeemed,revoked)
          VALUES('expired-invitation',1,1,$1,0,0)",
     )
-    .bind(crate::time::unix_timestamp() - 3_000_000)
+    .bind(racebin::time::unix_timestamp() - 3_000_000)
     .execute(repo.pool())
     .await
     .unwrap();
@@ -680,7 +683,7 @@ pub(super) async fn backend_contract(repo: Repository) {
     .await
     .unwrap();
     assert!(
-        repo.purge_expired(crate::time::unix_timestamp())
+        repo.purge_expired(racebin::time::unix_timestamp())
             .await
             .unwrap()
             >= 1
@@ -834,9 +837,9 @@ pub(super) async fn backend_contract(repo: Repository) {
          VALUES($1,$2,$3,$4,$5,$6,$7)",
     )
     .bind(1_i64).bind("administrator").bind("test.paginated").bind("user")
-    .bind("paste-owner").bind("{}").bind(crate::time::unix_timestamp())
+    .bind("paste-owner").bind("{}").bind(racebin::time::unix_timestamp())
     .execute(repo.pool()).await.unwrap();
-    let audit_page = crate::services::audit::list_page(&repo, Some("paginated"), 1, 1)
+    let audit_page = racebin::services::audit::list_page(&repo, Some("paginated"), 1, 1)
         .await
         .unwrap();
     assert_eq!(audit_page.total_items, 1);
@@ -900,7 +903,7 @@ pub(super) async fn backend_contract(repo: Repository) {
     }
     let capped_sessions: i64 =
         sqlx::query_scalar("SELECT count(*) FROM sessions WHERE user_id=2 AND expires_at>$1")
-            .bind(crate::time::unix_timestamp())
+            .bind(racebin::time::unix_timestamp())
             .fetch_one(repo.pool())
             .await
             .unwrap();
@@ -915,13 +918,13 @@ pub(super) async fn backend_contract(repo: Repository) {
         .is_none());
 
     let mut folder_transaction = repo.pool().begin().await.unwrap();
-    for index in 0..crate::limits::MAX_FOLDERS_PER_USER {
+    for index in 0..racebin::limits::MAX_FOLDERS_PER_USER {
         let name = format!("bounded-folder-{index}");
         sqlx::query("INSERT INTO folders(owner_id,name,name_key,created_at) VALUES($1,$2,$3,$4)")
             .bind(2_i64)
             .bind(&name)
             .bind(&name)
-            .bind(crate::time::unix_timestamp())
+            .bind(racebin::time::unix_timestamp())
             .execute(&mut *folder_transaction)
             .await
             .unwrap();

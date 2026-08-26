@@ -1,6 +1,6 @@
-use crate::account::{self as accounts, api_keys};
-use crate::repository::{copy_database, DatabaseKind, Repository};
-use crate::services::{NewAttachment, PasteInput, PasteQuery, PasteService, Principal};
+use racebin::account::{self as accounts, api_keys};
+use racebin::repository::{copy_database, DatabaseKind, Repository};
+use racebin::services::{NewAttachment, PasteInput, PasteQuery, PasteService, Principal};
 
 fn attachment(filename: &str, storage_key: &str, size_bytes: i64) -> NewAttachment {
     NewAttachment {
@@ -11,11 +11,17 @@ fn attachment(filename: &str, storage_key: &str, size_bytes: i64) -> NewAttachme
 }
 use std::path::{Path, PathBuf};
 
+#[path = "integration/backend.rs"]
 mod backend;
+#[path = "integration/concurrency.rs"]
 mod concurrency;
+#[path = "integration/copy.rs"]
 mod copy;
+#[path = "integration/http.rs"]
 mod http;
+#[path = "integration/migration.rs"]
 mod migration;
+#[path = "integration/runners.rs"]
 mod runners;
 
 fn sqlite_url(data_dir: &Path) -> String {
@@ -44,7 +50,7 @@ async fn insert_user(repo: &Repository, id: i64, username: &str, role: &str) {
     .bind(username)
     .bind(accounts::password_hash("correct horse battery staple").unwrap())
     .bind(role)
-    .bind(crate::time::unix_timestamp())
+    .bind(racebin::time::unix_timestamp())
     .execute(repo.pool())
     .await
     .unwrap();
