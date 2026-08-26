@@ -37,12 +37,12 @@ flowchart TB
         Assets["Embedded browser app<br/>HTML, CSS, JavaScript<br/>Fonts"]
         Handlers["API handlers<br/>Request and response<br/>translation"]
         Domain["Domain services<br/>Authorization and<br/>business rules"]
-        Repository["Repository<br/>Transactions and<br/>SQLx queries"]
+        Persistence["Database infrastructure<br/>Transactions and<br/>SQLx queries"]
 
         Boundary -->|browser routes and assets| Assets
         Boundary -->|/api/v1| Handlers
         Handlers --> Domain
-        Domain --> Repository
+        Domain --> Persistence
     end
 
     Database[("SQLite or PostgreSQL")]
@@ -50,7 +50,7 @@ flowchart TB
 
     Browser -->|same-origin HTTP| Boundary
     Client -->|HTTP with bearer key| Boundary
-    Repository --> Database
+    Persistence --> Database
     Handlers -->|upload and download streams| Files
     Domain -->|transactional promotion and cleanup| Files
 ```
@@ -75,7 +75,7 @@ sequenceDiagram
     participant C as Browser or API client
     participant H as Actix boundary and handler
     participant S as Domain service
-    participant R as Repository
+    participant R as Database infrastructure
     participant D as Database
     participant F as Attachment directory
 
@@ -107,9 +107,9 @@ layers so these alternate entry points cannot bypass them.
 
 `src/main.rs` is the composition root. At startup it:
 
-1. Dispatches a requested database or account CLI command, if present.
-2. Validates server configuration.
-3. Creates the data directory.
+1. The minimal binary entry point delegates to the library application.
+2. Dispatches a requested database or account CLI command, if present.
+3. Validates server configuration and creates the data directory.
 4. Opens the configured database and selects its backend.
 5. Applies the matching SQLx migrations.
 6. Purges expired records and orphaned attachment directories.
@@ -131,20 +131,21 @@ The Rust backend is divided by responsibility:
 
 | Layer | Location | Responsibility |
 | --- | --- | --- |
-| Process and configuration | `src/main.rs`, `src/args.rs` | Startup, environment and CLI configuration, server construction, periodic cleanup |
+| Process and composition | `src/main.rs`, `src/lib.rs`, `src/app.rs`, `src/args.rs` | Minimal executable entry point, reusable library boundary, configuration, server construction, and periodic cleanup |
 | HTTP transport | `src/http/` | Routing, request parsing, authentication extraction, status codes, cookies, uploads, downloads, and response serialization |
-| Domain services | `src/services/` | Paste rules, visibility, ownership, validation, conversion, read limits, search, and transactional operations |
-| Accounts and credentials | `src/account/` | Users, passwords, sessions, invitations, API keys, and scopes |
-| Persistence | `src/repository.rs`, `src/repository/` | Backend selection, connection pooling, migrations, database copy, and shared storage primitives |
+| Paste domain | `src/pastes/` | Paste rules, visibility, ownership, validation, conversion, read limits, folders, attachments, search, and transactional operations |
+| Accounts and credentials | `src/accounts/` | Users, passwords, sessions, invitations, API keys, scopes, administration, and throttling |
+| Instance operations | `src/instance/` | Audit records and runtime settings |
+| Database infrastructure | `src/database/` | Backend selection, connection pooling, migrations, database copy, and shared storage primitives |
 | Operator CLI | `src/cli/` | Account administration, database copy, and OpenAPI export commands |
 
 HTTP handlers should remain transport adapters. Rules that must also hold for
-future transports or CLI callers belong in a service or account operation,
-not solely in a handler. Database-specific setup and migration selection
-belong in the repository layer.
+future transports or CLI callers belong in a paste, account, or instance
+operation, not solely in a handler. Database-specific setup and migration
+selection belong in the database layer.
 
 `PasteService` is currently the main application service. It owns a
-`Repository` and accepts a `Principal` representing an anonymous request,
+`Database` and accepts a `Principal` representing an anonymous request,
 browser session, or API key. This keeps authorization decisions close to the
 operations they protect.
 
@@ -271,7 +272,7 @@ the assignment rather than deleting its pastes.
 ## Database abstraction
 
 SQLx's `Any` driver provides the common query interface for SQLite and
-PostgreSQL. `Repository::open` identifies the backend from the URL and
+PostgreSQL. `Database::open` identifies the backend from the URL and
 configures its pool:
 
 - SQLite uses foreign-key enforcement, WAL mode, and a busy timeout.
@@ -554,7 +555,7 @@ Tests are organized around architectural boundaries:
 PostgreSQL tests require a dedicated disposable database and reset its
 `public` schema. See [testing.md](testing.md) for commands and safety details.
 
-## Repository map
+## Source-tree map
 
 ```text
 src/
@@ -567,7 +568,10 @@ src/
 web/
   src/api/              generated wire types, transport, normalization, and named resources
   src/components/       reusable Svelte controls
+  src/app/              shared session, state, cache, notices, and preferences
+  src/api/              the enforced HTTP client boundary and generated types
   src/navigation/       routes, guards, history/scroll, and navigation runtime
+  src/rich-text/        rich-text editor, viewer, and paste normalization
   src/pages/            route-level Svelte components
   e2e/                  Playwright browser workflows
   dist/                 compiled frontend embedded by Cargo
@@ -585,7 +589,7 @@ scripts/                 reproducibility, naming, and architecture checks
 Use the existing boundaries when extending Racebin:
 
 - Add or change an API contract in `src/http`, but place reusable business
-  rules in `src/services` or `src/account`.
+  rules in `src/pastes`, `src/accounts`, or `src/instance`.
 - Keep SQLite and PostgreSQL migrations logically equivalent.
 - Treat database rows and attachment files as a coordinated data set.
 - Enforce authorization on the server even when the frontend hides a control.

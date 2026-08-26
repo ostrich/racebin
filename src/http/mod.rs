@@ -17,6 +17,7 @@ use zip::write::SimpleFileOptions;
 
 mod account;
 mod admin;
+mod api_key_routes;
 mod assets;
 pub(crate) mod attachments;
 mod auth;
@@ -25,7 +26,6 @@ mod cookies;
 mod dto;
 mod errors;
 mod folders;
-mod keys;
 pub(crate) mod openapi;
 mod paste_payload;
 mod pastes;
@@ -73,7 +73,7 @@ pub fn configure(config: &mut web::ServiceConfig) {
                 .configure(folders::configure)
                 .configure(pastes::configure)
                 .configure(attachments::configure)
-                .configure(keys::configure)
+                .configure(api_key_routes::configure)
                 .configure(admin::configure),
         )
         .service(web::resource("/assets/{path:.*}").route(web::get().to(assets::asset)))
