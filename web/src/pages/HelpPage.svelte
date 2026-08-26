@@ -1,7 +1,7 @@
 <script lang="ts">
   import Link from "../components/Link.svelte";
-  import { showNotice } from "../notices";
-  import { appState } from "../state";
+  import { showNotice } from "../app/notices";
+  import { appState } from "../app/state";
 
   let apiBase = $derived($appState.config.api_base_url ?? `${location.origin}/api/v1`);
   const command = (...lines: string[]) => lines.join("\n");

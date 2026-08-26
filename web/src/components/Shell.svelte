@@ -1,10 +1,10 @@
 <script lang="ts">
   import { logout as logoutSession } from "../api";
-  import { appState } from "../state";
-  import { replaceSession } from "../session";
+  import { appState } from "../app/state";
+  import { replaceSession } from "../app/session";
   import { clearUnsavedChangesGuard, confirmDiscardChanges, navigate } from "../navigation";
-  import { notice } from "../notices";
-  import { setColorTheme, uiPreferences, type ColorTheme } from "../uiPreferences";
+  import { notice } from "../app/notices";
+  import { setColorTheme, uiPreferences, type ColorTheme } from "../app/uiPreferences";
   import Icon from "./Icon.svelte";
   import type { IconName } from "./icons";
   import Link from "./Link.svelte";

@@ -1,6 +1,6 @@
 import { mount } from "svelte";
 import App from "./App.svelte";
-import { initializeUiPreferences } from "./uiPreferences";
+import { initializeUiPreferences } from "./app/uiPreferences";
 import "./style.css";
 
 const target = document.querySelector<HTMLDivElement>("#app");

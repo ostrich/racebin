@@ -5,11 +5,11 @@
   import InvitationDialog from "../components/InvitationDialog.svelte";
   import Link from "../components/Link.svelte";
   import Pagination from "../components/Pagination.svelte";
-  import { confirmAction } from "../confirmations";
+  import { confirmAction } from "../app/confirmations";
   import { formatDate } from "../format";
   import { holdNavigation, navigate } from "../navigation";
-  import { showNotice } from "../notices";
-  import { appState } from "../state";
+  import { showNotice } from "../app/notices";
+  import { appState } from "../app/state";
   import type { Page } from "../types";
 
   let { query }: { query: URLSearchParams } = $props();

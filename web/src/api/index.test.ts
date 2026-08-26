@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { normalizePayload } from "./api/normalize";
-import { ApiError, transport } from "./api/transport";
-import type { components } from "./api/generated";
-import type { Paste } from "./types";
+import { normalizePayload } from "./normalize";
+import { ApiError, transport } from "./transport";
+import type { components } from "./generated";
+import type { Paste } from "../types";
 
 type WirePasteResource = components["schemas"]["PasteResource"];
 

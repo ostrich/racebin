@@ -1,10 +1,10 @@
 <script lang="ts">
   import { changePassword } from "../api";
   import Link from "../components/Link.svelte";
-  import { showNotice } from "../notices";
+  import { showNotice } from "../app/notices";
   import { clearUnsavedChangesGuard, guardUnsavedChanges, navigate } from "../navigation";
-  import { replaceSession } from "../session";
-  import { appState } from "../state";
+  import { replaceSession } from "../app/session";
+  import { appState } from "../app/state";
 
   let submitting = $state(false);
   let dirty = $state(false);

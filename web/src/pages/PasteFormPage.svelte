@@ -12,11 +12,11 @@
   import LanguagePicker from "../components/LanguagePicker.svelte";
   import Link from "../components/Link.svelte";
   import { pasteDisplayTitle } from "../format";
-  import { confirmAction } from "../confirmations";
+  import { confirmAction } from "../app/confirmations";
   import { normalizeLanguage } from "../highlighting";
-  import { showNotice } from "../notices";
+  import { showNotice } from "../app/notices";
   import { clearUnsavedChangesGuard, guardUnsavedChanges, holdNavigation, navigate } from "../navigation";
-  import { appState } from "../state";
+  import { appState } from "../app/state";
   import type { Folder, FolderOverview, Paste } from "../types";
 
   type ContentKind = "text" | "markdown";
@@ -326,7 +326,7 @@
             </div>
             <div class:visual={richMode === "visual"} class="rich-editor-pane">
               {#if richMode === "visual"}
-                {#await import("../components/RichTextEditor.svelte") then module}
+                {#await import("../rich-text/Editor.svelte") then module}
                   {@const RichTextEditor = module.default}
                   <RichTextEditor bind:markdown/>
                 {/await}

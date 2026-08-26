@@ -8,9 +8,9 @@
   import AdminNav from "../components/AdminNav.svelte";
   import { availableLanguageOptions } from "../highlighting";
   import { holdNavigation } from "../navigation";
-  import { showNotice } from "../notices";
-  import { loadCapabilities } from "../session";
-  import { appState } from "../state";
+  import { showNotice } from "../app/notices";
+  import { loadCapabilities } from "../app/session";
+  import { appState } from "../app/state";
 
   let settings = $state<InstanceSettings | null>(null);
   let error = $state("");

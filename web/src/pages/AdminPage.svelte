@@ -13,7 +13,7 @@
   import Link from "../components/Link.svelte";
   import { formatByteSize, formatDate } from "../format";
   import { holdNavigation } from "../navigation";
-  import { appState } from "../state";
+  import { appState } from "../app/state";
   import type { AdminUser } from "../types";
 
   let summary = $state<AdminSummary | null>(null);

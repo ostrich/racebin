@@ -6,11 +6,11 @@
   import TaskList from "@tiptap/extension-task-list";
   import TaskItem from "@tiptap/extension-task-item";
   import StarterKit from "@tiptap/starter-kit";
-  import { showNotice } from "../notices";
-  import { confirmAction } from "../confirmations";
-  import Icon from "./Icon.svelte";
-  import { RichTextPasteNormalization } from "./RichTextPasteNormalization";
-  import type { IconName } from "./icons";
+  import { showNotice } from "../app/notices";
+  import { confirmAction } from "../app/confirmations";
+  import Icon from "../components/Icon.svelte";
+  import { RichTextPasteNormalization } from "./pasteNormalization";
+  import type { IconName } from "../components/icons";
 
   let { markdown = $bindable(), onchange }: { markdown: string; onchange?: () => void } = $props();
   let element: HTMLDivElement;

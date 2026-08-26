@@ -19,7 +19,7 @@
   import PasteListPage from "./pages/PasteListPage.svelte";
   import PasteViewPage from "./pages/PasteViewPage.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
-  import { setConfirmationPrompt } from "./confirmations";
+  import { setConfirmationPrompt } from "./app/confirmations";
   import Link from "./components/Link.svelte";
   import Shell from "./components/Shell.svelte";
   import {
@@ -29,8 +29,8 @@
     startNavigation
   } from "./navigation";
   import type { RouteLocation } from "./navigation";
-  import { loadSession } from "./session";
-  import { appState } from "./state";
+  import { loadSession } from "./app/session";
+  import { appState } from "./app/state";
 
   let discardDialog: ConfirmDialog;
   let startupError = $state("");

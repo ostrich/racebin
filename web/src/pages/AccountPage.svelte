@@ -4,10 +4,10 @@
   import Link from "../components/Link.svelte";
   import Pagination from "../components/Pagination.svelte";
   import { formatDate } from "../format";
-  import { confirmAction } from "../confirmations";
-  import { showNotice } from "../notices";
+  import { confirmAction } from "../app/confirmations";
+  import { showNotice } from "../app/notices";
   import { holdNavigation, navigate } from "../navigation";
-  import { appState } from "../state";
+  import { appState } from "../app/state";
   import type { ApiKey, Page } from "../types";
 
   let { query }: { query: URLSearchParams } = $props();

@@ -16,4 +16,3 @@ export function confirmAction(options: ConfirmationOptions): Promise<boolean> {
   if (!prompt) throw new Error("Confirmation dialog is not ready");
   return prompt(options);
 }
-

@@ -1,6 +1,6 @@
-import { getCapabilities, getLanguages, getSession } from "./api";
+import { getCapabilities, getLanguages, getSession } from "../api";
 import { appState } from "./state";
-import type { Session } from "./types";
+import type { Session } from "../types";
 
 export async function loadSession(): Promise<void> {
   const [session, config, languages] = await Promise.all([

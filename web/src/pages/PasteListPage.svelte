@@ -8,12 +8,12 @@
   import Pagination from "../components/Pagination.svelte";
   import PasteFilters from "../components/PasteFilters.svelte";
   import PasteRows from "../components/PasteRows.svelte";
-  import { confirmAction } from "../confirmations";
-  import { showNotice } from "../notices";
-  import { cachedQuery, loadQuery } from "../queryCache";
+  import { confirmAction } from "../app/confirmations";
+  import { showNotice } from "../app/notices";
+  import { cachedQuery, loadQuery } from "../app/queryCache";
   import { holdNavigation, navigate } from "../navigation";
   import type { FolderOverview, Page, Paste, PasteRevisionResponse } from "../types";
-  import { setPasteListView, uiPreferences } from "../uiPreferences";
+  import { setPasteListView, uiPreferences } from "../app/uiPreferences";
 
   let { mine, query }: { mine: boolean; query: URLSearchParams } = $props();
   function requestPaths(requestedQuery: URLSearchParams): { paste: string; folders: string | null } {

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { login } from "../api";
-  import { showNotice } from "../notices";
+  import { showNotice } from "../app/notices";
   import { navigate } from "../navigation";
-  import { loadSession } from "../session";
+  import { loadSession } from "../app/session";
 
   let submitting = $state(false);
 

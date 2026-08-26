@@ -9,11 +9,11 @@
   import PasswordConfirmDialog from "../components/PasswordConfirmDialog.svelte";
   import Link from "../components/Link.svelte";
   import { formatByteSize, formatDate } from "../format";
-  import { confirmAction } from "../confirmations";
-  import { showNotice } from "../notices";
+  import { confirmAction } from "../app/confirmations";
+  import { showNotice } from "../app/notices";
   import { holdNavigation } from "../navigation";
   import type { AdminUser } from "../types";
-  import { appState } from "../state";
+  import { appState } from "../app/state";
 
   let { userId }: { userId: number } = $props();
   const initialLoadReady = holdNavigation();

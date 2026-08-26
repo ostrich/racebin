@@ -1,6 +1,6 @@
 <script lang="ts">
   import { formatByteSize } from "../format";
-  import { showNotice } from "../notices";
+  import { showNotice } from "../app/notices";
   import Icon from "./Icon.svelte";
 
   let {

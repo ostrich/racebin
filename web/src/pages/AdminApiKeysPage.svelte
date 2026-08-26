@@ -3,9 +3,9 @@
   import AdminNav from "../components/AdminNav.svelte";
   import Icon from "../components/Icon.svelte";
   import Pagination from "../components/Pagination.svelte";
-  import { confirmAction } from "../confirmations";
+  import { confirmAction } from "../app/confirmations";
   import { holdNavigation, navigate } from "../navigation";
-  import { showNotice } from "../notices";
+  import { showNotice } from "../app/notices";
   import type { ApiKey, Page } from "../types";
 
   let { query }: { query: URLSearchParams } = $props();

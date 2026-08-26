@@ -1,8 +1,8 @@
 <script lang="ts">
   import { resetPassword } from "../api";
   import Link from "../components/Link.svelte";
-  import { loadSession } from "../session";
-  import { appState } from "../state";
+  import { loadSession } from "../app/session";
+  import { appState } from "../app/state";
 
   let { token }: { token: string } = $props();
   let password = $state("");

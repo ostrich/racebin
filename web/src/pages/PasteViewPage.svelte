@@ -5,12 +5,12 @@
   import CodeViewer from "../components/CodeViewer.svelte";
   import Icon from "../components/Icon.svelte";
   import Link from "../components/Link.svelte";
-  import RichTextViewer from "../components/RichTextViewer.svelte";
+  import RichTextViewer from "../rich-text/Viewer.svelte";
   import { formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
-  import { confirmAction } from "../confirmations";
-  import { showNotice } from "../notices";
+  import { confirmAction } from "../app/confirmations";
+  import { showNotice } from "../app/notices";
   import { holdNavigation, navigate } from "../navigation";
-  import { appState } from "../state";
+  import { appState } from "../app/state";
   import type { Paste } from "../types";
 
   let { pasteId }: { pasteId: string } = $props();

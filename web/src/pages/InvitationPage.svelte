@@ -1,9 +1,9 @@
 <script lang="ts">
   import { redeemInvitation } from "../api";
-  import { showNotice } from "../notices";
+  import { showNotice } from "../app/notices";
   import { navigate } from "../navigation";
-  import { loadSession } from "../session";
-  import { appState } from "../state";
+  import { loadSession } from "../app/session";
+  import { appState } from "../app/state";
 
   let { token }: { token: string } = $props();
   let submitting = $state(false);

@@ -6,7 +6,7 @@
   import InvitationDialog from "../components/InvitationDialog.svelte";
   import Pagination from "../components/Pagination.svelte";
   import { formatByteSize, formatDate } from "../format";
-  import { appState } from "../state";
+  import { appState } from "../app/state";
   import { holdNavigation, navigate } from "../navigation";
   import type { AdminUser, Page } from "../types";
 

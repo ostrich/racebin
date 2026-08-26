@@ -1,6 +1,6 @@
 <script lang="ts">
   import Link from "./Link.svelte";
-  import { appState } from "../state";
+  import { appState } from "../app/state";
   import { locationState } from "../navigation";
 
   const current = (path: string) => $locationState.path === path ? "page" : undefined;

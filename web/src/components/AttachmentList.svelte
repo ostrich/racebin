@@ -1,8 +1,8 @@
 <script lang="ts">
   import { deleteAttachment } from "../api";
   import { formatByteSize } from "../format";
-  import { showNotice } from "../notices";
-  import { confirmAction } from "../confirmations";
+  import { showNotice } from "../app/notices";
+  import { confirmAction } from "../app/confirmations";
   import type { Attachment } from "../types";
   import Icon from "./Icon.svelte";
 

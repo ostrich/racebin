@@ -6,11 +6,11 @@
   import Pagination from "../components/Pagination.svelte";
   import PasteFilters from "../components/PasteFilters.svelte";
   import { formatByteSize, formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
-  import { confirmAction } from "../confirmations";
-  import { showNotice } from "../notices";
-  import { cachedQuery, loadQuery } from "../queryCache";
+  import { confirmAction } from "../app/confirmations";
+  import { showNotice } from "../app/notices";
+  import { cachedQuery, loadQuery } from "../app/queryCache";
   import { holdNavigation } from "../navigation";
-  import { appState } from "../state";
+  import { appState } from "../app/state";
   import type { Page, Paste } from "../types";
 
   let { query }: { query: URLSearchParams } = $props();

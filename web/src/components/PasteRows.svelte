@@ -1,10 +1,10 @@
 <script lang="ts">
   import { deletePaste } from "../api";
   import { formatByteSize, formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
-  import { confirmAction } from "../confirmations";
-  import { showNotice } from "../notices";
+  import { confirmAction } from "../app/confirmations";
+  import { showNotice } from "../app/notices";
   import type { Paste } from "../types";
-  import type { PasteListView } from "../uiPreferences";
+  import type { PasteListView } from "../app/uiPreferences";
   import Icon from "./Icon.svelte";
   import Link from "./Link.svelte";
 

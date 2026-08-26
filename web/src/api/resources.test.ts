@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { appState } from "../state";
+import { appState } from "../app/state";
 import {
   createPaste, createPasteWithAttachments, deleteAttachment, readPaste, reauthenticate,
   replaceInstanceSettings, updatePaste

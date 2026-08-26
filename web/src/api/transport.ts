@@ -1,5 +1,5 @@
-import { currentState } from "../state";
-import { clearQueryCache } from "../queryCache";
+import { currentState } from "../app/state";
+import { clearQueryCache } from "../app/queryCache";
 import type { components } from "./generated";
 
 type ProblemDetails = components["schemas"]["ProblemDetails"];

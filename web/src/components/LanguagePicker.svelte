@@ -1,6 +1,6 @@
 <script lang="ts">
   import { availableLanguageOptions, normalizeLanguage } from "../highlighting";
-  import { appState } from "../state";
+  import { appState } from "../app/state";
 
   let {
     value = $bindable(),

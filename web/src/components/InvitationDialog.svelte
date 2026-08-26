@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createInvitation, updateInvitationComment, type Invitation, type InvitationCreated } from "../api";
-  import { showNotice } from "../notices";
+  import { showNotice } from "../app/notices";
   import Icon from "./Icon.svelte";
 
   let { oncreated }: { oncreated?: () => void | Promise<void> } = $props();

@@ -1,5 +1,5 @@
 import { get, writable } from "svelte/store";
-import type { Config, Language, Session } from "./types";
+import type { Config, Language, Session } from "../types";
 
 export type AppState = {
   session: Session;
