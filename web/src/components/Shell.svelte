@@ -3,7 +3,7 @@
   import { appState } from "../app/state";
   import { replaceSession } from "../app/session";
   import { clearUnsavedChangesGuard, confirmDiscardChanges, navigate } from "../navigation";
-  import { notice } from "../app/notices";
+  import { clearNotice, notice } from "../app/notices";
   import { setColorTheme, uiPreferences, type ColorTheme } from "../app/uiPreferences";
   import Icon from "./Icon.svelte";
   import type { IconName } from "./icons";
@@ -23,6 +23,7 @@
     await logoutSession();
     replaceSession({ authenticated: false, permissions: [] });
     await navigate("/");
+    clearNotice();
   }
 
   const themes: Record<ColorTheme, { next: ColorTheme; label: string; icon: IconName }> = {

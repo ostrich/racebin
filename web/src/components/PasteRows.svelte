@@ -19,6 +19,7 @@
     folderNames,
     view = "normal",
     context = "public",
+    totalItems,
     onremoved
   }: {
     items: Paste[];
@@ -30,6 +31,7 @@
     folderNames?: Map<number, string>;
     view?: PasteListView;
     context?: "public" | "workspace" | "admin";
+    totalItems?: number;
     onremoved?: (paste: Paste) => void;
   } = $props();
 
@@ -91,12 +93,16 @@
       Hold Shift while selecting to select a range.
     </span>
   {/if}
-  {#if context === "admin"}
-    <div class="admin-paste-head" aria-hidden="true"><span>Paste</span><span>Owner</span><span>Details</span><span>Actions</span></div>
-  {/if}
-  <div class="paste-list" class:compact={view === "compact"}
-    class:mobile-stack={context !== "admin" && view !== "compact"}
-    class:admin-paste-list={context === "admin"}>
+  <div class:admin-paste-table={context === "admin"}>
+    {#if context === "admin"}
+      <div class="admin-paste-head" aria-hidden="true">
+        <span>Paste{#if totalItems !== undefined}<small>{totalItems} total</small>{/if}</span>
+        <span>Owner</span><span>Details</span><span>Actions</span>
+      </div>
+    {/if}
+    <div class="paste-list" class:compact={view === "compact"}
+      class:mobile-stack={context !== "admin" && view !== "compact"}
+      class:admin-paste-list={context === "admin"}>
     {#each visible as paste, index (paste.id)}
       <article class="paste-row paste-list-row" class:selectable class:admin-paste-row={context === "admin"}>
         {#if context === "admin"}
@@ -131,5 +137,6 @@
         {/if}
       </article>
     {/each}
+    </div>
   </div>
 {/if}

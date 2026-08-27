@@ -160,6 +160,21 @@
   font-weight: 700;
   text-transform: uppercase;
 }
+.admin-paste-head > span:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.admin-paste-head small {
+  color: var(--color-label);
+  font-size: inherit;
+  font-weight: 500;
+  text-transform: none;
+}
+.admin-paste-content .list-filter-bar {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
 .admin-paste-row {
   padding: 16px 4px;
   border-bottom: 1px solid var(--line);

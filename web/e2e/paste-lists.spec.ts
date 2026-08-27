@@ -72,6 +72,33 @@ test("paste list controls separate search, filters, and sorting", async ({ page 
   }
 });
 
+test("admin paste results form one compact table boundary", async ({ page }) => {
+  const items = Array.from({ length: 24 }, (_, index) => ({
+    ...paste,
+    id: `admin-paste-${index}`,
+    title: `Admin paste ${index + 1}`
+  }));
+  await mockApi(page, true, { items });
+  await page.goto("/admin/pastes");
+
+  await expect(page.locator(".admin-paste-head")).toContainText("24 total");
+  await expect(page.locator(".admin-paste-content > .result-count")).toHaveCount(0);
+  const boundaries = await page.locator(".admin-paste-content").evaluate(element => {
+    const toolbar = element.querySelector<HTMLElement>(".list-filter-bar")!;
+    const table = element.querySelector<HTMLElement>(".admin-paste-table")!;
+    const head = element.querySelector<HTMLElement>(".admin-paste-head")!;
+    return {
+      toolbarBorder: getComputedStyle(toolbar).borderBottomWidth,
+      tableGap: table.getBoundingClientRect().top - toolbar.getBoundingClientRect().bottom,
+      headBorder: getComputedStyle(head).borderBottomWidth
+    };
+  });
+  expect(boundaries.toolbarBorder).toBe("0px");
+  expect(boundaries.headBorder).toBe("1px");
+  expect(boundaries.tableGap).toBeGreaterThanOrEqual(12);
+  expect(boundaries.tableGap).toBeLessThanOrEqual(20);
+});
+
 test("search, filters, and sort preserve unrelated list state", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes?folder_id=5&sort=size&direction=desc&page=3");
@@ -219,7 +246,8 @@ test("compact view is persistent and preserves paste selection", async ({ page }
     const actions = row.querySelector(".row-actions")!.getBoundingClientRect();
     return {
       titleTop: title.top,
-      checkboxOffset: checkbox.top - title.top,
+      titleCenterOffset: title.top + title.height / 2 - (rowBox.top + rowBox.height / 2),
+      checkboxCenterOffset: checkbox.top + checkbox.height / 2 - (rowBox.top + rowBox.height / 2),
       actionCenterOffset: actions.top + actions.height / 2 - (rowBox.top + rowBox.height / 2)
     };
   });
@@ -238,8 +266,9 @@ test("compact view is persistent and preserves paste selection", async ({ page }
   await expect(page.getByText("const answer = 42; console.log(answer);")).toBeHidden();
   await expect(page.getByText("1 attachment")).toBeHidden();
   const compactAlignment = await rowAlignment();
-  expect(Math.abs(compactAlignment.titleTop - normalAlignment.titleTop)).toBeLessThan(1);
-  expect(Math.abs(compactAlignment.checkboxOffset - normalAlignment.checkboxOffset)).toBeLessThan(1);
+  expect(compactAlignment.titleTop).toBeGreaterThan(normalAlignment.titleTop);
+  expect(Math.abs(compactAlignment.titleCenterOffset)).toBeLessThan(1);
+  expect(Math.abs(compactAlignment.checkboxCenterOffset)).toBeLessThan(1);
   expect(Math.abs(compactAlignment.actionCenterOffset)).toBeLessThan(1);
   expect(await page.evaluate(() => localStorage.getItem("racebin.pasteListView"))).toBe("compact");
 

@@ -126,7 +126,7 @@
 .paste-list.compact .paste-list-row {
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas: "identity actions";
-  align-items: start;
+  align-items: center;
   row-gap: 0;
 }
 .paste-list.compact .paste-list-row.selectable {
@@ -138,8 +138,8 @@
   display: none;
 }
 .paste-list.compact .paste-selector {
-  align-self: start;
-  margin-top: 4px;
+  align-self: center;
+  margin: 0;
 }
 .paste-list-row .paste-meta {
   display: flex;

@@ -76,6 +76,10 @@
       if (generation === loadGeneration) loading = false;
       routeReady();
     });
+    return () => {
+      if (generation === loadGeneration) loadGeneration += 1;
+      routeReady();
+    };
   });
 
   function pasteRemoved(paste: Paste): void {
@@ -89,11 +93,11 @@
 
 <section class="page-layout" aria-busy={loading}>
   <div class="page-heading"><div><p class="eyebrow">Administration</p><h1>All pastes</h1></div></div>
-  <div class="section-layout"><AdminNav/><div class="section-content">
+  <div class="section-layout"><AdminNav/><div class="section-content admin-paste-content">
   <PasteFilters params={appliedQuery} mode="admin" {ownerNames}/>
   {#if page}
-    <p class="result-count">{page.total_items} pastes</p>
-    <PasteRows items={page.items} context="admin" manage filterable {ownerNames} onremoved={pasteRemoved}/>
+    <PasteRows items={page.items} context="admin" manage filterable {ownerNames}
+      totalItems={page.total_items} onremoved={pasteRemoved}/>
     <Pagination {page} params={appliedQuery}/>
   {:else if error}<div class="empty compact"><p>{error}</p></div>
   {:else}<p class="muted">Loading pastes…</p>{/if}

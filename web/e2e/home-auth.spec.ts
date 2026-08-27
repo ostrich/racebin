@@ -88,3 +88,24 @@ test("plain-home login and authenticated homepage retain normal behavior", async
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { name: "New paste" })).toBeVisible();
 });
+
+test("logout discards stale protected-page failures", async ({ page }) => {
+  let requests = 0;
+  await mockApi(page, true, {
+    plainHome: true,
+    adminPastePage: () => ({ items: [], delay: ++requests > 1 ? 250 : 0 })
+  });
+  await page.goto("/admin/pastes");
+  await page.getByLabel("Search").fill("pending");
+  const refresh = page.waitForRequest(request =>
+    request.url().includes("/api/v1/admin/pastes") && request.url().includes("q=pending"));
+  await page.getByRole("button", { name: "Search" }).click();
+  await refresh;
+  await page.getByRole("button", { name: "Log out" }).click();
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { name: "Log in" })).toBeVisible();
+  await page.waitForTimeout(300);
+  await expect(page.locator(".toast.show")).toHaveCount(0);
+  await expect(page.getByText("Authentication required")).toHaveCount(0);
+});

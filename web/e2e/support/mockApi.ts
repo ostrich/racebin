@@ -186,6 +186,10 @@ export async function mockApi(
     const url = new URL(route.request().url());
     if (url.pathname === "/api/v1/session") {
       if (route.request().method() === "POST") signedIn = true;
+      if (route.request().method() === "DELETE") {
+        signedIn = false;
+        return route.fulfill({ status: 204 });
+      }
       return json(route, signedIn
         ? { authenticated: true, user, csrf_token: "csrf", permissions: ["paste:manage", "user:manage", "invitation:manage", "api_key:manage", "administrator:manage", "instance:configure", "ownership:transfer", "audit:read"] }
         : { authenticated: false, permissions: [] });
@@ -266,6 +270,7 @@ export async function mockApi(
         delay: options.delay
       };
       if (response.delay) await new Promise(resolve => setTimeout(resolve, response.delay));
+      if (!signedIn) return json(route, { detail: "Authentication required" }, 401);
       return json(route, {
         items: response.items,
         pagination: {

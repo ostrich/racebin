@@ -12,3 +12,10 @@ export function showNotice(message: string, variant: "default" | "error" = "defa
   if (timeout !== undefined) window.clearTimeout(timeout);
   timeout = window.setTimeout(() => notice.update(value => value?.id === id ? null : value), 3500);
 }
+
+export function clearNotice(): void {
+  noticeId += 1;
+  notice.set(null);
+  if (timeout !== undefined) window.clearTimeout(timeout);
+  timeout = undefined;
+}
