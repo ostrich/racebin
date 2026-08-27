@@ -109,7 +109,7 @@
 .paste-selector {
   grid-area: selector;
   align-self: start;
-  margin-top: 4px;
+  margin: 3.5px 0 0;
 }
 .paste-list-row:not(.admin-paste-row) > .paste-meta {
   grid-area: metadata;

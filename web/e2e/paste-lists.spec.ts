@@ -245,7 +245,10 @@ test("compact view is persistent and preserves paste selection", async ({ page }
       .getBoundingClientRect();
     const actions = row.querySelector(".row-actions")!.getBoundingClientRect();
     return {
+      checkboxLeft: checkbox.left,
+      titleLeft: title.left,
       titleTop: title.top,
+      checkboxTitleOffset: checkbox.top - title.top,
       titleCenterOffset: title.top + title.height / 2 - (rowBox.top + rowBox.height / 2),
       checkboxCenterOffset: checkbox.top + checkbox.height / 2 - (rowBox.top + rowBox.height / 2),
       actionCenterOffset: actions.top + actions.height / 2 - (rowBox.top + rowBox.height / 2)
@@ -266,6 +269,9 @@ test("compact view is persistent and preserves paste selection", async ({ page }
   await expect(page.getByText("const answer = 42; console.log(answer);")).toBeHidden();
   await expect(page.getByText("1 attachment")).toBeHidden();
   const compactAlignment = await rowAlignment();
+  expect(compactAlignment.checkboxLeft).toBeCloseTo(normalAlignment.checkboxLeft, 5);
+  expect(compactAlignment.titleLeft).toBeCloseTo(normalAlignment.titleLeft, 5);
+  expect(compactAlignment.checkboxTitleOffset).toBeCloseTo(normalAlignment.checkboxTitleOffset, 0);
   expect(compactAlignment.titleTop).toBeGreaterThan(normalAlignment.titleTop);
   expect(Math.abs(compactAlignment.titleCenterOffset)).toBeLessThan(1);
   expect(Math.abs(compactAlignment.checkboxCenterOffset)).toBeLessThan(1);
