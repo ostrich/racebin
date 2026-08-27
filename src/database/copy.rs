@@ -80,7 +80,7 @@ pub async fn copy_database(
             .map_err(|error| error.to_string())?;
     let pastes = sqlx::query(
         "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,
-                created_at,updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
+                created_at,updated_at,modified_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
          FROM pastes",
     )
     .fetch_all(&mut *source_tx)
