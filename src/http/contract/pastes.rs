@@ -149,6 +149,8 @@ pub(crate) struct PasteMetadataResource {
     #[schema(format = DateTime)]
     pub updated_at: String,
     #[schema(format = DateTime)]
+    pub modified_at: Option<String>,
+    #[schema(format = DateTime)]
     pub expires_at: Option<String>,
     #[schema(format = DateTime)]
     pub last_read_at: Option<String>,
@@ -193,6 +195,8 @@ pub(crate) struct PasteSummary {
     pub created_at: String,
     #[schema(format = DateTime)]
     pub updated_at: String,
+    #[schema(format = DateTime)]
+    pub modified_at: Option<String>,
     #[schema(format = DateTime)]
     pub expires_at: Option<String>,
     #[schema(format = DateTime)]
@@ -399,6 +403,7 @@ pub(crate) fn metadata_resource(
         folder_id: own.then_some(paste.folder_id).flatten(),
         created_at: format_timestamp(paste.created_at),
         updated_at: format_timestamp(paste.updated_at),
+        modified_at: paste.modified_at.map(format_timestamp),
         expires_at: paste.expires_at.map(format_timestamp),
         last_read_at: paste.last_read_at.map(format_timestamp),
         read_count: paste.read_count,
@@ -471,6 +476,7 @@ pub(crate) fn summary(
         folder_id: own.then_some(paste.folder_id).flatten(),
         created_at: format_timestamp(paste.created_at),
         updated_at: format_timestamp(paste.updated_at),
+        modified_at: paste.modified_at.map(format_timestamp),
         expires_at: paste.expires_at.map(format_timestamp),
         last_read_at: paste.last_read_at.map(format_timestamp),
         read_count: paste.read_count,

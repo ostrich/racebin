@@ -150,7 +150,7 @@ impl PasteService {
             });
         }
         let changed = sqlx::query(
-            "UPDATE pastes SET updated_at=$2,revision=revision+1
+            "UPDATE pastes SET updated_at=$2,modified_at=$2,revision=revision+1
              WHERE id=$1 AND ($3 IS NULL OR revision=$3)",
         )
         .bind(&paste.id)
@@ -220,7 +220,7 @@ impl PasteService {
                 .rows_affected();
             if affected == 1 {
                 let revision = sqlx::query_scalar::<_, i64>(
-                    "UPDATE pastes SET updated_at=$2,revision=revision+1
+                    "UPDATE pastes SET updated_at=$2,modified_at=$2,revision=revision+1
                      WHERE id=$1 AND ($3 IS NULL OR revision=$3)
                      RETURNING revision",
                 )

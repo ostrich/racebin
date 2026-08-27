@@ -1119,6 +1119,8 @@ export interface components {
             language?: string | null;
             /** Format: date-time */
             last_read_at?: string | null;
+            /** Format: date-time */
+            modified_at?: string | null;
             /** Format: int64 */
             owner_id?: number | null;
             /** Format: uri-reference */
@@ -1172,6 +1174,8 @@ export interface components {
             language?: string | null;
             /** Format: date-time */
             last_read_at?: string | null;
+            /** Format: date-time */
+            modified_at?: string | null;
             /** Format: int64 */
             owner_id?: number | null;
             owner_username?: string | null;

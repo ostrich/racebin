@@ -14,6 +14,7 @@ pub struct Paste {
     pub visibility: String,
     pub created_at: i64,
     pub updated_at: i64,
+    pub modified_at: Option<i64>,
     pub revision: i64,
     #[serde(skip)]
     pub consumed_at: Option<i64>,
@@ -49,6 +50,7 @@ impl<'r> FromRow<'r, AnyRow> for Paste {
             updated_at: row
                 .try_get("updated_at")
                 .unwrap_or_else(|_| row.try_get("created_at").unwrap_or(0)),
+            modified_at: row.try_get("modified_at").unwrap_or(None),
             revision: row.try_get("revision").unwrap_or(1),
             consumed_at: row.try_get("consumed_at").unwrap_or(None),
             expires_at: row.try_get("expires_at")?,

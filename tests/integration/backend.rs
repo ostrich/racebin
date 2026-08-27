@@ -299,6 +299,18 @@ pub(super) async fn backend_contract(repo: Database) {
         .create_paste(&owner, &paste_input("searchable public", "public"))
         .await
         .unwrap();
+    assert_eq!(public.modified_at, None);
+    assert_eq!(
+        services
+            .read_paste(&anonymous, &public.id, None)
+            .await
+            .unwrap()
+            .unwrap()
+            .paste
+            .modified_at,
+        None,
+        "recording a view must not mark a paste as modified"
+    );
     let unlisted = services
         .create_paste(&owner, &paste_input("private link", "unlisted"))
         .await
@@ -385,15 +397,13 @@ pub(super) async fn backend_contract(repo: Database) {
         read_limit: None,
         folder_id: None,
     };
-    assert_eq!(
-        services
-            .update_paste(&owner, &public.id, &update, None)
-            .await
-            .unwrap()
-            .unwrap()
-            .title,
-        "updated title"
-    );
+    let updated = services
+        .update_paste(&owner, &public.id, &update, None)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(updated.title, "updated title");
+    assert!(updated.modified_at.is_some());
     let paste_count_before: i64 = sqlx::query_scalar("SELECT count(*) FROM pastes")
         .fetch_one(repo.pool())
         .await

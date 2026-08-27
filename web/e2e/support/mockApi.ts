@@ -95,6 +95,7 @@ export const paste = {
   visibility: "unlisted",
   created_at: createdAt,
   updated_at: createdAt,
+  modified_at: null,
   expires_at: null,
   last_read_at: null,
   read_count: 2,
@@ -141,6 +142,9 @@ function wireMockValue(value: unknown): unknown {
       updated_at: typeof object.updated_at === "number"
         ? new Date(object.updated_at * 1000).toISOString()
         : object.updated_at ?? object.created_at,
+      modified_at: typeof object.modified_at === "number"
+        ? new Date(object.modified_at * 1000).toISOString()
+        : object.modified_at ?? null,
       attachments: Array.isArray(object.attachments)
         ? object.attachments.map(item => {
             const attachment = item as Record<string, unknown>;

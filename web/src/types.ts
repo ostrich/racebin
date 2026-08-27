@@ -44,6 +44,7 @@ export type Paste = {
   visibility: "public" | "unlisted" | "private";
   created_at: number;
   updated_at?: number;
+  modified_at: number | null;
   expires_at: number | null;
   last_read_at: number | null;
   read_count: number;

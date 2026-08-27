@@ -1688,6 +1688,13 @@
               "null"
             ]
           },
+          "modified_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "owner_id": {
             "format": "int64",
             "minimum": 1,
@@ -1882,6 +1889,13 @@
             ]
           },
           "last_read_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modified_at": {
             "format": "date-time",
             "type": [
               "string",

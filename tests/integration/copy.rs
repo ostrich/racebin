@@ -22,6 +22,10 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
     .execute(source.pool())
     .await
     .unwrap();
+    sqlx::query("UPDATE pastes SET modified_at=2 WHERE id='copied-paste'")
+        .execute(source.pool())
+        .await
+        .unwrap();
     sqlx::query(
         "INSERT INTO password_reset_tokens(user_id,token_hash,created_by_user_id,created_at,expires_at)
          VALUES(42,'reset-hash',42,1,9999999999)",
@@ -138,6 +142,12 @@ pub(super) async fn database_copy_contract(postgres_url: &str, data_dir: &Path) 
             .await
             .unwrap();
     assert_eq!(copied_folder, Some(80));
+    let copied_modification: Option<i64> =
+        sqlx::query_scalar("SELECT modified_at FROM pastes WHERE id='copied-paste'")
+            .fetch_one(destination.pool())
+            .await
+            .unwrap();
+    assert_eq!(copied_modification, Some(2));
     let next_user: i64 = sqlx::query_scalar(
         "INSERT INTO users(username,password_hash,role,created_at)
          VALUES('after-copy','hash','user',1) RETURNING id",

@@ -138,6 +138,7 @@
       {/if}
       <footer class="paste-stats">
         <span>Created {formatDate(paste.created_at)}</span>
+        {#if paste.modified_at}<span>Modified {formatDate(paste.modified_at)}</span>{/if}
         <span>Expires {formatDate(paste.expires_at)}</span>
         <span>{paste.read_count} view{paste.read_count === 1 ? "" : "s"}</span>
       </footer>

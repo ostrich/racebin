@@ -51,6 +51,7 @@ function pasteFromWire(value: WirePaste, etag?: string | null): Paste {
     visibility: value.visibility as "public" | "unlisted" | "private",
     created_at: unixTimestamp(value.created_at) ?? 0,
     updated_at: unixTimestamp(value.updated_at) ?? unixTimestamp(value.created_at) ?? 0,
+    modified_at: unixTimestamp(value.modified_at),
     expires_at: unixTimestamp(value.expires_at),
     last_read_at: unixTimestamp(value.last_read_at),
     read_count: value.read_count,

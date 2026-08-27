@@ -1,6 +1,20 @@
 import { expect, test } from "@playwright/test";
 import { mockApi, paste } from "./support/mockApi";
 
+test("paste footer shows a distinct modification time only after an edit", async ({ page }) => {
+  await mockApi(page, false);
+  await page.goto("/pastes/sample-paste");
+  await expect(page.locator(".paste-stats")).toContainText("Created");
+  await expect(page.locator(".paste-stats")).not.toContainText("Modified");
+
+  await mockApi(page, false, { viewPaste: {
+    ...paste,
+    modified_at: "2023-11-15T22:13:20Z"
+  } });
+  await page.reload();
+  await expect(page.locator(".paste-stats")).toContainText("Modified Nov 15, 2023");
+});
+
 test("paste view offers a print action and a paper-safe layout", async ({ page }) => {
   await page.addInitScript(() => {
     window.print = () => Object.assign(window, { __printed: true });

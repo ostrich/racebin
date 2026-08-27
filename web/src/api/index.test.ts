@@ -23,6 +23,7 @@ describe("API wire mapping", () => {
       folder_id: null,
       created_at: "2023-11-14T22:13:20Z",
       updated_at: "2023-11-14T22:13:21Z",
+      modified_at: null,
       expires_at: null,
       last_read_at: null,
       read_count: 0,

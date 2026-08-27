@@ -145,7 +145,7 @@ impl PasteService {
         .map_err(DomainError::internal)?;
         let items = sqlx::query_as::<_, Paste>(sqlx::AssertSqlSafe(format!(
             "SELECT id,owner_id,folder_id,title,substr(content,1,500) AS content,
-                    content_kind,language,visibility,created_at,updated_at,revision,consumed_at,
+                    content_kind,language,visibility,created_at,updated_at,modified_at,revision,consumed_at,
                     expires_at,last_read_at,read_count,read_limit,
                     (SELECT count(*) FROM attachments summary_files
                      WHERE summary_files.paste_id=pastes.id) AS attachment_count,
@@ -211,7 +211,7 @@ impl PasteService {
     pub(super) async fn find_paste(&self, id: &str) -> DomainResult<Option<Paste>> {
         let mut paste = sqlx::query_as::<_, Paste>(
             "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,created_at,
-                    updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
+                    updated_at,modified_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
              FROM pastes WHERE id=$1 AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at>$2)",
         )
         .bind(id)
@@ -282,7 +282,7 @@ impl PasteService {
         };
         let mut paste = sqlx::query_as::<_, Paste>(sqlx::AssertSqlSafe(format!(
             "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,created_at,
-                    updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
+                    updated_at,modified_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
              FROM pastes WHERE id=$1 AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at>$2){lock}"
         )))
         .bind(id)
@@ -369,7 +369,7 @@ impl PasteService {
         }
         let mut paste = sqlx::query_as::<_, Paste>(
             "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,
-                    created_at,updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
+                    created_at,updated_at,modified_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
              FROM pastes WHERE id=$1",
         )
         .bind(id)
@@ -425,8 +425,8 @@ impl PasteService {
         self.validate_folder_owner(owner, folder_id).await?;
         sqlx::query(
             "INSERT INTO pastes(id,owner_id,folder_id,title,content,content_kind,language,visibility,
-                               created_at,updated_at,revision,expires_at,last_read_at,read_count,read_limit)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,1,$10,NULL,0,$11)",
+                               created_at,updated_at,modified_at,revision,expires_at,last_read_at,read_count,read_limit)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,NULL,1,$10,NULL,0,$11)",
         )
         .bind(&id)
         .bind(owner)
@@ -505,8 +505,8 @@ impl PasteService {
             .map_err(DomainError::internal)?;
         sqlx::query(
             "INSERT INTO pastes(id,owner_id,folder_id,title,content,content_kind,language,visibility,
-                                created_at,updated_at,revision,expires_at,last_read_at,read_count,read_limit)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,1,$10,NULL,0,$11)",
+                                created_at,updated_at,modified_at,revision,expires_at,last_read_at,read_count,read_limit)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,NULL,1,$10,NULL,0,$11)",
         )
         .bind(&id)
         .bind(owner)
@@ -664,7 +664,7 @@ impl PasteService {
              content_kind=$4,language=$5,visibility=coalesce($6,visibility),
              expires_at=CASE WHEN $7=1 THEN $8 ELSE expires_at END,
              read_limit=CASE WHEN $9=1 THEN $10 ELSE read_limit END,
-             folder_id=$11,updated_at=$12,revision=revision+1
+             folder_id=$11,updated_at=$12,modified_at=$12,revision=revision+1
              WHERE id=$1 AND ($13 IS NULL OR revision=$13)",
         )
         .bind(id)
@@ -729,7 +729,7 @@ async fn load_paste_for_read(
 ) -> DomainResult<Option<Paste>> {
     let mut paste = sqlx::query_as::<_, Paste>(
         "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,
-                created_at,updated_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
+                created_at,updated_at,modified_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
          FROM pastes WHERE id=$1",
     )
     .bind(id)
@@ -843,6 +843,7 @@ mod tests {
             visibility: "private".to_string(),
             created_at: 0,
             updated_at: 0,
+            modified_at: None,
             revision: 1,
             consumed_at: None,
             expires_at: None,
