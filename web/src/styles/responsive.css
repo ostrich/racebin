@@ -59,13 +59,4 @@
   .copy-field {
     grid-template-columns: 1fr;
   }
-  .paste-row-footer {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .paste-row-footer .row-actions {
-    align-self: flex-end;
-    grid-area: auto;
-  }
 }

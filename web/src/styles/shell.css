@@ -111,9 +111,6 @@
   border-bottom: 1px solid var(--line);
   position: relative;
 }
-.paste-main {
-  min-width: 0;
-}
 .paste-title {
   font-weight: 750;
   text-decoration: none;
@@ -123,14 +120,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--color-heading);
-}
-.paste-main p {
-  margin: 5px 0 0;
-  color: var(--muted);
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .paste-meta {
   display: flex;

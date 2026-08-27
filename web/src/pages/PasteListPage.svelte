@@ -216,8 +216,9 @@
       <p class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</p>
     {/if}
     <PasteRows items={page.items} manage={mine} filterable selectable={mine}
+      context={mine ? "workspace" : "public"}
       view={mine ? $uiPreferences.pasteListView : "normal"}
-      bind:selected {folderNames}/>
+      bind:selected folderNames={mine ? folderNames : undefined}/>
     <Pagination {page} params={appliedQuery}/>
   {:else if error}
     <div class="empty compact"><p>{error}</p></div>

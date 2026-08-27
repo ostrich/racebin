@@ -67,6 +67,12 @@ test("mobile paste workspace", { tag: "@visual" }, async ({ page }) => {
   await expect(page).toHaveScreenshot("workspace-mobile.png", screenshot);
 });
 
+test("public paste listing", { tag: "@visual" }, async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/explore");
+  await expect(page).toHaveScreenshot("explore-desktop.png", screenshot);
+});
+
 test("paste editors", { tag: "@visual" }, async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/pastes/new");

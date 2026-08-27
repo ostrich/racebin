@@ -148,7 +148,7 @@
 .admin-paste-row {
   display: grid;
   grid-template-columns:
-    minmax(260px, 1.6fr) minmax(130px, 0.65fr) minmax(210px, 1fr) auto;
+    minmax(260px, 1.6fr) minmax(130px, 0.65fr) minmax(210px, 1fr) 124px;
   gap: 18px;
   align-items: center;
 }
@@ -164,25 +164,11 @@
   padding: 16px 4px;
   border-bottom: 1px solid var(--line);
 }
-.admin-paste-row .paste-main code {
+.admin-paste-row .paste-id {
+  display: block;
+  margin-top: var(--space-1);
   color: var(--muted);
   font-size: 11px;
-}
-.paste-identity-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: 5px;
-}
-.paste-identity-meta time {
-  color: var(--muted);
-  font-size: 11px;
-}
-.paste-identity-meta time::before {
-  content: "·";
-  margin-right: var(--space-2);
-  color: var(--color-detail-separator);
 }
 .admin-paste-owner a {
   display: grid;
@@ -196,7 +182,11 @@
   color: var(--muted);
 }
 .admin-paste-row .paste-meta {
+  align-self: center;
   flex-wrap: wrap;
+}
+.admin-paste-row .row-actions {
+  justify-self: end;
 }
 @media (max-width: 900px) {
   .advanced-filter-grid {
@@ -207,14 +197,18 @@
   }
   .admin-paste-row {
     grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "identity actions"
+      "owner actions"
+      "metadata actions";
+    align-items: start;
   }
-  .admin-paste-owner,
-  .admin-paste-row .paste-meta {
-    grid-column: 1;
-  }
+  .admin-paste-row .paste-row-identity { grid-area: identity; }
+  .admin-paste-owner { grid-area: owner; }
+  .admin-paste-row .paste-meta { grid-area: metadata; }
   .admin-paste-row .row-actions {
-    grid-column: 2;
-    grid-row: 1/4;
+    grid-area: actions;
+    align-self: center;
   }
 }
 @media (max-width: 620px) {
@@ -236,6 +230,17 @@
   }
   .advanced-filter-grid {
     grid-template-columns: 1fr;
+  }
+  .admin-paste-row {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "identity"
+      "owner"
+      "metadata"
+      "actions";
+  }
+  .admin-paste-row .row-actions {
+    justify-self: end;
   }
 }
 
@@ -542,21 +547,6 @@
 .paste-workspace-main {
   container-type: inline-size;
   min-width: 0;
-}
-.paste-main:has(> input[type="checkbox"]) {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
-}
-.paste-main > input {
-  margin-top: 4px;
-}
-.paste-main-content {
-  min-width: 0;
-}
-.paste-main-content p {
-  margin: 5px 0 0;
 }
 @media (max-width: 760px) {
   .paste-floating-scrollbar {

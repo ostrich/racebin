@@ -1,12 +1,13 @@
 <script lang="ts">
   import { deletePaste } from "../api";
-  import { formatByteSize, formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
+  import { pasteDisplayTitle } from "../format";
   import { confirmAction } from "../app/confirmations";
   import { showNotice } from "../app/notices";
   import type { Paste } from "../types";
   import type { PasteListView } from "../app/uiPreferences";
-  import Icon from "./Icon.svelte";
   import Link from "./Link.svelte";
+  import PasteMetadata from "./PasteMetadata.svelte";
+  import PasteRowActions from "./PasteRowActions.svelte";
 
   let {
     items,
@@ -16,7 +17,9 @@
     selectable = false,
     selected = $bindable(new Set<string>()),
     folderNames,
-    view = "normal"
+    view = "normal",
+    context = "public",
+    onremoved
   }: {
     items: Paste[];
     manage?: boolean;
@@ -26,6 +29,8 @@
     selected?: Set<string>;
     folderNames?: Map<number, string>;
     view?: PasteListView;
+    context?: "public" | "workspace" | "admin";
+    onremoved?: (paste: Paste) => void;
   } = $props();
 
   let visible = $state<Paste[]>([]);
@@ -52,6 +57,7 @@
     try {
       await deletePaste(paste.id, paste._etag ?? "*");
       visible = visible.filter(candidate => candidate.id !== paste.id);
+      onremoved?.(paste);
       showNotice("Paste deleted.");
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Request failed", "error");
@@ -85,62 +91,44 @@
       Hold Shift while selecting to select a range.
     </span>
   {/if}
-  <div class="paste-list" class:compact={view === "compact"}>
+  {#if context === "admin"}
+    <div class="admin-paste-head" aria-hidden="true"><span>Paste</span><span>Owner</span><span>Details</span><span>Actions</span></div>
+  {/if}
+  <div class="paste-list" class:compact={view === "compact"}
+    class:mobile-stack={context !== "admin" && view !== "compact"}
+    class:admin-paste-list={context === "admin"}>
     {#each visible as paste, index (paste.id)}
-      <article class="paste-row">
-        <div class="paste-main">
-          {#if selectable}<input type="checkbox" aria-label={`Select ${pasteDisplayTitle(paste)}`}
+      <article class="paste-row paste-list-row" class:selectable class:admin-paste-row={context === "admin"}>
+        {#if context === "admin"}
+          <div class="paste-row-identity">
+            <Link class="paste-title" href={`/pastes/${paste.id}`}>{pasteDisplayTitle(paste)}</Link>
+            <p>{paste.content.slice(0, 160).replace(/\s+/g, " ")}</p>
+            <code class="paste-id">{paste.id}</code>
+          </div>
+          <div class="admin-paste-owner">
+            {#if paste.owner_id === null}
+              <span class="muted">No owner</span>
+            {:else}
+              <Link href={filterUrl("owner_id", String(paste.owner_id))}>
+                <strong>{paste.owner_username ?? ownerNames?.get(paste.owner_id) ?? `User #${paste.owner_id}`}</strong>
+                <small>User #{paste.owner_id}</small>
+              </Link>
+            {/if}
+          </div>
+          <PasteMetadata {paste} {filterable} {filterUrl} {folderNames}/>
+          <PasteRowActions {paste} {manage} oncopy={copyLink} onremove={remove}/>
+        {:else}
+          {#if selectable}<input class="paste-selector" type="checkbox" aria-label={`Select ${pasteDisplayTitle(paste)}`}
             aria-describedby="paste-range-selection-help" title="Shift-click to select a range"
             checked={selected.has(paste.id)}
             onclick={(event) => selectPaste(index, event.currentTarget.checked, event.shiftKey)}/>{/if}
-          <div class="paste-main-content">
+          <div class="paste-row-identity">
             <Link class="paste-title" href={`/pastes/${paste.id}`}>{pasteDisplayTitle(paste)}</Link>
             <p>{paste.content.slice(0, 160).replace(/\s+/g, " ")}</p>
-            <div class="paste-row-footer">
-              <div class="paste-meta">
-                {#if ownerNames}
-                  <span class="meta-detail">Owner: {paste.owner_id === null ? "No owner" : ownerNames.get(paste.owner_id) ?? `User #${paste.owner_id}`}</span>
-                {/if}
-                {#if filterable}
-                  <Link class="meta-badge" href={filterUrl(
-                    paste.format === "text" ? "language" : "format",
-                    paste.format === "text" ? paste.language : paste.format
-                  )}>{pasteFormatLabel(paste)}</Link>
-                  <Link class="meta-badge" href={filterUrl("visibility", paste.visibility)}>{paste.visibility}</Link>
-                  {#if paste.folder_id && folderNames}
-                    <Link class="meta-detail" href={filterUrl("folder_id", String(paste.folder_id))}>
-                      Folder: {folderNames.get(paste.folder_id) ?? "Unknown"}
-                    </Link>
-                  {/if}
-                  {#if paste.attachment_count}
-                    <Link class="meta-detail" href={filterUrl("has_attachments", "true")}>
-                      {paste.attachment_count} attachment{paste.attachment_count === 1 ? "" : "s"}
-                    </Link>
-                  {/if}
-                {:else}
-                  <span class="meta-badge">{pasteFormatLabel(paste)}</span>
-                  <span class="meta-badge">{paste.visibility}</span>
-                  {#if paste.attachment_count}
-                    <span class="meta-detail">{paste.attachment_count} attachment{paste.attachment_count === 1 ? "" : "s"}</span>
-                  {/if}
-                {/if}
-                <span class="meta-detail">{formatByteSize(paste.size_bytes)}</span>
-                <span class="meta-detail">{paste.read_count} view{paste.read_count === 1 ? "" : "s"}</span>
-                <time class="meta-detail" datetime={new Date(paste.created_at * 1000).toISOString()}>{formatDate(paste.created_at)}</time>
-              </div>
-              <div class="row-actions">
-                <button class="icon-button" type="button" title="Copy link" aria-label="Copy link"
-                  onclick={() => copyLink(paste)}><Icon name="link-2"/></button>
-                {#if manage}
-                  <Link class="icon-button" title="Edit" aria-label="Edit"
-                    href={`/pastes/${paste.id}/edit`}><Icon name="edit-3"/></Link>
-                  <button class="icon-button" type="button" title="Delete" aria-label="Delete"
-                    onclick={() => remove(paste)}><Icon name="trash-2"/></button>
-                {/if}
-              </div>
-            </div>
           </div>
-        </div>
+          <PasteMetadata {paste} {filterable} {filterUrl} {folderNames}/>
+          <PasteRowActions {paste} {manage} oncopy={copyLink} onremove={remove}/>
+        {/if}
       </article>
     {/each}
   </div>

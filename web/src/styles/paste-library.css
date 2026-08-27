@@ -75,52 +75,74 @@
   }
 }
 .paste-list > .paste-row {
-  display: block;
-  padding: 17px 4px;
+  padding: var(--space-3) var(--space-1);
 }
-.paste-list .paste-main {
-  min-width: 0;
-}
-.paste-list .paste-main-content {
-  min-width: 0;
-}
-.paste-list .paste-main-content > p {
-  margin: 5px 0 0;
-}
-.paste-list.compact > .paste-row {
-  /* Center the actions while keeping the title and checkbox fixed across views. */
-  padding: 11px 4px;
-}
-.paste-list.compact .paste-main-content {
+.paste-list-row:not(.admin-paste-row) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "identity identity"
+    "metadata actions";
   align-items: start;
-  gap: var(--space-4);
+  column-gap: var(--space-4);
+  row-gap: 6px;
 }
-.paste-list.compact .paste-title {
-  margin-top: 6px;
+.paste-list-row.selectable:not(.admin-paste-row) {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "selector identity identity"
+    ". metadata actions";
 }
-.paste-list.compact .paste-main > input {
-  margin-top: 10px;
+.paste-list-row:not(.admin-paste-row) > .paste-row-identity {
+  grid-area: identity;
+  min-width: 0;
 }
-.paste-list.compact .paste-main-content > p,
+.paste-row-identity { min-width: 0; }
+.paste-row-identity > p {
+  margin: var(--space-1) 0 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.paste-selector {
+  grid-area: selector;
+  align-self: start;
+  margin-top: 4px;
+}
+.paste-list-row:not(.admin-paste-row) > .paste-meta {
+  grid-area: metadata;
+  align-self: center;
+}
+.paste-list-row:not(.admin-paste-row) > .row-actions {
+  grid-area: actions;
+  align-self: center;
+  justify-self: end;
+}
+.paste-list.compact > .paste-row {
+  min-height: 60px;
+}
+.paste-list.compact .paste-list-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "identity actions";
+  align-items: start;
+  row-gap: 0;
+}
+.paste-list.compact .paste-list-row.selectable {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "selector identity actions";
+}
+.paste-list.compact .paste-row-identity > p,
 .paste-list.compact .paste-meta {
   display: none;
 }
-.paste-list.compact .paste-row-footer {
-  margin-top: 0;
+.paste-list.compact .paste-selector {
+  align-self: start;
+  margin-top: 4px;
 }
-.paste-row-footer {
+.paste-list-row .paste-meta {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 18px;
-  margin-top: 10px;
-  min-width: 0;
-}
-.paste-row-footer .paste-meta {
-  display: flex;
-  flex: 1 1 auto;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 9px;
@@ -151,10 +173,21 @@
 .paste-meta a.meta-detail:hover {
   text-decoration: underline;
 }
-.paste-row-footer .row-actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 5px;
+@media (max-width: 760px) {
+  .paste-list.mobile-stack .paste-list-row {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "identity"
+      "metadata"
+      "actions";
+  }
+  .paste-list.mobile-stack .paste-list-row.selectable {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "selector identity"
+      ". metadata"
+      ". actions";
+  }
 }
 
 /* Reusable folder browsing and move destination picker */

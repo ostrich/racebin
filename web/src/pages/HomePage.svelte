@@ -32,5 +32,5 @@
 </section>
 <section>
   <div class="section-heading"><h2>Recently shared</h2><Link href="/explore">View all</Link></div>
-  {#if page}<PasteRows items={page.items}/>{:else}<p class="muted">Loading pastes…</p>{/if}
+  {#if page}<PasteRows items={page.items} context="public"/>{:else}<p class="muted">Loading pastes…</p>{/if}
 </section>

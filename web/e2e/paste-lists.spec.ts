@@ -214,7 +214,7 @@ test("compact view is persistent and preserves paste selection", async ({ page }
   const rowAlignment = async () => page.locator(".paste-list .paste-row").first().evaluate(row => {
     const rowBox = row.getBoundingClientRect();
     const title = row.querySelector(".paste-title")!.getBoundingClientRect();
-    const checkbox = row.querySelector<HTMLInputElement>(".paste-main > input[type=checkbox]")!
+    const checkbox = row.querySelector<HTMLInputElement>(".paste-selector")!
       .getBoundingClientRect();
     const actions = row.querySelector(".row-actions")!.getBoundingClientRect();
     return {
@@ -381,21 +381,92 @@ test("paste rows preserve content width and use selective metadata badges", asyn
     };
     return {
       title: bounds(".paste-title"),
-      preview: bounds(".paste-main-content>p"),
-      footer: bounds(".paste-row-footer"),
-      content: bounds(".paste-main-content"),
+      preview: bounds(".paste-row-identity>p"),
+      metadata: bounds(".paste-meta"),
+      content: bounds(".paste-row-identity"),
+      actions: bounds(".row-actions"),
       actionsParent: row.querySelector(".row-actions")?.parentElement?.className,
       badges: row.querySelectorAll(".meta-badge").length,
       details: row.querySelectorAll(".meta-detail").length
     };
   });
   expect(layout.preview.top).toBeGreaterThanOrEqual(layout.title.bottom);
-  expect(layout.footer.top).toBeGreaterThanOrEqual(layout.preview.bottom);
+  expect(layout.metadata.top).toBeGreaterThanOrEqual(layout.preview.bottom);
   expect(Math.abs(layout.title.width - layout.content.width)).toBeLessThan(1);
   expect(Math.abs(layout.preview.width - layout.content.width)).toBeLessThan(1);
-  expect(layout.actionsParent).toContain("paste-row-footer");
+  expect(layout.actionsParent).toContain("paste-list-row");
+  expect((layout.metadata.top + layout.metadata.bottom) / 2)
+    .toBeCloseTo((layout.actions.top + layout.actions.bottom) / 2, 1);
   expect(layout.badges).toBe(2);
   expect(layout.details).toBeGreaterThanOrEqual(4);
   await expect(page.getByText("2 views")).toBeVisible();
   await expect(page.getByText("Folder: Scripts")).toBeVisible();
+});
+
+test("public and workspace paste rows share one visual rhythm", async ({ page }) => {
+  await mockApi(page, true);
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  const measure = async () => page.locator(".paste-list .paste-row").first().evaluate(row => {
+    const title = row.querySelector(".paste-title")!.getBoundingClientRect();
+    const preview = row.querySelector(".paste-row-identity > p")!.getBoundingClientRect();
+    const metadata = row.querySelector(".paste-meta")!.getBoundingClientRect();
+    const actions = row.querySelector(".row-actions")!.getBoundingClientRect();
+    return {
+      titleHeight: title.height,
+      previewGap: preview.top - title.bottom,
+      metadataGap: metadata.top - preview.bottom,
+      footerCenterDifference: Math.abs(
+        metadata.top + metadata.height / 2 - (actions.top + actions.height / 2)
+      )
+    };
+  });
+
+  const layouts = [];
+  for (const route of ["/explore", "/pastes"]) {
+    await page.goto(route);
+    if (route === "/explore") await expect(page.getByText(/Folder:/)).toHaveCount(0);
+    layouts.push(await measure());
+  }
+  for (const layout of layouts) {
+    expect(layout.footerCenterDifference).toBeLessThan(1);
+    expect(layout.previewGap).toBeCloseTo(layouts[0].previewGap, 1);
+    expect(layout.metadataGap).toBeCloseTo(layouts[0].metadataGap, 1);
+    expect(layout.titleHeight).toBeCloseTo(layouts[0].titleHeight, 1);
+  }
+});
+
+test("administrative paste columns align and collapse without crowding", async ({ page }) => {
+  await mockApi(page, true);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/admin/pastes");
+
+  const columns = await page.evaluate(() => {
+    const bounds = (element: Element) => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, right: rect.right };
+    };
+    const heading = [...document.querySelectorAll(".admin-paste-head > span")].map(bounds);
+    const row = document.querySelector(".admin-paste-row")!;
+    const cells = [".paste-row-identity", ".admin-paste-owner", ".paste-meta", ".row-actions"]
+      .map(selector => bounds(row.querySelector(selector)!));
+    return { heading, cells };
+  });
+  columns.heading.forEach((heading, index) => {
+    expect(heading.left).toBeCloseTo(columns.cells[index].left, 1);
+    expect(heading.right).toBeCloseTo(columns.cells[index].right, 1);
+  });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobile = await page.locator(".admin-paste-row").first().evaluate(row => {
+    const metadata = row.querySelector(".paste-meta")!.getBoundingClientRect();
+    const actions = row.querySelector(".row-actions")!.getBoundingClientRect();
+    const paddingRight = Number.parseFloat(getComputedStyle(row).paddingRight);
+    return {
+      actionsBelowMetadata: actions.top >= metadata.bottom,
+      rightAligned: Math.abs(actions.right - (row.getBoundingClientRect().right - paddingRight)) < 1,
+      pageFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    };
+  });
+  expect(mobile).toEqual({ actionsBelowMetadata: true, rightAligned: true, pageFits: true });
 });
