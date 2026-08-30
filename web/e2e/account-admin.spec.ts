@@ -21,21 +21,25 @@ test("account and admin ownership data render as structured controls", async ({ 
   await expect(page.getByText("For a new teammate")).toBeVisible();
   const origin = new URL(page.url()).origin;
   await page.getByRole("button", { name: "Copy invitation link" }).click();
-  expect(await page.evaluate(() => (window as Window & { __copiedText: string }).__copiedText))
-    .toBe(`${origin}/invitations/active-token`);
+  expect(
+    await page.evaluate(() => (window as Window & { __copiedText: string }).__copiedText)
+  ).toBe(`${origin}/invitations/active-token`);
   await page.getByRole("button", { name: "Create invitation" }).click();
   const invitationDialog = page.getByRole("dialog");
   await invitationDialog.getByLabel("Private note Optional").fill("For an invited user");
   await invitationDialog.getByRole("button", { name: "Create invitation" }).click();
   await expect(page.getByRole("heading", { name: "Invitation created" })).toBeVisible();
   await page.getByRole("button", { name: "Copy link" }).click();
-  await expect.poll(() => page.evaluate(
-    () => (window as Window & { __copiedText: string }).__copiedText
-  )).toBe(`${origin}/invitations/new-token`);
+  await expect
+    .poll(() => page.evaluate(() => (window as Window & { __copiedText: string }).__copiedText))
+    .toBe(`${origin}/invitations/new-token`);
   await page.getByRole("button", { name: "Done" }).click();
   await page.getByRole("button", { name: "Edit private note" }).click();
   await page.getByLabel("Private note Optional").fill("Updated invitation note");
-  const noteUpdate = page.waitForRequest(request => request.method() === "PATCH" && request.url().endsWith("/api/v1/admin/invitations/4"));
+  const noteUpdate = page.waitForRequest(
+    (request) =>
+      request.method() === "PATCH" && request.url().endsWith("/api/v1/admin/invitations/4")
+  );
   await page.getByRole("button", { name: "Save note" }).click();
   expect((await noteUpdate).postDataJSON()).toEqual({ comment: "Updated invitation note" });
   await page.getByRole("link", { name: "History" }).click();
@@ -43,11 +47,13 @@ test("account and admin ownership data render as structured controls", async ({ 
   await page.getByLabel("Status").selectOption("redeemed");
   const invitationRows = page.locator(".invitation-row");
   await expect(invitationRows).toHaveCount(2);
-  const rowGeometry = await invitationRows.evaluateAll(rows => rows.map(row => {
-    const lifecycle = row.querySelector(".invitation-lifecycle")!.getBoundingClientRect();
-    const actions = row.querySelector(".row-actions")!.getBoundingClientRect();
-    return { lifecycleLeft: lifecycle.left, actionsRight: actions.right };
-  }));
+  const rowGeometry = await invitationRows.evaluateAll((rows) =>
+    rows.map((row) => {
+      const lifecycle = row.querySelector(".invitation-lifecycle")!.getBoundingClientRect();
+      const actions = row.querySelector(".row-actions")!.getBoundingClientRect();
+      return { lifecycleLeft: lifecycle.left, actionsRight: actions.right };
+    })
+  );
   expect(rowGeometry[0].lifecycleLeft).toBe(rowGeometry[1].lifecycleLeft);
   expect(rowGeometry[0].actionsRight).toBe(rowGeometry[1].actionsRight);
   await page.getByRole("link", { name: "API keys", exact: true }).click();
@@ -68,22 +74,34 @@ test("account and admin ownership data render as structured controls", async ({ 
   await expect(page.getByText("Role updated.")).toBeVisible();
 });
 
-test("administrative lists keep server-side filters and pagination in the URL", async ({ page }) => {
+test("administrative lists keep server-side filters and pagination in the URL", async ({
+  page
+}) => {
   await mockApi(page, true);
   const requests: URL[] = [];
-  await page.route("**/api/v1/admin/users?*", async route => {
+  await page.route("**/api/v1/admin/users?*", async (route) => {
     const url = new URL(route.request().url());
     requests.push(url);
     const pageNumber = Number(url.searchParams.get("page") ?? 1);
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        items: [{
-          id: pageNumber, username: `user-${pageNumber}`, role: "user", enabled: true,
-          password_change_required: false, created_at: "2023-11-14T22:13:20Z",
-          last_login_at: null, paste_count: 0, storage_bytes: 0,
-          active_session_count: 0, api_key_count: 0, active_api_key_count: 0
-        }],
+        items: [
+          {
+            id: pageNumber,
+            username: `user-${pageNumber}`,
+            role: "user",
+            enabled: true,
+            password_change_required: false,
+            created_at: "2023-11-14T22:13:20Z",
+            last_login_at: null,
+            paste_count: 0,
+            storage_bytes: 0,
+            active_session_count: 0,
+            api_key_count: 0,
+            active_api_key_count: 0
+          }
+        ],
         pagination: { page: pageNumber, page_size: 25, total_items: 26, total_pages: 2 }
       })
     });

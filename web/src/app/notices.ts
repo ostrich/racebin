@@ -10,7 +10,10 @@ export function showNotice(message: string, variant: "default" | "error" = "defa
   const id = ++noticeId;
   notice.set({ id, message, variant });
   if (timeout !== undefined) window.clearTimeout(timeout);
-  timeout = window.setTimeout(() => notice.update(value => value?.id === id ? null : value), 3500);
+  timeout = window.setTimeout(
+    () => notice.update((value) => (value?.id === id ? null : value)),
+    3500
+  );
 }
 
 export function clearNotice(): void {

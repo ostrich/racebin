@@ -25,9 +25,10 @@ export default defineConfig({
       output: {
         entryFileNames: "assets/app.js",
         chunkFileNames: "assets/[name]-[hash].js",
-        assetFileNames: asset => asset.names.some(name => name.endsWith(".woff2"))
-          ? "assets/[name][extname]"
-          : "assets/app[extname]"
+        assetFileNames: (asset) =>
+          asset.names.some((name) => name.endsWith(".woff2"))
+            ? "assets/[name][extname]"
+            : "assets/app[extname]"
       }
     }
   },

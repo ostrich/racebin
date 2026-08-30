@@ -26,9 +26,29 @@
   }
 </script>
 
-<section class="auth"><form onsubmit={(event) => { event.preventDefault(); void submit(event); }}>
-  <p class="eyebrow">Invitation</p><h1>Create your account</h1>
-  <label class="field"><span>Username</span><input name="username" autocomplete="username" required/></label>
-  <label class="field"><span>Password</span><input type="password" name="password" minlength={$appState.config.minimum_password_characters} autocomplete="new-password" required/></label>
-  <button class="button primary" type="submit" disabled={submitting}>{submitting ? "Creating…" : "Create account"}</button>
-</form></section>
+<section class="auth">
+  <form
+    onsubmit={(event) => {
+      event.preventDefault();
+      void submit(event);
+    }}
+  >
+    <p class="eyebrow">Invitation</p>
+    <h1>Create your account</h1>
+    <label class="field"
+      ><span>Username</span><input name="username" autocomplete="username" required /></label
+    >
+    <label class="field"
+      ><span>Password</span><input
+        type="password"
+        name="password"
+        minlength={$appState.config.minimum_password_characters}
+        autocomplete="new-password"
+        required
+      /></label
+    >
+    <button class="button primary" type="submit" disabled={submitting}
+      >{submitting ? "Creating…" : "Create account"}</button
+    >
+  </form>
+</section>

@@ -18,11 +18,19 @@
   let languageOptions = $derived(availableLanguageOptions($appState.languages));
 
   const labels: Record<string, string> = {
-    format: "Format", language: "Language", visibility: "Visibility",
-    has_attachments: "Attachments", owner_id: "Owner", created_after: "Created after",
-    created_before: "Created before", expiration: "Expiration", min_reads: "Minimum views",
-    max_reads: "Maximum views", min_size_bytes: "Minimum size",
-    max_size_bytes: "Maximum size", read_limit: "View limit"
+    format: "Format",
+    language: "Language",
+    visibility: "Visibility",
+    has_attachments: "Attachments",
+    owner_id: "Owner",
+    created_after: "Created after",
+    created_before: "Created before",
+    expiration: "Expiration",
+    min_reads: "Minimum views",
+    max_reads: "Maximum views",
+    min_size_bytes: "Minimum size",
+    max_size_bytes: "Maximum size",
+    read_limit: "View limit"
   };
   const filterKeys = Object.keys(labels);
   const sortChoices = [
@@ -40,14 +48,16 @@
 
   let filtersOpen = $state(false);
   let sortOpen = $state(false);
-  let activeFilters = $derived([...params.entries()].filter(
-    ([key, value]) => value && key in labels
-  ));
+  let activeFilters = $derived(
+    [...params.entries()].filter(([key, value]) => value && key in labels)
+  );
   let currentSort = $derived.by(() => {
     const sort = params.get("sort") ?? "created";
     const direction = params.get("direction") === "asc" ? "asc" : "desc";
-    return sortChoices.find(choice => choice.sort === sort && choice.direction === direction)
-      ?? sortChoices[0]!;
+    return (
+      sortChoices.find((choice) => choice.sort === sort && choice.direction === direction) ??
+      sortChoices[0]!
+    );
   });
 
   function dateValue(value: string | null): string {
@@ -60,10 +70,13 @@
   function shownValue(key: string, value: string): string {
     if (key === "owner_id") return ownerNames?.get(Number(value)) ?? `User #${value}`;
     if (key === "created_after" || key === "created_before") return dateValue(value);
-    if (key === "format") return ({ text: "Text", markdown: "Rich text" } as Record<string, string>)[value] ?? value;
-    if (key === "language") return languageOptions.find(language => language.id === value)?.label ?? value;
+    if (key === "format")
+      return ({ text: "Text", markdown: "Rich text" } as Record<string, string>)[value] ?? value;
+    if (key === "language")
+      return languageOptions.find((language) => language.id === value)?.label ?? value;
     if (key === "visibility") return value.charAt(0).toUpperCase() + value.slice(1);
-    if (key === "has_attachments") return value === "true" ? "With attachments" : "Without attachments";
+    if (key === "has_attachments")
+      return value === "true" ? "With attachments" : "Without attachments";
     if (key === "read_limit") return value === "limited" ? "Limited" : "Unlimited";
     if (key === "expiration") return value === "scheduled" ? "Scheduled" : "Never";
     if (key === "min_size_bytes" || key === "max_size_bytes") return formatByteSize(Number(value));
@@ -88,7 +101,7 @@
 
   function withoutFilters(): string {
     const next = updatedParams();
-    filterKeys.forEach(key => next.delete(key));
+    filterKeys.forEach((key) => next.delete(key));
     return urlFor(next);
   }
 
@@ -104,7 +117,7 @@
   async function submitFilters(event: SubmitEvent): Promise<void> {
     const data = new FormData(event.currentTarget as HTMLFormElement);
     const next = updatedParams();
-    filterKeys.forEach(key => next.delete(key));
+    filterKeys.forEach((key) => next.delete(key));
     data.forEach((value, key) => {
       if (!value || value instanceof File) return;
       if (key === "created_after" || key === "created_before") {
@@ -120,7 +133,7 @@
     await navigate(urlFor(next));
   }
 
-  async function selectSort(choice: typeof sortChoices[number]): Promise<void> {
+  async function selectSort(choice: (typeof sortChoices)[number]): Promise<void> {
     const next = updatedParams();
     next.delete("sort");
     next.delete("direction");
@@ -137,10 +150,14 @@
     const menu = event.currentTarget as HTMLElement;
     const items = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
     const current = items.indexOf(document.activeElement as HTMLButtonElement);
-    const target = event.key === "Home" ? 0
-      : event.key === "End" ? items.length - 1
-      : event.key === "ArrowDown" ? (current + 1) % items.length
-      : (current - 1 + items.length) % items.length;
+    const target =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? items.length - 1
+          : event.key === "ArrowDown"
+            ? (current + 1) % items.length
+            : (current - 1 + items.length) % items.length;
     event.preventDefault();
     items[target]?.focus();
   }
@@ -148,44 +165,92 @@
   function closeSort(returnFocus = false): void {
     if (!sortOpen) return;
     sortOpen = false;
-    if (returnFocus) requestAnimationFrame(() => document.querySelector<HTMLButtonElement>("#paste-sort-button")?.focus());
+    if (returnFocus)
+      requestAnimationFrame(() =>
+        document.querySelector<HTMLButtonElement>("#paste-sort-button")?.focus()
+      );
   }
 </script>
 
-<svelte:window onclick={(event) => {
+<svelte:window
+  onclick={(event) => {
     if (!(event.target as Element).closest?.(".sort-control")) closeSort();
   }}
-  onkeydown={(event) => { if (event.key === "Escape") closeSort(true); }}/>
+  onkeydown={(event) => {
+    if (event.key === "Escape") closeSort(true);
+  }}
+/>
 
 <div class="paste-filter-form">
   <div class="paste-filter-toolbar list-filter-bar">
-    <form class="paste-search"
-      onsubmit={(event) => { event.preventDefault(); void submitSearch(event); }}>
-      <label class="field"><span>Search</span><input name="search" value={params.get("search") ?? ""}
-        placeholder={mode === "admin" ? "Title, content, ID, owner, file…" : "Title, content, ID, language, file…"}/></label>
-      <button class="button primary" type="submit"><Icon name="search"/> Search</button>
+    <form
+      class="paste-search"
+      onsubmit={(event) => {
+        event.preventDefault();
+        void submitSearch(event);
+      }}
+    >
+      <label class="field"
+        ><span>Search</span><input
+          name="search"
+          value={params.get("search") ?? ""}
+          placeholder={mode === "admin"
+            ? "Title, content, ID, owner, file…"
+            : "Title, content, ID, language, file…"}
+        /></label
+      >
+      <button class="button primary" type="submit"><Icon name="search" /> Search</button>
     </form>
-    <button class="button filter-toggle" type="button" aria-expanded={filtersOpen}
-      aria-controls="paste-filter-panel" onclick={() => { filtersOpen = !filtersOpen; }}>
-      <Icon name="list-filter"/> Filters
+    <button
+      class="button filter-toggle"
+      type="button"
+      aria-expanded={filtersOpen}
+      aria-controls="paste-filter-panel"
+      onclick={() => {
+        filtersOpen = !filtersOpen;
+      }}
+    >
+      <Icon name="list-filter" /> Filters
       {#if activeFilters.length}<span class="filter-count">{activeFilters.length}</span>{/if}
     </button>
     <div class="sort-control">
-      <button class="button sort-button" id="paste-sort-button" type="button"
-        aria-haspopup="menu" aria-expanded={sortOpen} aria-controls="paste-sort-menu"
+      <button
+        class="button sort-button"
+        id="paste-sort-button"
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={sortOpen}
+        aria-controls="paste-sort-menu"
         onclick={() => {
           sortOpen = !sortOpen;
-          if (sortOpen) requestAnimationFrame(() =>
-            document.querySelector<HTMLButtonElement>('#paste-sort-menu [aria-checked="true"]')?.focus());
-        }}>
-        <Icon name="arrow-up-down"/><span>Sort: {currentSort.label}</span><Icon name="chevron-down"/>
+          if (sortOpen)
+            requestAnimationFrame(() =>
+              document
+                .querySelector<HTMLButtonElement>('#paste-sort-menu [aria-checked="true"]')
+                ?.focus()
+            );
+        }}
+      >
+        <Icon name="arrow-up-down" /><span>Sort: {currentSort.label}</span><Icon
+          name="chevron-down"
+        />
       </button>
       {#if sortOpen}
-        <div class="sort-menu" id="paste-sort-menu" role="menu" tabindex="-1" onkeydown={navigateSortMenu}>
+        <div
+          class="sort-menu"
+          id="paste-sort-menu"
+          role="menu"
+          tabindex="-1"
+          onkeydown={navigateSortMenu}
+        >
           {#each sortChoices as choice}
-            <button type="button" role="menuitemradio" aria-checked={choice === currentSort}
-              onclick={() => void selectSort(choice)}>
-              <span>{choice.label}</span>{#if choice === currentSort}<Icon name="check"/>{/if}
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={choice === currentSort}
+              onclick={() => void selectSort(choice)}
+            >
+              <span>{choice.label}</span>{#if choice === currentSort}<Icon name="check" />{/if}
             </button>
           {/each}
         </div>
@@ -194,50 +259,131 @@
   </div>
 
   {#if filtersOpen}
-    <form class="filter-panel" id="paste-filter-panel" aria-label="Paste filters"
-      onsubmit={(event) => { event.preventDefault(); void submitFilters(event); }}>
+    <form
+      class="filter-panel"
+      id="paste-filter-panel"
+      aria-label="Paste filters"
+      onsubmit={(event) => {
+        event.preventDefault();
+        void submitFilters(event);
+      }}
+    >
       <div class="advanced-filter-grid">
-        <label class="field list-filter-select"><span>Format</span><select name="format" value={params.get("format") ?? ""}>
-          <option value="">Any</option>
-          {#each $appState.config.formats as format}<option value={format}>{format === "markdown" ? "Rich text" : "Text"}</option>{/each}
-        </select></label>
-        {#if mode !== "explore"}
-          <label class="field list-filter-select"><span>Visibility</span><select name="visibility" value={params.get("visibility") ?? ""}>
+        <label class="field list-filter-select"
+          ><span>Format</span><select name="format" value={params.get("format") ?? ""}>
             <option value="">Any</option>
-            {#each $appState.config.visibility_modes as visibility}<option value={visibility}>{visibility.charAt(0).toUpperCase() + visibility.slice(1)}</option>{/each}
-          </select></label>
+            {#each $appState.config.formats as format}<option value={format}
+                >{format === "markdown" ? "Rich text" : "Text"}</option
+              >{/each}
+          </select></label
+        >
+        {#if mode !== "explore"}
+          <label class="field list-filter-select"
+            ><span>Visibility</span><select
+              name="visibility"
+              value={params.get("visibility") ?? ""}
+            >
+              <option value="">Any</option>
+              {#each $appState.config.visibility_modes as visibility}<option value={visibility}
+                  >{visibility.charAt(0).toUpperCase() + visibility.slice(1)}</option
+                >{/each}
+            </select></label
+          >
         {/if}
-        <label class="field list-filter-select"><span>Attachments</span><select name="has_attachments" value={params.get("has_attachments") ?? ""}>
-          <option value="">Any</option><option value="true">With attachments</option>
-          <option value="false">Without attachments</option>
-        </select></label>
-        <label class="field list-filter-select"><span>Language</span><select name="language" value={params.get("language") ?? ""}>
-          <option value="">Any</option>
-          {#each languageOptions.filter(language => language.id !== "auto") as language}
-            <option value={language.id}>{language.label}</option>
-          {/each}
-        </select></label>
+        <label class="field list-filter-select"
+          ><span>Attachments</span><select
+            name="has_attachments"
+            value={params.get("has_attachments") ?? ""}
+          >
+            <option value="">Any</option><option value="true">With attachments</option>
+            <option value="false">Without attachments</option>
+          </select></label
+        >
+        <label class="field list-filter-select"
+          ><span>Language</span><select name="language" value={params.get("language") ?? ""}>
+            <option value="">Any</option>
+            {#each languageOptions.filter((language) => language.id !== "auto") as language}
+              <option value={language.id}>{language.label}</option>
+            {/each}
+          </select></label
+        >
         {#if mode === "admin"}
-          <label class="field"><span>Owner ID</span><input type="number" min="1" name="owner_id" value={params.get("owner_id") ?? ""}/></label>
+          <label class="field"
+            ><span>Owner ID</span><input
+              type="number"
+              min="1"
+              name="owner_id"
+              value={params.get("owner_id") ?? ""}
+            /></label
+          >
         {/if}
-        <label class="field"><span>Created after</span><input type="date" name="created_after" value={dateValue(params.get("created_after"))}/></label>
-        <label class="field"><span>Created before</span><input type="date" name="created_before" value={dateValue(params.get("created_before"))}/></label>
-        <label class="field list-filter-select"><span>Expiration</span><select name="expiration" value={params.get("expiration") ?? ""}>
-          <option value="">Any</option><option value="never">Never</option><option value="scheduled">Scheduled</option>
-        </select></label>
-        <label class="field"><span>Minimum views</span><input type="number" min="0" name="min_reads" value={params.get("min_reads") ?? ""}/></label>
-        <label class="field"><span>Maximum views</span><input type="number" min="0" name="max_reads" value={params.get("max_reads") ?? ""}/></label>
-        <label class="field"><span>Minimum size (KiB)</span><input type="number" min="0" step="0.1" name="min_size_kib"
-          value={params.get("min_size_bytes") ? Number(params.get("min_size_bytes")) / 1024 : ""}/></label>
-        <label class="field"><span>Maximum size (KiB)</span><input type="number" min="0" step="0.1" name="max_size_kib"
-          value={params.get("max_size_bytes") ? Number(params.get("max_size_bytes")) / 1024 : ""}/></label>
-        <label class="field list-filter-select"><span>View limit</span><select name="read_limit" value={params.get("read_limit") ?? ""}>
-          <option value="">Any</option><option value="unlimited">Unlimited</option><option value="limited">Limited</option>
-        </select></label>
+        <label class="field"
+          ><span>Created after</span><input
+            type="date"
+            name="created_after"
+            value={dateValue(params.get("created_after"))}
+          /></label
+        >
+        <label class="field"
+          ><span>Created before</span><input
+            type="date"
+            name="created_before"
+            value={dateValue(params.get("created_before"))}
+          /></label
+        >
+        <label class="field list-filter-select"
+          ><span>Expiration</span><select name="expiration" value={params.get("expiration") ?? ""}>
+            <option value="">Any</option><option value="never">Never</option><option
+              value="scheduled">Scheduled</option
+            >
+          </select></label
+        >
+        <label class="field"
+          ><span>Minimum views</span><input
+            type="number"
+            min="0"
+            name="min_reads"
+            value={params.get("min_reads") ?? ""}
+          /></label
+        >
+        <label class="field"
+          ><span>Maximum views</span><input
+            type="number"
+            min="0"
+            name="max_reads"
+            value={params.get("max_reads") ?? ""}
+          /></label
+        >
+        <label class="field"
+          ><span>Minimum size (KiB)</span><input
+            type="number"
+            min="0"
+            step="0.1"
+            name="min_size_kib"
+            value={params.get("min_size_bytes") ? Number(params.get("min_size_bytes")) / 1024 : ""}
+          /></label
+        >
+        <label class="field"
+          ><span>Maximum size (KiB)</span><input
+            type="number"
+            min="0"
+            step="0.1"
+            name="max_size_kib"
+            value={params.get("max_size_bytes") ? Number(params.get("max_size_bytes")) / 1024 : ""}
+          /></label
+        >
+        <label class="field list-filter-select"
+          ><span>View limit</span><select name="read_limit" value={params.get("read_limit") ?? ""}>
+            <option value="">Any</option><option value="unlimited">Unlimited</option><option
+              value="limited">Limited</option
+            >
+          </select></label
+        >
       </div>
       <div class="filter-actions">
         <button class="button primary" type="submit">Apply filters</button>
-        {#if activeFilters.length}<Link class="button" href={withoutFilters()}>Clear filters</Link>{/if}
+        {#if activeFilters.length}<Link class="button" href={withoutFilters()}>Clear filters</Link
+          >{/if}
       </div>
     </form>
   {/if}

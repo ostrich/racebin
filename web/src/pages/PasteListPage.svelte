@@ -1,6 +1,12 @@
 <script lang="ts">
-  import { createFolder as createFolderRequest, deleteFolder as deleteFolderRequest,
-    listFolders, listPastes, movePastes, renameFolder as renameFolderRequest } from "../api";
+  import {
+    createFolder as createFolderRequest,
+    deleteFolder as deleteFolderRequest,
+    listFolders,
+    listPastes,
+    movePastes,
+    renameFolder as renameFolderRequest
+  } from "../api";
   import FolderNameDialog from "../components/FolderNameDialog.svelte";
   import FolderPicker from "../components/FolderPicker.svelte";
   import Icon from "../components/Icon.svelte";
@@ -16,7 +22,10 @@
   import { setPasteListView, uiPreferences } from "../app/uiPreferences";
 
   let { mine, query }: { mine: boolean; query: URLSearchParams } = $props();
-  function requestPaths(requestedQuery: URLSearchParams): { paste: string; folders: string | null } {
+  function requestPaths(requestedQuery: URLSearchParams): {
+    paste: string;
+    folders: string | null;
+  } {
     const params = new URLSearchParams(requestedQuery);
     if (params.has("search")) {
       params.set("q", params.get("search") ?? "");
@@ -42,13 +51,11 @@
     const requestedQuery = new URLSearchParams(query);
     const paths = requestPaths(requestedQuery);
     const cachedPage = cachedQuery<Page<Paste>>(paths.paste);
-    const cachedFolders = paths.folders
-      ? cachedQuery<FolderOverview>(paths.folders)
-      : null;
+    const cachedFolders = paths.folders ? cachedQuery<FolderOverview>(paths.folders) : null;
     const complete = Boolean(cachedPage && (!mine || cachedFolders));
     return {
-      page: complete ? cachedPage ?? null : null,
-      folders: complete ? cachedFolders ?? null : null,
+      page: complete ? (cachedPage ?? null) : null,
+      folders: complete ? (cachedFolders ?? null) : null,
       query: complete ? requestedQuery : new URLSearchParams()
     };
   }
@@ -63,11 +70,20 @@
   let selected = $state(new Set<string>());
   let selectAllCheckbox = $state<HTMLInputElement>();
   let folderNameDialog: FolderNameDialog;
-  let currentFolderId = $derived(appliedQuery.get("folder_id") ? Number(appliedQuery.get("folder_id")) : null);
+  let currentFolderId = $derived(
+    appliedQuery.get("folder_id") ? Number(appliedQuery.get("folder_id")) : null
+  );
   let unfiled = $derived(appliedQuery.get("unfiled") === "true");
-  let folderNames = $derived(new Map((folders?.items ?? []).map(folder => [folder.id, folder.name])));
-  let currentFolderName = $derived(unfiled ? "Uncategorized"
-    : currentFolderId ? folderNames.get(currentFolderId) ?? "Folder" : "My pastes");
+  let folderNames = $derived(
+    new Map((folders?.items ?? []).map((folder) => [folder.id, folder.name]))
+  );
+  let currentFolderName = $derived(
+    unfiled
+      ? "Uncategorized"
+      : currentFolderId
+        ? (folderNames.get(currentFolderId) ?? "Folder")
+        : "My pastes"
+  );
   let loadGeneration = 0;
   let initialRouteReady: (() => void) | null = holdNavigation();
 
@@ -85,9 +101,7 @@
     loading = true;
     const paths = requestPaths(requestedQuery);
     const cachedPage = cachedQuery<Page<Paste>>(paths.paste);
-    const cachedFolders = paths.folders
-      ? cachedQuery<FolderOverview>(paths.folders)
-      : null;
+    const cachedFolders = paths.folders ? cachedQuery<FolderOverview>(paths.folders) : null;
     if (cachedPage && (!mine || cachedFolders)) {
       page = cachedPage;
       folders = cachedFolders ?? null;
@@ -97,9 +111,7 @@
     }
     void Promise.all([
       loadQuery(paths.paste, () => listPastes(new URLSearchParams(paths.paste.split("?")[1]))),
-      paths.folders
-        ? loadQuery(paths.folders, () => listFolders())
-        : Promise.resolve(null)
+      paths.folders ? loadQuery(paths.folders, () => listFolders()) : Promise.resolve(null)
     ])
       .then(([result, loadedFolders]) => {
         if (generation !== loadGeneration) return;
@@ -109,7 +121,7 @@
         selected = new Set();
         error = "";
       })
-      .catch(reason => {
+      .catch((reason) => {
         if (generation !== loadGeneration) return;
         const message = reason instanceof Error ? reason.message : "Unable to load pastes";
         if (!page) error = message;
@@ -122,31 +134,55 @@
   });
 
   async function createFolder(): Promise<void> {
-    const name = await folderNameDialog.ask({ title: "Create folder", submitLabel: "Create folder" });
+    const name = await folderNameDialog.ask({
+      title: "Create folder",
+      submitLabel: "Create folder"
+    });
     if (!name) return;
     try {
       const folder = await createFolderRequest(name);
       await navigate(`/pastes?folder_id=${folder.id}`);
-    } catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to create folder", "error"); }
+    } catch (reason) {
+      showNotice(reason instanceof Error ? reason.message : "Unable to create folder", "error");
+    }
   }
 
   async function renameFolder(id: number, current: string): Promise<void> {
-    const name = await folderNameDialog.ask({ title: "Rename folder", value: current, submitLabel: "Rename" });
+    const name = await folderNameDialog.ask({
+      title: "Rename folder",
+      value: current,
+      submitLabel: "Rename"
+    });
     if (!name || name === current) return;
     try {
       await renameFolderRequest(id, name);
-      if (folders) folders = { ...folders, items: folders.items.map(folder =>
-        folder.id === id ? { ...folder, name } : folder) };
-    } catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to rename folder", "error"); }
+      if (folders)
+        folders = {
+          ...folders,
+          items: folders.items.map((folder) => (folder.id === id ? { ...folder, name } : folder))
+        };
+    } catch (reason) {
+      showNotice(reason instanceof Error ? reason.message : "Unable to rename folder", "error");
+    }
   }
 
   async function deleteFolder(id: number, name: string): Promise<void> {
-    if (!(await confirmAction({ title: `Delete “${name}”?`, message: "The folder will be deleted and its pastes will move to Uncategorized.", confirmLabel: "Delete folder", dangerous: true }))) return;
+    if (
+      !(await confirmAction({
+        title: `Delete “${name}”?`,
+        message: "The folder will be deleted and its pastes will move to Uncategorized.",
+        confirmLabel: "Delete folder",
+        dangerous: true
+      }))
+    )
+      return;
     try {
       await deleteFolderRequest(id);
       if (currentFolderId === id) await navigate("/pastes?unfiled=true");
       else reloadToken += 1;
-    } catch (reason) { showNotice(reason instanceof Error ? reason.message : "Unable to delete folder", "error"); }
+    } catch (reason) {
+      showNotice(reason instanceof Error ? reason.message : "Unable to delete folder", "error");
+    }
   }
 
   function folderUrl(id?: number, uncategorized = false): string {
@@ -178,52 +214,98 @@
   }
 </script>
 
-<FolderNameDialog bind:this={folderNameDialog}/>
+<FolderNameDialog bind:this={folderNameDialog} />
 
 <section class:paste-workspace={mine} aria-busy={loading}>
   <div class="paste-workspace-main">
-  <div class="page-layout paste-list-intro">
-  <div class="page-heading">
-    <div><p class="eyebrow">{mine ? "Workspace" : "Public"}</p><h1>{mine ? currentFolderName : "Explore"}</h1></div>
-    {#if mine}<div class="page-heading-actions"><Link class="button primary" href={`/pastes/new${currentFolderId ? `?folder_id=${currentFolderId}` : ""}`}><Icon name="plus"/> New paste</Link></div>{/if}
-  </div>
-  <PasteFilters params={appliedQuery} mode={mine ? "mine" : "explore"}/>
-  </div>
-  {#if page}
-    {#if mine && folders}
-      <div class="paste-selection-bar">
-        <div class="paste-folder-controls">
-          <FolderPicker overview={folders} mode="browse" label={currentFolderName}
-            {currentFolderId} {unfiled} onselect={browseFolder}
-            oncreate={createFolder} onrename={renameFolder} ondelete={deleteFolder}/>
-          <FolderPicker overview={folders} mode="move"
-            label={selected.size ? `Move ${selected.size}` : "Move"} disabled={!selected.size}
-            onselect={(folderId) => { void moveSelected(folderId); }}/>
+    <div class="page-layout paste-list-intro">
+      <div class="page-heading">
+        <div>
+          <p class="eyebrow">{mine ? "Workspace" : "Public"}</p>
+          <h1>{mine ? currentFolderName : "Explore"}</h1>
         </div>
-        <div class="paste-view-switch segmented-control" role="group" aria-label="Paste view">
-          <button type="button" aria-pressed={$uiPreferences.pasteListView === "normal"}
-            onclick={() => setPasteListView("normal")}>Normal</button>
-          <button type="button" aria-pressed={$uiPreferences.pasteListView === "compact"}
-            onclick={() => setPasteListView("compact")}>Compact</button>
-        </div>
-        <label class="select-all-pastes"><input bind:this={selectAllCheckbox} type="checkbox"
-          disabled={!page.items.length} checked={page.items.length > 0 && selected.size === page.items.length}
-          onchange={(event) => { selected = event.currentTarget.checked
-            ? new Set(page?.items.map(item => item.id)) : new Set(); }}/> Select all on page</label>
-        <span class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</span>
+        {#if mine}<div class="page-heading-actions">
+            <Link
+              class="button primary"
+              href={`/pastes/new${currentFolderId ? `?folder_id=${currentFolderId}` : ""}`}
+              ><Icon name="plus" /> New paste</Link
+            >
+          </div>{/if}
       </div>
+      <PasteFilters params={appliedQuery} mode={mine ? "mine" : "explore"} />
+    </div>
+    {#if page}
+      {#if mine && folders}
+        <div class="paste-selection-bar">
+          <div class="paste-folder-controls">
+            <FolderPicker
+              overview={folders}
+              mode="browse"
+              label={currentFolderName}
+              {currentFolderId}
+              {unfiled}
+              onselect={browseFolder}
+              oncreate={createFolder}
+              onrename={renameFolder}
+              ondelete={deleteFolder}
+            />
+            <FolderPicker
+              overview={folders}
+              mode="move"
+              label={selected.size ? `Move ${selected.size}` : "Move"}
+              disabled={!selected.size}
+              onselect={(folderId) => {
+                void moveSelected(folderId);
+              }}
+            />
+          </div>
+          <div class="paste-view-switch segmented-control" role="group" aria-label="Paste view">
+            <button
+              type="button"
+              aria-pressed={$uiPreferences.pasteListView === "normal"}
+              onclick={() => setPasteListView("normal")}>Normal</button
+            >
+            <button
+              type="button"
+              aria-pressed={$uiPreferences.pasteListView === "compact"}
+              onclick={() => setPasteListView("compact")}>Compact</button
+            >
+          </div>
+          <label class="select-all-pastes"
+            ><input
+              bind:this={selectAllCheckbox}
+              type="checkbox"
+              disabled={!page.items.length}
+              checked={page.items.length > 0 && selected.size === page.items.length}
+              onchange={(event) => {
+                selected = event.currentTarget.checked
+                  ? new Set(page?.items.map((item) => item.id))
+                  : new Set();
+              }}
+            /> Select all on page</label
+          >
+          <span class="result-count"
+            >{page.total_items} paste{page.total_items === 1 ? "" : "s"}</span
+          >
+        </div>
+      {:else}
+        <p class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</p>
+      {/if}
+      <PasteRows
+        items={page.items}
+        manage={mine}
+        filterable
+        selectable={mine}
+        context={mine ? "workspace" : "public"}
+        view={mine ? $uiPreferences.pasteListView : "normal"}
+        bind:selected
+        folderNames={mine ? folderNames : undefined}
+      />
+      <Pagination {page} params={appliedQuery} />
+    {:else if error}
+      <div class="empty compact"><p>{error}</p></div>
     {:else}
-      <p class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</p>
+      <p class="muted">Loading pastes…</p>
     {/if}
-    <PasteRows items={page.items} manage={mine} filterable selectable={mine}
-      context={mine ? "workspace" : "public"}
-      view={mine ? $uiPreferences.pasteListView : "normal"}
-      bind:selected folderNames={mine ? folderNames : undefined}/>
-    <Pagination {page} params={appliedQuery}/>
-  {:else if error}
-    <div class="empty compact"><p>{error}</p></div>
-  {:else}
-    <p class="muted">Loading pastes…</p>
-  {/if}
   </div>
 </section>

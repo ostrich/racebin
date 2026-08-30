@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-test("compiled frontend creates and reads a paste through a disposable backend", async ({ page, request }) => {
+test("compiled frontend creates and reads a paste through a disposable backend", async ({
+  page,
+  request
+}) => {
   const capabilitiesResponse = await request.get("/api/v1/capabilities");
   expect(capabilitiesResponse.ok()).toBe(true);
   const capabilities = await capabilitiesResponse.json();
@@ -11,11 +14,9 @@ test("compiled frontend creates and reads a paste through a disposable backend",
     api_base_url: "http://127.0.0.1:4174/api/v1",
     attachment_upload_media_types: ["multipart/form-data"]
   });
-  expect(capabilities.paste_create_media_types).toEqual(expect.arrayContaining([
-    "application/json",
-    "text/plain",
-    "multipart/form-data"
-  ]));
+  expect(capabilities.paste_create_media_types).toEqual(
+    expect.arrayContaining(["application/json", "text/plain", "multipart/form-data"])
+  );
 
   await page.goto("/login");
   await page.getByLabel("Username").fill("test-admin");
@@ -33,7 +34,9 @@ test("compiled frontend creates and reads a paste through a disposable backend",
   await expect(page.locator("code.hljs")).toContainText("const verified = true;");
 });
 
-test("rich-text structures survive visual editing, persistence, and server rendering", async ({ page }) => {
+test("rich-text structures survive visual editing, persistence, and server rendering", async ({
+  page
+}) => {
   await page.goto("/login");
   await page.getByLabel("Username").fill("test-admin");
   await page.getByLabel("Password").fill("correct horse battery staple");

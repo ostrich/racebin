@@ -15,17 +15,19 @@ export function loadQuery<T>(key: string, loader: () => Promise<T>): Promise<T> 
   if (existing?.request) return existing.request as Promise<T>;
 
   const requestGeneration = generation;
-  const request = loader().then(data => {
-    if (generation === requestGeneration) entries.set(key, { data });
-    return data;
-  }).catch(error => {
-    const current = entries.get(key);
-    if (current?.request === request) {
-      if (current.data === undefined) entries.delete(key);
-      else entries.set(key, { data: current.data });
-    }
-    throw error;
-  });
+  const request = loader()
+    .then((data) => {
+      if (generation === requestGeneration) entries.set(key, { data });
+      return data;
+    })
+    .catch((error) => {
+      const current = entries.get(key);
+      if (current?.request === request) {
+        if (current.data === undefined) entries.delete(key);
+        else entries.set(key, { data: current.data });
+      }
+      throw error;
+    });
   entries.set(key, { data: existing?.data, request });
   return request;
 }

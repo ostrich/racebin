@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { mockApi, paste } from "./support/mockApi";
 
-test("back and forward navigation restore list scroll positions after loading", async ({ page }) => {
+test("back and forward navigation restore list scroll positions after loading", async ({
+  page
+}) => {
   const items = Array.from({ length: 50 }, (_, index) => ({
     ...paste,
     id: `sample-paste-${index}`,
@@ -83,7 +85,7 @@ test("admin paste results form one compact table boundary", async ({ page }) => 
 
   await expect(page.locator(".admin-paste-head")).toContainText("24 total");
   await expect(page.locator(".admin-paste-content > .result-count")).toHaveCount(0);
-  const boundaries = await page.locator(".admin-paste-content").evaluate(element => {
+  const boundaries = await page.locator(".admin-paste-content").evaluate((element) => {
     const toolbar = element.querySelector<HTMLElement>(".list-filter-bar")!;
     const table = element.querySelector<HTMLElement>(".admin-paste-table")!;
     const head = element.querySelector<HTMLElement>(".admin-paste-head")!;
@@ -159,7 +161,7 @@ test("paste checkboxes support range selection and indeterminate select-all", as
   const fourth = page.getByRole("checkbox", { name: "Select Range paste 4" });
   const selectAll = page.getByRole("checkbox", { name: "Select all on page" });
   await first.check();
-  expect(await selectAll.evaluate(input => (input as HTMLInputElement).indeterminate)).toBe(true);
+  expect(await selectAll.evaluate((input) => (input as HTMLInputElement).indeterminate)).toBe(true);
   await fourth.click({ modifiers: ["Shift"] });
   for (let index = 1; index <= 4; index += 1) {
     await expect(page.getByRole("checkbox", { name: `Select Range paste ${index}` })).toBeChecked();
@@ -168,9 +170,13 @@ test("paste checkboxes support range selection and indeterminate select-all", as
 
   await fourth.click({ modifiers: ["Shift"] });
   for (let index = 1; index <= 4; index += 1) {
-    await expect(page.getByRole("checkbox", { name: `Select Range paste ${index}` })).not.toBeChecked();
+    await expect(
+      page.getByRole("checkbox", { name: `Select Range paste ${index}` })
+    ).not.toBeChecked();
   }
-  expect(await selectAll.evaluate(input => (input as HTMLInputElement).indeterminate)).toBe(false);
+  expect(await selectAll.evaluate((input) => (input as HTMLInputElement).indeterminate)).toBe(
+    false
+  );
 
   await selectAll.check();
   await expect(selectAll).toBeChecked();
@@ -180,11 +186,14 @@ test("paste checkboxes support range selection and indeterminate select-all", as
 
   await first.check();
   await fourth.click({ modifiers: ["Shift"] });
-  const moveRequest = page.waitForRequest(request =>
-    request.url().endsWith("/api/v1/pastes") && request.method() === "PATCH");
+  const moveRequest = page.waitForRequest(
+    (request) => request.url().endsWith("/api/v1/pastes") && request.method() === "PATCH"
+  );
   await page.getByRole("button", { name: "Move 4" }).click();
-  await page.getByRole("dialog", { name: "Move selected pastes" })
-    .getByRole("button", { name: /Uncategorized/ }).click();
+  await page
+    .getByRole("dialog", { name: "Move selected pastes" })
+    .getByRole("button", { name: /Uncategorized/ })
+    .click();
   expect((await moveRequest).postDataJSON()).toEqual({
     ids: ["range-paste-0", "range-paste-1", "range-paste-2", "range-paste-3"],
     folder_id: null
@@ -200,19 +209,26 @@ test("bulk controls retain their geometry as selection changes", async ({ page }
   await mockApi(page, true, { items });
   await page.goto("/pastes");
 
-  const geometry = () => page.locator(".paste-selection-bar").evaluate(element => {
-    const bounds = (selector: string) => {
-      const rect = element.querySelector(selector)!.getBoundingClientRect();
-      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width };
-    };
-    return {
-      browse: bounds(".paste-folder-controls .folder-picker:first-child .folder-picker-trigger"),
-      view: bounds(".paste-view-switch"),
-      count: bounds(".result-count"),
-      move: bounds(".paste-folder-controls .folder-picker:last-child .folder-picker-trigger"),
-      selectAll: bounds(".select-all-pastes")
-    };
-  });
+  const geometry = () =>
+    page.locator(".paste-selection-bar").evaluate((element) => {
+      const bounds = (selector: string) => {
+        const rect = element.querySelector(selector)!.getBoundingClientRect();
+        return {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+          width: rect.width
+        };
+      };
+      return {
+        browse: bounds(".paste-folder-controls .folder-picker:first-child .folder-picker-trigger"),
+        view: bounds(".paste-view-switch"),
+        count: bounds(".result-count"),
+        move: bounds(".paste-folder-controls .folder-picker:last-child .folder-picker-trigger"),
+        selectAll: bounds(".select-all-pastes")
+      };
+    });
   const empty = await geometry();
   await page.getByRole("checkbox", { name: "Select Geometry paste 1", exact: true }).check();
   const one = await geometry();
@@ -224,8 +240,10 @@ test("bulk controls retain their geometry as selection changes", async ({ page }
   expect(empty.browse.bottom).toBe(empty.move.bottom);
   expect(empty.view.top).toBe(empty.move.top);
   expect(empty.view.bottom).toBe(empty.move.bottom);
-  expect((empty.count.top + empty.count.bottom) / 2)
-    .toBeCloseTo((empty.selectAll.top + empty.selectAll.bottom) / 2, 5);
+  expect((empty.count.top + empty.count.bottom) / 2).toBeCloseTo(
+    (empty.selectAll.top + empty.selectAll.bottom) / 2,
+    5
+  );
   expect(empty.selectAll.top).toBeGreaterThanOrEqual(empty.move.bottom);
 });
 
@@ -238,22 +256,28 @@ test("compact view is persistent and preserves paste selection", async ({ page }
   const pasteCheckbox = page.getByRole("checkbox", {
     name: "Select JavaScript example"
   });
-  const rowAlignment = async () => page.locator(".paste-list .paste-row").first().evaluate(row => {
-    const rowBox = row.getBoundingClientRect();
-    const title = row.querySelector(".paste-title")!.getBoundingClientRect();
-    const checkbox = row.querySelector<HTMLInputElement>(".paste-selector")!
-      .getBoundingClientRect();
-    const actions = row.querySelector(".row-actions")!.getBoundingClientRect();
-    return {
-      checkboxLeft: checkbox.left,
-      titleLeft: title.left,
-      titleTop: title.top,
-      checkboxTitleOffset: checkbox.top - title.top,
-      titleCenterOffset: title.top + title.height / 2 - (rowBox.top + rowBox.height / 2),
-      checkboxCenterOffset: checkbox.top + checkbox.height / 2 - (rowBox.top + rowBox.height / 2),
-      actionCenterOffset: actions.top + actions.height / 2 - (rowBox.top + rowBox.height / 2)
-    };
-  });
+  const rowAlignment = async () =>
+    page
+      .locator(".paste-list .paste-row")
+      .first()
+      .evaluate((row) => {
+        const rowBox = row.getBoundingClientRect();
+        const title = row.querySelector(".paste-title")!.getBoundingClientRect();
+        const checkbox = row
+          .querySelector<HTMLInputElement>(".paste-selector")!
+          .getBoundingClientRect();
+        const actions = row.querySelector(".row-actions")!.getBoundingClientRect();
+        return {
+          checkboxLeft: checkbox.left,
+          titleLeft: title.left,
+          titleTop: title.top,
+          checkboxTitleOffset: checkbox.top - title.top,
+          titleCenterOffset: title.top + title.height / 2 - (rowBox.top + rowBox.height / 2),
+          checkboxCenterOffset:
+            checkbox.top + checkbox.height / 2 - (rowBox.top + rowBox.height / 2),
+          actionCenterOffset: actions.top + actions.height / 2 - (rowBox.top + rowBox.height / 2)
+        };
+      });
   await expect(normal).toHaveAttribute("aria-pressed", "true");
   const normalAlignment = await rowAlignment();
   await pasteCheckbox.check();
@@ -290,7 +314,11 @@ test("compact view remains usable without horizontal overflow on mobile", async 
   await page.getByRole("button", { name: "Compact", exact: true }).click();
 
   await expect
-    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth))
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+      )
+    )
     .toBe(true);
   await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
   await expect(page.getByLabel("Paste view")).toBeVisible();
@@ -308,19 +336,19 @@ test("selection and its range anchor reset with list navigation", async ({ page 
   await page.getByRole("button", { name: "Sort: Newest" }).click();
   await page.getByRole("menuitemradio", { name: "Oldest" }).click();
   await expect(page.getByRole("button", { name: "Move", exact: true })).toBeDisabled();
-  await page.getByRole("checkbox", { name: "Select Reset paste 3" }).click({ modifiers: ["Shift"] });
+  await page
+    .getByRole("checkbox", { name: "Select Reset paste 3" })
+    .click({ modifiers: ["Shift"] });
   await expect(page.getByRole("button", { name: "Move 1" })).toBeEnabled();
 });
 
 test("query navigation retains list pages until their replacement is ready", async ({ page }) => {
   const filteredPaste = { ...paste, id: "filtered-paste", title: "Filtered result" };
   await mockApi(page, true, {
-    pastePage: url => url.searchParams.has("q")
-      ? { items: [filteredPaste], delay: 150 }
-      : { items: [paste] },
-    adminPastePage: url => url.searchParams.has("q")
-      ? { items: [filteredPaste], delay: 150 }
-      : { items: [paste] }
+    pastePage: (url) =>
+      url.searchParams.has("q") ? { items: [filteredPaste], delay: 150 } : { items: [paste] },
+    adminPastePage: (url) =>
+      url.searchParams.has("q") ? { items: [filteredPaste], delay: 150 } : { items: [paste] }
   });
 
   await page.goto("/pastes");
@@ -333,10 +361,13 @@ test("query navigation retains list pages until their replacement is ready", asy
   await page.waitForTimeout(50);
   await expect(page.getByRole("button", { name: /^My pastes/ })).toBeVisible();
   await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
-  expect(await page.evaluate(() =>
-    (window as Window & { __retainedList: Element }).__retainedList
-      === document.querySelector(".paste-workspace")
-  )).toBe(true);
+  expect(
+    await page.evaluate(
+      () =>
+        (window as Window & { __retainedList: Element }).__retainedList ===
+        document.querySelector(".paste-workspace")
+    )
+  ).toBe(true);
   await expect(page.getByRole("link", { name: "Filtered result" })).toBeVisible();
 
   await page.goto("/admin/pastes");
@@ -348,10 +379,13 @@ test("query navigation retains list pages until their replacement is ready", asy
   await page.getByRole("button", { name: "Search" }).click();
   await page.waitForTimeout(50);
   await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
-  expect(await page.evaluate(() =>
-    (window as Window & { __retainedAdmin: Element }).__retainedAdmin
-      === document.querySelector("main > section")
-  )).toBe(true);
+  expect(
+    await page.evaluate(
+      () =>
+        (window as Window & { __retainedAdmin: Element }).__retainedAdmin ===
+        document.querySelector("main > section")
+    )
+  ).toBe(true);
   await expect(page.getByRole("link", { name: "Filtered result" })).toBeVisible();
 });
 
@@ -359,7 +393,7 @@ test("the newest query response wins when list requests overlap", async ({ page 
   const slowPaste = { ...paste, id: "slow-paste", title: "Slow result" };
   const fastPaste = { ...paste, id: "fast-paste", title: "Fast result" };
   await mockApi(page, true, {
-    pastePage: url => {
+    pastePage: (url) => {
       if (url.searchParams.get("folder_id") === "5") return { items: [slowPaste], delay: 250 };
       if (url.searchParams.get("unfiled") === "true") return { items: [fastPaste], delay: 25 };
       return { items: [paste] };
@@ -367,39 +401,46 @@ test("the newest query response wins when list requests overlap", async ({ page 
   });
   await page.goto("/pastes");
   await page.getByRole("button", { name: /^My pastes/ }).click();
-  await page.getByRole("dialog", { name: "Browse folders" })
-    .getByRole("button", { name: /^Scripts 1$/ }).click();
+  await page
+    .getByRole("dialog", { name: "Browse folders" })
+    .getByRole("button", { name: /^Scripts 1$/ })
+    .click();
   await page.waitForTimeout(20);
   await page.getByRole("button", { name: /^Scripts/ }).click();
-  await page.getByRole("dialog", { name: "Browse folders" })
-    .getByRole("button", { name: /^Uncategorized 0$/ }).click();
+  await page
+    .getByRole("dialog", { name: "Browse folders" })
+    .getByRole("button", { name: /^Uncategorized 0$/ })
+    .click();
   await expect(page.getByRole("link", { name: "Fast result" })).toBeVisible();
   await page.waitForTimeout(300);
   await expect(page.getByRole("link", { name: "Fast result" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Slow result" })).toHaveCount(0);
 });
 
-test("list geometry remains stable when the document starts or stops overflowing", async ({ page }) => {
+test("list geometry remains stable when the document starts or stops overflowing", async ({
+  page
+}) => {
   const manyPastes = Array.from({ length: 40 }, (_, index) => ({
     ...paste,
     id: `overflow-paste-${index}`,
     title: `Overflow paste ${index}`
   }));
   await mockApi(page, true, {
-    pastePage: url => url.searchParams.get("folder_id") === "5"
-      ? { items: manyPastes }
-      : { items: [] }
+    pastePage: (url) =>
+      url.searchParams.get("folder_id") === "5" ? { items: manyPastes } : { items: [] }
   });
   await page.goto("/pastes");
-  const before = await page.locator(".paste-workspace-main").evaluate(element => {
+  const before = await page.locator(".paste-workspace-main").evaluate((element) => {
     const bounds = element.getBoundingClientRect();
     return { left: bounds.left, right: bounds.right };
   });
   await page.getByRole("button", { name: /^My pastes/ }).click();
-  await page.getByRole("dialog", { name: "Browse folders" })
-    .getByRole("button", { name: /^Scripts 1$/ }).click();
+  await page
+    .getByRole("dialog", { name: "Browse folders" })
+    .getByRole("button", { name: /^Scripts 1$/ })
+    .click();
   await expect(page.getByRole("link", { name: "Overflow paste 39" })).toBeVisible();
-  const after = await page.locator(".paste-workspace-main").evaluate(element => {
+  const after = await page.locator(".paste-workspace-main").evaluate((element) => {
     const bounds = element.getBoundingClientRect();
     return { left: bounds.left, right: bounds.right };
   });
@@ -409,10 +450,16 @@ test("list geometry remains stable when the document starts or stops overflowing
 test("paste rows preserve content width and use selective metadata badges", async ({ page }) => {
   await mockApi(page, true, { items: [{ ...paste, folder_id: 5 }] });
   await page.goto("/pastes?folder_id=5");
-  const layout = await page.locator(".paste-list .paste-row").evaluate(row => {
+  const layout = await page.locator(".paste-list .paste-row").evaluate((row) => {
     const bounds = (selector: string) => {
       const rect = row.querySelector(selector)!.getBoundingClientRect();
-      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width };
+      return {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width
+      };
     };
     return {
       title: bounds(".paste-title"),
@@ -430,8 +477,10 @@ test("paste rows preserve content width and use selective metadata badges", asyn
   expect(Math.abs(layout.title.width - layout.content.width)).toBeLessThan(1);
   expect(Math.abs(layout.preview.width - layout.content.width)).toBeLessThan(1);
   expect(layout.actionsParent).toContain("paste-list-row");
-  expect((layout.metadata.top + layout.metadata.bottom) / 2)
-    .toBeCloseTo((layout.actions.top + layout.actions.bottom) / 2, 1);
+  expect((layout.metadata.top + layout.metadata.bottom) / 2).toBeCloseTo(
+    (layout.actions.top + layout.actions.bottom) / 2,
+    1
+  );
   expect(layout.badges).toBe(2);
   expect(layout.details).toBeGreaterThanOrEqual(4);
   await expect(page.getByText("2 views")).toBeVisible();
@@ -442,20 +491,24 @@ test("public and workspace paste rows share one visual rhythm", async ({ page })
   await mockApi(page, true);
   await page.setViewportSize({ width: 1440, height: 900 });
 
-  const measure = async () => page.locator(".paste-list .paste-row").first().evaluate(row => {
-    const title = row.querySelector(".paste-title")!.getBoundingClientRect();
-    const preview = row.querySelector(".paste-row-identity > p")!.getBoundingClientRect();
-    const metadata = row.querySelector(".paste-meta")!.getBoundingClientRect();
-    const actions = row.querySelector(".row-actions")!.getBoundingClientRect();
-    return {
-      titleHeight: title.height,
-      previewGap: preview.top - title.bottom,
-      metadataGap: metadata.top - preview.bottom,
-      footerCenterDifference: Math.abs(
-        metadata.top + metadata.height / 2 - (actions.top + actions.height / 2)
-      )
-    };
-  });
+  const measure = async () =>
+    page
+      .locator(".paste-list .paste-row")
+      .first()
+      .evaluate((row) => {
+        const title = row.querySelector(".paste-title")!.getBoundingClientRect();
+        const preview = row.querySelector(".paste-row-identity > p")!.getBoundingClientRect();
+        const metadata = row.querySelector(".paste-meta")!.getBoundingClientRect();
+        const actions = row.querySelector(".row-actions")!.getBoundingClientRect();
+        return {
+          titleHeight: title.height,
+          previewGap: preview.top - title.bottom,
+          metadataGap: metadata.top - preview.bottom,
+          footerCenterDifference: Math.abs(
+            metadata.top + metadata.height / 2 - (actions.top + actions.height / 2)
+          )
+        };
+      });
 
   const layouts = [];
   for (const route of ["/explore", "/pastes"]) {
@@ -483,8 +536,9 @@ test("administrative paste columns align and collapse without crowding", async (
     };
     const heading = [...document.querySelectorAll(".admin-paste-head > span")].map(bounds);
     const row = document.querySelector(".admin-paste-row")!;
-    const cells = [".paste-row-identity", ".admin-paste-owner", ".paste-meta", ".row-actions"]
-      .map(selector => bounds(row.querySelector(selector)!));
+    const cells = [".paste-row-identity", ".admin-paste-owner", ".paste-meta", ".row-actions"].map(
+      (selector) => bounds(row.querySelector(selector)!)
+    );
     return { heading, cells };
   });
   columns.heading.forEach((heading, index) => {
@@ -493,15 +547,19 @@ test("administrative paste columns align and collapse without crowding", async (
   });
 
   await page.setViewportSize({ width: 390, height: 844 });
-  const mobile = await page.locator(".admin-paste-row").first().evaluate(row => {
-    const metadata = row.querySelector(".paste-meta")!.getBoundingClientRect();
-    const actions = row.querySelector(".row-actions")!.getBoundingClientRect();
-    const paddingRight = Number.parseFloat(getComputedStyle(row).paddingRight);
-    return {
-      actionsBelowMetadata: actions.top >= metadata.bottom,
-      rightAligned: Math.abs(actions.right - (row.getBoundingClientRect().right - paddingRight)) < 1,
-      pageFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth
-    };
-  });
+  const mobile = await page
+    .locator(".admin-paste-row")
+    .first()
+    .evaluate((row) => {
+      const metadata = row.querySelector(".paste-meta")!.getBoundingClientRect();
+      const actions = row.querySelector(".row-actions")!.getBoundingClientRect();
+      const paddingRight = Number.parseFloat(getComputedStyle(row).paddingRight);
+      return {
+        actionsBelowMetadata: actions.top >= metadata.bottom,
+        rightAligned:
+          Math.abs(actions.right - (row.getBoundingClientRect().right - paddingRight)) < 1,
+        pageFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth
+      };
+    });
   expect(mobile).toEqual({ actionsBelowMetadata: true, rightAligned: true, pageFits: true });
 });

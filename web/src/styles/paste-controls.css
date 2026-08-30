@@ -147,8 +147,7 @@
 .admin-paste-head,
 .admin-paste-row {
   display: grid;
-  grid-template-columns:
-    minmax(260px, 1.6fr) minmax(130px, 0.65fr) minmax(210px, 1fr) 124px;
+  grid-template-columns: minmax(260px, 1.6fr) minmax(130px, 0.65fr) minmax(210px, 1fr) 124px;
   gap: 18px;
   align-items: center;
 }
@@ -218,9 +217,15 @@
       "metadata actions";
     align-items: start;
   }
-  .admin-paste-row .paste-row-identity { grid-area: identity; }
-  .admin-paste-owner { grid-area: owner; }
-  .admin-paste-row .paste-meta { grid-area: metadata; }
+  .admin-paste-row .paste-row-identity {
+    grid-area: identity;
+  }
+  .admin-paste-owner {
+    grid-area: owner;
+  }
+  .admin-paste-row .paste-meta {
+    grid-area: metadata;
+  }
   .admin-paste-row .row-actions {
     grid-area: actions;
     align-self: center;
@@ -391,8 +396,13 @@
 }
 .rich-editor-pane > .code-editor,
 .rich-editor-pane > .code-editor pre,
-.rich-editor-pane > .code-editor textarea { height: 100%; min-height: 0; }
-.rich-editor-pane > .code-editor textarea { resize: none; }
+.rich-editor-pane > .code-editor textarea {
+  height: 100%;
+  min-height: 0;
+}
+.rich-editor-pane > .code-editor textarea {
+  resize: none;
+}
 .content-editor-rich .rich-text-editor {
   min-height: 0;
   overflow: auto;
@@ -537,7 +547,9 @@
   background: var(--color-surface);
   color: inherit;
 }
-.markdown-view-options { justify-content: flex-end; }
+.markdown-view-options {
+  justify-content: flex-end;
+}
 .markdown-wrap-slot {
   min-width: 52px;
   min-height: 28px;

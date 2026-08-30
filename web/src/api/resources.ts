@@ -2,8 +2,17 @@ import type { components } from "./generated";
 import { normalizePayload } from "./normalize";
 import { transport, type ApiResult } from "./transport";
 import type {
-  AdminUser, ApiKey, Config, Folder, FolderOverview, Language, Page, Paste,
-  PasteRevisionResponse, Session, User
+  AdminUser,
+  ApiKey,
+  Config,
+  Folder,
+  FolderOverview,
+  Language,
+  Page,
+  Paste,
+  PasteRevisionResponse,
+  Session,
+  User
 } from "../types";
 
 type Schema = components["schemas"];
@@ -14,7 +23,10 @@ export type Conversion = Schema["ConversionOutput"];
 export type LoginInput = Schema["LoginInput"];
 export type KeyInput = Schema["KeyInput"];
 export type UserUpdate = Schema["UserUpdate"];
-export type Invitation = Omit<Schema["InvitationResource"], "created_at" | "expires_at" | "redeemed_at"> & {
+export type Invitation = Omit<
+  Schema["InvitationResource"],
+  "created_at" | "expires_at" | "redeemed_at"
+> & {
   created_at: number;
   expires_at: number;
   redeemed_at?: number;
@@ -29,15 +41,21 @@ async function normalized<T>(result: Promise<ApiResult<unknown>>): Promise<T> {
 
 const id = (value: string | number) => encodeURIComponent(String(value));
 
-export const getSession = () => normalized<Session>(transport<Schema["SessionResponse"]>("/session"));
-export const getCapabilities = () => normalized<Config>(transport<Schema["Capabilities"]>("/capabilities"));
-export const getLanguages = () => normalized<Language[]>(transport<Schema["Language"][]>("/languages"));
-export const login = (input: LoginInput) => normalized<Schema["SessionCreatedResponse"]>(
-  transport("/session", { method: "POST", json: input })
-);
+export const getSession = () =>
+  normalized<Session>(transport<Schema["SessionResponse"]>("/session"));
+export const getCapabilities = () =>
+  normalized<Config>(transport<Schema["Capabilities"]>("/capabilities"));
+export const getLanguages = () =>
+  normalized<Language[]>(transport<Schema["Language"][]>("/languages"));
+export const login = (input: LoginInput) =>
+  normalized<Schema["SessionCreatedResponse"]>(
+    transport("/session", { method: "POST", json: input })
+  );
 export const logout = () => transport<void>("/session", { method: "DELETE" });
-export const changePassword = (input: Schema["PasswordInput"]) => transport<void>("/account/password", { method: "PATCH", json: input });
-export const reauthenticate = (password: string) => transport<void>("/session/reauthenticate", { method: "POST", json: { password } });
+export const changePassword = (input: Schema["PasswordInput"]) =>
+  transport<void>("/account/password", { method: "PATCH", json: input });
+export const reauthenticate = (password: string) =>
+  transport<void>("/session/reauthenticate", { method: "POST", json: { password } });
 export const redeemInvitation = (token: string, input: Schema["InvitationInput"]) =>
   transport<void>(`/invitations/${id(token)}/redeem`, { method: "POST", json: input });
 export const resetPassword = (token: string, input: Schema["PasswordResetInput"]) =>
@@ -47,12 +65,20 @@ export const listPastes = (query: URLSearchParams) =>
   normalized<Page<Paste>>(transport<Schema["PastePage"]>(`/pastes?${query}`));
 export const listAdminPastes = (query: URLSearchParams) =>
   normalized<Page<Paste>>(transport<Schema["PastePage"]>(`/admin/pastes?${query}`));
-export const getPaste = (pasteId: string) => normalized<Paste>(transport<Schema["PasteMetadataResource"]>(`/pastes/${id(pasteId)}`));
-export const getPasteSource = (pasteId: string) => normalized<Paste>(transport<Schema["PasteResource"]>(`/pastes/${id(pasteId)}/source`));
-export type ConsumingRead = { paste: Paste; readToken: string | null; idempotencyReplayed: boolean };
+export const getPaste = (pasteId: string) =>
+  normalized<Paste>(transport<Schema["PasteMetadataResource"]>(`/pastes/${id(pasteId)}`));
+export const getPasteSource = (pasteId: string) =>
+  normalized<Paste>(transport<Schema["PasteResource"]>(`/pastes/${id(pasteId)}/source`));
+export type ConsumingRead = {
+  paste: Paste;
+  readToken: string | null;
+  idempotencyReplayed: boolean;
+};
 export async function readPaste(pasteId: string, idempotencyKey: string): Promise<ConsumingRead> {
   const result = await transport<Schema["PasteResource"]>(`/pastes/${id(pasteId)}/reads`, {
-    method: "POST", headers: { "Idempotency-Key": idempotencyKey }, invalidateQueries: false
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+    invalidateQueries: false
   });
   return {
     paste: normalizePayload(result.data, result.etag) as Paste,
@@ -60,11 +86,14 @@ export async function readPaste(pasteId: string, idempotencyKey: string): Promis
     idempotencyReplayed: result.idempotencyReplayed
   };
 }
-export const createPaste = (input: CreatePasteInput, idempotencyKey: string) => normalized<Paste>(
-  transport<Schema["PasteResource"]>("/pastes", {
-    method: "POST", json: input, headers: { "Idempotency-Key": idempotencyKey }
-  })
-);
+export const createPaste = (input: CreatePasteInput, idempotencyKey: string) =>
+  normalized<Paste>(
+    transport<Schema["PasteResource"]>("/pastes", {
+      method: "POST",
+      json: input,
+      headers: { "Idempotency-Key": idempotencyKey }
+    })
+  );
 function multipartBody(input: FlatCreateInput, files: File[]): FormData {
   const body = new FormData();
   for (const [key, value] of Object.entries(input)) {
@@ -74,67 +103,95 @@ function multipartBody(input: FlatCreateInput, files: File[]): FormData {
   return body;
 }
 
-export const createPasteWithAttachments = (input: FlatCreateInput, files: File[], idempotencyKey: string) => normalized<Paste>(
-  transport<Schema["PasteResource"]>("/pastes", {
-    method: "POST", body: multipartBody(input, files), headers: { "Idempotency-Key": idempotencyKey }
-  })
-);
-export const updatePaste = (pasteId: string, input: UpdatePasteInput, etag: string) => normalized<Paste>(
-  transport<Schema["PasteResource"]>(`/pastes/${id(pasteId)}`, {
-    method: "PATCH", json: input, headers: { "If-Match": etag }
-  })
-);
+export const createPasteWithAttachments = (
+  input: FlatCreateInput,
+  files: File[],
+  idempotencyKey: string
+) =>
+  normalized<Paste>(
+    transport<Schema["PasteResource"]>("/pastes", {
+      method: "POST",
+      body: multipartBody(input, files),
+      headers: { "Idempotency-Key": idempotencyKey }
+    })
+  );
+export const updatePaste = (pasteId: string, input: UpdatePasteInput, etag: string) =>
+  normalized<Paste>(
+    transport<Schema["PasteResource"]>(`/pastes/${id(pasteId)}`, {
+      method: "PATCH",
+      json: input,
+      headers: { "If-Match": etag }
+    })
+  );
 export const deletePaste = (pasteId: string, etag: string) =>
   transport<void>(`/pastes/${id(pasteId)}`, { method: "DELETE", headers: { "If-Match": etag } });
 export const convertPaste = (input: ConversionInput) =>
-  normalized<Conversion>(transport<Schema["ConversionOutput"]>("/content-conversions", {
-    method: "POST", json: input, invalidateQueries: false
-  }));
+  normalized<Conversion>(
+    transport<Schema["ConversionOutput"]>("/content-conversions", {
+      method: "POST",
+      json: input,
+      invalidateQueries: false
+    })
+  );
 export const uploadAttachments = (pasteId: string, files: File[], etag: string) => {
   const body = new FormData();
   for (const file of files) body.append("file", file);
-  return (
-  normalized<Schema["AttachmentUploadResponse"]>(transport(`/pastes/${id(pasteId)}/attachments`, {
-    method: "POST", body, headers: { "If-Match": etag }
-  })));
+  return normalized<Schema["AttachmentUploadResponse"]>(
+    transport(`/pastes/${id(pasteId)}/attachments`, {
+      method: "POST",
+      body,
+      headers: { "If-Match": etag }
+    })
+  );
 };
 export const deleteAttachment = (pasteId: string, attachmentId: number, etag: string) =>
   transport<void>(`/pastes/${id(pasteId)}/attachments/${id(attachmentId)}`, {
-    method: "DELETE", headers: { "If-Match": etag }
+    method: "DELETE",
+    headers: { "If-Match": etag }
   });
-export const pasteQrUrl = (apiBaseUrl: string, pasteId: string) => `${apiBaseUrl}/pastes/${id(pasteId)}/qr`;
+export const pasteQrUrl = (apiBaseUrl: string, pasteId: string) =>
+  `${apiBaseUrl}/pastes/${id(pasteId)}/qr`;
 
-export const listFolders = () => normalized<FolderOverview>(transport<Schema["FolderOverviewResource"]>("/folders"));
-export const createFolder = (name: string) => normalized<Folder>(transport<Schema["FolderResource"]>("/folders", {
-  method: "POST", json: { name } satisfies Schema["FolderInput"]
-}));
-export const renameFolder = (folderId: number, name: string) => normalized<Folder>(
-  transport<Schema["FolderResource"]>(`/folders/${id(folderId)}`, {
-    method: "PATCH", json: { name } satisfies Schema["FolderInput"]
-  })
-);
-export const deleteFolder = (folderId: number) => normalized<PasteRevisionResponse>(
-  transport<Schema["PasteRevisionResponse"]>(`/folders/${id(folderId)}`, { method: "DELETE" })
-);
-export const movePastes = (input: Schema["MovePastesInput"]) => normalized<PasteRevisionResponse>(
-  transport<Schema["PasteRevisionResponse"]>("/pastes", { method: "PATCH", json: input })
-);
+export const listFolders = () =>
+  normalized<FolderOverview>(transport<Schema["FolderOverviewResource"]>("/folders"));
+export const createFolder = (name: string) =>
+  normalized<Folder>(
+    transport<Schema["FolderResource"]>("/folders", {
+      method: "POST",
+      json: { name } satisfies Schema["FolderInput"]
+    })
+  );
+export const renameFolder = (folderId: number, name: string) =>
+  normalized<Folder>(
+    transport<Schema["FolderResource"]>(`/folders/${id(folderId)}`, {
+      method: "PATCH",
+      json: { name } satisfies Schema["FolderInput"]
+    })
+  );
+export const deleteFolder = (folderId: number) =>
+  normalized<PasteRevisionResponse>(
+    transport<Schema["PasteRevisionResponse"]>(`/folders/${id(folderId)}`, { method: "DELETE" })
+  );
+export const movePastes = (input: Schema["MovePastesInput"]) =>
+  normalized<PasteRevisionResponse>(
+    transport<Schema["PasteRevisionResponse"]>("/pastes", { method: "PATCH", json: input })
+  );
 
-export const listApiKeys = (query = new URLSearchParams()) => normalized<Page<ApiKey>>(
-  transport<Schema["ApiKeyPage"]>(`/account/api-keys?${query}`)
-);
-export const createApiKey = (input: KeyInput) => normalized<{ key: ApiKey; token: string }>(
-  transport<Schema["ApiKeyCreatedResponse"]>("/account/api-keys", { method: "POST", json: input })
-);
+export const listApiKeys = (query = new URLSearchParams()) =>
+  normalized<Page<ApiKey>>(transport<Schema["ApiKeyPage"]>(`/account/api-keys?${query}`));
+export const createApiKey = (input: KeyInput) =>
+  normalized<{ key: ApiKey; token: string }>(
+    transport<Schema["ApiKeyCreatedResponse"]>("/account/api-keys", { method: "POST", json: input })
+  );
 export const updateApiKey = (keyId: number, enabled: boolean) =>
   transport<void>(`/account/api-keys/${id(keyId)}`, { method: "PATCH", json: { enabled } });
 export const deleteApiKey = (keyId: number) =>
   transport<void>(`/account/api-keys/${id(keyId)}`, { method: "DELETE" });
 
-export const listAdminUsers = (query = new URLSearchParams()) => normalized<Page<AdminUser>>(
-  transport<Schema["AdminUserPage"]>(`/admin/users?${query}`)
-);
-export const getAdminUser = (userId: number) => normalized<AdminUser>(transport<Schema["AdminUserResource"]>(`/admin/users/${id(userId)}`));
+export const listAdminUsers = (query = new URLSearchParams()) =>
+  normalized<Page<AdminUser>>(transport<Schema["AdminUserPage"]>(`/admin/users?${query}`));
+export const getAdminUser = (userId: number) =>
+  normalized<AdminUser>(transport<Schema["AdminUserResource"]>(`/admin/users/${id(userId)}`));
 export const updateAdminUser = (userId: number, input: UserUpdate) =>
   transport<void>(`/admin/users/${id(userId)}`, { method: "PATCH", json: input });
 export const updateAdminUserRole = (userId: number, role: "user" | "admin") =>
@@ -144,34 +201,41 @@ export const transferOwnership = (userId: number) =>
 export type InstanceSettings = Schema["InstanceSettingsResource"];
 export type AuditEvent = Schema["AuditEventResource"];
 export type AdminSummary = Schema["AdminSummaryResource"];
-export const getInstanceSettings = () => normalized<InstanceSettings>(transport<InstanceSettings>("/admin/settings"));
-export const replaceInstanceSettings = (settings: InstanceSettings) => normalized<InstanceSettings>(
-  transport<InstanceSettings>("/admin/settings", { method: "PUT", json: settings })
-);
-export const getAdminSummary = () => normalized<AdminSummary>(transport<AdminSummary>("/admin/summary"));
-export const listAuditEvents = (query = new URLSearchParams()) => normalized<Page<AuditEvent>>(
-  transport<Schema["AuditEventPage"]>(`/admin/audit-events?${query}`)
-);
-export const createPasswordReset = (userId: number) => normalized<Schema["LinkResponse"]>(
-  transport<Schema["LinkResponse"]>(`/admin/users/${id(userId)}/password-reset`, { method: "POST" })
-);
+export const getInstanceSettings = () =>
+  normalized<InstanceSettings>(transport<InstanceSettings>("/admin/settings"));
+export const replaceInstanceSettings = (settings: InstanceSettings) =>
+  normalized<InstanceSettings>(
+    transport<InstanceSettings>("/admin/settings", { method: "PUT", json: settings })
+  );
+export const getAdminSummary = () =>
+  normalized<AdminSummary>(transport<AdminSummary>("/admin/summary"));
+export const listAuditEvents = (query = new URLSearchParams()) =>
+  normalized<Page<AuditEvent>>(transport<Schema["AuditEventPage"]>(`/admin/audit-events?${query}`));
+export const createPasswordReset = (userId: number) =>
+  normalized<Schema["LinkResponse"]>(
+    transport<Schema["LinkResponse"]>(`/admin/users/${id(userId)}/password-reset`, {
+      method: "POST"
+    })
+  );
 export const revokeUserSessions = (userId: number) =>
   transport<void>(`/admin/users/${id(userId)}/sessions`, { method: "DELETE" });
 export const revokeUserApiKeys = (userId: number) =>
   transport<void>(`/admin/users/${id(userId)}/api-keys`, { method: "DELETE" });
-export const listInvitations = (query = new URLSearchParams()) => normalized<Page<Invitation>>(
-  transport<Schema["InvitationPage"]>(`/admin/invitations?${query}`)
-);
-export const createInvitation = (comment?: string) => normalized<Schema["InvitationCreatedResponse"]>(
-  transport<Schema["InvitationCreatedResponse"]>("/admin/invitations", { method: "POST", json: { comment } })
-);
+export const listInvitations = (query = new URLSearchParams()) =>
+  normalized<Page<Invitation>>(transport<Schema["InvitationPage"]>(`/admin/invitations?${query}`));
+export const createInvitation = (comment?: string) =>
+  normalized<Schema["InvitationCreatedResponse"]>(
+    transport<Schema["InvitationCreatedResponse"]>("/admin/invitations", {
+      method: "POST",
+      json: { comment }
+    })
+  );
 export const updateInvitationComment = (invitationId: number, comment?: string) =>
   transport<void>(`/admin/invitations/${id(invitationId)}`, { method: "PATCH", json: { comment } });
 export const revokeInvitation = (invitationId: number) =>
   transport<void>(`/admin/invitations/${id(invitationId)}`, { method: "DELETE" });
-export const listAdminApiKeys = (query = new URLSearchParams()) => normalized<Page<ApiKey>>(
-  transport<Schema["ApiKeyPage"]>(`/admin/api-keys?${query}`)
-);
+export const listAdminApiKeys = (query = new URLSearchParams()) =>
+  normalized<Page<ApiKey>>(transport<Schema["ApiKeyPage"]>(`/admin/api-keys?${query}`));
 export const updateAdminApiKey = (keyId: number, enabled: boolean) =>
   transport<void>(`/admin/api-keys/${id(keyId)}`, { method: "PATCH", json: { enabled } });
 export const deleteAdminApiKey = (keyId: number) =>

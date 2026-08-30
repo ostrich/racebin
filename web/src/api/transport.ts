@@ -30,7 +30,10 @@ export type TransportOptions = {
   invalidateQueries?: boolean;
 };
 
-export async function transport<T>(path: string, options: TransportOptions = {}): Promise<ApiResult<T>> {
+export async function transport<T>(
+  path: string,
+  options: TransportOptions = {}
+): Promise<ApiResult<T>> {
   const method = options.method ?? "GET";
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
@@ -48,7 +51,7 @@ export async function transport<T>(path: string, options: TransportOptions = {})
     credentials: "same-origin"
   });
   if (!response.ok) {
-    const problem = await response.json().catch(() => null) as ProblemDetails | null;
+    const problem = (await response.json().catch(() => null)) as ProblemDetails | null;
     throw new ApiError(
       response.status,
       problem?.detail ?? response.statusText,
@@ -58,7 +61,7 @@ export async function transport<T>(path: string, options: TransportOptions = {})
   }
   if (options.invalidateQueries ?? method !== "GET") clearQueryCache();
   return {
-    data: response.status === 204 ? undefined as T : await response.json() as T,
+    data: response.status === 204 ? (undefined as T) : ((await response.json()) as T),
     etag: response.headers.get("ETag"),
     readToken: response.headers.get("Read-Token"),
     idempotencyReplayed: response.headers.get("Idempotency-Replayed") === "true"

@@ -158,19 +158,43 @@
   width: 100%;
   min-width: 0;
 }
-.type-field { grid-column: 1; grid-row: 1; }
+.type-field {
+  grid-column: 1;
+  grid-row: 1;
+}
 .language-field {
   grid-column: 2;
   grid-row: 1;
 }
-.folder-field { grid-column: 3; grid-row: 1; }
-.visibility-field { grid-column: 4; grid-row: 1; }
+.folder-field {
+  grid-column: 3;
+  grid-row: 1;
+}
+.visibility-field {
+  grid-column: 4;
+  grid-row: 1;
+}
 .type-field,
-.visibility-field { width: 140px; }
-.read-limit-field { grid-column: 3; grid-row: 2; width: 120px; }
-.form-grid.without-folder .visibility-field { grid-column: 3; }
-.expiration-mode-field { grid-column: 1; grid-row: 2; width: 140px; }
-.expiration-time-field { grid-column: 2; grid-row: 2; }
+.visibility-field {
+  width: 140px;
+}
+.read-limit-field {
+  grid-column: 3;
+  grid-row: 2;
+  width: 120px;
+}
+.form-grid.without-folder .visibility-field {
+  grid-column: 3;
+}
+.expiration-mode-field {
+  grid-column: 1;
+  grid-row: 2;
+  width: 140px;
+}
+.expiration-time-field {
+  grid-column: 2;
+  grid-row: 2;
+}
 @media (max-width: 980px) {
   .form-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -182,7 +206,9 @@
   .type-field,
   .visibility-field,
   .expiration-mode-field,
-  .read-limit-field { width: 100%; }
+  .read-limit-field {
+    width: 100%;
+  }
 }
 .paste-view .content {
   background: var(--color-code-block-surface);

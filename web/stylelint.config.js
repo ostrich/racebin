@@ -20,6 +20,6 @@ export default {
     "selector-max-id": 0,
     "selector-max-specificity": "0,4,1",
     "selector-not-notation": null,
-    "selector-pseudo-element-colon-notation": null,
-  },
+    "selector-pseudo-element-colon-notation": null
+  }
 };

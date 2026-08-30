@@ -35,7 +35,7 @@
     const cachedPage = cachedQuery<Page<Paste>>(pastePath(requestedQuery));
     const complete = Boolean(cachedPage);
     return {
-      page: complete ? cachedPage ?? null : null,
+      page: complete ? (cachedPage ?? null) : null,
       query: complete ? requestedQuery : new URLSearchParams()
     };
   }
@@ -45,7 +45,13 @@
   let appliedQuery = $state(initial.query);
   let loading = $state(false);
   let error = $state("");
-  let ownerNames = $derived(new Map(page?.items.filter(paste => paste.owner_id && paste.owner_username).map(paste => [paste.owner_id!, paste.owner_username!]) ?? []));
+  let ownerNames = $derived(
+    new Map(
+      page?.items
+        .filter((paste) => paste.owner_id && paste.owner_username)
+        .map((paste) => [paste.owner_id!, paste.owner_username!]) ?? []
+    )
+  );
   let loadGeneration = 0;
   let initialRouteReady: (() => void) | null = holdNavigation();
 
@@ -62,20 +68,25 @@
       appliedQuery = requestedQuery;
       error = "";
     }
-    void loadQuery(requestedPastePath, () => listAdminPastes(new URLSearchParams(requestedPastePath.split("?")[1]))).then(result => {
-      if (generation !== loadGeneration) return;
-      page = result;
-      appliedQuery = requestedQuery;
-      error = "";
-    }).catch(reason => {
-      if (generation !== loadGeneration) return;
-      const message = reason instanceof Error ? reason.message : "Unable to load pastes";
-      if (!page) error = message;
-      showNotice(message, "error");
-    }).finally(() => {
-      if (generation === loadGeneration) loading = false;
-      routeReady();
-    });
+    void loadQuery(requestedPastePath, () =>
+      listAdminPastes(new URLSearchParams(requestedPastePath.split("?")[1]))
+    )
+      .then((result) => {
+        if (generation !== loadGeneration) return;
+        page = result;
+        appliedQuery = requestedQuery;
+        error = "";
+      })
+      .catch((reason) => {
+        if (generation !== loadGeneration) return;
+        const message = reason instanceof Error ? reason.message : "Unable to load pastes";
+        if (!page) error = message;
+        showNotice(message, "error");
+      })
+      .finally(() => {
+        if (generation === loadGeneration) loading = false;
+        routeReady();
+      });
     return () => {
       if (generation === loadGeneration) loadGeneration += 1;
       routeReady();
@@ -83,23 +94,39 @@
   });
 
   function pasteRemoved(paste: Paste): void {
-    if (page) page = {
-      ...page,
-      items: page.items.filter(candidate => candidate.id !== paste.id),
-      total_items: page.total_items - 1
-    };
+    if (page)
+      page = {
+        ...page,
+        items: page.items.filter((candidate) => candidate.id !== paste.id),
+        total_items: page.total_items - 1
+      };
   }
 </script>
 
 <section class="page-layout" aria-busy={loading}>
-  <div class="page-heading"><div><p class="eyebrow">Administration</p><h1>All pastes</h1></div></div>
-  <div class="section-layout"><AdminNav/><div class="section-content admin-paste-content">
-  <PasteFilters params={appliedQuery} mode="admin" {ownerNames}/>
-  {#if page}
-    <PasteRows items={page.items} context="admin" manage filterable {ownerNames}
-      totalItems={page.total_items} onremoved={pasteRemoved}/>
-    <Pagination {page} params={appliedQuery}/>
-  {:else if error}<div class="empty compact"><p>{error}</p></div>
-  {:else}<p class="muted">Loading pastes…</p>{/if}
-  </div></div>
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">Administration</p>
+      <h1>All pastes</h1>
+    </div>
+  </div>
+  <div class="section-layout">
+    <AdminNav />
+    <div class="section-content admin-paste-content">
+      <PasteFilters params={appliedQuery} mode="admin" {ownerNames} />
+      {#if page}
+        <PasteRows
+          items={page.items}
+          context="admin"
+          manage
+          filterable
+          {ownerNames}
+          totalItems={page.total_items}
+          onremoved={pasteRemoved}
+        />
+        <Pagination {page} params={appliedQuery} />
+      {:else if error}<div class="empty compact"><p>{error}</p></div>
+      {:else}<p class="muted">Loading pastes…</p>{/if}
+    </div>
+  </div>
 </section>

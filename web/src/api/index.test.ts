@@ -33,12 +33,12 @@ describe("API wire mapping", () => {
       attachments: []
     };
     const before = structuredClone(wire);
-    const paste = normalizePayload(wire, "\"paste-example-paste-1\"") as Paste;
+    const paste = normalizePayload(wire, '"paste-example-paste-1"') as Paste;
 
     expect(wire).toEqual(before);
     expect(paste.format).toBe("text");
     expect(paste.content).toBe("const answer = 42;");
-    expect(paste._etag).toBe("\"paste-example-paste-1\"");
+    expect(paste._etag).toBe('"paste-example-paste-1"');
     expect(paste).not.toHaveProperty("body");
   });
 
@@ -49,9 +49,7 @@ describe("API wire mapping", () => {
         created_at: "2023-11-14T22:13:20Z",
         last_used_at: null
       },
-      invitations: [
-        { id: 7, expires_at: "2027-01-15T08:00:00Z" }
-      ]
+      invitations: [{ id: 7, expires_at: "2027-01-15T08:00:00Z" }]
     };
 
     expect(normalizePayload(response)).toEqual({
@@ -61,36 +59,49 @@ describe("API wire mapping", () => {
   });
 
   it("exposes mutation protocol headers to callers", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, {
-      status: 204,
-      headers: {
-        ETag: "\"paste-example-paste-2\"",
-        "Read-Token": "grant",
-        "Idempotency-Replayed": "true"
-      }
-    })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(null, {
+          status: 204,
+          headers: {
+            ETag: '"paste-example-paste-2"',
+            "Read-Token": "grant",
+            "Idempotency-Replayed": "true"
+          }
+        })
+      )
+    );
 
     const result = await transport<void>("/pastes/example-paste", { method: "DELETE" });
     expect(result).toEqual({
       data: undefined,
-      etag: "\"paste-example-paste-2\"",
+      etag: '"paste-example-paste-2"',
       readToken: "grant",
       idempotencyReplayed: true
     });
   });
 
   it("preserves Problem Details identity and retry guidance", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      type: "urn:racebin:problem:validation_failed",
-      title: "Unprocessable Entity",
-      status: 422,
-      detail: "Request is invalid",
-    }), {
-      status: 422,
-      headers: { "Content-Type": "application/problem+json", "Retry-After": "3" }
-    })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            type: "urn:racebin:problem:validation_failed",
+            title: "Unprocessable Entity",
+            status: 422,
+            detail: "Request is invalid"
+          }),
+          {
+            status: 422,
+            headers: { "Content-Type": "application/problem+json", "Retry-After": "3" }
+          }
+        )
+      )
+    );
 
-    const error = await transport("/pastes").catch(reason => reason) as ApiError;
+    const error = (await transport("/pastes").catch((reason) => reason)) as ApiError;
     expect(error).toMatchObject({
       status: 422,
       problemType: "urn:racebin:problem:validation_failed",

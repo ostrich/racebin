@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { createInvitation, updateInvitationComment, type Invitation, type InvitationCreated } from "../api";
+  import {
+    createInvitation,
+    updateInvitationComment,
+    type Invitation,
+    type InvitationCreated
+  } from "../api";
   import { showNotice } from "../app/notices";
   import Icon from "./Icon.svelte";
 
@@ -65,26 +70,60 @@
   }
 </script>
 
-<dialog bind:this={dialog} class="site-dialog invitation-dialog" aria-labelledby="invitation-dialog-title" oncancel={(event) => {
-  if (creating) event.preventDefault();
-}}>
+<dialog
+  bind:this={dialog}
+  class="site-dialog invitation-dialog"
+  aria-labelledby="invitation-dialog-title"
+  oncancel={(event) => {
+    if (creating) event.preventDefault();
+  }}
+>
   {#if result}
     <div class="dialog-form">
       <h2 id="invitation-dialog-title">Invitation created</h2>
       <p class="dialog-message">This one-use link expires in 24 hours.</p>
-      <label class="field"><span>Invitation link</span><div class="copy-field"><input readonly value={resultUrl}><button class="button primary" type="button" onclick={copy}><Icon name="link-2"/> Copy link</button></div></label>
-      {#if comment.trim()}<p class="invitation-comment"><strong>Note</strong><span>{comment.trim()}</span></p>{/if}
-      <div class="actions"><button class="button primary" type="button" onclick={close}>Done</button></div>
+      <label class="field"
+        ><span>Invitation link</span>
+        <div class="copy-field">
+          <input readonly value={resultUrl} /><button
+            class="button primary"
+            type="button"
+            onclick={copy}><Icon name="link-2" /> Copy link</button
+          >
+        </div></label
+      >
+      {#if comment.trim()}<p class="invitation-comment">
+          <strong>Note</strong><span>{comment.trim()}</span>
+        </p>{/if}
+      <div class="actions">
+        <button class="button primary" type="button" onclick={close}>Done</button>
+      </div>
     </div>
   {:else}
     <div class="dialog-form">
       <h2 id="invitation-dialog-title">{editing ? "Edit invitation note" : "Create invitation"}</h2>
-      <p class="dialog-message">{editing ? "The note is visible only to administrators." : "The invitation can be used once and expires after 24 hours."}</p>
-      <label class="field"><span>Private note <small>Optional</small></span><input bind:value={comment} maxlength="200" placeholder="Who is this invitation for?"></label>
+      <p class="dialog-message">
+        {editing
+          ? "The note is visible only to administrators."
+          : "The invitation can be used once and expires after 24 hours."}
+      </p>
+      <label class="field"
+        ><span>Private note <small>Optional</small></span><input
+          bind:value={comment}
+          maxlength="200"
+          placeholder="Who is this invitation for?"
+        /></label
+      >
       <p class="muted">Only administrators can see this note.</p>
       <div class="actions">
         <button class="button" type="button" disabled={creating} onclick={close}>Cancel</button>
-        <button class="button primary" type="button" disabled={creating} onclick={editing ? save : create}>{creating ? "Saving…" : editing ? "Save note" : "Create invitation"}</button>
+        <button
+          class="button primary"
+          type="button"
+          disabled={creating}
+          onclick={editing ? save : create}
+          >{creating ? "Saving…" : editing ? "Save note" : "Create invitation"}</button
+        >
       </div>
     </div>
   {/if}

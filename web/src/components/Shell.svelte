@@ -41,7 +41,7 @@
       {#if $appState.config.public_explore_enabled}<Link href="/explore">Explore</Link>{/if}
       {#if $appState.session.user}
         <Link href="/pastes">My pastes</Link>
-        <Link href="/pastes/new"><Icon name="plus"/> New</Link>
+        <Link href="/pastes/new"><Icon name="plus" /> New</Link>
         <Link href="/help">Help</Link>
       {/if}
       {#if $appState.session.user?.role === "admin" || $appState.session.user?.role === "owner"}
@@ -49,21 +49,39 @@
       {/if}
     </nav>
     <div class="session">
-      <button class="theme-control" type="button"
+      <button
+        class="theme-control"
+        type="button"
         title={`${currentTheme.label}; click for ${themes[currentTheme.next].label.toLowerCase()}`}
         aria-label={`Color theme: ${currentTheme.label}`}
-        onclick={() => setColorTheme(currentTheme.next)}><Icon name={currentTheme.icon}/></button>
+        onclick={() => setColorTheme(currentTheme.next)}><Icon name={currentTheme.icon} /></button
+      >
       {#if $appState.session.user}
-        <Link href="/account"><Icon name="user-round"/><span>{$appState.session.user.username}</span></Link>
-        <button class="icon-button" type="button" title="Log out" aria-label="Log out" onclick={logout}>
-          <Icon name="log-out"/>
+        <Link href="/account"
+          ><Icon name="user-round" /><span>{$appState.session.user.username}</span></Link
+        >
+        <button
+          class="icon-button"
+          type="button"
+          title="Log out"
+          aria-label="Log out"
+          onclick={logout}
+        >
+          <Icon name="log-out" />
         </button>
       {:else}
-        <Link href="/login"><Icon name="log-in"/><span>Log in</span></Link>
+        <Link href="/login"><Icon name="log-in" /><span>Log in</span></Link>
       {/if}
     </div>
   {/if}
 </header>
 <main>{@render children()}</main>
-<div class="toast" class:show={$notice} class:error={$notice?.variant === "error"}
-  role="status" aria-live="polite">{$notice?.message ?? ""}</div>
+<div
+  class="toast"
+  class:show={$notice}
+  class:error={$notice?.variant === "error"}
+  role="status"
+  aria-live="polite"
+>
+  {$notice?.message ?? ""}
+</div>

@@ -1,9 +1,18 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import {
-    convertPaste, createPaste, createPasteWithAttachments, deletePaste as deletePasteRequest,
-    getPasteSource, listFolders, updatePaste, uploadAttachments,
-    type Conversion, type CreatePasteInput, type FlatCreateInput, type UpdatePasteInput
+    convertPaste,
+    createPaste,
+    createPasteWithAttachments,
+    deletePaste as deletePasteRequest,
+    getPasteSource,
+    listFolders,
+    updatePaste,
+    uploadAttachments,
+    type Conversion,
+    type CreatePasteInput,
+    type FlatCreateInput,
+    type UpdatePasteInput
   } from "../api";
   import AttachmentList from "../components/AttachmentList.svelte";
   import AttachmentPicker from "../components/AttachmentPicker.svelte";
@@ -15,7 +24,12 @@
   import { confirmAction } from "../app/confirmations";
   import { normalizeLanguage } from "../highlighting";
   import { showNotice } from "../app/notices";
-  import { clearUnsavedChangesGuard, guardUnsavedChanges, holdNavigation, navigate } from "../navigation";
+  import {
+    clearUnsavedChangesGuard,
+    guardUnsavedChanges,
+    holdNavigation,
+    navigate
+  } from "../navigation";
   import { appState } from "../app/state";
   import type { Folder, FolderOverview, Paste } from "../types";
 
@@ -63,8 +77,10 @@
 
   function localDateTime(date: Date): string {
     const part = (value: number) => String(value).padStart(2, "0");
-    return `${date.getFullYear()}-${part(date.getMonth() + 1)}-${part(date.getDate())}`
-      + `T${part(date.getHours())}:${part(date.getMinutes())}`;
+    return (
+      `${date.getFullYear()}-${part(date.getMonth() + 1)}-${part(date.getDate())}` +
+      `T${part(date.getHours())}:${part(date.getMinutes())}`
+    );
   }
 
   function changeExpirationMode(event: Event): void {
@@ -94,17 +110,23 @@
 
   function attachmentFingerprint(): string {
     return selectedAttachments
-      .map(file => `${file.name}:${file.size}:${file.lastModified}`).join("|");
+      .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
+      .join("|");
   }
 
   function snapshot(selectedAttachmentFingerprint = attachmentFingerprint()): string {
-    const effectiveKind = contentKind === "markdown" && !markdown.trim()
-      ? "text"
-      : contentKind;
+    const effectiveKind = contentKind === "markdown" && !markdown.trim() ? "text" : contentKind;
     return JSON.stringify({
-      title, content, markdown: effectiveKind === "markdown" ? markdown : null,
-      contentKind: effectiveKind, folderId, language: effectiveKind === "text" ? language : null,
-      visibility, expirationMode, expiresAt, readLimit,
+      title,
+      content,
+      markdown: effectiveKind === "markdown" ? markdown : null,
+      contentKind: effectiveKind,
+      folderId,
+      language: effectiveKind === "text" ? language : null,
+      visibility,
+      expirationMode,
+      expiresAt,
+      readLimit,
       attachmentSelection: selectedAttachmentFingerprint
     });
   }
@@ -121,12 +143,16 @@
     content = source?.content ?? "";
     markdown = source?.format === "markdown" ? source.content : "";
     contentKind = source?.format ?? $appState.config.default_format;
-    folderId = source?.folder_id ? String(source.folder_id) : (
-      source ? "" : new URLSearchParams(location.search).get("folder_id") ?? ""
-    );
-    language = normalizeLanguage(source?.language ?? $appState.config.default_language) ?? "plaintext";
+    folderId = source?.folder_id
+      ? String(source.folder_id)
+      : source
+        ? ""
+        : (new URLSearchParams(location.search).get("folder_id") ?? "");
+    language =
+      normalizeLanguage(source?.language ?? $appState.config.default_language) ?? "plaintext";
     visibility = source?.visibility ?? $appState.config.default_visibility;
-    expirationMode = source?.expires_at || $appState.config.default_expiration_seconds ? "custom" : "never";
+    expirationMode =
+      source?.expires_at || $appState.config.default_expiration_seconds ? "custom" : "never";
     expiresAt = source?.expires_at
       ? localDateTime(new Date(source.expires_at * 1000))
       : $appState.config.default_expiration_seconds
@@ -143,8 +169,12 @@
 
   onMount(() => {
     void listFolders()
-      .then(result => { folders = result.items; })
-      .catch(reason => showNotice(reason instanceof Error ? reason.message : "Unable to load folders", "error"));
+      .then((result) => {
+        folders = result.items;
+      })
+      .catch((reason) =>
+        showNotice(reason instanceof Error ? reason.message : "Unable to load folders", "error")
+      );
     loading = Boolean(pasteId);
     if (!pasteId) {
       initialize();
@@ -153,7 +183,9 @@
     }
     void getPasteSource(pasteId)
       .then(initialize)
-      .catch(reason => { error = reason instanceof Error ? reason.message : "Unable to load paste"; })
+      .catch((reason) => {
+        error = reason instanceof Error ? reason.message : "Unable to load paste";
+      })
       .finally(() => {
         loading = false;
         initialLoadReady();
@@ -165,9 +197,10 @@
     targetKind: "text" | "markdown"
   ): Promise<Conversion> {
     return convertPaste({
-      source: sourceKind === "markdown"
-        ? { format: "markdown", content: markdown }
-        : { format: "text", content, language },
+      source:
+        sourceKind === "markdown"
+          ? { format: "markdown", content: markdown }
+          : { format: "text", content, language },
       target_format: targetKind
     });
   }
@@ -213,7 +246,10 @@
       await convert("markdown", "markdown");
       richMode = "visual";
     } catch (reason) {
-      showNotice(reason instanceof Error ? reason.message : "Markdown cannot be opened visually", "error");
+      showNotice(
+        reason instanceof Error ? reason.message : "Markdown cannot be opened visually",
+        "error"
+      );
     }
   }
 
@@ -224,16 +260,30 @@
       return;
     }
     const submittedContent = contentKind === "markdown" ? markdown : content;
-    if (new TextEncoder().encode(submittedContent).length > $appState.config.max_content_size_bytes) {
-      showNotice(`Content exceeds the ${Math.floor($appState.config.max_content_size_bytes / 1024)} KiB server limit.`, "error");
+    if (
+      new TextEncoder().encode(submittedContent).length > $appState.config.max_content_size_bytes
+    ) {
+      showNotice(
+        `Content exceeds the ${Math.floor($appState.config.max_content_size_bytes / 1024)} KiB server limit.`,
+        "error"
+      );
       return;
     }
     const selected = selectedAttachments;
-    if (selected.length + (paste?.attachments.length ?? 0) > $appState.config.max_attachments_per_paste) {
-      showNotice(`A paste can have at most ${$appState.config.max_attachments_per_paste} attachments.`, "error");
+    if (
+      selected.length + (paste?.attachments.length ?? 0) >
+      $appState.config.max_attachments_per_paste
+    ) {
+      showNotice(
+        `A paste can have at most ${$appState.config.max_attachments_per_paste} attachments.`,
+        "error"
+      );
       return;
     }
-    if (selected.reduce((size, file) => size + file.size, 0) > $appState.config.max_attachment_size_bytes) {
+    if (
+      selected.reduce((size, file) => size + file.size, 0) >
+      $appState.config.max_attachment_size_bytes
+    ) {
       showNotice("Selected attachments exceed the server upload limit.", "error");
       return;
     }
@@ -242,16 +292,18 @@
     try {
       const body = {
         title,
-        body: contentKind === "markdown"
-          ? { format: "markdown", content: markdown }
-          : { format: "text", content, language: canonicalLanguage },
+        body:
+          contentKind === "markdown"
+            ? { format: "markdown", content: markdown }
+            : { format: "text", content, language: canonicalLanguage },
         visibility,
         ...(pasteId || (expirationMode !== "never" && expiresAt)
-          ? { expires_at: expirationMode !== "never" && expiresAt ? new Date(expiresAt).toISOString() : null }
+          ? {
+              expires_at:
+                expirationMode !== "never" && expiresAt ? new Date(expiresAt).toISOString() : null
+            }
           : {}),
-        ...(pasteId || readLimit
-          ? { read_limit: readLimit ? Number(readLimit) : null }
-          : {}),
+        ...(pasteId || readLimit ? { read_limit: readLimit ? Number(readLimit) : null } : {}),
         ...(canOrganize && (pasteId || folderId)
           ? { folder_id: folderId ? Number(folderId) : null }
           : {})
@@ -260,9 +312,14 @@
         created = await updatePaste(pasteId, body as UpdatePasteInput, paste?._etag ?? "*");
       } else if (selected.length) {
         const flat: FlatCreateInput = {
-          title, format: contentKind, content: submittedContent, visibility,
+          title,
+          format: contentKind,
+          content: submittedContent,
+          visibility,
           ...(contentKind === "text" ? { language: canonicalLanguage } : {}),
-          ...(expirationMode !== "never" && expiresAt ? { expires_at: new Date(expiresAt).toISOString() } : {}),
+          ...(expirationMode !== "never" && expiresAt
+            ? { expires_at: new Date(expiresAt).toISOString() }
+            : {}),
           ...(readLimit ? { read_limit: Number(readLimit) } : {}),
           ...(canOrganize && folderId ? { folder_id: Number(folderId) } : {})
         };
@@ -294,7 +351,16 @@
   }
 
   async function deletePaste(): Promise<void> {
-    if (!pasteId || !(await confirmAction({ title: "Delete paste?", message: "This paste and its attachments will be permanently deleted.", confirmLabel: "Delete paste", dangerous: true }))) return;
+    if (
+      !pasteId ||
+      !(await confirmAction({
+        title: "Delete paste?",
+        message: "This paste and its attachments will be permanently deleted.",
+        confirmLabel: "Delete paste",
+        dangerous: true
+      }))
+    )
+      return;
     try {
       await deletePasteRequest(pasteId, paste?._etag ?? "*");
       initialized = false;
@@ -306,90 +372,188 @@
   }
 </script>
 
-<ConversionDialog bind:this={conversionDialog}/>
+<ConversionDialog bind:this={conversionDialog} />
 {#if loading}
   <p class="muted">Loading paste…</p>
 {:else if error}
-  <section class="empty"><h1>Unable to edit this paste</h1><p>{error}</p><Link class="button" href="/pastes">Return to pastes</Link></section>
+  <section class="empty">
+    <h1>Unable to edit this paste</h1>
+    <p>{error}</p>
+    <Link class="button" href="/pastes">Return to pastes</Link>
+  </section>
 {:else}
   <section class="editor page-layout">
-    <div class="page-heading"><div><p class="eyebrow">{paste ? "Edit" : "Create"}</p><h1>{paste ? pasteDisplayTitle(paste) : "New paste"}</h1></div></div>
-    <form onsubmit={(event) => { event.preventDefault(); void submit(); }}>
-      <label class="field title-field"><span>Title</span><input bind:value={title} maxlength={$appState.config.max_title_characters} placeholder="Optional title"/></label>
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow">{paste ? "Edit" : "Create"}</p>
+        <h1>{paste ? pasteDisplayTitle(paste) : "New paste"}</h1>
+      </div>
+    </div>
+    <form
+      onsubmit={(event) => {
+        event.preventDefault();
+        void submit();
+      }}
+    >
+      <label class="field title-field"
+        ><span>Title</span><input
+          bind:value={title}
+          maxlength={$appState.config.max_title_characters}
+          placeholder="Optional title"
+        /></label
+      >
       {#if contentKind === "markdown"}
-        <div class="field content-field"><span>Content</span>
-          <div class="content-editor content-editor-rich" style={`height:${editorHeight}px`}
-            use:trackEditorResize>
-            <div class="rich-text-mode segmented-control" role="group" aria-label="Rich-text editing mode">
-              <button type="button" class:active={richMode === "visual"} onclick={() => { void showVisualEditor(); }}>Visual</button>
-              <button type="button" class:active={richMode === "markdown"} onclick={() => { richMode = "markdown"; }}>Markdown</button>
+        <div class="field content-field">
+          <span>Content</span>
+          <div
+            class="content-editor content-editor-rich"
+            style={`height:${editorHeight}px`}
+            use:trackEditorResize
+          >
+            <div
+              class="rich-text-mode segmented-control"
+              role="group"
+              aria-label="Rich-text editing mode"
+            >
+              <button
+                type="button"
+                class:active={richMode === "visual"}
+                onclick={() => {
+                  void showVisualEditor();
+                }}>Visual</button
+              >
+              <button
+                type="button"
+                class:active={richMode === "markdown"}
+                onclick={() => {
+                  richMode = "markdown";
+                }}>Markdown</button
+              >
             </div>
             <div class:visual={richMode === "visual"} class="rich-editor-pane">
               {#if richMode === "visual"}
                 {#await import("../rich-text/Editor.svelte") then module}
                   {@const RichTextEditor = module.default}
-                  <RichTextEditor bind:markdown/>
+                  <RichTextEditor bind:markdown />
                 {/await}
               {:else}
-                <CodeEditor bind:value={markdown} bind:language={markdownLanguage} maxLength={$appState.config.max_content_size_bytes}/>
+                <CodeEditor
+                  bind:value={markdown}
+                  bind:language={markdownLanguage}
+                  maxLength={$appState.config.max_content_size_bytes}
+                />
               {/if}
             </div>
           </div>
         </div>
       {:else}
-        <div class="field content-field"><span>Content</span>
-          <div class="content-editor content-editor-text" style={`height:${editorHeight}px`}
-            use:trackEditorResize>
-            <CodeEditor bind:value={content} bind:language maxLength={$appState.config.max_content_size_bytes}/>
+        <div class="field content-field">
+          <span>Content</span>
+          <div
+            class="content-editor content-editor-text"
+            style={`height:${editorHeight}px`}
+            use:trackEditorResize
+          >
+            <CodeEditor
+              bind:value={content}
+              bind:language
+              maxLength={$appState.config.max_content_size_bytes}
+            />
           </div>
         </div>
       {/if}
       <div class:without-folder={!canOrganize} class="form-grid">
-        <label class="field type-field"><span>Type</span><select value={contentKind} disabled={switching} onchange={changeKind}>
-          {#each $appState.config.formats as format}<option value={format}>{format === "markdown" ? "Rich text" : "Text"}</option>{/each}
-        </select></label>
-        <LanguagePicker bind:value={language} disabled={contentKind !== "text"}/>
+        <label class="field type-field"
+          ><span>Type</span><select value={contentKind} disabled={switching} onchange={changeKind}>
+            {#each $appState.config.formats as format}<option value={format}
+                >{format === "markdown" ? "Rich text" : "Text"}</option
+              >{/each}
+          </select></label
+        >
+        <LanguagePicker bind:value={language} disabled={contentKind !== "text"} />
         {#if canOrganize}
-          <label class="field folder-field"><span>Folder</span><select bind:value={folderId}>
-            <option value="">Uncategorized</option>
-            {#each folders as folder}<option value={String(folder.id)}>{folder.name}</option>{/each}
-          </select></label>
+          <label class="field folder-field"
+            ><span>Folder</span><select bind:value={folderId}>
+              <option value="">Uncategorized</option>
+              {#each folders as folder}<option value={String(folder.id)}>{folder.name}</option
+                >{/each}
+            </select></label
+          >
         {/if}
-        <label class="field visibility-field"><span>Visibility</span><select bind:value={visibility}>
-          {#each $appState.config.visibility_modes as mode}<option value={mode}>{mode}</option>{/each}
-        </select></label>
-        <label class="field expiration-mode-field"><span>Expiration</span><select value={expirationMode} onchange={changeExpirationMode}>
-          <option value="never">Never</option><option value="1h">1 hour</option>
-          <option value="12h">12 hours</option><option value="1d">1 day</option>
-          <option value="1w">1 week</option><option value="30d">30 days</option>
-          <option value="1y">1 year</option><option value="custom">Custom…</option>
-        </select></label>
-        <label class="field expiration-time-field"><span>Date and time</span>
+        <label class="field visibility-field"
+          ><span>Visibility</span><select bind:value={visibility}>
+            {#each $appState.config.visibility_modes as mode}<option value={mode}>{mode}</option
+              >{/each}
+          </select></label
+        >
+        <label class="field expiration-mode-field"
+          ><span>Expiration</span><select value={expirationMode} onchange={changeExpirationMode}>
+            <option value="never">Never</option><option value="1h">1 hour</option>
+            <option value="12h">12 hours</option><option value="1d">1 day</option>
+            <option value="1w">1 week</option><option value="30d">30 days</option>
+            <option value="1y">1 year</option><option value="custom">Custom…</option>
+          </select></label
+        >
+        <label class="field expiration-time-field"
+          ><span>Date and time</span>
           {#if expirationMode === "never"}
-            <input type="text" value="Not applicable" disabled/>
+            <input type="text" value="Not applicable" disabled />
           {:else}
-            <input type="datetime-local" bind:value={expiresAt} required oninput={customizeExpiration}/>
+            <input
+              type="datetime-local"
+              bind:value={expiresAt}
+              required
+              oninput={customizeExpiration}
+            />
           {/if}
         </label>
-        <label class="field read-limit-field"><span>View limit</span><input type="number" min="1" bind:value={readLimit} placeholder="Unlimited"/></label>
+        <label class="field read-limit-field"
+          ><span>View limit</span><input
+            type="number"
+            min="1"
+            bind:value={readLimit}
+            placeholder="Unlimited"
+          /></label
+        >
       </div>
       {#if paste?.attachments.length}
-        <div class="existing-attachments"><span>Current attachments</span>
-          <AttachmentList pasteId={paste.id} attachments={paste.attachments} canDelete editing etag={paste._etag}
-            ondelete={(attachment, etag) => { if (paste) paste = { ...paste, _etag: etag ?? paste._etag, attachments: paste.attachments.filter(item => item.id !== attachment.id) }; }}/>
-          <small>Deleting an existing attachment takes effect immediately, even if you cancel editing.</small>
+        <div class="existing-attachments">
+          <span>Current attachments</span>
+          <AttachmentList
+            pasteId={paste.id}
+            attachments={paste.attachments}
+            canDelete
+            editing
+            etag={paste._etag}
+            ondelete={(attachment, etag) => {
+              if (paste)
+                paste = {
+                  ...paste,
+                  _etag: etag ?? paste._etag,
+                  attachments: paste.attachments.filter((item) => item.id !== attachment.id)
+                };
+            }}
+          />
+          <small
+            >Deleting an existing attachment takes effect immediately, even if you cancel editing.</small
+          >
         </div>
       {/if}
       {#if $appState.config.attachments_enabled}
-        <AttachmentPicker bind:files={selectedAttachments}
+        <AttachmentPicker
+          bind:files={selectedAttachments}
           existingCount={paste?.attachments.length ?? 0}
           maxFiles={$appState.config.max_attachments_per_paste}
-          maxBytes={$appState.config.max_attachment_size_bytes}/>
+          maxBytes={$appState.config.max_attachment_size_bytes}
+        />
       {/if}
       <div class="actions">
-        <button class="button primary" type="submit" disabled={submitting || switching}>{submitting ? "Saving…" : paste ? "Save changes" : "Create paste"}</button>
+        <button class="button primary" type="submit" disabled={submitting || switching}
+          >{submitting ? "Saving…" : paste ? "Save changes" : "Create paste"}</button
+        >
         <Link class="button" href={paste ? `/pastes/${paste.id}` : "/pastes"}>Cancel</Link>
-        {#if paste}<button class="button danger" type="button" onclick={deletePaste}>Delete</button>{/if}
+        {#if paste}<button class="button danger" type="button" onclick={deletePaste}>Delete</button
+          >{/if}
       </div>
     </form>
   </section>

@@ -48,12 +48,19 @@
     return () => observer.disconnect();
   });
 
-  $effect(() => { void render(value, language); });
+  $effect(() => {
+    void render(value, language);
+  });
 </script>
 
 <div class="code-editor" style={`--line-number-width:${width}`}>
   <div bind:this={gutter} class="line-numbers" aria-hidden="true">{lineNumbers}</div>
   <pre bind:this={pre} aria-hidden="true"><code class="hljs">{@html html}</code></pre>
-  <textarea bind:this={textarea} bind:value maxlength={maxLength} spellcheck="false" aria-label="Paste content"
+  <textarea
+    bind:this={textarea}
+    bind:value
+    maxlength={maxLength}
+    spellcheck="false"
+    aria-label="Paste content"
     onscroll={syncScroll}></textarea>
 </div>

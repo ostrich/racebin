@@ -12,11 +12,14 @@
 
   let { query }: { query: URLSearchParams } = $props();
 
-  let scopes = $derived($appState.config.scopes.filter(scope =>
-    $appState.session.user?.role === "admin" ||
-    $appState.session.user?.role === "owner" ||
-    !scope.id.endsWith(":manage")
-  ));
+  let scopes = $derived(
+    $appState.config.scopes.filter(
+      (scope) =>
+        $appState.session.user?.role === "admin" ||
+        $appState.session.user?.role === "owner" ||
+        !scope.id.endsWith(":manage")
+    )
+  );
   let page = $state<Page<ApiKey> | null>(null);
   let keys = $derived(page?.items ?? []);
   let loading = $state(true);
@@ -55,10 +58,23 @@
   }
 
   async function remove(key: ApiKey): Promise<void> {
-    if (!(await confirmAction({ title: "Delete API key?", message: `The key “${key.name}” will stop working immediately.`, confirmLabel: "Delete key", dangerous: true }))) return;
+    if (
+      !(await confirmAction({
+        title: "Delete API key?",
+        message: `The key “${key.name}” will stop working immediately.`,
+        confirmLabel: "Delete key",
+        dangerous: true
+      }))
+    )
+      return;
     try {
       await deleteApiKey(key.id);
-      if (page) page = { ...page, items: page.items.filter(candidate => candidate.id !== key.id), total_items: page.total_items - 1 };
+      if (page)
+        page = {
+          ...page,
+          items: page.items.filter((candidate) => candidate.id !== key.id),
+          total_items: page.total_items - 1
+        };
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Request failed", "error");
     }
@@ -86,14 +102,16 @@
   async function applySearch(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     const params = new URLSearchParams(query);
-    if (search.trim()) params.set("search", search.trim()); else params.delete("search");
+    if (search.trim()) params.set("search", search.trim());
+    else params.delete("search");
     params.delete("page");
     await navigate(`/account?${params}`);
   }
 
   function setFilter(key: string, value: string): void {
     const params = new URLSearchParams(query);
-    if (value) params.set(key, value); else params.delete(key);
+    if (value) params.set(key, value);
+    else params.delete(key);
     params.delete("page");
     void navigate(`/account?${params}`);
   }
@@ -106,17 +124,51 @@
 
 <section class="page-layout">
   <div class="page-heading">
-    <div><p class="eyebrow">Settings</p><h1>Account</h1></div>
-    <div class="page-heading-actions"><Link class="button" href="/account/password">Change password</Link></div>
+    <div>
+      <p class="eyebrow">Settings</p>
+      <h1>Account</h1>
+    </div>
+    <div class="page-heading-actions">
+      <Link class="button" href="/account/password">Change password</Link>
+    </div>
   </div>
   <section class="panel">
-    <h2>API keys</h2><p class="muted">Tokens are shown once when created.</p>
+    <h2>API keys</h2>
+    <p class="muted">Tokens are shown once when created.</p>
     <form class="list-filter-bar account-key-filters" onsubmit={applySearch}>
-      <label class="field list-filter-search"><span>Search</span><input type="search" placeholder="Name, prefix, or privilege" bind:value={search}></label>
-      <button class="button primary" type="submit"><Icon name="search"/> Search</button>
-      <label class="field list-filter-select"><span>Status</span><select value={query.get("status") ?? ""} onchange={event => setFilter("status", event.currentTarget.value)}><option value="">Any status</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></label>
-      <label class="field list-filter-select"><span>Sort</span><select value={query.get("sort") ?? "created"} onchange={event => setFilter("sort", event.currentTarget.value)}><option value="created">Created</option><option value="name">Name</option><option value="used">Last used</option></select></label>
-      <label class="field list-filter-select"><span>Direction</span><select value={query.get("direction") ?? "desc"} onchange={event => setFilter("direction", event.currentTarget.value)}><option value="desc">Descending</option><option value="asc">Ascending</option></select></label>
+      <label class="field list-filter-search"
+        ><span>Search</span><input
+          type="search"
+          placeholder="Name, prefix, or privilege"
+          bind:value={search}
+        /></label
+      >
+      <button class="button primary" type="submit"><Icon name="search" /> Search</button>
+      <label class="field list-filter-select"
+        ><span>Status</span><select
+          value={query.get("status") ?? ""}
+          onchange={(event) => setFilter("status", event.currentTarget.value)}
+          ><option value="">Any status</option><option value="enabled">Enabled</option><option
+            value="disabled">Disabled</option
+          ></select
+        ></label
+      >
+      <label class="field list-filter-select"
+        ><span>Sort</span><select
+          value={query.get("sort") ?? "created"}
+          onchange={(event) => setFilter("sort", event.currentTarget.value)}
+          ><option value="created">Created</option><option value="name">Name</option><option
+            value="used">Last used</option
+          ></select
+        ></label
+      >
+      <label class="field list-filter-select"
+        ><span>Direction</span><select
+          value={query.get("direction") ?? "desc"}
+          onchange={(event) => setFilter("direction", event.currentTarget.value)}
+          ><option value="desc">Descending</option><option value="asc">Ascending</option></select
+        ></label
+      >
     </form>
     {#if page}<p class="result-count">{page.total_items} API keys</p>{/if}
     <div class="key-list">
@@ -127,29 +179,55 @@
           <div class="key-row">
             <div>
               <strong>{key.name}</strong><code>rbk_{key.token_prefix}_...</code>
-              <small>{key.scopes.join(", ") || "No scopes"} · Created {formatDate(key.created_at)}</small>
+              <small
+                >{key.scopes.join(", ") || "No scopes"} · Created {formatDate(
+                  key.created_at
+                )}</small
+              >
             </div>
             <label class="switch">
-              <input type="checkbox" checked={key.enabled}
+              <input
+                type="checkbox"
+                checked={key.enabled}
                 aria-label={`Enable ${key.name}`}
-                onchange={(event) => toggle(key, event.currentTarget.checked)}/>
+                onchange={(event) => toggle(key, event.currentTarget.checked)}
+              />
               <span></span>
             </label>
-            <button class="icon-button" title="Delete API key" aria-label={`Delete ${key.name}`}
-              type="button" onclick={() => remove(key)}><Icon name="trash-2"/></button>
+            <button
+              class="icon-button"
+              title="Delete API key"
+              aria-label={`Delete ${key.name}`}
+              type="button"
+              onclick={() => remove(key)}><Icon name="trash-2" /></button
+            >
           </div>
         {/each}
       {/if}
     </div>
-    {#if page}<Pagination {page} params={query}/>{/if}
-    <form class="key-form" onsubmit={(event) => { event.preventDefault(); void create(event); }}>
-      <label class="field"><span>Name</span><input name="name" required maxlength="100"/></label>
-      <fieldset><legend>Scopes</legend><div class="scope-options">
-        {#each scopes as scope}
-          <label class="check" title={scope.description}><input type="checkbox" name="scopes" value={scope.id}/><span>{scope.id}</span></label>
-        {/each}
-      </div></fieldset>
-      <button class="button primary" type="submit" disabled={submitting}><Icon name="key-round"/> {submitting ? "Creating…" : "Create key"}</button>
+    {#if page}<Pagination {page} params={query} />{/if}
+    <form
+      class="key-form"
+      onsubmit={(event) => {
+        event.preventDefault();
+        void create(event);
+      }}
+    >
+      <label class="field"><span>Name</span><input name="name" required maxlength="100" /></label>
+      <fieldset>
+        <legend>Scopes</legend>
+        <div class="scope-options">
+          {#each scopes as scope}
+            <label class="check" title={scope.description}
+              ><input type="checkbox" name="scopes" value={scope.id} /><span>{scope.id}</span
+              ></label
+            >
+          {/each}
+        </div>
+      </fieldset>
+      <button class="button primary" type="submit" disabled={submitting}
+        ><Icon name="key-round" /> {submitting ? "Creating…" : "Create key"}</button
+      >
     </form>
   </section>
 </section>

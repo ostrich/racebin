@@ -14,7 +14,10 @@
   async function submit(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     error = "";
-    if (password !== confirmation) { error = "Passwords do not match."; return; }
+    if (password !== confirmation) {
+      error = "Passwords do not match.";
+      return;
+    }
     saving = true;
     try {
       await resetPassword(token, { new_password: password });
@@ -23,23 +26,45 @@
       password = confirmation = "";
     } catch (reason) {
       error = reason instanceof Error ? reason.message : "Unable to reset password";
-    } finally { saving = false; }
+    } finally {
+      saving = false;
+    }
   }
 </script>
 
 <section class="auth-card panel">
   {#if complete}
-    <p class="eyebrow">Account recovery</p><h1>Password reset</h1>
+    <p class="eyebrow">Account recovery</p>
+    <h1>Password reset</h1>
     <p>Your password has been changed and existing sessions have been signed out.</p>
     <Link class="button primary" href="/login">Log in</Link>
   {:else}
-    <p class="eyebrow">Account recovery</p><h1>Choose a new password</h1>
+    <p class="eyebrow">Account recovery</p>
+    <h1>Choose a new password</h1>
     <p class="muted">This one-time link expires one hour after it was created.</p>
     <form class="stack" onsubmit={submit}>
-      <label class="field"><span>New password</span><input type="password" minlength={$appState.config.minimum_password_characters} autocomplete="new-password" bind:value={password} required></label>
-      <label class="field"><span>Confirm password</span><input type="password" minlength={$appState.config.minimum_password_characters} autocomplete="new-password" bind:value={confirmation} required></label>
+      <label class="field"
+        ><span>New password</span><input
+          type="password"
+          minlength={$appState.config.minimum_password_characters}
+          autocomplete="new-password"
+          bind:value={password}
+          required
+        /></label
+      >
+      <label class="field"
+        ><span>Confirm password</span><input
+          type="password"
+          minlength={$appState.config.minimum_password_characters}
+          autocomplete="new-password"
+          bind:value={confirmation}
+          required
+        /></label
+      >
       {#if error}<p class="form-error" role="alert">{error}</p>{/if}
-      <button class="button primary" type="submit" disabled={saving}>{saving ? "Resetting…" : "Reset password"}</button>
+      <button class="button primary" type="submit" disabled={saving}
+        >{saving ? "Resetting…" : "Reset password"}</button
+      >
     </form>
   {/if}
 </section>

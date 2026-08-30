@@ -25,7 +25,8 @@
       Boolean(anchor.target && anchor.target !== "_self") ||
       anchor.hasAttribute("download") ||
       new URL(anchor.href, location.href).origin !== location.origin
-    ) return;
+    )
+      return;
     event.preventDefault();
     void navigate(href);
   }

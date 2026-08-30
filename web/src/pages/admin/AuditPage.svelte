@@ -22,15 +22,23 @@
     initialLoadReady = null;
     search = query.get("search") ?? "";
     void listAuditEvents(source)
-      .then(value => { if (current === generation) { page = value; error = ""; } })
-      .catch(reason => { error = reason instanceof Error ? reason.message : "Unable to load audit log"; })
+      .then((value) => {
+        if (current === generation) {
+          page = value;
+          error = "";
+        }
+      })
+      .catch((reason) => {
+        error = reason instanceof Error ? reason.message : "Unable to load audit log";
+      })
       .finally(() => ready?.());
   });
 
   async function applySearch(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     const params = new URLSearchParams(query);
-    if (search.trim()) params.set("search", search.trim()); else params.delete("search");
+    if (search.trim()) params.set("search", search.trim());
+    else params.delete("search");
     params.delete("page");
     await navigate(`/admin/audit?${params}`);
   }
@@ -38,12 +46,23 @@
 
 <section class="page-layout">
   <div class="page-heading">
-    <div><p class="eyebrow">Owner</p><h1>Audit log</h1></div>
+    <div>
+      <p class="eyebrow">Owner</p>
+      <h1>Audit log</h1>
+    </div>
   </div>
   <div class="section-layout">
-    <AdminNav/>
+    <AdminNav />
     <div class="section-content">
-      <form class="list-filter-bar" onsubmit={applySearch}><label class="field list-filter-search"><span>Search</span><input type="search" placeholder="Actor, action, or target" bind:value={search}></label><button class="button primary" type="submit"><Icon name="search"/> Search</button></form>
+      <form class="list-filter-bar" onsubmit={applySearch}>
+        <label class="field list-filter-search"
+          ><span>Search</span><input
+            type="search"
+            placeholder="Actor, action, or target"
+            bind:value={search}
+          /></label
+        ><button class="button primary" type="submit"><Icon name="search" /> Search</button>
+      </form>
       {#if error}
         <section class="empty"><p>{error}</p></section>
       {:else if page}
@@ -53,14 +72,20 @@
             <article class="data-row">
               <div>
                 <strong>{event.action.replaceAll(".", " ")}</strong>
-                <small>{event.actor_username} · {formatDate(event.created_at)}{event.target_label ? ` · ${event.target_label}` : event.target_id ? ` · ${event.target_type} ${event.target_id}` : ""}</small>
+                <small
+                  >{event.actor_username} · {formatDate(event.created_at)}{event.target_label
+                    ? ` · ${event.target_label}`
+                    : event.target_id
+                      ? ` · ${event.target_type} ${event.target_id}`
+                      : ""}</small
+                >
               </div>
             </article>
           {:else}
             <div class="empty"><p>No audit events match.</p></div>
           {/each}
         </div>
-        <Pagination {page} params={query}/>
+        <Pagination {page} params={query} />
       {:else}<p class="muted">Loading audit events…</p>{/if}
     </div>
   </div>

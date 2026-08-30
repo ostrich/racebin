@@ -2,9 +2,8 @@ import { get, writable } from "svelte/store";
 
 const pasteListViewStorageKey = "racebin.pasteListView";
 const colorThemeStorageKey = "racebin.colorTheme";
-const systemTheme = typeof matchMedia === "function"
-  ? matchMedia("(prefers-color-scheme: dark)")
-  : undefined;
+const systemTheme =
+  typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : undefined;
 
 export type PasteListView = "normal" | "compact";
 export type ColorTheme = "auto" | "dark" | "light";
@@ -36,9 +35,7 @@ export function initializeUiPreferences(storage: Storage = localStorage): void {
 }
 
 function resolvedColorTheme(colorTheme: ColorTheme): "dark" | "light" {
-  return colorTheme === "auto"
-    ? systemTheme?.matches ? "dark" : "light"
-    : colorTheme;
+  return colorTheme === "auto" ? (systemTheme?.matches ? "dark" : "light") : colorTheme;
 }
 
 function applyColorTheme(colorTheme: ColorTheme): void {
@@ -49,7 +46,7 @@ function applyColorTheme(colorTheme: ColorTheme): void {
 }
 
 export function setColorTheme(colorTheme: ColorTheme, storage: Storage = localStorage): void {
-  uiPreferences.update(preferences => ({ ...preferences, colorTheme }));
+  uiPreferences.update((preferences) => ({ ...preferences, colorTheme }));
   applyColorTheme(colorTheme);
   try {
     if (colorTheme === "auto") storage.removeItem(colorThemeStorageKey);
@@ -68,7 +65,7 @@ export function setPasteListView(
   pasteListView: PasteListView,
   storage: Storage = localStorage
 ): void {
-  uiPreferences.update(preferences => ({ ...preferences, pasteListView }));
+  uiPreferences.update((preferences) => ({ ...preferences, pasteListView }));
   try {
     storage.setItem(pasteListViewStorageKey, pasteListView);
   } catch {

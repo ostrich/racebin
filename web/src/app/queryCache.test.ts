@@ -21,9 +21,13 @@ describe("query cache", () => {
 
   it("does not restore an in-flight result after invalidation", async () => {
     let resolveRequest: (value: { count: number }) => void = () => {};
-    const pending = loadQuery("/items", () => new Promise(resolve => {
-      resolveRequest = resolve;
-    }));
+    const pending = loadQuery(
+      "/items",
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        })
+    );
     clearQueryCache();
     resolveRequest({ count: 2 });
     await pending;

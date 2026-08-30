@@ -63,26 +63,47 @@ export function parseLocation(path: string, search = "", hash = ""): RouteLocati
 
 export function routeTitle(route: Route): string {
   switch (route.name) {
-    case "home": return "Home";
-    case "explore": return "Explore";
-    case "login": return "Log in";
-    case "new-paste": return "New paste";
-    case "my-pastes": return "My pastes";
-    case "paste": return "Paste";
-    case "edit-paste": return "Edit paste";
-    case "account": return "Account";
-    case "password": return "Change password";
-    case "admin": return "Administration";
-    case "admin-pastes": return "Manage pastes";
-    case "admin-users": return "Manage users";
-    case "admin-user": return "Manage user";
-    case "admin-invitations": return "Invitations";
-    case "admin-api-keys": return "API keys";
-    case "admin-settings": return "Site settings";
-    case "admin-audit": return "Audit log";
-    case "help": return "Help";
-    case "password-reset": return "Reset password";
-    case "invitation": return "Invitation";
-    case "not-found": return "Page not found";
+    case "home":
+      return "Home";
+    case "explore":
+      return "Explore";
+    case "login":
+      return "Log in";
+    case "new-paste":
+      return "New paste";
+    case "my-pastes":
+      return "My pastes";
+    case "paste":
+      return "Paste";
+    case "edit-paste":
+      return "Edit paste";
+    case "account":
+      return "Account";
+    case "password":
+      return "Change password";
+    case "admin":
+      return "Administration";
+    case "admin-pastes":
+      return "Manage pastes";
+    case "admin-users":
+      return "Manage users";
+    case "admin-user":
+      return "Manage user";
+    case "admin-invitations":
+      return "Invitations";
+    case "admin-api-keys":
+      return "API keys";
+    case "admin-settings":
+      return "Site settings";
+    case "admin-audit":
+      return "Audit log";
+    case "help":
+      return "Help";
+    case "password-reset":
+      return "Reset password";
+    case "invitation":
+      return "Invitation";
+    case "not-found":
+      return "Page not found";
   }
 }

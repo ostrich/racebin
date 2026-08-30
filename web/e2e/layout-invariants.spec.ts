@@ -7,28 +7,31 @@ test.beforeEach(async ({ page }) => {
 
 test("the bundled interface font is available", async ({ page }) => {
   await page.goto("/");
-  const faces = await page.evaluate(async () =>
-    (await document.fonts.load('16px "Racebin Inter"')).length
+  const faces = await page.evaluate(
+    async () => (await document.fonts.load('16px "Racebin Inter"')).length
   );
   expect(faces).toBeGreaterThan(0);
 });
 
-test("desktop layout stays anchored without reserving an idle scrollbar gutter", async ({ page }) => {
+test("desktop layout stays anchored without reserving an idle scrollbar gutter", async ({
+  page
+}) => {
   await page.setViewportSize({ width: 1440, height: 1400 });
   await page.goto("/pastes/new");
-  const measure = () => page.evaluate(() => {
-    const root = document.documentElement;
-    const header = document.querySelector<HTMLElement>(".site-header")!;
-    const heading = document.querySelector<HTMLElement>("h1")!;
-    return {
-      headingX: heading.getBoundingClientRect().x,
-      headerWidth: header.getBoundingClientRect().width,
-      rootWidth: root.getBoundingClientRect().width,
-      viewportWidth: innerWidth,
-      scrollbarGutter: getComputedStyle(root).scrollbarGutter,
-      scrollable: root.scrollHeight > innerHeight
-    };
-  });
+  const measure = () =>
+    page.evaluate(() => {
+      const root = document.documentElement;
+      const header = document.querySelector<HTMLElement>(".site-header")!;
+      const heading = document.querySelector<HTMLElement>("h1")!;
+      return {
+        headingX: heading.getBoundingClientRect().x,
+        headerWidth: header.getBoundingClientRect().width,
+        rootWidth: root.getBoundingClientRect().width,
+        viewportWidth: innerWidth,
+        scrollbarGutter: getComputedStyle(root).scrollbarGutter,
+        scrollable: root.scrollHeight > innerHeight
+      };
+    });
   const withoutScrollbar = await measure();
   expect(withoutScrollbar.scrollable).toBe(false);
   expect(withoutScrollbar.scrollbarGutter).toBe("auto");
@@ -50,7 +53,7 @@ test("desktop layout stays anchored without reserving an idle scrollbar gutter",
 test("primary pages do not overflow at supported widths", async ({ page }) => {
   for (const viewport of [
     { width: 1440, height: 900 },
-    { width: 390, height: 844 },
+    { width: 390, height: 844 }
   ]) {
     await page.setViewportSize(viewport);
     for (const path of [
@@ -61,15 +64,13 @@ test("primary pages do not overflow at supported widths", async ({ page }) => {
       "/admin/pastes",
       "/admin/users",
       "/admin/users/1",
-      "/help",
+      "/help"
     ]) {
       await page.goto(path);
       await expect
-        .poll(() =>
-          page.locator("html").evaluate(
-            (root) => root.scrollWidth <= root.clientWidth,
-          ), { message: `${path} should fit at ${viewport.width}px` }
-        )
+        .poll(() => page.locator("html").evaluate((root) => root.scrollWidth <= root.clientWidth), {
+          message: `${path} should fit at ${viewport.width}px`
+        })
         .toBe(true);
     }
   }
@@ -79,16 +80,20 @@ test("long paste identifiers do not displace mobile navigation", async ({ page }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/pastes/example-paste");
   const heading = page.getByRole("heading", { level: 1 });
-  await heading.evaluate(element => {
+  await heading.evaluate((element) => {
     element.textContent = "f7f7113f74ab4a59baaac0ba";
   });
 
-  await expect.poll(() => page.locator("html").evaluate(root =>
-    root.scrollWidth <= root.clientWidth
-  )).toBe(true);
-  await expect.poll(() => page.locator(".primary-nav").evaluate(nav =>
-    Math.abs(nav.getBoundingClientRect().bottom - window.innerHeight)
-  )).toBeLessThan(1);
+  await expect
+    .poll(() => page.locator("html").evaluate((root) => root.scrollWidth <= root.clientWidth))
+    .toBe(true);
+  await expect
+    .poll(() =>
+      page
+        .locator(".primary-nav")
+        .evaluate((nav) => Math.abs(nav.getBoundingClientRect().bottom - window.innerHeight))
+    )
+    .toBeLessThan(1);
 });
 
 test("workspace sections share a common content edge", async ({ page }) => {
@@ -102,7 +107,7 @@ test("workspace sections share a common content edge", async ({ page }) => {
       bounds(".page-heading"),
       bounds(".paste-filter-form"),
       bounds(".paste-selection-bar"),
-      bounds(".paste-list"),
+      bounds(".paste-list")
     ];
   });
   for (const edge of edges.slice(1)) {
@@ -112,11 +117,12 @@ test("workspace sections share a common content edge", async ({ page }) => {
 });
 
 test("page headings use consistent eyebrow-to-title spacing", async ({ page }) => {
-  const headingGap = async () => page.locator(".page-heading").evaluate((heading) => {
-    const eyebrow = heading.querySelector<HTMLElement>(".eyebrow")!.getBoundingClientRect();
-    const title = heading.querySelector<HTMLElement>("h1")!.getBoundingClientRect();
-    return title.top - eyebrow.bottom;
-  });
+  const headingGap = async () =>
+    page.locator(".page-heading").evaluate((heading) => {
+      const eyebrow = heading.querySelector<HTMLElement>(".eyebrow")!.getBoundingClientRect();
+      const title = heading.querySelector<HTMLElement>("h1")!.getBoundingClientRect();
+      return title.top - eyebrow.bottom;
+    });
 
   await page.goto("/pastes");
   const standardGap = await headingGap();
@@ -134,17 +140,16 @@ test("page-level actions share one heading alignment", async ({ page }) => {
     "/admin/users",
     "/admin/users/1",
     "/admin/invitations",
-    "/admin/settings",
+    "/admin/settings"
   ]) {
     await page.goto(route);
-    const alignment = await page.locator(".page-heading").evaluate(heading => {
+    const alignment = await page.locator(".page-heading").evaluate((heading) => {
       const actions = heading.querySelector<HTMLElement>(".page-heading-actions");
       if (!actions) throw new Error("Page heading has no standard action container");
       const headingBox = heading.getBoundingClientRect();
       const actionBox = actions.getBoundingClientRect();
       return Math.abs(
-        (headingBox.top + headingBox.height / 2) -
-        (actionBox.top + actionBox.height / 2)
+        headingBox.top + headingBox.height / 2 - (actionBox.top + actionBox.height / 2)
       );
     });
     expect(alignment, `${route} should center its page action`).toBeLessThan(1);
@@ -155,16 +160,16 @@ test("desktop side navigation uses the standard sticky header clearance", async 
   await page.setViewportSize({ width: 1440, height: 700 });
   for (const [route, label] of [
     ["/help", "Help topics"],
-    ["/admin", "Administration"],
+    ["/admin", "Administration"]
   ] as const) {
     await page.goto(route);
-    const geometry = await page.getByRole("complementary", { name: label }).evaluate(element => {
+    const geometry = await page.getByRole("complementary", { name: label }).evaluate((element) => {
       const styles = getComputedStyle(document.documentElement);
       return {
         stickyTop: Number.parseFloat(getComputedStyle(element).top),
         expectedTop:
           Number.parseFloat(styles.getPropertyValue("--header-height")) +
-          Number.parseFloat(styles.getPropertyValue("--space-4")),
+          Number.parseFloat(styles.getPropertyValue("--space-4"))
       };
     });
     expect(geometry.stickyTop, `${label} sticky offset`).toBe(geometry.expectedTop);
@@ -186,7 +191,7 @@ test("primary pages share one heading-to-content boundary", async ({ page }) => 
     "/admin/invitations",
     "/admin/api-keys",
     "/admin/settings",
-    "/admin/audit",
+    "/admin/audit"
   ];
 
   let headingTop: number | undefined;
@@ -194,7 +199,7 @@ test("primary pages share one heading-to-content boundary", async ({ page }) => 
     await page.goto(route);
     const heading = page.locator(".page-heading");
     await expect(heading, `${route} should render its page heading`).toBeVisible();
-    const geometry = await heading.evaluate(element => {
+    const geometry = await heading.evaluate((element) => {
       const content = element.nextElementSibling;
       if (!(content instanceof HTMLElement)) throw new Error("Page heading has no content sibling");
       const headingBox = element.getBoundingClientRect();
@@ -202,10 +207,12 @@ test("primary pages share one heading-to-content boundary", async ({ page }) => 
       return {
         parentClass: element.parentElement?.className,
         top: headingBox.top,
-        gap: contentBox.top - headingBox.bottom,
+        gap: contentBox.top - headingBox.bottom
       };
     });
-    expect(String(geometry.parentClass), `${route} should use the shared page layout`).toContain("page-layout");
+    expect(String(geometry.parentClass), `${route} should use the shared page layout`).toContain(
+      "page-layout"
+    );
     headingTop ??= geometry.top;
     expect(geometry.top, `${route} heading top`).toBeCloseTo(headingTop, 1);
     expect(geometry.gap, `${route} heading boundary`).toBeCloseTo(20, 1);
@@ -215,18 +222,12 @@ test("primary pages share one heading-to-content boundary", async ({ page }) => 
   await expect(page.locator(".paste-filter-form")).toHaveCSS("border-top-style", "none");
 });
 
-test("filter expansion preserves the search toolbar boundary", async ({
-  page,
-}) => {
+test("filter expansion preserves the search toolbar boundary", async ({ page }) => {
   await page.goto("/pastes");
   const toolbar = page.locator(".paste-filter-toolbar");
-  const before = await toolbar.evaluate(
-    (element) => element.getBoundingClientRect().bottom,
-  );
+  const before = await toolbar.evaluate((element) => element.getBoundingClientRect().bottom);
   await page.getByRole("button", { name: /^Filters/ }).click();
-  const after = await toolbar.evaluate(
-    (element) => element.getBoundingClientRect().bottom,
-  );
+  const after = await toolbar.evaluate((element) => element.getBoundingClientRect().bottom);
   expect(after).toBe(before);
   await expect(toolbar).toHaveCSS("border-bottom-style", "solid");
 });
@@ -236,22 +237,27 @@ test("filter selects follow their widest option instead of their grid track", as
   await page.goto("/pastes");
   await page.getByRole("button", { name: /^Filters/ }).click();
 
-  const measurements = await page.locator(".list-filter-select select").evaluateAll(selects =>
-    selects.map(element => {
+  const measurements = await page.locator(".list-filter-select select").evaluateAll((selects) =>
+    selects.map((element) => {
       const select = element as HTMLSelectElement;
       const style = getComputedStyle(select);
       const canvas = document.createElement("canvas");
       const context = canvas.getContext("2d")!;
       context.font = style.font;
-      const textWidth = Math.max(...[...select.options].map(option => context.measureText(option.text).width));
-      const fixedWidth = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)
-        + Number.parseFloat(style.borderLeftWidth) + Number.parseFloat(style.borderRightWidth);
+      const textWidth = Math.max(
+        ...[...select.options].map((option) => context.measureText(option.text).width)
+      );
+      const fixedWidth =
+        Number.parseFloat(style.paddingLeft) +
+        Number.parseFloat(style.paddingRight) +
+        Number.parseFloat(style.borderLeftWidth) +
+        Number.parseFloat(style.borderRightWidth);
       return {
         actual: select.getBoundingClientRect().width,
         textAndBox: textWidth + fixedWidth,
-        track: (select.closest(".advanced-filter-grid")!.getBoundingClientRect().width - 36) / 4,
+        track: (select.closest(".advanced-filter-grid")!.getBoundingClientRect().width - 36) / 4
       };
-    }),
+    })
   );
 
   for (const measurement of measurements) {
@@ -259,24 +265,20 @@ test("filter selects follow their widest option instead of their grid track", as
     expect(measurement.actual).toBeGreaterThanOrEqual(measurement.textAndBox + 12);
     expect(measurement.actual).toBeLessThanOrEqual(measurement.textAndBox + 48);
   }
-  expect(measurements.some(measurement => measurement.actual < measurement.track)).toBe(true);
+  expect(measurements.some((measurement) => measurement.actual < measurement.track)).toBe(true);
 });
 
-test("standard form controls use the shared control height", async ({
-  page,
-}) => {
+test("standard form controls use the shared control height", async ({ page }) => {
   await page.goto("/pastes/new");
   const heights = await page
     .locator(
-      '.form-grid input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), .form-grid select',
+      '.form-grid input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), .form-grid select'
     )
-    .evaluateAll((elements) =>
-      elements.map((element) => element.getBoundingClientRect().height),
-    );
+    .evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().height));
   expect(new Set(heights)).toEqual(new Set([40]));
-  const controlTops = await page.locator(".type-field > select, .language-picker > input").evaluateAll(
-    elements => elements.map(element => element.getBoundingClientRect().top),
-  );
+  const controlTops = await page
+    .locator(".type-field > select, .language-picker > input")
+    .evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().top));
   expect(controlTops[0]).toBe(controlTops[1]);
 });
 
@@ -285,13 +287,13 @@ test("checkbox rows retain native control geometry", async ({ page }) => {
   await page.goto("/login");
   const remember = page.getByRole("checkbox", { name: "Keep me signed in" });
   await expect(remember).toBeVisible();
-  const geometry = await remember.evaluate(input => {
+  const geometry = await remember.evaluate((input) => {
     const control = input.getBoundingClientRect();
     const label = input.closest("label")!;
     return {
       display: getComputedStyle(label).display,
       width: control.width,
-      height: control.height,
+      height: control.height
     };
   });
   expect(geometry.display).toBe("flex");
@@ -302,18 +304,20 @@ test("checkbox rows retain native control geometry", async ({ page }) => {
 test("form controls and composite editors share one complete focus ring", async ({ page }) => {
   await page.goto("/pastes/new");
 
-  const focusRing = async (selector: string) => page.locator(selector).evaluate(element => {
-    const style = getComputedStyle(element);
-    return { color: style.outlineColor, style: style.outlineStyle, width: style.outlineWidth };
-  });
-  const expectedFocusColor = async () => page.evaluate(() => {
-    const probe = document.createElement("span");
-    probe.style.color = "var(--color-focus-ring)";
-    document.body.append(probe);
-    const color = getComputedStyle(probe).color;
-    probe.remove();
-    return color;
-  });
+  const focusRing = async (selector: string) =>
+    page.locator(selector).evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { color: style.outlineColor, style: style.outlineStyle, width: style.outlineWidth };
+    });
+  const expectedFocusColor = async () =>
+    page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--color-focus-ring)";
+      document.body.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
 
   await page.getByLabel("Title").focus();
   const inputRing = await focusRing(".title-field input");
@@ -323,7 +327,9 @@ test("form controls and composite editors share one complete focus ring", async 
   await expect(page.locator(".content-editor-text textarea")).toHaveCSS("outline-style", "none");
 
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
-  const richContent = page.locator('.rich-text-editor[data-editor-ready="true"] .rich-text-content');
+  const richContent = page.locator(
+    '.rich-text-editor[data-editor-ready="true"] .rich-text-content'
+  );
   await expect(richContent).toBeVisible();
   await richContent.focus();
   const richEditorRing = await focusRing(".content-editor-rich");
@@ -333,7 +339,9 @@ test("form controls and composite editors share one complete focus ring", async 
   expect(textEditorRing).toEqual(inputRing);
   expect(richEditorRing).toEqual(inputRing);
 
-  await page.evaluate(() => { document.documentElement.dataset.colorScheme = "dark"; });
+  await page.evaluate(() => {
+    document.documentElement.dataset.colorScheme = "dark";
+  });
   await page.getByLabel("Title").focus();
   const darkRing = await focusRing(".title-field input");
   expect(darkRing).toEqual({ color: await expectedFocusColor(), style: "solid", width: "2px" });
@@ -341,16 +349,17 @@ test("form controls and composite editors share one complete focus ring", async 
 });
 
 test("disabled form controls and action buttons share one visual state", async ({ page }) => {
-  const appearance = (selector: string) => page.locator(selector).evaluate(element => {
-    const style = getComputedStyle(element);
-    return {
-      background: style.backgroundColor,
-      border: style.borderColor,
-      color: style.color,
-      cursor: style.cursor,
-      opacity: style.opacity,
-    };
-  });
+  const appearance = (selector: string) =>
+    page.locator(selector).evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        background: style.backgroundColor,
+        border: style.borderColor,
+        color: style.color,
+        cursor: style.cursor,
+        opacity: style.opacity
+      };
+    });
 
   await page.goto("/pastes/new");
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
@@ -363,10 +372,11 @@ test("disabled form controls and action buttons share one visual state", async (
 });
 
 test("interactive control families use consistent hover states", async ({ page }) => {
-  const appearance = (locator: Locator) => locator.evaluate(element => {
-    const style = getComputedStyle(element);
-    return { background: style.backgroundColor, border: style.borderColor, color: style.color };
-  });
+  const appearance = (locator: Locator) =>
+    locator.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { background: style.backgroundColor, border: style.borderColor, color: style.color };
+    });
 
   await page.goto("/pastes");
   const ordinary = page.getByRole("button", { name: "Filters" });
@@ -389,7 +399,9 @@ test("interactive control families use consistent hover states", async ({ page }
   const selectBefore = await appearance(select);
   await select.hover();
   const selectHover = await appearance(select);
-  const attachmentZone = await appearance(page.getByRole("group", { name: "Attachment drop zone" }));
+  const attachmentZone = await appearance(
+    page.getByRole("group", { name: "Attachment drop zone" })
+  );
   const chooseFiles = page.getByRole("button", { name: "Choose files" });
   await chooseFiles.hover();
   const chooseFilesHover = await appearance(chooseFiles);
@@ -423,24 +435,26 @@ test("paste editor uses the page width without stretching metadata controls", as
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/pastes/new");
 
-  const geometry = await page.locator("main, .editor, .form-grid > *").evaluateAll((elements, mainSelector) =>
-    elements.map(element => {
-      const box = element.getBoundingClientRect();
-      const style = element.matches(mainSelector) ? getComputedStyle(element) : null;
-      return {
-        left: box.left,
-        right: box.right,
-        width: box.width,
-        paddingLeft: style ? Number.parseFloat(style.paddingLeft) : 0,
-        paddingRight: style ? Number.parseFloat(style.paddingRight) : 0
-      };
-    }), "main"
+  const geometry = await page.locator("main, .editor, .form-grid > *").evaluateAll(
+    (elements, mainSelector) =>
+      elements.map((element) => {
+        const box = element.getBoundingClientRect();
+        const style = element.matches(mainSelector) ? getComputedStyle(element) : null;
+        return {
+          left: box.left,
+          right: box.right,
+          width: box.width,
+          paddingLeft: style ? Number.parseFloat(style.paddingLeft) : 0,
+          paddingRight: style ? Number.parseFloat(style.paddingRight) : 0
+        };
+      }),
+    "main"
   );
   const [main, editor, ...controls] = geometry;
 
   expect(editor.left).toBe(main.left + main.paddingLeft);
   expect(editor.right).toBe(main.right - main.paddingRight);
-  expect(controls.slice(0, 4).map(control => control.width)).toEqual([140, 260, 200, 140]);
+  expect(controls.slice(0, 4).map((control) => control.width)).toEqual([140, 260, 200, 140]);
   expect(controls[4]?.left).toBe(controls[0]?.left);
   expect(controls[4]?.width).toBe(140);
   expect(controls[5]?.left).toBe(controls[1]?.left);
@@ -448,7 +462,7 @@ test("paste editor uses the page width without stretching metadata controls", as
   expect(controls[6]?.width).toBe(120);
   expect(controls[1]!.left - controls[0]!.right).toBe(12);
   expect(controls[5]!.left - controls[4]!.right).toBe(12);
-  const readLimitWidths = await page.locator(".read-limit-field").evaluate(field => ({
+  const readLimitWidths = await page.locator(".read-limit-field").evaluate((field) => ({
     field: field.getBoundingClientRect().width,
     input: field.querySelector("input")!.getBoundingClientRect().width
   }));

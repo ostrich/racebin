@@ -8,7 +8,9 @@
     target = targetKind;
     preview = content.slice(0, 4000);
     dialog.showModal();
-    return new Promise(answer => { resolve = answer; });
+    return new Promise((answer) => {
+      resolve = answer;
+    });
   }
 
   function finish(answer: boolean): void {
@@ -18,11 +20,21 @@
   }
 </script>
 
-<dialog bind:this={dialog} class="site-dialog" aria-labelledby="conversion-dialog-title" oncancel={(event) => {
-  event.preventDefault(); finish(false);
-}}>
+<dialog
+  bind:this={dialog}
+  class="site-dialog"
+  aria-labelledby="conversion-dialog-title"
+  oncancel={(event) => {
+    event.preventDefault();
+    finish(false);
+  }}
+>
   <h2 id="conversion-dialog-title">Convert to {target.replace("_", " ")}?</h2>
-  <p class="muted">{target === "text" ? "Formatting will be removed when you save." : "Review the converted text before continuing."}</p>
+  <p class="muted">
+    {target === "text"
+      ? "Formatting will be removed when you save."
+      : "Review the converted text before continuing."}
+  </p>
   <pre>{preview}</pre>
   <div class="actions">
     <button class="button" type="button" onclick={() => finish(false)}>Cancel</button>

@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
 import { clearUnsavedChangesGuard, setDiscardPrompt } from "./guards";
-import { holdNavigation, locationState, navigate, navigationReady, startNavigation } from "./runtime";
+import {
+  holdNavigation,
+  locationState,
+  navigate,
+  navigationReady,
+  startNavigation
+} from "./runtime";
 
 describe("navigation runtime", () => {
   beforeEach(() => {
@@ -30,9 +36,9 @@ describe("navigation runtime", () => {
   it("resolves access policy before committing the visible route", async () => {
     history.replaceState({}, "", "/pastes");
     const seen: string[] = [];
-    const unsubscribe = locationState.subscribe(value => seen.push(value.path));
+    const unsubscribe = locationState.subscribe((value) => seen.push(value.path));
     const stop = await startNavigation({
-      accessPolicy: location => location.route.name === "my-pastes" ? "/login" : null,
+      accessPolicy: (location) => (location.route.name === "my-pastes" ? "/login" : null),
       siteName: () => "Test Racebin"
     });
 
@@ -47,8 +53,10 @@ describe("navigation runtime", () => {
   it("waits for the mounted page's readiness hold before completing", async () => {
     let release = () => {};
     let markHeld = () => {};
-    const held = new Promise<void>(resolve => { markHeld = resolve; });
-    const unsubscribe = locationState.subscribe(value => {
+    const held = new Promise<void>((resolve) => {
+      markHeld = resolve;
+    });
+    const unsubscribe = locationState.subscribe((value) => {
       if (value.path === "/help") {
         release = holdNavigation();
         markHeld();
@@ -56,7 +64,9 @@ describe("navigation runtime", () => {
     });
     const stop = await startNavigation();
     let completed = false;
-    const pending = navigate("/help").then(result => { completed = result; });
+    const pending = navigate("/help").then((result) => {
+      completed = result;
+    });
     await held;
     expect(completed).toBe(false);
     release();
@@ -68,11 +78,15 @@ describe("navigation runtime", () => {
 
   it("prevents a slow superseded policy decision from overwriting a newer route", async () => {
     let releaseSlow = () => {};
-    const slowPolicy = new Promise<void>(resolve => { releaseSlow = resolve; });
-    const stop = await startNavigation({ accessPolicy: async location => {
-      if (location.path === "/explore") await slowPolicy;
-      return null;
-    }});
+    const slowPolicy = new Promise<void>((resolve) => {
+      releaseSlow = resolve;
+    });
+    const stop = await startNavigation({
+      accessPolicy: async (location) => {
+        if (location.path === "/explore") await slowPolicy;
+        return null;
+      }
+    });
     const slow = navigate("/explore");
     const latest = navigate("/help");
     releaseSlow();

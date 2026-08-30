@@ -11,7 +11,11 @@ async function login(client: APIRequestContext): Promise<string> {
   return (await response.json()).csrf_token;
 }
 
-async function createKey(client: APIRequestContext, csrf: string, scopes: string[]): Promise<string> {
+async function createKey(
+  client: APIRequestContext,
+  csrf: string,
+  scopes: string[]
+): Promise<string> {
   const response = await client.post("/api/v1/account/api-keys", {
     headers: { "X-CSRF-Token": csrf },
     data: { name: `real-stack-${crypto.randomUUID()}`, scopes }
@@ -47,7 +51,9 @@ test("browser authentication enforces CSRF and bearer scopes", async ({ request 
   }
 });
 
-test("owner settings stay behind a browser-session boundary and produce audit history", async ({ request }) => {
+test("owner settings stay behind a browser-session boundary and produce audit history", async ({
+  request
+}) => {
   const csrf = await login(request);
   const settingsResponse = await request.get("/api/v1/admin/settings");
   expect(settingsResponse.ok()).toBe(true);
@@ -78,11 +84,13 @@ test("owner settings stay behind a browser-session boundary and produce audit hi
 
   const audit = await request.get("/api/v1/admin/audit-events");
   expect(audit.ok()).toBe(true);
-  expect(await audit.json()).toEqual(expect.objectContaining({
-    items: expect.arrayContaining([
-      expect.objectContaining({ action: "instance.settings_changed", target_type: "instance" })
-    ])
-  }));
+  expect(await audit.json()).toEqual(
+    expect.objectContaining({
+      items: expect.arrayContaining([
+        expect.objectContaining({ action: "instance.settings_changed", target_type: "instance" })
+      ])
+    })
+  );
 
   const restored = await request.put("/api/v1/admin/settings", {
     headers: { "X-CSRF-Token": csrf },
@@ -106,7 +114,8 @@ test("idempotent creation and conditional updates preserve protocol state", asyn
       visibility: "private"
     };
     const created = await bearer.post("/api/v1/pastes", {
-      headers: { "Idempotency-Key": idempotencyKey }, data: input
+      headers: { "Idempotency-Key": idempotencyKey },
+      data: input
     });
     expect(created.status()).toBe(201);
     const paste = await created.json();
@@ -114,19 +123,22 @@ test("idempotent creation and conditional updates preserve protocol state", asyn
     expect(etag).toMatch(/^".+"$/);
 
     const replay = await bearer.post("/api/v1/pastes", {
-      headers: { "Idempotency-Key": idempotencyKey }, data: input
+      headers: { "Idempotency-Key": idempotencyKey },
+      data: input
     });
     expect(replay.ok()).toBe(true);
     expect(replay.headers()["idempotency-replayed"]).toBe("true");
     expect((await replay.json()).id).toBe(paste.id);
 
     const stale = await bearer.patch(`/api/v1/pastes/${paste.id}`, {
-      headers: { "If-Match": '"stale"' }, data: { title: "Changed" }
+      headers: { "If-Match": '"stale"' },
+      data: { title: "Changed" }
     });
     expect(stale.status()).toBe(412);
 
     const updated = await bearer.patch(`/api/v1/pastes/${paste.id}`, {
-      headers: { "If-Match": etag }, data: { title: "Changed" }
+      headers: { "If-Match": etag },
+      data: { title: "Changed" }
     });
     expect(updated.ok()).toBe(true);
     expect(updated.headers().etag).not.toBe(etag);
@@ -154,7 +166,11 @@ test("multipart attachment creation supports final-read download grants", async 
         language: "plaintext",
         visibility: "unlisted",
         read_limit: "1",
-        file: { name: "example.txt", mimeType: "text/plain", buffer: Buffer.from("attachment body") }
+        file: {
+          name: "example.txt",
+          mimeType: "text/plain",
+          buffer: Buffer.from("attachment body")
+        }
       }
     });
     expect(created.status()).toBe(201);

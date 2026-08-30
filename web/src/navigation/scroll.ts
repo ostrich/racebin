@@ -6,7 +6,7 @@ type NavigationHistoryState = {
 };
 
 export function historyState(state: unknown = history.state): NavigationHistoryState {
-  return state && typeof state === "object" ? state as NavigationHistoryState : {};
+  return state && typeof state === "object" ? (state as NavigationHistoryState) : {};
 }
 
 export function historyIndex(state: unknown = history.state): number | undefined {

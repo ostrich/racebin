@@ -18,9 +18,21 @@ export type AdminUser = User & {
 };
 
 export type Session =
-  | { authenticated: false; permissions: string[]; user?: never; api_key?: never; csrf_token?: never }
+  | {
+      authenticated: false;
+      permissions: string[];
+      user?: never;
+      api_key?: never;
+      csrf_token?: never;
+    }
   | { authenticated: true; user: User; csrf_token: string; permissions: string[] }
-  | { authenticated: true; api_key: { id: number; name: string; scopes: string[] }; permissions: string[]; user?: never; csrf_token?: never };
+  | {
+      authenticated: true;
+      api_key: { id: number; name: string; scopes: string[] };
+      permissions: string[];
+      user?: never;
+      csrf_token?: never;
+    };
 export type Attachment = { id: number; filename: string; size_bytes: number; url: string };
 
 export type Paste = {

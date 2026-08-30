@@ -17,10 +17,12 @@ export function unixTimestamp(value: string | null | undefined): number | null {
 function isWirePaste(value: unknown): value is WirePaste {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<WirePaste>;
-  return typeof candidate.id === "string"
-    && typeof candidate.url === "string"
-    && (candidate.format === "text" || candidate.format === "markdown")
-    && typeof candidate.created_at === "string";
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.url === "string" &&
+    (candidate.format === "text" || candidate.format === "markdown") &&
+    typeof candidate.created_at === "string"
+  );
 }
 
 function attachmentFromWire(value: WireAttachment): Attachment {
@@ -29,7 +31,7 @@ function attachmentFromWire(value: WireAttachment): Attachment {
 
 function pasteFromWire(value: WirePaste, etag?: string | null): Paste {
   const resource = "attachments" in value ? value : undefined;
-  const body = resource && "body" in resource ? resource.body as WireBody : undefined;
+  const body = resource && "body" in resource ? (resource.body as WireBody) : undefined;
   return {
     id: value.id,
     url: value.url,
@@ -40,14 +42,14 @@ function pasteFromWire(value: WirePaste, etag?: string | null): Paste {
     archive_url: resource?.archive_url ?? undefined,
     _etag: etag ?? undefined,
     owner_id: value.owner_id ?? null,
-    owner_username: "owner_username" in value ? value.owner_username ?? undefined : undefined,
+    owner_username: "owner_username" in value ? (value.owner_username ?? undefined) : undefined,
     folder_id: value.folder_id ?? null,
     title: value.title,
-    content: body?.content ?? ("excerpt" in value ? value.excerpt ?? "" : ""),
+    content: body?.content ?? ("excerpt" in value ? (value.excerpt ?? "") : ""),
     rendered_html: body?.format === "markdown" ? body.rendered_html : null,
-    plain_text: body?.format === "markdown" ? body.plain_text : body?.content ?? "",
+    plain_text: body?.format === "markdown" ? body.plain_text : (body?.content ?? ""),
     format: value.format as "text" | "markdown",
-    language: body?.format === "text" ? body.language : value.language ?? "plaintext",
+    language: body?.format === "text" ? body.language : (value.language ?? "plaintext"),
     visibility: value.visibility as "public" | "unlisted" | "private",
     created_at: unixTimestamp(value.created_at) ?? 0,
     updated_at: unixTimestamp(value.updated_at) ?? unixTimestamp(value.created_at) ?? 0,
@@ -64,23 +66,26 @@ function pasteFromWire(value: WirePaste, etag?: string | null): Paste {
 }
 
 export function normalizePayload(value: unknown, etag?: string | null): unknown {
-  if (Array.isArray(value)) return value.map(item => normalizePayload(item));
+  if (Array.isArray(value)) return value.map((item) => normalizePayload(item));
   if (!value || typeof value !== "object") return value;
   if (isWirePaste(value)) return pasteFromWire(value, etag);
   const object = value as Record<string, unknown>;
   if (Array.isArray(object.items)) {
-    const pagination = object.pagination && typeof object.pagination === "object"
-      ? object.pagination as Record<string, unknown>
-      : undefined;
+    const pagination =
+      object.pagination && typeof object.pagination === "object"
+        ? (object.pagination as Record<string, unknown>)
+        : undefined;
     return {
       ...object,
-      items: object.items.map(item => normalizePayload(item)),
-      ...(pagination ? {
-        page: pagination.page,
-        page_size: pagination.page_size,
-        total_items: pagination.total_items,
-        total_pages: pagination.total_pages
-      } : {})
+      items: object.items.map((item) => normalizePayload(item)),
+      ...(pagination
+        ? {
+            page: pagination.page,
+            page_size: pagination.page_size,
+            total_items: pagination.total_items,
+            total_pages: pagination.total_pages
+          }
+        : {})
     };
   }
   const normalized = Object.fromEntries(

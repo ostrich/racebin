@@ -36,8 +36,9 @@
   function updateLineOffsets(): void {
     if (!wrap || !gutter || !highlighted) return;
     const gutterTop = gutter.getBoundingClientRect().top;
-    lineOffsets = [...highlighted.querySelectorAll<HTMLElement>(".line-anchor")]
-      .map(anchor => anchor.getBoundingClientRect().top - gutterTop);
+    lineOffsets = [...highlighted.querySelectorAll<HTMLElement>(".line-anchor")].map(
+      (anchor) => anchor.getBoundingClientRect().top - gutterTop
+    );
   }
 
   function updateFloatingScrollbar(): void {
@@ -48,9 +49,8 @@
       reportedOverflow = overflowing;
       onoverflowchange?.(overflowing);
     }
-    floatingVisible = overflowing
-      && bounds.top < window.innerHeight
-      && bounds.bottom > window.innerHeight;
+    floatingVisible =
+      overflowing && bounds.top < window.innerHeight && bounds.bottom > window.innerHeight;
     floatingLeft = Math.max(0, bounds.left);
     floatingWidth = Math.max(0, Math.min(window.innerWidth, bounds.right) - floatingLeft);
     floatingContent.style.width = `${viewport.scrollWidth}px`;
@@ -75,10 +75,10 @@
     const source = code;
     const sourceLanguage = language;
     const results = await Promise.all(
-      source.split("\n").map(line => highlightedCode(line || " ", sourceLanguage))
+      source.split("\n").map((line) => highlightedCode(line || " ", sourceLanguage))
     );
     if (current !== printRevision || source !== code || sourceLanguage !== language) return;
-    printLines = results.map(result => result.html);
+    printLines = results.map((result) => result.html);
     await tick();
   }
 
@@ -104,7 +104,7 @@
     const current = ++revision;
     printRevision += 1;
     printLines = [];
-    void highlightedCode(code, language).then(result => {
+    void highlightedCode(code, language).then((result) => {
       if (current !== revision) return;
       html = result.html;
       void tick().then(() => {
@@ -125,20 +125,32 @@
       {:else}{lines}{/if}
     </div>
     <div bind:this={viewport} class="paste-code-content-scroll" onscroll={syncFromViewport}>
-      <pre class="content"><code bind:this={highlighted} class="hljs">{@html wrap
-        ? `<span class="line-anchor"></span>${html.replaceAll("\n", "\n<span class=\"line-anchor\"></span>")}`
-        : html}</code></pre>
+      <pre class="content"><code bind:this={highlighted} class="hljs"
+          >{@html wrap
+            ? `<span class="line-anchor"></span>${html.replaceAll("\n", '\n<span class="line-anchor"></span>')}`
+            : html}</code
+        ></pre>
     </div>
   </div>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex (Native scroll region needs keyboard focus.) -->
-  <div bind:this={floatingScrollbar} class="paste-floating-scrollbar"
-    class:visible={floatingVisible} style={`left:${floatingLeft}px;width:${floatingWidth}px`}
-    role="region" aria-label="Horizontal paste scrollbar" tabindex="0"
-    onscroll={syncFromFloatingScrollbar}>
+  <div
+    bind:this={floatingScrollbar}
+    class="paste-floating-scrollbar"
+    class:visible={floatingVisible}
+    style={`left:${floatingLeft}px;width:${floatingWidth}px`}
+    role="region"
+    aria-label="Horizontal paste scrollbar"
+    tabindex="0"
+    onscroll={syncFromFloatingScrollbar}
+  >
     <div bind:this={floatingContent}></div>
   </div>
 </div>
-<div class="paste-print-code" style={`--print-line-number-width:${String(count).length}ch`} aria-hidden="true">
+<div
+  class="paste-print-code"
+  style={`--print-line-number-width:${String(count).length}ch`}
+  aria-hidden="true"
+>
   {#each printLines as line, index}
     <div class="paste-print-line"><span>{index + 1}</span><code>{@html line}</code></div>
   {/each}

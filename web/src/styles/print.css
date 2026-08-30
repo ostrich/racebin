@@ -57,12 +57,18 @@
 
   .paste-print-code {
     display: block;
-    font: 10pt/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+    font:
+      10pt/1.45 ui-monospace,
+      SFMono-Regular,
+      Consolas,
+      monospace;
   }
 
   .paste-print-line {
     display: grid;
-    grid-template-columns: calc(var(--print-line-number-width) + var(--space-2) + var(--space-2)) minmax(0, 1fr);
+    grid-template-columns:
+      calc(var(--print-line-number-width) + var(--space-2) + var(--space-2))
+      minmax(0, 1fr);
     break-inside: avoid;
   }
 

@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appState } from "../app/state";
 import {
-  createPaste, createPasteWithAttachments, deleteAttachment, readPaste, reauthenticate,
-  replaceInstanceSettings, updatePaste
+  createPaste,
+  createPasteWithAttachments,
+  deleteAttachment,
+  readPaste,
+  reauthenticate,
+  replaceInstanceSettings,
+  updatePaste
 } from "./resources";
 
 const pasteResponse = {
@@ -39,7 +44,7 @@ function jsonResponse(headers: HeadersInit = {}): Response {
 
 describe("typed API resources", () => {
   beforeEach(() => {
-    appState.update(state => ({
+    appState.update((state) => ({
       ...state,
       session: {
         authenticated: true,
@@ -54,19 +59,24 @@ describe("typed API resources", () => {
   it("serializes JSON and supplies CSRF and idempotency headers", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse());
     vi.stubGlobal("fetch", fetchMock);
-    await createPaste({
-      title: "Example",
-      body: { format: "text", content: "hello", language: "plaintext" },
-      visibility: "private"
-    }, "create-key");
+    await createPaste(
+      {
+        title: "Example",
+        body: { format: "text", content: "hello", language: "plaintext" },
+        visibility: "private"
+      },
+      "create-key"
+    );
 
     const [, init] = fetchMock.mock.calls[0]!;
     const headers = new Headers(init.headers);
-    expect(init.body).toBe(JSON.stringify({
-      title: "Example",
-      body: { format: "text", content: "hello", language: "plaintext" },
-      visibility: "private"
-    }));
+    expect(init.body).toBe(
+      JSON.stringify({
+        title: "Example",
+        body: { format: "text", content: "hello", language: "plaintext" },
+        visibility: "private"
+      })
+    );
     expect(headers.get("Content-Type")).toBe("application/json");
     expect(headers.get("X-CSRF-Token")).toBe("csrf-example");
     expect(headers.get("Idempotency-Key")).toBe("create-key");
@@ -76,9 +86,16 @@ describe("typed API resources", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse());
     vi.stubGlobal("fetch", fetchMock);
     const file = new File(["hello"], "example.txt", { type: "text/plain" });
-    await createPasteWithAttachments({
-      title: "Files", format: "text", content: "body", language: "plaintext"
-    }, [file], "multipart-key");
+    await createPasteWithAttachments(
+      {
+        title: "Files",
+        format: "text",
+        content: "body",
+        language: "plaintext"
+      },
+      [file],
+      "multipart-key"
+    );
 
     const [, init] = fetchMock.mock.calls[0]!;
     expect(init.body).toBeInstanceOf(FormData);
@@ -91,43 +108,65 @@ describe("typed API resources", () => {
   it("propagates If-Match and replacement ETags", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ETag: '"paste-example-paste-2"' }));
     vi.stubGlobal("fetch", fetchMock);
-    const paste = await updatePaste("example-paste", { title: "Changed" }, '"paste-example-paste-1"');
-    expect(new Headers(fetchMock.mock.calls[0]![1].headers).get("If-Match"))
-      .toBe('"paste-example-paste-1"');
+    const paste = await updatePaste(
+      "example-paste",
+      { title: "Changed" },
+      '"paste-example-paste-1"'
+    );
+    expect(new Headers(fetchMock.mock.calls[0]![1].headers).get("If-Match")).toBe(
+      '"paste-example-paste-1"'
+    );
     expect(paste._etag).toBe('"paste-example-paste-2"');
 
-    fetchMock.mockResolvedValueOnce(new Response(null, {
-      status: 204, headers: { ETag: '"paste-example-paste-3"' }
-    }));
+    fetchMock.mockResolvedValueOnce(
+      new Response(null, {
+        status: 204,
+        headers: { ETag: '"paste-example-paste-3"' }
+      })
+    );
     const deleted = await deleteAttachment("example-paste", 7, '"paste-example-paste-2"');
     expect(deleted.etag).toBe('"paste-example-paste-3"');
   });
 
   it("exposes final-read grants and replay state", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
-      "Read-Token": "download-grant",
-      "Idempotency-Replayed": "true"
-    }));
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        "Read-Token": "download-grant",
+        "Idempotency-Replayed": "true"
+      })
+    );
     vi.stubGlobal("fetch", fetchMock);
     const result = await readPaste("example-paste", "read-key");
     expect(result.paste.content).toBe("const answer = 42;");
     expect(result.readToken).toBe("download-grant");
     expect(result.idempotencyReplayed).toBe(true);
-    expect(new Headers(fetchMock.mock.calls[0]![1].headers).get("Idempotency-Key")).toBe("read-key");
+    expect(new Headers(fetchMock.mock.calls[0]![1].headers).get("Idempotency-Key")).toBe(
+      "read-key"
+    );
   });
 
   it("keeps owner settings and password confirmation behind the typed API layer", async () => {
     const settings = {
-      site_name: "Example", home_mode: "standard", public_explore_enabled: true,
-      invitations_enabled: true, attachments_enabled: true, qr_codes_enabled: false,
-      default_format: "text", default_language: "plaintext", default_visibility: "unlisted",
+      site_name: "Example",
+      home_mode: "standard",
+      public_explore_enabled: true,
+      invitations_enabled: true,
+      attachments_enabled: true,
+      qr_codes_enabled: false,
+      default_format: "text",
+      default_language: "plaintext",
+      default_visibility: "unlisted",
       default_expiration_seconds: null
     };
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(settings), {
-        status: 200, headers: { "Content-Type": "application/json" }
-      }));
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(settings), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        })
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     await reauthenticate("correct password");
@@ -137,7 +176,8 @@ describe("typed API resources", () => {
     expect(fetchMock.mock.calls[0]![1].method).toBe("POST");
     expect(fetchMock.mock.calls[1]![0]).toBe("/api/v1/admin/settings");
     expect(fetchMock.mock.calls[1]![1].method).toBe("PUT");
-    expect(new Headers(fetchMock.mock.calls[1]![1].headers).get("X-CSRF-Token"))
-      .toBe("csrf-example");
+    expect(new Headers(fetchMock.mock.calls[1]![1].headers).get("X-CSRF-Token")).toBe(
+      "csrf-example"
+    );
   });
 });

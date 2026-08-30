@@ -73,38 +73,38 @@
 }
 
 :root[data-color-scheme="dark"] {
-    --color-canvas: #111619;
-    --color-surface: #192126;
-    --color-surface-subtle: #2b353b;
-    --color-text: #e8edf0;
-    --color-heading: #f1f5f6;
-    --color-muted: #a4adb3;
-    --color-label: #a4adb3;
-    --color-line: #343d43;
-    --color-control-border: #343d43;
-    --color-control-border-hover: #68737a;
-    --color-hero-surface: #18312f;
-    --color-code-surface: #0d1117;
-    --color-code-gutter: #161b22;
-    --color-code-text: #c9d1d9;
-    --color-inline-code: #2b353b;
-    --color-current-surface: #263b39;
-    --color-current-text: #dcebea;
-    --color-focus-ring: #62d3c9;
-    --shadow-control: 0 1px 3px rgba(0, 0, 0, 0.3);
-    --shadow-menu: 0 10px 28px rgba(0, 0, 0, 0.4);
-    --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.4);
-    --syntax-red: #ff7b72;
-    --syntax-purple: #d2a8ff;
-    --syntax-blue: #79c0ff;
-    --syntax-string: #a5d6ff;
-    --syntax-orange: #ffa657;
-    --syntax-muted: #8b949e;
-    --syntax-green: #7ee787;
-    --syntax-yellow: #f2cc60;
-    --syntax-addition-surface: #033a16;
-    --syntax-deletion-text: #ffdcd7;
-    --syntax-deletion-surface: #67060c;
+  --color-canvas: #111619;
+  --color-surface: #192126;
+  --color-surface-subtle: #2b353b;
+  --color-text: #e8edf0;
+  --color-heading: #f1f5f6;
+  --color-muted: #a4adb3;
+  --color-label: #a4adb3;
+  --color-line: #343d43;
+  --color-control-border: #343d43;
+  --color-control-border-hover: #68737a;
+  --color-hero-surface: #18312f;
+  --color-code-surface: #0d1117;
+  --color-code-gutter: #161b22;
+  --color-code-text: #c9d1d9;
+  --color-inline-code: #2b353b;
+  --color-current-surface: #263b39;
+  --color-current-text: #dcebea;
+  --color-focus-ring: #62d3c9;
+  --shadow-control: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-menu: 0 10px 28px rgba(0, 0, 0, 0.4);
+  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --syntax-red: #ff7b72;
+  --syntax-purple: #d2a8ff;
+  --syntax-blue: #79c0ff;
+  --syntax-string: #a5d6ff;
+  --syntax-orange: #ffa657;
+  --syntax-muted: #8b949e;
+  --syntax-green: #7ee787;
+  --syntax-yellow: #f2cc60;
+  --syntax-addition-surface: #033a16;
+  --syntax-deletion-text: #ffdcd7;
+  --syntax-deletion-surface: #67060c;
 }
 
 @media print {

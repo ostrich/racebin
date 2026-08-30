@@ -6,9 +6,12 @@
   } catch {
     // The system preference remains available when storage is unavailable.
   }
-  const colorScheme = theme === "auto"
-    ? matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-    : theme;
+  const colorScheme =
+    theme === "auto"
+      ? matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light"
+      : theme;
   const root = document.documentElement;
   root.dataset.theme = theme;
   root.dataset.colorScheme = colorScheme;

@@ -48,7 +48,8 @@
 
     if (additions.length) files = [...files, ...additions];
     if (rejectedForCount) showNotice(`A paste can have at most ${maxFiles} attachments.`, "error");
-    else if (rejectedForSize) showNotice("Selected attachments exceed the server upload limit.", "error");
+    else if (rejectedForSize)
+      showNotice("Selected attachments exceed the server upload limit.", "error");
   }
 
   function selected(): void {
@@ -68,37 +69,60 @@
 </script>
 
 <div class="attachment-picker">
-  <div class="attachment-drop-zone" class:dragging role="group" aria-label="Attachment drop zone"
-    ondragenter={(event) => { event.preventDefault(); dragging = true; }}
+  <div
+    class="attachment-drop-zone"
+    class:dragging
+    role="group"
+    aria-label="Attachment drop zone"
+    ondragenter={(event) => {
+      event.preventDefault();
+      dragging = true;
+    }}
     ondragover={(event) => event.preventDefault()}
     ondragleave={(event) => {
-      if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) dragging = false;
+      if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null))
+        dragging = false;
     }}
-    ondrop={dropped}>
+    ondrop={dropped}
+  >
     <div>
       <strong>Add attachments</strong>
       <small>Choose files or drag them here</small>
     </div>
     <button class="button" type="button" onclick={() => input.click()}>Choose files</button>
-    <input class="visually-hidden" bind:this={input} type="file" multiple tabindex="-1"
-      aria-hidden="true" aria-label="Add attachments" onchange={selected}/>
+    <input
+      class="visually-hidden"
+      bind:this={input}
+      type="file"
+      multiple
+      tabindex="-1"
+      aria-hidden="true"
+      aria-label="Add attachments"
+      onchange={selected}
+    />
   </div>
 
   {#if files.length}
     <div class="attachment-queue" role="region" aria-label="Selected attachments">
       {#each files as file, index (identity(file))}
         <div class="attachment-queue-row">
-          <Icon name="file-text"/>
+          <Icon name="file-text" />
           <span title={file.name}>{file.name}</span>
           <small>{formatByteSize(file.size)}</small>
-          <button class="icon-button" type="button" title="Remove attachment"
-            aria-label={`Remove ${file.name}`} onclick={() => remove(index)}>
-            <Icon name="trash-2"/>
+          <button
+            class="icon-button"
+            type="button"
+            title="Remove attachment"
+            aria-label={`Remove ${file.name}`}
+            onclick={() => remove(index)}
+          >
+            <Icon name="trash-2" />
           </button>
         </div>
       {/each}
       <small class="attachment-queue-summary">
-        {files.length} {files.length === 1 ? "file" : "files"} · {formatByteSize(totalBytes)} selected
+        {files.length}
+        {files.length === 1 ? "file" : "files"} · {formatByteSize(totalBytes)} selected
       </small>
     </div>
   {/if}

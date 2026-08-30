@@ -5,4 +5,4 @@
   let Glyph = $derived(icons[name]);
 </script>
 
-<Glyph aria-hidden="true"/>
+<Glyph aria-hidden="true" />

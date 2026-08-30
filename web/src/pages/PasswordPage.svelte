@@ -33,13 +33,40 @@
   }
 </script>
 
-<section class="auth"><form oninput={() => { dirty = true; }}
-  onsubmit={(event) => { event.preventDefault(); void submit(event); }}>
-  <p class="eyebrow">Security</p><h1>Change password</h1>
-  <label class="field"><span>Current password</span><input type="password" name="current_password" autocomplete="current-password" required/></label>
-  <label class="field"><span>New password</span><input type="password" name="new_password" minlength={$appState.config.minimum_password_characters} autocomplete="new-password" required/></label>
-  <div class="actions">
-    <button class="button primary" type="submit" disabled={submitting}>{submitting ? "Updating…" : "Update password"}</button>
-    <Link class="button" href="/account">Cancel</Link>
-  </div>
-</form></section>
+<section class="auth">
+  <form
+    oninput={() => {
+      dirty = true;
+    }}
+    onsubmit={(event) => {
+      event.preventDefault();
+      void submit(event);
+    }}
+  >
+    <p class="eyebrow">Security</p>
+    <h1>Change password</h1>
+    <label class="field"
+      ><span>Current password</span><input
+        type="password"
+        name="current_password"
+        autocomplete="current-password"
+        required
+      /></label
+    >
+    <label class="field"
+      ><span>New password</span><input
+        type="password"
+        name="new_password"
+        minlength={$appState.config.minimum_password_characters}
+        autocomplete="new-password"
+        required
+      /></label
+    >
+    <div class="actions">
+      <button class="button primary" type="submit" disabled={submitting}
+        >{submitting ? "Updating…" : "Update password"}</button
+      >
+      <Link class="button" href="/account">Cancel</Link>
+    </div>
+  </form>
+</section>

@@ -1,10 +1,6 @@
 import { tick } from "svelte";
 import { get, writable } from "svelte/store";
-import {
-  clearUnsavedChangesGuard,
-  confirmDiscardChanges,
-  startUnloadGuard
-} from "./guards";
+import { clearUnsavedChangesGuard, confirmDiscardChanges, startUnloadGuard } from "./guards";
 import { parseLocation, routeTitle, type RouteLocation } from "./routes";
 import {
   currentScroll,
@@ -78,7 +74,9 @@ function scheduleScrollCheckpoint(): void {
 
 function transaction(): NavigationTransaction {
   let resolve = () => {};
-  const ready = new Promise<void>(complete => { resolve = complete; });
+  const ready = new Promise<void>((complete) => {
+    resolve = complete;
+  });
   return { id: ++transactionSequence, pending: 0, sealed: false, ready, resolve };
 }
 
@@ -106,11 +104,15 @@ export function holdNavigation(): () => void {
 async function allowedLocation(path: string): Promise<{ path: string; location: RouteLocation }> {
   let candidate = new URL(path, location.href);
   for (let redirects = 0; redirects < 8; redirects += 1) {
-    if (candidate.origin !== location.origin) throw new Error("Navigation must remain on this site");
+    if (candidate.origin !== location.origin)
+      throw new Error("Navigation must remain on this site");
     const parsed = parseLocation(candidate.pathname, candidate.search, candidate.hash);
     const redirect = await options.accessPolicy?.(parsed);
     if (!redirect) {
-      return { path: `${candidate.pathname}${candidate.search}${candidate.hash}`, location: parsed };
+      return {
+        path: `${candidate.pathname}${candidate.search}${candidate.hash}`,
+        location: parsed
+      };
     }
     candidate = new URL(redirect, candidate);
   }
@@ -129,7 +131,8 @@ function focusRoute(): void {
   const hadTabIndex = target.hasAttribute("tabindex");
   if (!hadTabIndex) target.setAttribute("tabindex", "-1");
   target.focus({ preventScroll: true });
-  if (!hadTabIndex) target.addEventListener("blur", () => target.removeAttribute("tabindex"), { once: true });
+  if (!hadTabIndex)
+    target.addEventListener("blur", () => target.removeAttribute("tabindex"), { once: true });
 }
 
 function revealFragment(hash: string): boolean {
@@ -151,7 +154,9 @@ function revealFragment(hash: string): boolean {
     if (!hadTabIndex) focusTarget.setAttribute("tabindex", "-1");
     focusTarget.focus({ preventScroll: true });
     if (!hadTabIndex) {
-      focusTarget.addEventListener("blur", () => focusTarget.removeAttribute("tabindex"), { once: true });
+      focusTarget.addEventListener("blur", () => focusTarget.removeAttribute("tabindex"), {
+        once: true
+      });
     }
   }
   return true;
@@ -193,7 +198,7 @@ async function commit(
   await owner.ready;
   if (activeTransaction !== owner) return false;
   await tick();
-  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   if (activeTransaction !== owner) return false;
   const revealedFragment = revealFragment(allowed.location.hash);
   if (!revealedFragment) restoreScroll(position);
@@ -233,9 +238,11 @@ export async function startNavigation(runtimeOptions: RuntimeOptions = {}): Prom
     const targetIndex = historyIndex(event.state);
     if (reversingPop) {
       reversingPop = false;
-      restoreScroll(targetIndex === undefined
-        ? savedScroll(event.state)
-        : rememberedScroll(targetIndex, event.state));
+      restoreScroll(
+        targetIndex === undefined
+          ? savedScroll(event.state)
+          : rememberedScroll(targetIndex, event.state)
+      );
       scrollPaused = false;
       return;
     }
@@ -251,9 +258,10 @@ export async function startNavigation(runtimeOptions: RuntimeOptions = {}): Prom
         return;
       }
       clearUnsavedChangesGuard();
-      const position = targetIndex === undefined
-        ? savedScroll(event.state)
-        : rememberedScroll(targetIndex, event.state);
+      const position =
+        targetIndex === undefined
+          ? savedScroll(event.state)
+          : rememberedScroll(targetIndex, event.state);
       if (targetIndex !== undefined) currentIndex = targetIndex;
       await commit(
         `${location.pathname}${location.search}${location.hash}`,

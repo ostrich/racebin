@@ -184,7 +184,7 @@ export function availableLanguageOptions(
   discovered: readonly LanguageOption[]
 ): readonly LanguageOption[] {
   if (!discovered.length) return languageOptions;
-  const byId = new Map(languageOptions.map(language => [language.id, language]));
+  const byId = new Map(languageOptions.map((language) => [language.id, language]));
   for (const language of discovered) {
     byId.set(language.id, { ...byId.get(language.id), ...language });
   }
@@ -220,7 +220,7 @@ async function ensureLanguage(language: string): Promise<boolean> {
   if (!loader) return false;
   let promise = loading.get(language);
   if (!promise) {
-    promise = loader().then(module => {
+    promise = loader().then((module) => {
       hljs.registerLanguage(language, module.default);
     });
     loading.set(language, promise);
@@ -237,7 +237,7 @@ async function ensureLanguage(language: string): Promise<boolean> {
 function escapeHtml(code: string): string {
   return code.replace(
     /[&<>]/g,
-    character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[character]!
+    (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[character]!
   );
 }
 

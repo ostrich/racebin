@@ -15,9 +15,7 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:4174",
     trace: "retain-on-failure"
   },
-  projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } }
-  ],
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     command: "../scripts/run-real-stack-test-server.sh",
     url: "http://127.0.0.1:4174/readyz",

@@ -3,15 +3,39 @@ import { Fragment, type Node as ProseMirrorNode, Slice } from "@tiptap/pm/model"
 import { Plugin } from "@tiptap/pm/state";
 
 const blockElementNames = new Set([
-  "ADDRESS", "ARTICLE", "ASIDE", "BLOCKQUOTE", "DIV", "DL", "FIELDSET", "FIGURE",
-  "FOOTER", "FORM", "H1", "H2", "H3", "H4", "H5", "H6", "HEADER", "HR", "MAIN",
-  "NAV", "OL", "P", "PRE", "SECTION", "TABLE", "UL"
+  "ADDRESS",
+  "ARTICLE",
+  "ASIDE",
+  "BLOCKQUOTE",
+  "DIV",
+  "DL",
+  "FIELDSET",
+  "FIGURE",
+  "FOOTER",
+  "FORM",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "HEADER",
+  "HR",
+  "MAIN",
+  "NAV",
+  "OL",
+  "P",
+  "PRE",
+  "SECTION",
+  "TABLE",
+  "UL"
 ]);
 
 function normalizeTableCells(document: Document): void {
   for (const cell of document.querySelectorAll("td, th")) {
-    const hasBlockContent = [...cell.children]
-      .some(child => blockElementNames.has(child.tagName));
+    const hasBlockContent = [...cell.children].some((child) =>
+      blockElementNames.has(child.tagName)
+    );
     if (hasBlockContent || !cell.childNodes.length) continue;
 
     const paragraph = document.createElement("p");
@@ -94,8 +118,13 @@ function markdownTables(text: string): string[][][] {
   for (let index = 0; index + 1 < lines.length; index += 1) {
     const header = splitMarkdownTableRow(lines[index]!);
     const delimiter = splitMarkdownTableRow(lines[index + 1]!);
-    if (!header || !delimiter || header.length !== delimiter.length
-      || !delimiter.every(cell => /^:?-{3,}:?$/.test(cell))) continue;
+    if (
+      !header ||
+      !delimiter ||
+      header.length !== delimiter.length ||
+      !delimiter.every((cell) => /^:?-{3,}:?$/.test(cell))
+    )
+      continue;
 
     const rows = [header];
     index += 2;
@@ -168,12 +197,12 @@ function recoverMarkdownTableBreaks(html: string, text: string): string | null {
       const cell = cells[cellIndex]!;
       const segments = sourceCells[cellIndex]!.split(/<br\s*\/?>/i);
       if (segments.length < 2 || cell.querySelector("br")) continue;
-      const visibleSegments = segments.map(segment => markdownInlineText(segment, document));
+      const visibleSegments = segments.map((segment) => markdownInlineText(segment, document));
       if (visibleSegments.join("") !== cell.textContent) continue;
 
-      const offsets = visibleSegments.slice(0, -1).map((_, index) =>
-        visibleSegments.slice(0, index + 1).join("").length
-      );
+      const offsets = visibleSegments
+        .slice(0, -1)
+        .map((_, index) => visibleSegments.slice(0, index + 1).join("").length);
       for (const offset of offsets.reverse()) {
         if (!insertBreakAtTextOffset(cell, offset, document)) return null;
       }
@@ -204,29 +233,32 @@ export const RichTextPasteNormalization = Extension.create({
   name: "richTextPasteNormalization",
   addProseMirrorPlugins() {
     let replayingNormalizedPaste = false;
-    return [new Plugin({
-      props: {
-        handlePaste: (view, event) => {
-          if (replayingNormalizedPaste) return false;
-          const html = event.clipboardData?.getData("text/html");
-          const text = event.clipboardData?.getData("text/plain");
-          if (!html || !text) return false;
-          const recovered = recoverMarkdownTableBreaks(html, text);
-          if (!recovered) return false;
-          replayingNormalizedPaste = true;
-          try {
-            return view.pasteHTML(recovered);
-          } finally {
-            replayingNormalizedPaste = false;
-          }
-        },
-        transformPastedHTML: normalizeClipboardHtml,
-        transformPasted: slice => new Slice(
-          Fragment.fromArray(slice.content.content.map(normalizeNode)),
-          slice.openStart,
-          slice.openEnd
-        )
-      }
-    })];
+    return [
+      new Plugin({
+        props: {
+          handlePaste: (view, event) => {
+            if (replayingNormalizedPaste) return false;
+            const html = event.clipboardData?.getData("text/html");
+            const text = event.clipboardData?.getData("text/plain");
+            if (!html || !text) return false;
+            const recovered = recoverMarkdownTableBreaks(html, text);
+            if (!recovered) return false;
+            replayingNormalizedPaste = true;
+            try {
+              return view.pasteHTML(recovered);
+            } finally {
+              replayingNormalizedPaste = false;
+            }
+          },
+          transformPastedHTML: normalizeClipboardHtml,
+          transformPasted: (slice) =>
+            new Slice(
+              Fragment.fromArray(slice.content.content.map(normalizeNode)),
+              slice.openStart,
+              slice.openEnd
+            )
+        }
+      })
+    ];
   }
 });

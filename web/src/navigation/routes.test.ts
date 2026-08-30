@@ -4,7 +4,10 @@ import { parseLocation, parseRoute, routeTitle } from "./routes";
 describe("routes", () => {
   it("parses static and parameterized routes without accepting trailing paths", () => {
     expect(parseRoute("/pastes/sample-paste")).toEqual({ name: "paste", pasteId: "sample-paste" });
-    expect(parseRoute("/pastes/sample-paste/edit")).toEqual({ name: "edit-paste", pasteId: "sample-paste" });
+    expect(parseRoute("/pastes/sample-paste/edit")).toEqual({
+      name: "edit-paste",
+      pasteId: "sample-paste"
+    });
     expect(parseRoute("/admin/users/42")).toEqual({ name: "admin-user", userId: 42 });
     expect(parseRoute("/admin/invitations")).toEqual({ name: "admin-invitations" });
     expect(parseRoute("/admin/api-keys")).toEqual({ name: "admin-api-keys" });

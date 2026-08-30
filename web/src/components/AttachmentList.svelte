@@ -23,15 +23,16 @@
   } = $props();
 
   async function remove(attachment: Attachment): Promise<void> {
-    const suffix = editing
-      ? "\n\nThis takes effect immediately, even if you cancel editing."
-      : "";
-    if (!(await confirmAction({
-      title: "Delete attachment?",
-      message: `This attachment will be permanently deleted.${suffix}`,
-      confirmLabel: "Delete attachment",
-      dangerous: true
-    }))) return;
+    const suffix = editing ? "\n\nThis takes effect immediately, even if you cancel editing." : "";
+    if (
+      !(await confirmAction({
+        title: "Delete attachment?",
+        message: `This attachment will be permanently deleted.${suffix}`,
+        confirmLabel: "Delete attachment",
+        dangerous: true
+      }))
+    )
+      return;
     try {
       const result = await deleteAttachment(pasteId, attachment.id, etag ?? "*");
       ondelete?.(attachment, result.etag);
@@ -46,14 +47,19 @@
   {#each attachments as attachment (attachment.id)}
     <div class="attachment-row">
       <a href={attachment.url}>
-        <Icon name="file-text"/>
+        <Icon name="file-text" />
         <span title={attachment.filename}>{attachment.filename}</span>
         <small>{formatByteSize(attachment.size_bytes)}</small>
       </a>
       {#if canDelete}
-        <button class="icon-button" type="button" title="Delete attachment"
-          aria-label={`Delete ${attachment.filename}`} onclick={() => remove(attachment)}>
-          <Icon name="trash-2"/>
+        <button
+          class="icon-button"
+          type="button"
+          title="Delete attachment"
+          aria-label={`Delete ${attachment.filename}`}
+          onclick={() => remove(attachment)}
+        >
+          <Icon name="trash-2" />
         </button>
       {/if}
     </div>

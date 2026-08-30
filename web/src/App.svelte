@@ -22,12 +22,7 @@
   import { setConfirmationPrompt } from "./app/confirmations";
   import Link from "./components/Link.svelte";
   import Shell from "./components/Shell.svelte";
-  import {
-    locationState,
-    navigationReady,
-    setDiscardPrompt,
-    startNavigation
-  } from "./navigation";
+  import { locationState, navigationReady, setDiscardPrompt, startNavigation } from "./navigation";
   import type { RouteLocation } from "./navigation";
   import { loadSession } from "./app/session";
   import { appState } from "./app/state";
@@ -43,12 +38,23 @@
       return "/account/password";
     }
     const protectedRoute = [
-      "new-paste", "my-pastes", "edit-paste", "account", "password", "help"
+      "new-paste",
+      "my-pastes",
+      "edit-paste",
+      "account",
+      "password",
+      "help"
     ].includes(location.route.name);
     if (!authenticated && protectedRoute) return "/login";
     if (authenticated && location.route.name === "login") return "/pastes";
-    const adminRoute = ["admin", "admin-pastes", "admin-users", "admin-user", "admin-invitations", "admin-api-keys"]
-      .includes(location.route.name);
+    const adminRoute = [
+      "admin",
+      "admin-pastes",
+      "admin-users",
+      "admin-user",
+      "admin-invitations",
+      "admin-api-keys"
+    ].includes(location.route.name);
     if (user?.role !== "admin" && user?.role !== "owner" && adminRoute) return "/";
     const ownerRoute = ["admin-settings", "admin-audit"].includes(location.route.name);
     if (user?.role !== "owner" && ownerRoute) return "/admin";
@@ -56,13 +62,15 @@
   }
 
   onMount(() => {
-    setConfirmationPrompt(options => discardDialog.ask(options));
-    setDiscardPrompt(() => discardDialog.ask({
-      title: "Discard unsaved changes?",
-      message: "Your changes will not be saved.",
-      confirmLabel: "Discard changes",
-      dangerous: true
-    }));
+    setConfirmationPrompt((options) => discardDialog.ask(options));
+    setDiscardPrompt(() =>
+      discardDialog.ask({
+        title: "Discard unsaved changes?",
+        message: "Your changes will not be saved.",
+        confirmLabel: "Discard changes",
+        dangerous: true
+      })
+    );
     let stopNavigation: (() => void) | undefined;
     void loadSession()
       .then(async () => {
@@ -71,7 +79,9 @@
           siteName: () => $appState.config.site_name
         });
       })
-      .catch(error => { startupError = error instanceof Error ? error.message : "Unable to start Racebin"; })
+      .catch((error) => {
+        startupError = error instanceof Error ? error.message : "Unable to start Racebin";
+      });
     return () => stopNavigation?.();
   });
 
@@ -80,10 +90,13 @@
   let minimalShell = $derived(!$appState.ready);
 </script>
 
-<ConfirmDialog bind:this={discardDialog}/>
+<ConfirmDialog bind:this={discardDialog} />
 <Shell minimal={minimalShell}>
   {#if startupError}
-    <section class="empty"><h1>Unable to load Racebin</h1><p>{startupError}</p></section>
+    <section class="empty">
+      <h1>Unable to load Racebin</h1>
+      <p>{startupError}</p>
+    </section>
   {:else if !$appState.ready || !$navigationReady}
     <p class="muted">Loading Racebin…</p>
   {:else}
@@ -91,52 +104,56 @@
       {@const route = $locationState.route}
       {#if route.name === "home"}
         {#if authenticated}
-          <PasteFormPage/>
+          <PasteFormPage />
         {:else if $appState.config.plain_home_enabled}
-          <LoginPage/>
+          <LoginPage />
         {:else}
-          <HomePage/>
+          <HomePage />
         {/if}
       {:else if route.name === "explore"}
-        <PasteListPage mine={false} query={$locationState.query}/>
+        <PasteListPage mine={false} query={$locationState.query} />
       {:else if route.name === "login"}
-        <LoginPage/>
+        <LoginPage />
       {:else if route.name === "new-paste"}
-        <PasteFormPage/>
+        <PasteFormPage />
       {:else if route.name === "my-pastes"}
-        <PasteListPage mine query={$locationState.query}/>
+        <PasteListPage mine query={$locationState.query} />
       {:else if route.name === "paste"}
-        <PasteViewPage pasteId={route.pasteId}/>
+        <PasteViewPage pasteId={route.pasteId} />
       {:else if route.name === "edit-paste"}
-        <PasteFormPage pasteId={route.pasteId}/>
+        <PasteFormPage pasteId={route.pasteId} />
       {:else if route.name === "account"}
-        <AccountPage query={$locationState.query}/>
+        <AccountPage query={$locationState.query} />
       {:else if route.name === "password"}
-        <PasswordPage/>
+        <PasswordPage />
       {:else if route.name === "admin"}
-        <AdminPage/>
+        <AdminPage />
       {:else if route.name === "admin-pastes"}
-        <AdminPastesPage query={$locationState.query}/>
+        <AdminPastesPage query={$locationState.query} />
       {:else if route.name === "admin-users"}
-        <AdminUsersPage query={$locationState.query}/>
+        <AdminUsersPage query={$locationState.query} />
       {:else if route.name === "admin-user"}
-        <AdminUserPage userId={route.userId}/>
+        <AdminUserPage userId={route.userId} />
       {:else if route.name === "admin-invitations"}
-        <AdminInvitationsPage query={$locationState.query}/>
+        <AdminInvitationsPage query={$locationState.query} />
       {:else if route.name === "admin-api-keys"}
-        <AdminApiKeysPage query={$locationState.query}/>
+        <AdminApiKeysPage query={$locationState.query} />
       {:else if route.name === "admin-settings"}
-        <AdminSettingsPage/>
+        <AdminSettingsPage />
       {:else if route.name === "admin-audit"}
-        <AdminAuditPage query={$locationState.query}/>
+        <AdminAuditPage query={$locationState.query} />
       {:else if route.name === "help"}
-        <HelpPage/>
+        <HelpPage />
       {:else if route.name === "password-reset"}
-        <PasswordResetPage token={route.token}/>
+        <PasswordResetPage token={route.token} />
       {:else if route.name === "invitation"}
-        <InvitationPage token={route.token}/>
+        <InvitationPage token={route.token} />
       {:else}
-        <section class="empty"><h1>Page not found</h1><p>The requested page does not exist.</p><Link class="button" href="/">Return home</Link></section>
+        <section class="empty">
+          <h1>Page not found</h1>
+          <p>The requested page does not exist.</p>
+          <Link class="button" href="/">Return home</Link>
+        </section>
       {/if}
     {/key}
   {/if}

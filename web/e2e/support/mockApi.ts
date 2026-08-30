@@ -102,12 +102,14 @@ export const paste = {
   read_limit: null,
   attachment_count: 1,
   size_bytes: 1064,
-  attachments: [{
-    id: 7,
-    filename: "example.txt",
-    size_bytes: 1024,
-    url: "/api/v1/pastes/sample-paste/attachments/7"
-  }]
+  attachments: [
+    {
+      id: 7,
+      filename: "example.txt",
+      size_bytes: 1024,
+      url: "/api/v1/pastes/sample-paste/attachments/7"
+    }
+  ]
 };
 const folderOverview = {
   items: [
@@ -134,19 +136,31 @@ function wireMockValue(value: unknown): unknown {
       source_url: object.source_url === null ? null : `/api/v1/pastes/${id}/source`,
       format: object.format,
       body: richText
-        ? { format: "markdown", content: object.content ?? "", rendered_html: object.rendered_html ?? "", plain_text: object.plain_text ?? object.content ?? "" }
-        : { format: "text", content: object.content ?? "", language: object.language ?? "plaintext" },
-      created_at: typeof object.created_at === "number"
-        ? new Date(object.created_at * 1000).toISOString()
-        : object.created_at,
-      updated_at: typeof object.updated_at === "number"
-        ? new Date(object.updated_at * 1000).toISOString()
-        : object.updated_at ?? object.created_at,
-      modified_at: typeof object.modified_at === "number"
-        ? new Date(object.modified_at * 1000).toISOString()
-        : object.modified_at ?? null,
+        ? {
+            format: "markdown",
+            content: object.content ?? "",
+            rendered_html: object.rendered_html ?? "",
+            plain_text: object.plain_text ?? object.content ?? ""
+          }
+        : {
+            format: "text",
+            content: object.content ?? "",
+            language: object.language ?? "plaintext"
+          },
+      created_at:
+        typeof object.created_at === "number"
+          ? new Date(object.created_at * 1000).toISOString()
+          : object.created_at,
+      updated_at:
+        typeof object.updated_at === "number"
+          ? new Date(object.updated_at * 1000).toISOString()
+          : (object.updated_at ?? object.created_at),
+      modified_at:
+        typeof object.modified_at === "number"
+          ? new Date(object.modified_at * 1000).toISOString()
+          : (object.modified_at ?? null),
       attachments: Array.isArray(object.attachments)
-        ? object.attachments.map(item => {
+        ? object.attachments.map((item) => {
             const attachment = item as Record<string, unknown>;
             return {
               ...attachment,
@@ -156,7 +170,9 @@ function wireMockValue(value: unknown): unknown {
         : []
     };
   }
-  return Object.fromEntries(Object.entries(object).map(([key, item]) => [key, wireMockValue(item)]));
+  return Object.fromEntries(
+    Object.entries(object).map(([key, item]) => [key, wireMockValue(item)])
+  );
 }
 
 async function json(route: Route, value: unknown, status = 200): Promise<void> {
@@ -182,7 +198,7 @@ export async function mockApi(
   const viewPaste = options.viewPaste ?? paste;
   let signedIn = authenticated;
   let folders = structuredClone(folderOverview);
-  await page.route("**/api/v1/**", async route => {
+  await page.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/v1/session") {
       if (route.request().method() === "POST") signedIn = true;
@@ -190,9 +206,26 @@ export async function mockApi(
         signedIn = false;
         return route.fulfill({ status: 204 });
       }
-      return json(route, signedIn
-        ? { authenticated: true, user, csrf_token: "csrf", permissions: ["paste:manage", "user:manage", "invitation:manage", "api_key:manage", "administrator:manage", "instance:configure", "ownership:transfer", "audit:read"] }
-        : { authenticated: false, permissions: [] });
+      return json(
+        route,
+        signedIn
+          ? {
+              authenticated: true,
+              user,
+              csrf_token: "csrf",
+              permissions: [
+                "paste:manage",
+                "user:manage",
+                "invitation:manage",
+                "api_key:manage",
+                "administrator:manage",
+                "instance:configure",
+                "ownership:transfer",
+                "audit:read"
+              ]
+            }
+          : { authenticated: false, permissions: [] }
+      );
     }
     if (url.pathname === "/api/v1/session/reauthenticate") return route.fulfill({ status: 204 });
     if (url.pathname === "/api/v1/capabilities") {
@@ -202,7 +235,12 @@ export async function mockApi(
     if (url.pathname === "/api/v1/folders") {
       if (route.request().method() === "POST") {
         const body = route.request().postDataJSON() as { name: string };
-        const folder = { id: 6, name: body.name, created_at: "2023-11-14T22:13:21Z", paste_count: 0 };
+        const folder = {
+          id: 6,
+          name: body.name,
+          created_at: "2023-11-14T22:13:21Z",
+          paste_count: 0
+        };
         folders.items.push(folder);
         return json(route, folder, 201);
       }
@@ -211,12 +249,13 @@ export async function mockApi(
     if (url.pathname === "/api/v1/folders/5") {
       if (route.request().method() === "PATCH") {
         const body = route.request().postDataJSON() as { name: string };
-        folders.items = folders.items.map(folder =>
-          folder.id === 5 ? { ...folder, name: body.name } : folder);
+        folders.items = folders.items.map((folder) =>
+          folder.id === 5 ? { ...folder, name: body.name } : folder
+        );
         return json(route, folders.items[0]);
       }
       if (route.request().method() === "DELETE") {
-        folders.items = folders.items.filter(folder => folder.id !== 5);
+        folders.items = folders.items.filter((folder) => folder.id !== 5);
         return json(route, { pastes: [{ id: paste.id, etag: '"sample-paste:2"' }] });
       }
     }
@@ -227,28 +266,54 @@ export async function mockApi(
     if (url.pathname === "/api/v1/pastes/sample-paste/source") return json(route, viewPaste);
     if (url.pathname === "/api/v1/pastes/sample-paste") return json(route, viewPaste);
     if (url.pathname === "/api/v1/content-conversions") {
-      const body = route.request().postDataJSON() as { source: { format: string; content: string }; target_format: string };
-      return json(route, body.target_format === "markdown"
-        ? { body: { format: "markdown", content: body.source.content } }
-        : { body: { format: "text", content: paste.content, language: "plaintext" } });
+      const body = route.request().postDataJSON() as {
+        source: { format: string; content: string };
+        target_format: string;
+      };
+      return json(
+        route,
+        body.target_format === "markdown"
+          ? { body: { format: "markdown", content: body.source.content } }
+          : { body: { format: "text", content: paste.content, language: "plaintext" } }
+      );
     }
     if (url.pathname === "/api/v1/account/api-keys") {
-      const items = [{
-        id: 4, user_id: 1, name: "Automation", token_prefix: "abcd",
-        owner_username: "test-admin",
-        scopes: ["paste:read", "paste:write"], enabled: true,
-        created_at: createdAt, last_used_at: null
-      }];
-      if (route.request().method() === "POST") return json(route, { key: items[0], token: "rbk_test_secret" }, 201);
-      return json(route, { items, pagination: { page: 1, page_size: 25, total_items: 1, total_pages: 1 } });
+      const items = [
+        {
+          id: 4,
+          user_id: 1,
+          name: "Automation",
+          token_prefix: "abcd",
+          owner_username: "test-admin",
+          scopes: ["paste:read", "paste:write"],
+          enabled: true,
+          created_at: createdAt,
+          last_used_at: null
+        }
+      ];
+      if (route.request().method() === "POST")
+        return json(route, { key: items[0], token: "rbk_test_secret" }, 201);
+      return json(route, {
+        items,
+        pagination: { page: 1, page_size: 25, total_items: 1, total_pages: 1 }
+      });
     }
-    if (url.pathname === "/api/v1/admin/summary") return json(route, {
-      user_count: 2, paste_count: 4, storage_bytes: 8192, active_session_count: 2,
-      active_invitation_count: 1, expiring_invitation_count: 0, password_change_required_count: 0
-    });
+    if (url.pathname === "/api/v1/admin/summary")
+      return json(route, {
+        user_count: 2,
+        paste_count: 4,
+        storage_bytes: 8192,
+        active_session_count: 2,
+        active_invitation_count: 1,
+        expiring_invitation_count: 0,
+        password_change_required_count: 0
+      });
     if (url.pathname === "/api/v1/admin/users") {
       const items = [user, managedUser];
-      return json(route, { items, pagination: { page: 1, page_size: 25, total_items: items.length, total_pages: 1 } });
+      return json(route, {
+        items,
+        pagination: { page: 1, page_size: 25, total_items: items.length, total_pages: 1 }
+      });
     }
     if (url.pathname === "/api/v1/admin/users/1") {
       if (route.request().method() === "PATCH") return json(route, {});
@@ -260,16 +325,19 @@ export async function mockApi(
     if (url.pathname === "/api/v1/admin/users/1/password-reset") {
       return json(route, { url: "/password-reset/sample-reset-token" }, 201);
     }
-    if (["/api/v1/admin/users/1/sessions", "/api/v1/admin/users/1/api-keys"].includes(url.pathname)) {
+    if (
+      ["/api/v1/admin/users/1/sessions", "/api/v1/admin/users/1/api-keys"].includes(url.pathname)
+    ) {
       return route.fulfill({ status: 204 });
     }
-    if (url.pathname === "/api/v1/password-resets/sample-reset-token") return route.fulfill({ status: 204 });
+    if (url.pathname === "/api/v1/password-resets/sample-reset-token")
+      return route.fulfill({ status: 204 });
     if (url.pathname === "/api/v1/admin/pastes") {
       const response = options.adminPastePage?.(url) ?? {
         items: options.items ?? [paste],
         delay: options.delay
       };
-      if (response.delay) await new Promise(resolve => setTimeout(resolve, response.delay));
+      if (response.delay) await new Promise((resolve) => setTimeout(resolve, response.delay));
       if (!signedIn) return json(route, { detail: "Authentication required" }, 401);
       return json(route, {
         items: response.items,
@@ -286,48 +354,103 @@ export async function mockApi(
         return json(route, { token: "new-token", url: "/invitations/new-token" }, 201);
       }
       const active = {
-        id: 4, token_prefix: "active", comment: "For a new teammate",
-        created_at: createdAt, created_by_username: "test-admin", expires_at: expiresAt,
-        status: "active", url: "/invitations/active-token", redeemed_by_username: null
+        id: 4,
+        token_prefix: "active",
+        comment: "For a new teammate",
+        created_at: createdAt,
+        created_by_username: "test-admin",
+        expires_at: expiresAt,
+        status: "active",
+        url: "/invitations/active-token",
+        redeemed_by_username: null
       };
       const redeemed = {
-        id: 3, token_prefix: "invite", comment: "Documentation reviewer",
-        created_at: createdAt, created_by_username: "test-admin", expires_at: expiresAt,
-        status: "redeemed", url: null, redeemed_by_username: "reader", redeemed_at: createdAt
+        id: 3,
+        token_prefix: "invite",
+        comment: "Documentation reviewer",
+        created_at: createdAt,
+        created_by_username: "test-admin",
+        expires_at: expiresAt,
+        status: "redeemed",
+        url: null,
+        redeemed_by_username: "reader",
+        redeemed_at: createdAt
       };
       const redeemedWithLink = {
-        id: 2, token_prefix: "earlier", comment: "Release reviewer",
-        created_at: createdAt, created_by_username: "test-admin", expires_at: expiresAt,
-        status: "redeemed", url: "/invitations/earlier-token", redeemed_by_username: "writer", redeemed_at: createdAt
+        id: 2,
+        token_prefix: "earlier",
+        comment: "Release reviewer",
+        created_at: createdAt,
+        created_by_username: "test-admin",
+        expires_at: expiresAt,
+        status: "redeemed",
+        url: "/invitations/earlier-token",
+        redeemed_by_username: "writer",
+        redeemed_at: createdAt
       };
-      const items = url.searchParams.get("view") === "history" ? [redeemed, redeemedWithLink] : [active];
-      return json(route, { items, pagination: { page: 1, page_size: 25, total_items: items.length, total_pages: 1 } });
+      const items =
+        url.searchParams.get("view") === "history" ? [redeemed, redeemedWithLink] : [active];
+      return json(route, {
+        items,
+        pagination: { page: 1, page_size: 25, total_items: items.length, total_pages: 1 }
+      });
     }
-    if (url.pathname.startsWith("/api/v1/admin/invitations/")) return route.fulfill({ status: 204 });
-    if (url.pathname === "/api/v1/admin/api-keys") return json(route, { items: [{
-      id: 4, user_id: 1, name: "Automation", token_prefix: "abcd",
-      owner_username: "test-admin",
-      scopes: ["paste:read", "paste:write"], enabled: true,
-      created_at: createdAt, last_used_at: null
-    }], pagination: { page: 1, page_size: 25, total_items: 1, total_pages: 1 } });
-    if (url.pathname === "/api/v1/admin/settings") return json(route, {
-      site_name: "Racebin", home_mode: "standard", public_explore_enabled: true,
-      invitations_enabled: true, attachments_enabled: true, qr_codes_enabled: false,
-      default_format: "text", default_language: "plaintext", default_visibility: "unlisted",
-      default_expiration_seconds: null
-    });
-    if (url.pathname === "/api/v1/admin/audit-events") return json(route, { items: [{
-      id: 1, actor_username: "test-admin", actor_api_key_id: null,
-      action: "instance.settings_changed", target_type: "instance", target_id: "1",
-      target_label: null, details: {}, created_at: createdAt
-    }], pagination: { page: 1, page_size: 25, total_items: 1, total_pages: 1 } });
+    if (url.pathname.startsWith("/api/v1/admin/invitations/"))
+      return route.fulfill({ status: 204 });
+    if (url.pathname === "/api/v1/admin/api-keys")
+      return json(route, {
+        items: [
+          {
+            id: 4,
+            user_id: 1,
+            name: "Automation",
+            token_prefix: "abcd",
+            owner_username: "test-admin",
+            scopes: ["paste:read", "paste:write"],
+            enabled: true,
+            created_at: createdAt,
+            last_used_at: null
+          }
+        ],
+        pagination: { page: 1, page_size: 25, total_items: 1, total_pages: 1 }
+      });
+    if (url.pathname === "/api/v1/admin/settings")
+      return json(route, {
+        site_name: "Racebin",
+        home_mode: "standard",
+        public_explore_enabled: true,
+        invitations_enabled: true,
+        attachments_enabled: true,
+        qr_codes_enabled: false,
+        default_format: "text",
+        default_language: "plaintext",
+        default_visibility: "unlisted",
+        default_expiration_seconds: null
+      });
+    if (url.pathname === "/api/v1/admin/audit-events")
+      return json(route, {
+        items: [
+          {
+            id: 1,
+            actor_username: "test-admin",
+            actor_api_key_id: null,
+            action: "instance.settings_changed",
+            target_type: "instance",
+            target_id: "1",
+            target_label: null,
+            details: {},
+            created_at: createdAt
+          }
+        ],
+        pagination: { page: 1, page_size: 25, total_items: 1, total_pages: 1 }
+      });
     if (url.pathname === "/api/v1/pastes") {
       if (route.request().method() === "POST") return json(route, paste, 201);
       const response = options.pastePage?.(url) ?? {
         items: options.items ?? [paste],
         delay: options.delay
       };
-      if (response.delay) await new Promise(resolve => setTimeout(resolve, response.delay));
+      if (response.delay) await new Promise((resolve) => setTimeout(resolve, response.delay));
       return json(route, {
         items: response.items,
         pagination: {

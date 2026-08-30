@@ -20,14 +20,14 @@ test("color theme can follow the system or persist an explicit choice", async ({
   await page.goto("/");
   const theme = page.getByRole("button", { name: "Color theme: Automatic theme" });
   const expectButtonVariants = async () => {
-    const colors = await page.locator(".welcome .actions").evaluate(element => {
+    const colors = await page.locator(".welcome .actions").evaluate((element) => {
       const [primary, secondary] = [...element.querySelectorAll<HTMLElement>(".button")];
       const primaryStyle = getComputedStyle(primary!);
       const secondaryStyle = getComputedStyle(secondary!);
       return {
         primaryBackground: primaryStyle.backgroundColor,
         primaryBorder: primaryStyle.borderTopColor,
-        secondaryBackground: secondaryStyle.backgroundColor,
+        secondaryBackground: secondaryStyle.backgroundColor
       };
     });
     expect(colors.primaryBackground).toBe(colors.primaryBorder);
@@ -55,7 +55,7 @@ test("color theme can follow the system or persist an explicit choice", async ({
 
 test("plain home presents login within the standard public shell", async ({ page }) => {
   let homepagePasteRequests = 0;
-  page.on("request", request => {
+  page.on("request", (request) => {
     const url = new URL(request.url());
     if (url.pathname === "/api/v1/pastes" && page.url().endsWith("/")) homepagePasteRequests += 1;
   });
@@ -97,8 +97,10 @@ test("logout discards stale protected-page failures", async ({ page }) => {
   });
   await page.goto("/admin/pastes");
   await page.getByLabel("Search").fill("pending");
-  const refresh = page.waitForRequest(request =>
-    request.url().includes("/api/v1/admin/pastes") && request.url().includes("q=pending"));
+  const refresh = page.waitForRequest(
+    (request) =>
+      request.url().includes("/api/v1/admin/pastes") && request.url().includes("q=pending")
+  );
   await page.getByRole("button", { name: "Search" }).click();
   await refresh;
   await page.getByRole("button", { name: "Log out" }).click();

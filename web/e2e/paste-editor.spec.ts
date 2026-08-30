@@ -62,7 +62,9 @@ test("plain text is uncolored by default", async ({ page }) => {
   await expect(page.locator(".code-editor .hljs-keyword")).toHaveCount(0);
 });
 
-test("editing triggers the custom discard dialog and explicitly enabled auto detection detects JavaScript", async ({ page }) => {
+test("editing triggers the custom discard dialog and explicitly enabled auto detection detects JavaScript", async ({
+  page
+}) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
   await page.getByRole("combobox", { name: /Language/ }).click();
@@ -85,38 +87,50 @@ test("code editor caret and highlighted text retain the same scroll viewport", a
     (_, index) => `${String(index + 1).padStart(3, "0")} ${"long line ".repeat(20)}`
   ).join("\n");
   await editor.fill(content);
-  await editor.evaluate(element => {
+  await editor.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
     element.scrollLeft = element.scrollWidth;
     element.dispatchEvent(new Event("scroll"));
   });
-  await expect.poll(() => page.locator(".code-editor").evaluate(container => {
-    const textarea = container.querySelector("textarea")!;
-    const overlay = container.querySelector("pre")!;
-    const gutter = container.querySelector<HTMLElement>(".line-numbers")!;
-    return {
-      heightsMatch: overlay.clientHeight === textarea.clientHeight
-        && gutter.clientHeight === textarea.clientHeight,
-      verticalScrollMatches: Math.abs(overlay.scrollTop - textarea.scrollTop) < 1
-        && Math.abs(gutter.scrollTop - textarea.scrollTop) < 1,
-      horizontalScrollMatches: Math.abs(overlay.scrollLeft - textarea.scrollLeft) < 1
-    };
-  })).toEqual({
-    heightsMatch: true,
-    verticalScrollMatches: true,
-    horizontalScrollMatches: true
-  });
+  await expect
+    .poll(() =>
+      page.locator(".code-editor").evaluate((container) => {
+        const textarea = container.querySelector("textarea")!;
+        const overlay = container.querySelector("pre")!;
+        const gutter = container.querySelector<HTMLElement>(".line-numbers")!;
+        return {
+          heightsMatch:
+            overlay.clientHeight === textarea.clientHeight &&
+            gutter.clientHeight === textarea.clientHeight,
+          verticalScrollMatches:
+            Math.abs(overlay.scrollTop - textarea.scrollTop) < 1 &&
+            Math.abs(gutter.scrollTop - textarea.scrollTop) < 1,
+          horizontalScrollMatches: Math.abs(overlay.scrollLeft - textarea.scrollLeft) < 1
+        };
+      })
+    )
+    .toEqual({
+      heightsMatch: true,
+      verticalScrollMatches: true,
+      horizontalScrollMatches: true
+    });
 });
 
-test("resizing the text editor grows the complete editor and is retained across modes", async ({ page }) => {
+test("resizing the text editor grows the complete editor and is retained across modes", async ({
+  page
+}) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
   const editor = page.locator(".content-editor");
-  await editor.evaluate(element => { (element as HTMLElement).style.height = "620px"; });
-  await expect.poll(() => page.locator(".content-editor").evaluate(element =>
-    element.getBoundingClientRect().height
-  )).toBe(620);
-  const layers = await page.locator(".code-editor").evaluate(container => ({
+  await editor.evaluate((element) => {
+    (element as HTMLElement).style.height = "620px";
+  });
+  await expect
+    .poll(() =>
+      page.locator(".content-editor").evaluate((element) => element.getBoundingClientRect().height)
+    )
+    .toBe(620);
+  const layers = await page.locator(".code-editor").evaluate((container) => ({
     editor: container.getBoundingClientRect().height,
     textarea: container.querySelector("textarea")!.getBoundingClientRect().height,
     overlay: container.querySelector("pre")!.getBoundingClientRect().height,
@@ -133,7 +147,7 @@ test("resizing the text editor grows the complete editor and is retained across 
   await expect(page.locator(".content-editor")).toHaveCSS("height", "620px");
   await expect(page.locator(".content-editor")).toHaveCSS("resize", "vertical");
 
-  await page.locator(".content-editor").evaluate(element => {
+  await page.locator(".content-editor").evaluate((element) => {
     (element as HTMLElement).style.height = "700px";
   });
   await expect(page.locator(".content-editor")).toHaveCSS("height", "700px");
@@ -149,23 +163,23 @@ test("empty rich-text conversion skips preview and disables language", async ({ 
   await language.click();
   await page.getByRole("option", { name: /JavaScript/ }).click();
   await expect(language).toHaveValue("javascript");
-  const textEditorHeight = await page.locator(".content-editor").evaluate(
-    element => element.getBoundingClientRect().height
-  );
-  const textControlsTop = await page.locator(".form-grid").evaluate(
-    element => element.getBoundingClientRect().top
-  );
+  const textEditorHeight = await page
+    .locator(".content-editor")
+    .evaluate((element) => element.getBoundingClientRect().height);
+  const textControlsTop = await page
+    .locator(".form-grid")
+    .evaluate((element) => element.getBoundingClientRect().top);
   await page.locator(".form-grid select").first().selectOption("markdown");
   await expect(page.getByRole("heading", { name: /Convert to/ })).toHaveCount(0);
   await expect(language).toBeDisabled();
   await expect(language).toHaveValue("Not applicable");
   await expect(page.locator(".rich-text-editor")).toBeVisible();
-  const richTextEditorHeight = await page.locator(".content-editor").evaluate(
-    element => element.getBoundingClientRect().height
-  );
-  const richTextControlsTop = await page.locator(".form-grid").evaluate(
-    element => element.getBoundingClientRect().top
-  );
+  const richTextEditorHeight = await page
+    .locator(".content-editor")
+    .evaluate((element) => element.getBoundingClientRect().height);
+  const richTextControlsTop = await page
+    .locator(".form-grid")
+    .evaluate((element) => element.getBoundingClientRect().top);
   expect(richTextEditorHeight).toBe(textEditorHeight);
   expect(richTextControlsTop).toBe(textControlsTop);
   await page.locator(".form-grid select").first().selectOption("text");
@@ -178,21 +192,29 @@ test("paste form labels share the same dark-mode color", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await mockApi(page, true);
   await page.goto("/pastes/new");
-  const colors = await page.locator(".form-grid").evaluate(form => {
+  const colors = await page.locator(".form-grid").evaluate((form) => {
     const color = (element: Element | null) => getComputedStyle(element!).color;
     return {
       type: color(form.querySelector("label > span")),
       language: color(form.querySelector(".language-field > label")),
-      folder: color([...form.querySelectorAll("label > span")]
-        .find(label => label.textContent === "Folder") ?? null),
-      visibility: color([...form.querySelectorAll("label > span")]
-        .find(label => label.textContent === "Visibility") ?? null)
+      folder: color(
+        [...form.querySelectorAll("label > span")].find(
+          (label) => label.textContent === "Folder"
+        ) ?? null
+      ),
+      visibility: color(
+        [...form.querySelectorAll("label > span")].find(
+          (label) => label.textContent === "Visibility"
+        ) ?? null
+      )
     };
   });
   expect(new Set(Object.values(colors)).size).toBe(1);
 });
 
-test("rich-text formatting uses a single-row icon toolbar and confirms clearing", async ({ page }) => {
+test("rich-text formatting uses a single-row icon toolbar and confirms clearing", async ({
+  page
+}) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
   await page.locator(".form-grid select").first().selectOption("markdown");
@@ -201,9 +223,12 @@ test("rich-text formatting uses a single-row icon toolbar and confirms clearing"
   await expect(toolbar.getByRole("button", { name: "Paragraph" })).toHaveText("¶");
   await expect(toolbar.getByRole("button", { name: "Heading 1" })).toHaveText("H1");
   await expect(toolbar.getByRole("button", { name: "Bulleted list" }).locator("svg")).toBeVisible();
-  const rows = await toolbar.getByRole("button").evaluateAll(buttons =>
-    new Set(buttons.map(button => Math.round(button.getBoundingClientRect().top))).size
-  );
+  const rows = await toolbar
+    .getByRole("button")
+    .evaluateAll(
+      (buttons) =>
+        new Set(buttons.map((button) => Math.round(button.getBoundingClientRect().top))).size
+    );
   expect(rows).toBe(1);
 
   await page.getByLabel("Rich-text paste content").fill("Formatted text");
@@ -222,8 +247,8 @@ test("ordered rich-text lists can be submitted", async ({ page }) => {
   await page.getByLabel("Rich-text paste content").fill("First item");
   await page.getByRole("button", { name: "Numbered list" }).click();
 
-  const submitted = page.waitForRequest(request =>
-    request.url().endsWith("/api/v1/pastes") && request.method() === "POST"
+  const submitted = page.waitForRequest(
+    (request) => request.url().endsWith("/api/v1/pastes") && request.method() === "POST"
   );
   await page.getByRole("button", { name: "Create paste" }).click();
   const body = (await submitted).postDataJSON();
@@ -247,11 +272,14 @@ test("task lists use checkbox rows without ordinary list markers", async ({ page
   await expect(checkbox).toBeVisible();
   await expect(taskList).toHaveCSS("list-style-type", "none");
   await expect(task).toHaveCSS("display", "flex");
-  const alignment = await task.evaluate(item => {
+  const alignment = await task.evaluate((item) => {
     const checkboxBox = item.querySelector("input")!.getBoundingClientRect();
     const paragraphBox = item.querySelector("p")!.getBoundingClientRect();
-    return Math.abs((checkboxBox.top + checkboxBox.height / 2)
-      - (paragraphBox.top + Number.parseFloat(getComputedStyle(item).lineHeight) / 2));
+    return Math.abs(
+      checkboxBox.top +
+        checkboxBox.height / 2 -
+        (paragraphBox.top + Number.parseFloat(getComputedStyle(item).lineHeight) / 2)
+    );
   });
   expect(alignment).toBeLessThan(2);
 });
@@ -268,7 +296,7 @@ test("visual bullet lists use compact item spacing", async ({ page }) => {
   await page.keyboard.type("Second item");
   const items = page.locator(".rich-text-editor ul li");
   await expect(items).toHaveCount(2);
-  const gap = await items.evaluateAll(elements => {
+  const gap = await items.evaluateAll((elements) => {
     const first = elements[0]!.getBoundingClientRect();
     const second = elements[1]!.getBoundingClientRect();
     return second.top - first.bottom;
@@ -276,7 +304,9 @@ test("visual bullet lists use compact item spacing", async ({ page }) => {
   expect(gap).toBeLessThan(8);
 });
 
-test("table picker inserts the selected size and exposes contextual editing controls", async ({ page }) => {
+test("table picker inserts the selected size and exposes contextual editing controls", async ({
+  page
+}) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
@@ -284,7 +314,7 @@ test("table picker inserts the selected size and exposes contextual editing cont
 
   const picker = page.getByRole("dialog", { name: "Choose table size" });
   await expect(picker).toBeVisible();
-  const placement = await page.getByRole("button", { name: "Insert table" }).evaluate(trigger => {
+  const placement = await page.getByRole("button", { name: "Insert table" }).evaluate((trigger) => {
     const triggerBox = trigger.getBoundingClientRect();
     const toolbarBox = trigger.closest(".rich-text-toolbar")!.getBoundingClientRect();
     const pickerBox = document.querySelector<HTMLElement>(".table-picker")!.getBoundingClientRect();
@@ -324,17 +354,24 @@ test("pasted links are normalized to the supported document contract", async ({ 
   await page.locator(".form-grid select").first().selectOption("markdown");
   const editor = page.getByLabel("Rich-text paste content");
   await editor.focus();
-  await editor.evaluate(element => {
+  await editor.evaluate((element) => {
     const clipboard = new DataTransfer();
     clipboard.setData("text/plain", "Relative link and phone");
-    clipboard.setData("text/html", '<p><a href="/help" target="_self" rel="external" class="button" onclick="alert(1)">Relative link</a> and <a href="tel:+15551212">phone</a></p>');
-    element.dispatchEvent(new ClipboardEvent("paste", {
-      bubbles: true, cancelable: true, clipboardData: clipboard
-    }));
+    clipboard.setData(
+      "text/html",
+      '<p><a href="/help" target="_self" rel="external" class="button" onclick="alert(1)">Relative link</a> and <a href="tel:+15551212">phone</a></p>'
+    );
+    element.dispatchEvent(
+      new ClipboardEvent("paste", {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: clipboard
+      })
+    );
   });
 
-  const submitted = page.waitForRequest(request =>
-    request.url().endsWith("/api/v1/pastes") && request.method() === "POST"
+  const submitted = page.waitForRequest(
+    (request) => request.url().endsWith("/api/v1/pastes") && request.method() === "POST"
   );
   await page.getByRole("button", { name: "Create paste" }).click();
   const body = (await submitted).postDataJSON();
@@ -350,13 +387,17 @@ test("pasted formatting cannot introduce non-GFM underline syntax", async ({ pag
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
   const editor = page.getByLabel("Rich-text paste content");
   await editor.focus();
-  await editor.evaluate(element => {
+  await editor.evaluate((element) => {
     const clipboard = new DataTransfer();
     clipboard.setData("text/plain", "underlined text");
     clipboard.setData("text/html", "<p><u>underlined text</u></p>");
-    element.dispatchEvent(new ClipboardEvent("paste", {
-      bubbles: true, cancelable: true, clipboardData: clipboard
-    }));
+    element.dispatchEvent(
+      new ClipboardEvent("paste", {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: clipboard
+      })
+    );
   });
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Paste content" })).toHaveValue("underlined text");
@@ -375,13 +416,15 @@ test("rich-text conversion populates the plain-text editor", async ({ page }) =>
   await expect(page.locator(".code-editor textarea")).toHaveValue(paste.content);
 });
 
-test("rich text switches between visual editing and canonical Markdown source", async ({ page }) => {
+test("rich text switches between visual editing and canonical Markdown source", async ({
+  page
+}) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
   const source = page.getByRole("textbox", { name: "Paste content" });
-  const geometry = await page.locator(".rich-editor-pane").evaluate(pane => ({
+  const geometry = await page.locator(".rich-editor-pane").evaluate((pane) => ({
     pane: pane.getBoundingClientRect().height,
     editor: pane.querySelector(".code-editor")!.getBoundingClientRect().height
   }));
@@ -394,7 +437,9 @@ test("rich text switches between visual editing and canonical Markdown source", 
   await expect(source).toHaveValue("## Scene\n\n- [x] Ready");
 });
 
-test("the supported Markdown document contract survives a visual-editor round trip", async ({ page }) => {
+test("the supported Markdown document contract survives a visual-editor round trip", async ({
+  page
+}) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
@@ -454,7 +499,7 @@ test("pasted code blocks do not acquire editable trailing blank lines", async ({
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
   const editor = page.getByLabel("Rich-text paste content");
   await editor.focus();
-  await editor.evaluate(element => {
+  await editor.evaluate((element) => {
     const clipboard = new DataTransfer();
     clipboard.setData("text/html", "<p>Example:</p><pre><code>const answer = 42;\n</code></pre>");
     clipboard.setData("text/plain", "Example:\n\nconst answer = 42;");
@@ -463,7 +508,8 @@ test("pasted code blocks do not acquire editable trailing blank lines", async ({
   await expect(page.locator(".rich-text-editor pre code")).toHaveText("const answer = 42;");
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
   const source = page.getByRole("textbox", { name: "Paste content" });
-  await expect.poll(async () => (await source.inputValue()).trimEnd())
+  await expect
+    .poll(async () => (await source.inputValue()).trimEnd())
     .toBe("Example:\n\n```\nconst answer = 42;\n```");
   expect(await source.inputValue()).not.toContain("const answer = 42;\n\n```");
 });
@@ -474,12 +520,15 @@ test("pasted rich-text table cells preserve hard line breaks and formatting", as
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
   const editor = page.getByLabel("Rich-text paste content");
   await editor.focus();
-  await editor.evaluate(element => {
+  await editor.evaluate((element) => {
     const clipboard = new DataTransfer();
-    clipboard.setData("text/html", `<table><tbody>
+    clipboard.setData(
+      "text/html",
+      `<table><tbody>
       <tr><th><span>Label</span></th><th><span>Details</span></th></tr>
       <tr><td><span>Example</span></td><td><strong><span>Bold line</span></strong><br><em><span>Italic line</span></em></td></tr>
-    </tbody></table>`);
+    </tbody></table>`
+    );
     clipboard.setData("text/plain", "Label\tDetails\nExample\tBold line\nItalic line");
     element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true }));
   });
@@ -497,22 +546,28 @@ test("pasted Markdown tables recover breaks omitted from clipboard HTML", async 
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
   const editor = page.getByLabel("Rich-text paste content");
   await editor.focus();
-  await editor.evaluate(element => {
+  await editor.evaluate((element) => {
     const clipboard = new DataTransfer();
-    clipboard.setData("text/html", `<table><thead><tr>
+    clipboard.setData(
+      "text/html",
+      `<table><thead><tr>
       <th align="left">Left aligned</th><th align="left">Multi-line cell</th>
     </tr></thead><tbody>
       <tr><td align="left">Alpha</td><td align="left">First lineSecond line</td></tr>
       <tr><td align="left">Beta</td><td align="left"><strong>Bold line</strong><em>Italic line</em></td></tr>
       <tr><td align="left">Gamma</td><td align="left"><a href="https://example.com">Link</a><code>code</code></td></tr>
-    </tbody></table>`);
-    clipboard.setData("text/plain", [
-      "| Left aligned | Multi-line cell |",
-      "| :----------- | :-------------- |",
-      "| Alpha | First line<br>Second line |",
-      "| Beta | **Bold line**<br>*Italic line* |",
-      "| Gamma | [Link](https://example.com)<br>`code` |"
-    ].join("\n"));
+    </tbody></table>`
+    );
+    clipboard.setData(
+      "text/plain",
+      [
+        "| Left aligned | Multi-line cell |",
+        "| :----------- | :-------------- |",
+        "| Alpha | First line<br>Second line |",
+        "| Beta | **Bold line**<br>*Italic line* |",
+        "| Gamma | [Link](https://example.com)<br>`code` |"
+      ].join("\n")
+    );
     element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true }));
   });
   await expect(page.locator(".rich-text-editor tbody td br")).toHaveCount(3);
@@ -523,15 +578,20 @@ test("pasted Markdown tables recover breaks omitted from clipboard HTML", async 
   await expect(source).toHaveValue(/\[Link\]\(https:\/\/example\.com\)<br>`code`/);
 });
 
-test("flattened table HTML is unchanged without corroborating Markdown breaks", async ({ page }) => {
+test("flattened table HTML is unchanged without corroborating Markdown breaks", async ({
+  page
+}) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
   const editor = page.getByLabel("Rich-text paste content");
   await editor.focus();
-  await editor.evaluate(element => {
+  await editor.evaluate((element) => {
     const clipboard = new DataTransfer();
-    clipboard.setData("text/html", "<table><tbody><tr><td>First lineSecond line</td></tr></tbody></table>");
+    clipboard.setData(
+      "text/html",
+      "<table><tbody><tr><td>First lineSecond line</td></tr></tbody></table>"
+    );
     clipboard.setData("text/plain", "First lineSecond line");
     element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true }));
   });
@@ -545,33 +605,38 @@ test("pasted semantic task lists become nested canonical task lists", async ({ p
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
   const editor = page.getByLabel("Rich-text paste content");
   await editor.focus();
-  await editor.evaluate(element => {
+  await editor.evaluate((element) => {
     const clipboard = new DataTransfer();
-    clipboard.setData("text/html", `<ul>
+    clipboard.setData(
+      "text/html",
+      `<ul>
       <li data-task-list-item="true" data-checked="true"><span contenteditable="false"><input type="checkbox" checked></span><div><p>Completed task</p></div></li>
       <li data-task-list-item="true" data-checked="false"><span contenteditable="false"><input type="checkbox"></span><div><p>Parent task</p><ul><li data-task-list-item="true" data-checked="true"><span contenteditable="false"><input type="checkbox" checked></span><div><p>Nested task</p></div></li></ul></div></li>
-    </ul>`);
+    </ul>`
+    );
     clipboard.setData("text/plain", "Completed task\nParent task\nNested task");
     element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true }));
   });
   await expect(page.locator('.rich-text-editor ul[data-type="taskList"]')).toHaveCount(2);
-  await expect(page.locator('.rich-text-editor li[data-checked]')).toHaveCount(3);
+  await expect(page.locator(".rich-text-editor li[data-checked]")).toHaveCount(3);
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
   const source = page.getByRole("textbox", { name: "Paste content" });
-  await expect.poll(async () => (await source.inputValue()).trimEnd()).toBe([
-    "- [x] Completed task",
-    "- [ ] Parent task",
-    "  - [x] Nested task"
-  ].join("\n"));
+  await expect
+    .poll(async () => (await source.inputValue()).trimEnd())
+    .toBe(["- [x] Completed task", "- [ ] Parent task", "  - [x] Nested task"].join("\n"));
 });
 
-test("table cells prevent block structures that canonical Markdown cannot preserve", async ({ page }) => {
+test("table cells prevent block structures that canonical Markdown cannot preserve", async ({
+  page
+}) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
   await page.getByRole("button", { name: "Insert table" }).click();
-  await page.getByRole("dialog", { name: "Choose table size" })
-    .getByRole("gridcell", { name: "1 row by 1 column" }).click();
+  await page
+    .getByRole("dialog", { name: "Choose table size" })
+    .getByRole("gridcell", { name: "1 row by 1 column" })
+    .click();
   const cell = page.locator(".rich-text-editor th");
   await cell.click();
   await page.keyboard.type("zxcdsdsaf");
@@ -590,14 +655,18 @@ test("table cell line breaks remain valid canonical Markdown", async ({ page }) 
   await page.goto("/pastes/new");
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
   await page.getByRole("button", { name: "Insert table" }).click();
-  await page.getByRole("dialog", { name: "Choose table size" })
-    .getByRole("gridcell", { name: "1 row by 1 column" }).click();
+  await page
+    .getByRole("dialog", { name: "Choose table size" })
+    .getByRole("gridcell", { name: "1 row by 1 column" })
+    .click();
   await page.locator(".rich-text-editor th").click();
   await page.keyboard.type("first");
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("second");
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "Paste content" })).toHaveValue(/first<br>second/i);
+  await expect(page.getByRole("textbox", { name: "Paste content" })).toHaveValue(
+    /first<br>second/i
+  );
   await page.getByRole("button", { name: "Visual", exact: true }).click();
   await expect(page.locator(".rich-text-editor th br")).toHaveCount(1);
 });
@@ -607,11 +676,15 @@ test("table row editing retains a Markdown-compatible header row", async ({ page
   await page.goto("/pastes/new");
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
   await page.getByRole("button", { name: "Insert table" }).click();
-  await page.getByRole("dialog", { name: "Choose table size" })
-    .getByRole("gridcell", { name: "2 rows by 2 columns" }).click();
+  await page
+    .getByRole("dialog", { name: "Choose table size" })
+    .getByRole("gridcell", { name: "2 rows by 2 columns" })
+    .click();
   await page.locator(".rich-text-editor th").first().click();
-  await page.getByRole("group", { name: "Edit table" })
-    .getByRole("button", { name: "Delete row" }).click();
+  await page
+    .getByRole("group", { name: "Edit table" })
+    .getByRole("button", { name: "Delete row" })
+    .click();
   await page.locator(".rich-text-editor td").first().click();
   await page.keyboard.type("value");
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
@@ -624,7 +697,7 @@ test("table row editing retains a Markdown-compatible header row", async ({ page
 test("attachment selections accumulate in a removable upload queue", async ({ page }) => {
   await mockApi(page, true);
   let multipart = "";
-  page.on("request", request => {
+  page.on("request", (request) => {
     if (new URL(request.url()).pathname === "/api/v1/pastes" && request.method() === "POST") {
       multipart = request.postData() ?? "";
     }
@@ -687,7 +760,7 @@ test("attachment deletion carries the returned revision into the next edit", asy
   await mockApi(page, true);
   let deleteMatch = "";
   let patchMatch = "";
-  await page.route("**/api/v1/pastes/sample-paste**", async route => {
+  await page.route("**/api/v1/pastes/sample-paste**", async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
     if (pathname.endsWith("/source") && request.method() === "GET") {
@@ -720,16 +793,17 @@ test("attachment deletion carries the returned revision into the next edit", asy
   await expect(page.getByRole("link", { name: /example.txt/ })).toBeHidden();
   await page.getByLabel("Title").fill("Updated after attachment removal");
   await page.getByRole("button", { name: "Save changes" }).click();
-  await expect.poll(() => [deleteMatch, patchMatch]).toEqual([
-    '"paste-sample-paste-1"',
-    '"paste-sample-paste-2"'
-  ]);
+  await expect
+    .poll(() => [deleteMatch, patchMatch])
+    .toEqual(['"paste-sample-paste-1"', '"paste-sample-paste-2"']);
 });
 
-test("failed edit attachment upload preserves the saved revision and retry state", async ({ page }) => {
+test("failed edit attachment upload preserves the saved revision and retry state", async ({
+  page
+}) => {
   await mockApi(page, true);
   const patchHeaders: string[] = [];
-  await page.route("**/api/v1/pastes/sample-paste**", async route => {
+  await page.route("**/api/v1/pastes/sample-paste**", async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
     if (pathname === "/api/v1/pastes/sample-paste" && request.method() === "PATCH") {
@@ -763,5 +837,5 @@ test("failed edit attachment upload preserves the saved revision and retry state
   );
   await expect(page).toHaveURL(/\/pastes\/sample-paste\/edit$/);
   await page.getByRole("button", { name: "Save changes" }).click();
-  await expect.poll(() => patchHeaders).toEqual(["*", "\"paste-sample-paste-2\""]);
+  await expect.poll(() => patchHeaders).toEqual(["*", '"paste-sample-paste-2"']);
 });
