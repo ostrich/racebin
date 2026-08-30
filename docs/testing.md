@@ -57,14 +57,22 @@ git config core.hooksPath .githooks
 
 The hook runs `scripts/check-before-push.sh`. It checks Rust formatting,
 retired naming, the OpenAPI snapshot and generated TypeScript types, frontend
-API boundaries, CSS architecture, Svelte diagnostics, frontend unit tests, the
-production bundle, committed generated artifacts, and a deterministic browser
-gate. Run the script directly when you want the same result without pushing.
+API boundaries, frontend formatting, CSS architecture, Svelte diagnostics,
+frontend unit tests, the production bundle, committed generated artifacts, and
+a deterministic browser gate. Run the script directly when you want the same
+result without pushing.
 
 The main frontend commands are:
 
+- `npm run format` rewrites handwritten frontend sources with Prettier using
+  the repository's 100-column soft width.
+- `npm run check:format` verifies that handwritten frontend sources are
+  formatted. Generated API types, compiled assets, screenshots, and test
+  output are excluded.
+
 ```bash
 cd web
+npm run check:format
 npm run check
 npm run check:css
 npm run test:unit

@@ -1,0 +1,7 @@
+dist/
+coverage/
+playwright-report/
+test-results/
+src/api/generated.ts
+src/assets/
+e2e/visual-regression.spec.ts-snapshots/

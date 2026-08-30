@@ -10,10 +10,11 @@ cargo fmt -- --check
 sh scripts/check-naming.sh
 sh scripts/test-classify-ci-paths.sh
 
-printf '%s\n' '==> Checking the frontend contract, boundaries, and CSS architecture'
+printf '%s\n' '==> Checking frontend contracts, formatting, and architecture'
 cd web
 npm run check:api
 npm run check:api-boundary
+npm run check:format
 npm run check:css
 npm run check
 npm run test:unit
