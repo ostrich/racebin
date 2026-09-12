@@ -118,16 +118,4 @@ impl FlatCreateRequest {
     }
 }
 
-pub(super) struct StagedFile {
-    pub(super) temporary: PathBuf,
-    pub(super) filename: String,
-    pub(super) storage_key: String,
-    pub(super) size_bytes: i64,
-    pub(super) digest: String,
-}
-
-impl Drop for StagedFile {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.temporary);
-    }
-}
+pub(super) type StagedFile = crate::attachment_storage::StagedUpload;

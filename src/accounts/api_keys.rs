@@ -70,7 +70,7 @@ async fn scopes_for(
         .map_err(DomainError::from)
 }
 
-async fn from_row(repo: &Database, row: sqlx::any::AnyRow) -> DomainResult<ApiKey> {
+fn from_row(row: sqlx::any::AnyRow, scopes: Vec<String>) -> DomainResult<ApiKey> {
     let id = row.try_get("id").map_err(DomainError::from)?;
     Ok(ApiKey {
         id,
@@ -78,7 +78,7 @@ async fn from_row(repo: &Database, row: sqlx::any::AnyRow) -> DomainResult<ApiKe
         owner_username: row.try_get("owner_username").map_err(DomainError::from)?,
         name: row.try_get("name").map_err(DomainError::from)?,
         token_prefix: row.try_get("token_prefix").map_err(DomainError::from)?,
-        scopes: scopes_for(repo.pool(), id).await?,
+        scopes,
         created_at: row.try_get("created_at").map_err(DomainError::from)?,
         last_used_at: row.try_get("last_used_at").map_err(DomainError::from)?,
         enabled: row
@@ -170,7 +170,8 @@ pub async fn authenticate(repo: &Database, token: &str) -> DomainResult<Option<A
     let Some(row) = row else {
         return Ok(None);
     };
-    let key = from_row(repo, row).await?;
+    let id = row.try_get("id").map_err(DomainError::from)?;
+    let key = from_row(row, scopes_for(repo.pool(), id).await?)?;
     sqlx::query(
         "UPDATE api_keys SET last_used_at=$2 WHERE id=$1
          AND (last_used_at IS NULL OR last_used_at<$2-300)",
@@ -201,15 +202,15 @@ pub async fn list_page(
     let search = query
         .search
         .filter(|value| !value.trim().is_empty())
-        .map(|value| format!("%{}%", value.trim().to_lowercase()))
+        .map(|value| crate::database::literal_like_pattern(&value.trim().to_lowercase()))
         .unwrap_or_default();
     let owner_id = query.user_id.unwrap_or(0);
     let enabled_value = query.enabled.map_or(-1, i64::from);
     let privileged = i64::from(query.include_privileged);
     let where_clause = " WHERE ($1=0 OR k.user_id=$1)
         AND ($2=1 OR u.id IS NULL OR (u.role<>'admin' AND u.is_owner=0))
-        AND ($3='' OR LOWER(k.name) LIKE $3 OR LOWER(k.token_prefix) LIKE $3 OR LOWER(COALESCE(u.username,'')) LIKE $3
-             OR EXISTS (SELECT 1 FROM api_key_scopes s WHERE s.api_key_id=k.id AND LOWER(s.scope) LIKE $3))
+        AND ($3='' OR LOWER(k.name) LIKE $3 ESCAPE '\\' OR LOWER(k.token_prefix) LIKE $3 ESCAPE '\\' OR LOWER(COALESCE(u.username,'')) LIKE $3 ESCAPE '\\'
+             OR EXISTS (SELECT 1 FROM api_key_scopes s WHERE s.api_key_id=k.id AND LOWER(s.scope) LIKE $3 ESCAPE '\\'))
         AND ($4=-1 OR k.enabled=$4)";
     let total_items = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(format!(
         "SELECT COUNT(*) FROM api_keys k LEFT JOIN users u ON u.id=k.user_id{where_clause}"
@@ -243,9 +244,40 @@ pub async fn list_page(
         .fetch_all(repo.pool())
         .await
         .map_err(DomainError::from)?;
+    let page_ids = rows
+        .iter()
+        .map(|row| row.try_get::<i64, _>("id").map_err(DomainError::from))
+        .collect::<DomainResult<std::collections::HashSet<_>>>()?;
+    let mut scopes_by_key = std::collections::HashMap::<i64, Vec<String>>::new();
+    if !page_ids.is_empty() {
+        let mut query = sqlx::QueryBuilder::<sqlx::Any>::new(
+            "SELECT api_key_id,scope FROM api_key_scopes WHERE api_key_id IN (",
+        );
+        let mut ids = query.separated(",");
+        for id in &page_ids {
+            ids.push_bind(id);
+        }
+        ids.push_unseparated(") ORDER BY api_key_id,scope");
+        for row in query
+            .build()
+            .fetch_all(repo.pool())
+            .await
+            .map_err(DomainError::from)?
+        {
+            let key_id = row.try_get("api_key_id").map_err(DomainError::from)?;
+            scopes_by_key
+                .entry(key_id)
+                .or_default()
+                .push(row.try_get("scope").map_err(DomainError::from)?);
+        }
+    }
     let mut items = Vec::with_capacity(rows.len());
     for row in rows {
-        items.push(from_row(repo, row).await?);
+        let id = row.try_get("id").map_err(DomainError::from)?;
+        items.push(from_row(
+            row,
+            scopes_by_key.remove(&id).unwrap_or_default(),
+        )?);
     }
     Ok(crate::pastes::Page {
         items,
@@ -265,7 +297,10 @@ pub async fn get(repo: &Database, id: i64) -> DomainResult<Option<ApiKey>> {
     .await
     .map_err(DomainError::from)?;
     match row {
-        Some(row) => from_row(repo, row).await.map(Some),
+        Some(row) => {
+            let id = row.try_get("id").map_err(DomainError::from)?;
+            from_row(row, scopes_for(repo.pool(), id).await?).map(Some)
+        }
         None => Ok(None),
     }
 }

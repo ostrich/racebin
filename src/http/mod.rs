@@ -10,8 +10,8 @@ use auth::{principal, require_admin, require_auth, require_mutation};
 use errors::{domain_error, error, internal};
 use futures::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use std::io::{Cursor, Write};
-use std::path::{Component, Path, PathBuf};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use tokio::io::AsyncWriteExt;
 use zip::write::SimpleFileOptions;
 

@@ -47,7 +47,8 @@ pub(crate) async fn reauthenticate(
         Err(response) => return response,
     };
     let client = auth::client_address(&req);
-    match accounts::login_retry_after(&services.storage, &session.user.username, &client).await {
+    match accounts::reserve_login_attempt(&services.storage, &session.user.username, &client).await
+    {
         Ok(Some(retry_after)) => {
             let mut response = error(
                 StatusCode::TOO_MANY_REQUESTS,
@@ -65,6 +66,12 @@ pub(crate) async fn reauthenticate(
     }
     match accounts::verify_user(&services.storage, &session.user.username, &body.password).await {
         Ok(Some(_)) => {
+            if let Err(value) =
+                accounts::release_login_attempt(&services.storage, &session.user.username, &client)
+                    .await
+            {
+                return domain_error(value);
+            }
             if let Err(value) =
                 accounts::clear_login_failures(&services.storage, &session.user.username).await
             {
@@ -86,19 +93,11 @@ pub(crate) async fn reauthenticate(
                 ),
             }
         }
-        Ok(None) => {
-            if let Err(value) =
-                accounts::record_login_failure(&services.storage, &session.user.username, &client)
-                    .await
-            {
-                return domain_error(value);
-            }
-            error(
-                StatusCode::UNAUTHORIZED,
-                "invalid_credentials",
-                "Password is incorrect",
-            )
-        }
+        Ok(None) => error(
+            StatusCode::UNAUTHORIZED,
+            "invalid_credentials",
+            "Password is incorrect",
+        ),
         Err(error) => domain_error(error),
     }
 }
@@ -191,7 +190,7 @@ pub(crate) async fn login(
 ) -> HttpResponse {
     let client = auth::client_address(&req);
     let retry_after =
-        match accounts::login_retry_after(&services.storage, &body.username, &client).await {
+        match accounts::reserve_login_attempt(&services.storage, &body.username, &client).await {
             Ok(value) => value,
             Err(error) => return domain_error(error),
         };
@@ -209,6 +208,11 @@ pub(crate) async fn login(
     }
     match accounts::verify_user(&services.storage, &body.username, &body.password).await {
         Ok(Some(user)) => {
+            if let Err(error) =
+                accounts::release_login_attempt(&services.storage, &body.username, &client).await
+            {
+                return domain_error(error);
+            }
             if let Err(error) =
                 accounts::clear_login_failures(&services.storage, &body.username).await
             {
@@ -247,18 +251,11 @@ pub(crate) async fn login(
                 Err(e) => domain_error(e),
             }
         }
-        Ok(None) => {
-            if let Err(error) =
-                accounts::record_login_failure(&services.storage, &body.username, &client).await
-            {
-                return domain_error(error);
-            }
-            error(
-                StatusCode::UNAUTHORIZED,
-                "invalid_credentials",
-                "Invalid username or password",
-            )
-        }
+        Ok(None) => error(
+            StatusCode::UNAUTHORIZED,
+            "invalid_credentials",
+            "Invalid username or password",
+        ),
         Err(e) => domain_error(e),
     }
 }

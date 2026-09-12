@@ -109,6 +109,12 @@ impl Principal {
         matches!(self, Self::Session(session) if Some(session.user.id) == owner_id)
     }
 
+    pub fn can_bypass_read_limit(&self, owner_id: Option<i64>) -> bool {
+        self.can("paste:manage")
+            || self.is_session_owner(owner_id)
+            || matches!(self, Self::ApiKey(key) if key.user_id == owner_id && key.has_scope("paste:read"))
+    }
+
     pub fn can(&self, scope: &str) -> bool {
         let permission = match scope {
             "paste:manage" => Some(Permission::ManagePastes),

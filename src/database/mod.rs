@@ -98,48 +98,55 @@ impl Database {
         if !has_document {
             return Ok(());
         }
-        let rows =
-            sqlx::query("SELECT id,document_json FROM pastes WHERE content_kind='rich_text'")
-                .fetch_all(&self.pool)
-                .await
-                .map_err(|error| error.to_string())?;
-        if rows.is_empty() {
-            return Ok(());
-        }
         use sqlx::Row;
         let has_revision = match self.kind {
             DatabaseKind::Sqlite => sqlx::query("SELECT name FROM pragma_table_info('pastes') WHERE name='revision'").fetch_optional(&self.pool).await.map_err(|e| e.to_string())?.is_some(),
             DatabaseKind::Postgres => sqlx::query("SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='pastes' AND column_name='revision'").fetch_optional(&self.pool).await.map_err(|e| e.to_string())?.is_some(),
         };
-        let mut converted = Vec::new();
-        for row in rows {
-            let id: String = row.try_get("id").map_err(|e| e.to_string())?;
-            let encoded: String = row
-                .try_get("document_json")
-                .map_err(|_| format!("Rich-text paste {id} has no document"))?;
-            let document = serde_json::from_str(&encoded)
-                .map_err(|error| format!("Rich-text paste {id} is invalid: {error}"))?;
-            let markdown = crate::pastes::document_to_markdown(&document)
-                .map_err(|error| format!("Cannot migrate paste {id}: {error}"))?;
-            crate::pastes::render_markdown(&markdown)
-                .map_err(|error| format!("Cannot migrate paste {id}: {error}"))?;
-            converted.push((id, markdown));
+        let mut after = String::new();
+        loop {
+            let rows = sqlx::query(
+                "SELECT id,document_json FROM pastes
+                 WHERE content_kind='rich_text' AND id>$1 ORDER BY id LIMIT 100",
+            )
+            .bind(&after)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|error| error.to_string())?;
+            if rows.is_empty() {
+                return Ok(());
+            }
+            let mut converted = Vec::with_capacity(rows.len());
+            for row in rows {
+                let id: String = row.try_get("id").map_err(|e| e.to_string())?;
+                let encoded: String = row
+                    .try_get("document_json")
+                    .map_err(|_| format!("Rich-text paste {id} has no document"))?;
+                let document = serde_json::from_str(&encoded)
+                    .map_err(|error| format!("Rich-text paste {id} is invalid: {error}"))?;
+                let markdown = crate::pastes::document_to_markdown(&document)
+                    .map_err(|error| format!("Cannot migrate paste {id}: {error}"))?;
+                crate::pastes::render_markdown(&markdown)
+                    .map_err(|error| format!("Cannot migrate paste {id}: {error}"))?;
+                after.clone_from(&id);
+                converted.push((id, markdown));
+            }
+            let mut transaction = self.pool.begin().await.map_err(|e| e.to_string())?;
+            for (id, markdown) in converted {
+                let statement = if has_revision {
+                    "UPDATE pastes SET revision=revision+CASE WHEN content<>$1 THEN 1 ELSE 0 END,content=$1 WHERE id=$2"
+                } else {
+                    "UPDATE pastes SET content=$1 WHERE id=$2"
+                };
+                sqlx::query(sqlx::AssertSqlSafe(statement))
+                    .bind(markdown)
+                    .bind(id)
+                    .execute(&mut *transaction)
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
+            transaction.commit().await.map_err(|e| e.to_string())?;
         }
-        let mut transaction = self.pool.begin().await.map_err(|e| e.to_string())?;
-        for (id, markdown) in converted {
-            let statement = if has_revision {
-                "UPDATE pastes SET revision=revision+CASE WHEN content<>$1 THEN 1 ELSE 0 END,content=$1 WHERE id=$2"
-            } else {
-                "UPDATE pastes SET content=$1 WHERE id=$2"
-            };
-            sqlx::query(sqlx::AssertSqlSafe(statement))
-                .bind(markdown)
-                .bind(id)
-                .execute(&mut *transaction)
-                .await
-                .map_err(|e| e.to_string())?;
-        }
-        transaction.commit().await.map_err(|e| e.to_string())
     }
 
     pub async fn purge_expired(&self, now: i64) -> Result<usize, String> {
@@ -233,6 +240,25 @@ impl Database {
                 if entry.file_type().await.is_ok_and(|kind| kind.is_dir()) && !valid.contains(&name)
                 {
                     let _ = tokio::fs::remove_dir_all(entry.path()).await;
+                } else if valid.contains(&name) {
+                    let referenced: HashSet<String> =
+                        sqlx::query_scalar("SELECT storage_key FROM attachments WHERE paste_id=$1")
+                            .bind(&name)
+                            .fetch_all(&self.pool)
+                            .await
+                            .map_err(|error| error.to_string())?
+                            .into_iter()
+                            .collect();
+                    if let Ok(mut files) = tokio::fs::read_dir(entry.path()).await {
+                        while let Ok(Some(file)) = files.next_entry().await {
+                            let key = file.file_name().to_string_lossy().into_owned();
+                            if file.file_type().await.is_ok_and(|kind| kind.is_file())
+                                && !referenced.contains(&key)
+                            {
+                                let _ = tokio::fs::remove_file(file.path()).await;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -248,6 +274,14 @@ pub fn database_kind(url: &str) -> Result<DatabaseKind, String> {
     } else {
         Err("database URL must use sqlite, postgres, or postgresql".to_string())
     }
+}
+
+pub(crate) fn literal_like_pattern(value: &str) -> String {
+    let escaped = value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    format!("%{escaped}%")
 }
 
 #[cfg(test)]

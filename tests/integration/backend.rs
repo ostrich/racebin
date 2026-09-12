@@ -461,7 +461,7 @@ pub(super) async fn backend_contract(repo: Database) {
     assert_eq!(search.items.len(), 1);
 
     let rich_input = PasteInput {
-        title: Some("Rich script".into()),
+        title: Some("Rich 100% script".into()),
         content: Some(
             "# **The Test Episode**\n\nINT. LAB - NIGHT  \n*ADA: The conversion works.*".into(),
         ),
@@ -487,6 +487,19 @@ pub(super) async fn backend_contract(repo: Database) {
         .await
         .unwrap();
     assert_eq!(rich_search.items.len(), 1);
+    let literal_wildcard_search = services
+        .list_pastes(
+            &anonymous,
+            &PasteQuery {
+                search: Some("%".into()),
+                ..PasteQuery::default()
+            },
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(literal_wildcard_search.items.len(), 1);
+    assert_eq!(literal_wildcard_search.items[0].id, rich.id);
 
     for index in 0..35 {
         services
@@ -566,6 +579,10 @@ pub(super) async fn backend_contract(repo: Database) {
         .into_iter()
         .next()
         .unwrap();
+    let cascade_directory = repo.data_dir.join("attachments").join(&cascade.id);
+    std::fs::create_dir_all(&cascade_directory).unwrap();
+    let stored_path = cascade_directory.join(&stored_attachment.storage_key);
+    std::fs::write(&stored_path, b"live").unwrap();
     assert_eq!(
         services
             .add_attachments(
@@ -603,6 +620,7 @@ pub(super) async fn backend_contract(repo: Database) {
     assert_eq!(unchanged.revision, 2);
     assert_eq!(unchanged.attachments.len(), 1);
     assert_eq!(unchanged.attachments[0].filename, "file.txt");
+    assert_eq!(std::fs::read(&stored_path).unwrap(), b"live");
     let attached = services
         .list_pastes(
             &owner,
@@ -628,17 +646,35 @@ pub(super) async fn backend_contract(repo: Database) {
         Some("file.txt")
     );
     assert!(attached.items[0].size_bytes >= 4);
-    sqlx::query("DELETE FROM pastes WHERE id=$1")
-        .bind(&cascade.id)
-        .execute(repo.pool())
+    assert!(services
+        .delete_paste(&owner, &cascade.id, Some(2))
         .await
-        .unwrap();
+        .unwrap());
+    assert!(!cascade_directory.exists());
     let file_count: i64 = sqlx::query_scalar("SELECT count(*) FROM attachments WHERE paste_id=$1")
         .bind(&cascade.id)
         .fetch_one(repo.pool())
         .await
         .unwrap();
     assert_eq!(file_count, 0);
+
+    let cleanup_paste = services
+        .create_paste(&owner, &paste_input("cleanup reconciliation", "private"))
+        .await
+        .unwrap();
+    services
+        .add_attachments(
+            &owner,
+            &cleanup_paste.id,
+            &[attachment("kept.txt", "kept-storage", 4)],
+            None,
+        )
+        .await
+        .unwrap();
+    let cleanup_directory = repo.data_dir.join("attachments").join(&cleanup_paste.id);
+    std::fs::create_dir_all(&cleanup_directory).unwrap();
+    std::fs::write(cleanup_directory.join("kept-storage"), b"kept").unwrap();
+    std::fs::write(cleanup_directory.join("crashed-upload"), b"orphan").unwrap();
 
     let orphaned = services
         .create_paste(
@@ -699,6 +735,8 @@ pub(super) async fn backend_contract(repo: Database) {
             >= 1
     );
     assert!(!expiration_dir.exists());
+    assert!(cleanup_directory.join("kept-storage").exists());
+    assert!(!cleanup_directory.join("crashed-upload").exists());
     let expired_records: i64 = sqlx::query_scalar(
         "SELECT (SELECT count(*) FROM sessions WHERE token_hash='expired-session') +
                 (SELECT count(*) FROM invitations WHERE token_hash='expired-invitation') +
@@ -856,31 +894,33 @@ pub(super) async fn backend_contract(repo: Database) {
     assert_eq!(audit_page.items[0].action, "test.paginated");
 
     for index in 0..5 {
-        accounts::record_login_failure(
+        assert!(accounts::reserve_login_attempt(
             &repo,
             "limited-account",
             &format!("account-client-{index}"),
         )
         .await
-        .unwrap();
+        .unwrap()
+        .is_none());
     }
     assert!(
-        accounts::login_retry_after(&repo, "limited-account", "fresh-client")
+        accounts::reserve_login_attempt(&repo, "limited-account", "fresh-client")
             .await
             .unwrap()
             .is_some()
     );
     for index in 0..20 {
-        accounts::record_login_failure(
+        assert!(accounts::reserve_login_attempt(
             &repo,
             &format!("address-account-{index}"),
             "limited-address",
         )
         .await
-        .unwrap();
+        .unwrap()
+        .is_none());
     }
     assert!(
-        accounts::login_retry_after(&repo, "fresh-account", "limited-address")
+        accounts::reserve_login_attempt(&repo, "fresh-account", "limited-address")
             .await
             .unwrap()
             .is_some()

@@ -129,4 +129,89 @@ pub(super) async fn concurrency_contract(repo: Database) {
         current.title.as_str(),
         "left update" | "right update"
     ));
+
+    let idempotent = paste_input("idempotent multipart", "private");
+    let (left, right) = futures::join!(
+        services.create_paste_idempotent(
+            &admin,
+            &idempotent,
+            Some("shared-multipart-key"),
+            "shared-request-hash",
+            1,
+        ),
+        services.create_paste_idempotent(
+            &admin,
+            &idempotent,
+            Some("shared-multipart-key"),
+            "shared-request-hash",
+            1,
+        )
+    );
+    assert_eq!(
+        [&left, &right]
+            .into_iter()
+            .filter(|result| result.is_ok())
+            .count(),
+        1
+    );
+    assert!([&left, &right].into_iter().any(|result| {
+        result
+            .as_ref()
+            .is_err_and(|error| error.code == "idempotency_in_progress")
+    }));
+    let (paste, token) = [left, right]
+        .into_iter()
+        .find_map(|result| result.ok())
+        .map(|(paste, replayed, token)| {
+            assert!(!replayed);
+            (paste, token.unwrap())
+        })
+        .unwrap();
+    services
+        .add_attachments(
+            &admin,
+            &paste.id,
+            &[attachment("idempotent.txt", "idempotent-store", 1)],
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(services
+        .complete_create_idempotency(&admin, "shared-multipart-key", &token)
+        .await
+        .unwrap());
+    let (replayed, was_replayed, token) = services
+        .create_paste_idempotent(
+            &admin,
+            &idempotent,
+            Some("shared-multipart-key"),
+            "shared-request-hash",
+            1,
+        )
+        .await
+        .unwrap();
+    assert_eq!(replayed.id, paste.id);
+    assert!(was_replayed);
+    assert!(token.is_none());
+
+    let reservations = (0..20).map(|index| {
+        let repo = repo.clone();
+        async move {
+            accounts::reserve_login_attempt(
+                &repo,
+                "concurrent-login-limit",
+                &format!("concurrent-client-{index}"),
+            )
+            .await
+            .unwrap()
+        }
+    });
+    let reservations = futures::future::join_all(reservations).await;
+    assert_eq!(
+        reservations
+            .iter()
+            .filter(|retry_after| retry_after.is_none())
+            .count(),
+        5
+    );
 }

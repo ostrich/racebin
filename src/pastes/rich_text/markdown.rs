@@ -26,13 +26,37 @@ pub struct MarkdownOutput {
 pub fn text_to_markdown(text: &str) -> String {
     text.lines()
         .map(|line| {
-            line.replace('\\', "\\\\")
-                .replace('*', "\\*")
-                .replace('_', "\\_")
-                .replace('#', "\\#")
-                .replace('`', "\\`")
-                .replace('[', "\\[")
-                .replace(']', "\\]")
+            let ordered_marker_end = line
+                .char_indices()
+                .take_while(|(_, character)| character.is_ascii_digit())
+                .last()
+                .map(|(index, character)| index + character.len_utf8())
+                .filter(|end| {
+                    *end > 0
+                        && matches!(line.as_bytes().get(*end), Some(b'.' | b')'))
+                        && matches!(line.as_bytes().get(*end + 1), Some(b' ' | b'\t'))
+                });
+            line.char_indices()
+                .fold(String::new(), |mut escaped, (index, character)| {
+                    if character == ' ' && line[..index].bytes().all(|byte| byte == b' ') {
+                        escaped.push_str("&#32;");
+                        return escaped;
+                    }
+                    let block_marker =
+                        index == 0 && matches!(character, '#' | '>' | '-' | '+' | '=');
+                    let ordered_marker = ordered_marker_end == Some(index);
+                    if block_marker
+                        || ordered_marker
+                        || matches!(
+                            character,
+                            '\\' | '*' | '_' | '`' | '[' | ']' | '<' | '>' | '|' | '~'
+                        )
+                    {
+                        escaped.push('\\');
+                    }
+                    escaped.push(character);
+                    escaped
+                })
         })
         .collect::<Vec<_>>()
         .join("  \n")
@@ -198,6 +222,21 @@ mod tests {
                 prop_assert!(!output.html.to_ascii_lowercase().contains("javascript:"));
             }
         }
+
+        #[test]
+        fn text_conversion_preserves_literal_text(source in "[ -~]{0,2000}") {
+            let rendered = render_markdown(&text_to_markdown(&source)).unwrap();
+            prop_assert_eq!(normalize_plain_text(&rendered.plain_text), normalize_plain_text(&source));
+        }
+    }
+
+    fn normalize_plain_text(value: &str) -> String {
+        value
+            .lines()
+            .map(str::trim_end)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     #[test]

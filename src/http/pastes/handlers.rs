@@ -205,8 +205,14 @@ pub(crate) async fn create_paste(
         Ok(value) => value,
         Err(message) => return error(StatusCode::UNPROCESSABLE_ENTITY, "invalid_paste", message),
     };
-    let (mut paste, replayed) = match services
-        .create_paste_idempotent(&principal, &input, idempotency_key.as_deref(), &fingerprint)
+    let (mut paste, replayed, operation_token) = match services
+        .create_paste_idempotent(
+            &principal,
+            &input,
+            idempotency_key.as_deref(),
+            &fingerprint,
+            staged.len(),
+        )
         .await
     {
         Ok(value) => value,
@@ -222,10 +228,15 @@ pub(crate) async fn create_paste(
         if let Err(message) =
             promote_created_files(&services, &principal, &mut paste, &mut staged).await
         {
-            if let Some(key) = idempotency_key.as_deref() {
-                let _ = services.clear_create_idempotency(&principal, key).await;
+            if let (Some(key), Some(token)) =
+                (idempotency_key.as_deref(), operation_token.as_deref())
+            {
+                let _ = services
+                    .rollback_create_idempotency(&principal, key, token)
+                    .await;
+            } else if !replayed {
+                let _ = services.delete_paste(&principal, &paste.id, None).await;
             }
-            let _ = services.delete_paste(&principal, &paste.id, None).await;
             return error(
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "invalid_attachment",
@@ -233,8 +244,23 @@ pub(crate) async fn create_paste(
             );
         }
     }
+    if let (Some(key), Some(token)) = (idempotency_key.as_deref(), operation_token.as_deref()) {
+        match services
+            .complete_create_idempotency(&principal, key, token)
+            .await
+        {
+            Ok(true) => {}
+            Ok(false) => {
+                return internal("Paste creation operation ownership was lost");
+            }
+            Err(value) => return domain_error(value),
+        }
+    }
     let tag = contract::etag(&paste);
-    let resource = contract::resource(&req, &principal, paste, None);
+    let resource = match contract::resource(&req, &principal, paste, None) {
+        Ok(resource) => resource,
+        Err(value) => return domain_error(value),
+    };
     let mut response = if accepts(&req, "text/plain") {
         HttpResponse::Created()
             .content_type("text/plain; charset=utf-8")
@@ -362,9 +388,7 @@ pub(crate) async fn get_paste_raw(
     let paste_id = paste_id.into_inner();
     let paste = match services.get_paste(&principal, &paste_id).await {
         Ok(Some(paste))
-            if paste.read_limit.is_none()
-                || principal.is_admin()
-                || principal.user_id() == paste.owner_id =>
+            if paste.read_limit.is_none() || principal.can_bypass_read_limit(paste.owner_id) =>
         {
             Some(paste)
         }
@@ -633,9 +657,12 @@ fn resource_response(
 ) -> HttpResponse {
     let tag = contract::etag(&paste);
     if include_body {
-        HttpResponse::Ok()
-            .insert_header((header::ETAG, tag))
-            .json(contract::resource(req, principal, paste, grant))
+        match contract::resource(req, principal, paste, grant) {
+            Ok(resource) => HttpResponse::Ok()
+                .insert_header((header::ETAG, tag))
+                .json(resource),
+            Err(value) => domain_error(value),
+        }
     } else {
         HttpResponse::Ok()
             .insert_header((header::ETAG, tag))

@@ -2,7 +2,6 @@ use super::validation::authorize_owner;
 use super::{Attachment, DomainError, DomainResult, NewAttachment, PasteService, Principal};
 use crate::time::unix_timestamp;
 use std::collections::HashSet;
-use uuid::Uuid;
 
 impl PasteService {
     pub async fn delete_paste(
@@ -11,49 +10,26 @@ impl PasteService {
         id: &str,
         expected_revision: Option<i64>,
     ) -> DomainResult<bool> {
+        let _write_guard = self.storage.lock_writes().await;
         let current = match self.find_paste(id).await? {
             Some(value) => value,
             None => return Ok(false),
         };
         authorize_owner(principal, &current, "paste:delete")?;
-        let directory = self.storage.data_dir.join("attachments").join(id);
-        let staged = self
-            .storage
-            .data_dir
-            .join("attachments")
-            .join(format!(".delete-{}", Uuid::new_v4()));
-        let had_directory = directory.exists();
-        if had_directory {
-            std::fs::rename(&directory, &staged).map_err(DomainError::internal)?;
-        }
-        match sqlx::query("DELETE FROM pastes WHERE id=$1 AND ($2 IS NULL OR revision=$2)")
+        let result = sqlx::query("DELETE FROM pastes WHERE id=$1 AND ($2 IS NULL OR revision=$2)")
             .bind(id)
             .bind(expected_revision)
             .execute(self.storage.pool())
             .await
-        {
-            Ok(result) if result.rows_affected() == 1 => {
-                if had_directory {
-                    let _ = std::fs::remove_dir_all(staged);
-                }
-                Ok(true)
-            }
-            Ok(_) => {
-                if had_directory {
-                    let _ = std::fs::rename(staged, directory);
-                }
-                if expected_revision.is_some() {
-                    Err(DomainError::precondition("Paste revision changed"))
-                } else {
-                    Ok(false)
-                }
-            }
-            Err(error) => {
-                if had_directory {
-                    let _ = std::fs::rename(staged, directory);
-                }
-                Err(DomainError::internal(error))
-            }
+            .map_err(DomainError::internal)?;
+        if result.rows_affected() == 1 {
+            let directory = self.storage.data_dir.join("attachments").join(id);
+            let _ = std::fs::remove_dir_all(directory);
+            Ok(true)
+        } else if expected_revision.is_some() {
+            Err(DomainError::precondition("Paste revision changed"))
+        } else {
+            Ok(false)
         }
     }
 
@@ -174,6 +150,7 @@ impl PasteService {
         attachment_id: i64,
         expected_revision: Option<i64>,
     ) -> DomainResult<Option<i64>> {
+        let _write_guard = self.storage.lock_writes().await;
         let paste = self
             .find_paste(id)
             .await?
@@ -200,11 +177,6 @@ impl PasteService {
             .join("attachments")
             .join(&paste.id)
             .join(&attachment.storage_key);
-        let staged = path.with_file_name(format!(".delete-{}", Uuid::new_v4()));
-        let existed = path.exists();
-        if existed {
-            std::fs::rename(&path, &staged).map_err(DomainError::internal)?;
-        }
         let mut transaction = self
             .storage
             .pool()
@@ -240,23 +212,10 @@ impl PasteService {
         .await;
         match result {
             Ok(Some(revision)) => {
-                if existed {
-                    let _ = std::fs::remove_file(staged);
-                }
+                let _ = std::fs::remove_file(path);
                 Ok(Some(revision))
             }
-            Ok(None) => {
-                if existed {
-                    let _ = std::fs::rename(staged, path);
-                }
-                Ok(None)
-            }
-            Err(error) => {
-                if existed {
-                    let _ = std::fs::rename(staged, path);
-                }
-                Err(error)
-            }
+            other => other,
         }
     }
 }

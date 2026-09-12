@@ -92,10 +92,10 @@ pub async fn list_page(
 ) -> DomainResult<Page<AuditEvent>> {
     let search = search
         .filter(|value| !value.trim().is_empty())
-        .map(|value| format!("%{}%", value.trim().to_lowercase()))
+        .map(|value| crate::database::literal_like_pattern(&value.trim().to_lowercase()))
         .unwrap_or_default();
-    let condition = " WHERE ($1='' OR LOWER(actor_username) LIKE $1 OR LOWER(action) LIKE $1
-        OR LOWER(target_type) LIKE $1 OR LOWER(COALESCE(target_label,'')) LIKE $1 OR LOWER(COALESCE(target_id,'')) LIKE $1)";
+    let condition = " WHERE ($1='' OR LOWER(actor_username) LIKE $1 ESCAPE '\\' OR LOWER(action) LIKE $1 ESCAPE '\\'
+        OR LOWER(target_type) LIKE $1 ESCAPE '\\' OR LOWER(COALESCE(target_label,'')) LIKE $1 ESCAPE '\\' OR LOWER(COALESCE(target_id,'')) LIKE $1 ESCAPE '\\')";
     let total_items = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(format!(
         "SELECT COUNT(*) FROM audit_events{condition}"
     )))

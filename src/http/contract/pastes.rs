@@ -427,9 +427,14 @@ pub(crate) fn resource(
     principal: &Principal,
     paste: Paste,
     grant_token: Option<&str>,
-) -> PasteResource {
+) -> crate::pastes::DomainResult<PasteResource> {
     let body = if paste.content_kind == "markdown" {
-        let rendered = render_markdown(&paste.content).expect("stored Markdown is valid");
+        let rendered = render_markdown(&paste.content).map_err(|error| {
+            crate::pastes::DomainError::internal(format!(
+                "Stored Markdown for paste {} is invalid: {error}",
+                paste.id
+            ))
+        })?;
         BodyOutput::Markdown {
             content: paste.content.clone(),
             rendered_html: rendered.html,
@@ -441,10 +446,10 @@ pub(crate) fn resource(
             language: paste.language.clone(),
         }
     };
-    PasteResource {
+    Ok(PasteResource {
         metadata: metadata_resource(request, principal, paste, grant_token),
         body,
-    }
+    })
 }
 
 pub(crate) fn summary(

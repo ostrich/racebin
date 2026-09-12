@@ -1,31 +1,11 @@
 use super::*;
 
-#[derive(Default)]
-struct UploadCleanup {
-    paths: Vec<PathBuf>,
-}
-
-impl Drop for UploadCleanup {
-    fn drop(&mut self) {
-        for path in &self.paths {
-            let _ = std::fs::remove_file(path);
-        }
-    }
-}
-
 pub(crate) fn attachment_path(
     data_dir: &Path,
     paste_id: &str,
     name: &str,
 ) -> Result<PathBuf, String> {
-    let safe_component = |value: &str| {
-        let mut components = Path::new(value).components();
-        matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
-    };
-    if !safe_component(paste_id) || !safe_component(name) || name.starts_with('.') {
-        return Err("Unsafe attachment metadata".to_string());
-    }
-    Ok(data_dir.join("attachments").join(paste_id).join(name))
+    crate::attachment_storage::attachment_path(data_dir, paste_id, name)
 }
 
 pub(crate) fn sanitize_upload_filename(value: &str) -> String {
@@ -126,19 +106,10 @@ pub(crate) async fn upload_attachments(
         Ok(value) => value,
         Err(response) => return response,
     };
-    let directory = services
-        .storage
-        .data_dir
-        .join("attachments")
-        .join(&paste.id);
-    if let Err(e) = tokio::fs::create_dir_all(&directory).await {
-        return internal(e.to_string());
-    }
     let Ok(limit) = ARGS.attachment_size_limit_bytes() else {
         return internal("Configured attachment size limit is invalid");
     };
-    let mut staged: Vec<(PathBuf, PathBuf, String, String, i64)> = Vec::new();
-    let mut cleanup = UploadCleanup::default();
+    let mut staged = Vec::<crate::attachment_storage::StagedUpload>::new();
     let mut total_size = 0usize;
     loop {
         let mut field = match payload.try_next().await {
@@ -177,25 +148,30 @@ pub(crate) async fn upload_attachments(
                 "Every multipart field must contain a filename",
             );
         };
-        let temporary = directory.join(format!(".upload-{}", uuid::Uuid::new_v4()));
-        let mut output = match tokio::fs::File::create(&temporary).await {
+        let mut upload = match crate::attachment_storage::StagedUpload::create(
+            &services.storage.data_dir,
+            filename,
+        )
+        .await
+        {
+            Ok(upload) => upload,
+            Err(e) => return internal(e.to_string()),
+        };
+        let mut output = match tokio::fs::File::create(upload.path()).await {
             Ok(file) => file,
             Err(e) => return internal(e.to_string()),
         };
-        cleanup.paths.push(temporary.clone());
         let mut size = 0usize;
         while let Some(chunk) = field.next().await {
             let chunk = match chunk {
                 Ok(chunk) => chunk,
                 Err(e) => {
-                    let _ = std::fs::remove_file(&temporary);
                     return error(StatusCode::BAD_REQUEST, "invalid_upload", e.to_string());
                 }
             };
             size += chunk.len();
             total_size = total_size.saturating_add(chunk.len());
             if size > limit || total_size > limit {
-                let _ = std::fs::remove_file(&temporary);
                 return error(
                     StatusCode::PAYLOAD_TOO_LARGE,
                     "attachment_too_large",
@@ -203,67 +179,35 @@ pub(crate) async fn upload_attachments(
                 );
             }
             if let Err(e) = output.write_all(&chunk).await {
-                let _ = std::fs::remove_file(&temporary);
                 return internal(e.to_string());
             }
         }
-        let storage_key = uuid::Uuid::new_v4().simple().to_string();
-        let destination = match attachment_path(&services.storage.data_dir, &paste.id, &storage_key)
-        {
-            Ok(path) => path,
-            Err(e) => {
-                let _ = std::fs::remove_file(&temporary);
-                return error(StatusCode::BAD_REQUEST, "invalid_attachment", e);
-            }
-        };
-        if tokio::fs::try_exists(&destination).await.unwrap_or(true) {
-            let _ = std::fs::remove_file(&temporary);
-            return error(
-                StatusCode::CONFLICT,
-                "attachment_exists",
-                format!("{filename} already exists"),
-            );
-        }
-        staged.push((temporary, destination, filename, storage_key, size as i64));
+        upload.size_bytes = size as i64;
+        staged.push(upload);
     }
-    let mut promoted = Vec::new();
-    for (temporary, destination, _, _, _) in &staged {
-        if let Err(e) = tokio::fs::rename(temporary, destination).await {
-            let _ = std::fs::remove_file(temporary);
-            for path in promoted {
-                let _ = std::fs::remove_file(path);
-            }
-            for (path, _, _, _, _) in &staged {
-                let _ = std::fs::remove_file(path);
-            }
+    for upload in &mut staged {
+        if let Err(e) = upload.promote(&services.storage.data_dir, &paste.id).await {
             return internal(e.to_string());
         }
-        cleanup.paths.push(destination.clone());
-        promoted.push(destination.clone());
     }
     let inputs = staged
         .iter()
-        .map(
-            |(_, _, filename, storage_key, size_bytes)| crate::pastes::NewAttachment {
-                filename: filename.clone(),
-                storage_key: storage_key.clone(),
-                size_bytes: *size_bytes,
-            },
-        )
+        .map(|upload| crate::pastes::NewAttachment {
+            filename: upload.filename.clone(),
+            storage_key: upload.storage_key.clone(),
+            size_bytes: upload.size_bytes,
+        })
         .collect::<Vec<_>>();
     let attachments = match services
         .add_attachments(&value, &paste_id, &inputs, expected_revision)
         .await
     {
         Ok(attachments) => attachments,
-        Err(e) => {
-            for path in promoted {
-                let _ = std::fs::remove_file(path);
-            }
-            return domain_error(e);
-        }
+        Err(e) => return domain_error(e),
     };
-    cleanup.paths.clear();
+    for upload in &mut staged {
+        upload.commit();
+    }
     let current = match services.ensure_can_update(&value, &paste_id).await {
         Ok(current) => current,
         Err(value) => return domain_error(value),
@@ -442,8 +386,21 @@ pub(crate) async fn get_archive(
     }
     let data_dir = services.storage.data_dir.clone();
     let archive_id = paste.id.clone();
+    static ARCHIVE_GENERATION: std::sync::OnceLock<std::sync::Arc<tokio::sync::Semaphore>> =
+        std::sync::OnceLock::new();
+    let permit = match ARCHIVE_GENERATION
+        .get_or_init(|| std::sync::Arc::new(tokio::sync::Semaphore::new(2)))
+        .clone()
+        .acquire_owned()
+        .await
+    {
+        Ok(permit) => permit,
+        Err(error) => return internal(error.to_string()),
+    };
     let archive = web::block(move || {
-        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let _permit = permit;
+        let file = tempfile::tempfile().map_err(|error| error.to_string())?;
+        let mut zip = zip::ZipWriter::new(file);
         let options =
             SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         if !paste.content.is_empty() {
@@ -454,24 +411,30 @@ pub(crate) async fn get_archive(
         }
         for attachment in &paste.attachments {
             let path = attachment_path(&data_dir, &paste.id, &attachment.storage_key)?;
-            let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-            zip.start_file(&attachment.filename, options)
+            let mut source = std::fs::File::open(path).map_err(|e| e.to_string())?;
+            zip.start_file(format!("attachments/{}", attachment.filename), options)
                 .map_err(|e| e.to_string())?;
-            zip.write_all(&bytes).map_err(|e| e.to_string())?;
+            std::io::copy(&mut source, &mut zip).map_err(|e| e.to_string())?;
         }
-        zip.finish()
-            .map(|cursor| cursor.into_inner())
-            .map_err(|e| e.to_string())
+        let mut file = zip.finish().map_err(|e| e.to_string())?;
+        std::io::Seek::seek(&mut file, std::io::SeekFrom::Start(0)).map_err(|e| e.to_string())?;
+        Ok::<_, String>(file)
     })
     .await;
     match archive {
-        Ok(Ok(bytes)) => HttpResponse::Ok()
-            .insert_header((header::CONTENT_TYPE, "application/zip"))
-            .insert_header((
-                header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"{archive_id}.zip\""),
-            ))
-            .body(bytes),
+        Ok(Ok(file)) => NamedFile::from_file(file, format!("{archive_id}.zip"))
+            .map(|named| {
+                named
+                    .set_content_type("application/zip".parse().unwrap())
+                    .set_content_disposition(header::ContentDisposition {
+                        disposition: header::DispositionType::Attachment,
+                        parameters: vec![header::DispositionParam::Filename(format!(
+                            "{archive_id}.zip"
+                        ))],
+                    })
+                    .into_response(&req)
+            })
+            .unwrap_or_else(|error| internal(error.to_string())),
         Ok(Err(e)) => internal(e),
         Err(e) => internal(e.to_string()),
     }
@@ -484,8 +447,7 @@ async fn paste_for_download(
     read_token: Option<&str>,
 ) -> crate::pastes::DomainResult<Option<crate::pastes::Paste>> {
     if let Some(paste) = services.get_paste(principal, paste_id).await? {
-        let owner = principal.is_admin() || principal.user_id() == paste.owner_id;
-        if paste.read_limit.is_none() || owner {
+        if paste.read_limit.is_none() || principal.can_bypass_read_limit(paste.owner_id) {
             return Ok(Some(paste));
         }
     }

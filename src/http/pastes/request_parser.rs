@@ -76,14 +76,6 @@ pub(super) async fn parse_multipart(
     let mut files = Vec::new();
     let mut total_size = 0usize;
     let limit = ARGS.attachment_size_limit_bytes().map_err(internal)?;
-    let staging = services
-        .storage
-        .data_dir
-        .join("attachments")
-        .join(".staging");
-    tokio::fs::create_dir_all(&staging)
-        .await
-        .map_err(|error| internal(error.to_string()))?;
     while let Some(mut field) = multipart.try_next().await.map_err(|reason| {
         error(
             StatusCode::BAD_REQUEST,
@@ -121,8 +113,10 @@ pub(super) async fn parse_multipart(
                     "Attachment filename is invalid",
                 ));
             }
-            let temporary = staging.join(format!("upload-{}", uuid::Uuid::new_v4().simple()));
-            let mut output = tokio::fs::File::create(&temporary)
+            let mut staged = StagedFile::create(&services.storage.data_dir, filename)
+                .await
+                .map_err(|error| internal(error.to_string()))?;
+            let mut output = tokio::fs::File::create(staged.path())
                 .await
                 .map_err(|error| internal(error.to_string()))?;
             let mut size = 0usize;
@@ -138,7 +132,6 @@ pub(super) async fn parse_multipart(
                 size = size.saturating_add(chunk.len());
                 total_size = total_size.saturating_add(chunk.len());
                 if size > limit || total_size > limit {
-                    let _ = tokio::fs::remove_file(&temporary).await;
                     return Err(error(
                         StatusCode::PAYLOAD_TOO_LARGE,
                         "attachment_too_large",
@@ -151,13 +144,9 @@ pub(super) async fn parse_multipart(
                     .await
                     .map_err(|error| internal(error.to_string()))?;
             }
-            files.push(StagedFile {
-                temporary,
-                filename,
-                storage_key: uuid::Uuid::new_v4().simple().to_string(),
-                size_bytes: size as i64,
-                digest: lower_hex(&digest.finalize()),
-            });
+            staged.size_bytes = size as i64;
+            staged.digest = lower_hex(&digest.finalize());
+            files.push(staged);
         } else {
             if !matches!(
                 name.as_str(),
@@ -236,30 +225,10 @@ pub(super) async fn promote_created_files(
     paste: &mut crate::pastes::Paste,
     staged: &mut [StagedFile],
 ) -> crate::pastes::DomainResult<()> {
-    let directory = services
-        .storage
-        .data_dir
-        .join("attachments")
-        .join(&paste.id);
-    tokio::fs::create_dir_all(&directory)
-        .await
-        .map_err(|error| crate::pastes::DomainError::internal(error.to_string()))?;
-    let mut promoted = Vec::new();
     for file in staged.iter_mut() {
-        let destination = super::attachments::attachment_path(
-            &services.storage.data_dir,
-            &paste.id,
-            &file.storage_key,
-        )
-        .map_err(crate::pastes::DomainError::internal)?;
-        if let Err(error) = tokio::fs::rename(&file.temporary, &destination).await {
-            for path in promoted {
-                let _ = tokio::fs::remove_file(path).await;
-            }
-            return Err(crate::pastes::DomainError::internal(error.to_string()));
-        }
-        file.temporary = PathBuf::new();
-        promoted.push(destination);
+        file.promote(&services.storage.data_dir, &paste.id)
+            .await
+            .map_err(crate::pastes::DomainError::internal)?;
     }
     let inputs = staged
         .iter()
@@ -274,16 +243,14 @@ pub(super) async fn promote_created_files(
         .await
     {
         Ok(_) => {
+            for file in staged.iter_mut() {
+                file.commit();
+            }
             *paste = services.ensure_can_update(principal, &paste.id).await?;
             remove_unreferenced_attachment_files(services, paste).await;
             Ok(())
         }
-        Err(message) => {
-            for path in promoted {
-                let _ = tokio::fs::remove_file(path).await;
-            }
-            Err(message)
-        }
+        Err(message) => Err(message),
     }
 }
 

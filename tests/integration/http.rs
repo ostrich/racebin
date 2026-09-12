@@ -518,7 +518,7 @@ mod tests {
         assert_eq!(paste_text, "body");
         let mut attachment_text = String::new();
         archive
-            .by_name("hello.txt")
+            .by_name("attachments/hello.txt")
             .unwrap()
             .read_to_string(&mut attachment_text)
             .unwrap();

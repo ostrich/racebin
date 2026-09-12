@@ -45,9 +45,9 @@ pub async fn list_invitations(
     };
     let search = search
         .filter(|value| !value.trim().is_empty())
-        .map(|value| format!("%{}%", value.trim().to_lowercase()));
+        .map(|value| crate::database::literal_like_pattern(&value.trim().to_lowercase()));
     let search_clause = if search.is_some() {
-        " AND (LOWER(COALESCE(i.comment,'')) LIKE $2 OR LOWER(c.username) LIKE $2 OR LOWER(COALESCE(r.username,'')) LIKE $2 OR LOWER(COALESCE(i.token, i.token_hash)) LIKE $2)"
+        " AND (LOWER(COALESCE(i.comment,'')) LIKE $2 ESCAPE '\\' OR LOWER(c.username) LIKE $2 ESCAPE '\\' OR LOWER(COALESCE(r.username,'')) LIKE $2 ESCAPE '\\' OR LOWER(COALESCE(i.token, i.token_hash)) LIKE $2 ESCAPE '\\')"
     } else {
         ""
     };

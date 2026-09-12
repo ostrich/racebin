@@ -1,4 +1,5 @@
 mod app;
+mod attachment_storage;
 
 pub mod accounts;
 pub mod args;

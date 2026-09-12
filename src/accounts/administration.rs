@@ -101,14 +101,14 @@ pub async fn list_admin_users(
     let search = query
         .search
         .filter(|value| !value.trim().is_empty())
-        .map(|value| format!("%{}%", value.trim().to_lowercase()));
+        .map(|value| crate::database::literal_like_pattern(&value.trim().to_lowercase()));
     let search_value = search.as_deref().unwrap_or("");
     let role_value = query.role.unwrap_or("");
     let enabled_value = query.enabled.map_or(-1, i64::from);
-    let count_where = " WHERE ($1='' OR LOWER(u.username) LIKE $1)
+    let count_where = " WHERE ($1='' OR LOWER(u.username) LIKE $1 ESCAPE '\\')
         AND ($2='' OR ($2='owner' AND u.is_owner=1) OR ($2<>'owner' AND u.role=$2 AND u.is_owner=0))
         AND ($3=-1 OR u.enabled=$3)";
-    let list_where = " WHERE ($2='' OR LOWER(u.username) LIKE $2)
+    let list_where = " WHERE ($2='' OR LOWER(u.username) LIKE $2 ESCAPE '\\')
         AND ($3='' OR ($3='owner' AND u.is_owner=1) OR ($3<>'owner' AND u.role=$3 AND u.is_owner=0))
         AND ($4=-1 OR u.enabled=$4)";
     let sort_field = match query.sort {

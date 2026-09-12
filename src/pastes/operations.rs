@@ -35,7 +35,7 @@ impl PasteService {
             .clamp(1, crate::limits::MAX_PAGE_SIZE);
         let offset = i64::from(page - 1).saturating_mul(i64::from(page_size));
         let user_id = principal.user_id();
-        let search = format!("%{}%", query.search.as_deref().unwrap_or(""));
+        let search = crate::database::literal_like_pattern(query.search.as_deref().unwrap_or(""));
         let visibility = query.visibility.as_deref();
         let content_kind = query.content_kind.as_deref();
         let language = query.language.as_deref();
@@ -90,15 +90,15 @@ impl PasteService {
              AND ($3 IS NULL OR visibility=$3)
              AND ($4 IS NULL OR owner_id=$4)
              AND (expires_at IS NULL OR expires_at>$5)
-             AND (lower(title) LIKE lower($6) OR lower(content) LIKE lower($6)
-                  OR lower(id) LIKE lower($6) OR lower(language) LIKE lower($6)
-                  OR lower(content_kind) LIKE lower($6)
+             AND (lower(title) LIKE lower($6) ESCAPE '\\' OR lower(content) LIKE lower($6) ESCAPE '\\'
+                  OR lower(id) LIKE lower($6) ESCAPE '\\' OR lower(language) LIKE lower($6) ESCAPE '\\'
+                  OR lower(content_kind) LIKE lower($6) ESCAPE '\\'
                   OR EXISTS(SELECT 1 FROM attachments search_files
                             WHERE search_files.paste_id=pastes.id
-                              AND lower(search_files.filename) LIKE lower($6))
+                              AND lower(search_files.filename) LIKE lower($6) ESCAPE '\\')
                   OR ($1=1 AND EXISTS(SELECT 1 FROM users search_owner
                                      WHERE search_owner.id=pastes.owner_id
-                                       AND lower(search_owner.username) LIKE lower($6))))
+                                       AND lower(search_owner.username) LIKE lower($6) ESCAPE '\\')))
              AND ($7 IS NULL OR content_kind=$7)
              AND ($8 IS NULL OR language=$8)
              AND ($9 IS NULL OR ($9=1 AND EXISTS(SELECT 1 FROM attachments filter_files
@@ -457,12 +457,13 @@ impl PasteService {
         input: &PasteInput,
         idempotency_key: Option<&str>,
         request_hash: &str,
-    ) -> DomainResult<(Paste, bool)> {
+        attachment_count: usize,
+    ) -> DomainResult<(Paste, bool, Option<String>)> {
         let Some(key) = idempotency_key else {
             return self
                 .create_paste(principal, input)
                 .await
-                .map(|paste| (paste, false));
+                .map(|paste| (paste, false, None));
         };
         let owner = principal
             .user_id()
@@ -470,6 +471,23 @@ impl PasteService {
         let _guard = self.storage.lock_writes().await;
         let key_hash = hash_token(key);
         let now = unix_timestamp();
+        let mut cleanup = self
+            .storage
+            .pool()
+            .begin()
+            .await
+            .map_err(DomainError::internal)?;
+        let stale_paste: Option<String> = sqlx::query_scalar(
+            "SELECT paste_id FROM idempotency_records
+             WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2
+               AND state='pending' AND expires_at<=$3",
+        )
+        .bind(owner)
+        .bind(&key_hash)
+        .bind(now)
+        .fetch_optional(&mut *cleanup)
+        .await
+        .map_err(DomainError::internal)?;
         sqlx::query(
             "DELETE FROM idempotency_records
              WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2 AND expires_at<=$3",
@@ -477,14 +495,23 @@ impl PasteService {
         .bind(owner)
         .bind(&key_hash)
         .bind(now)
-        .execute(self.storage.pool())
+        .execute(&mut *cleanup)
         .await
         .map_err(DomainError::internal)?;
+        if let Some(stale_paste) = stale_paste {
+            sqlx::query("DELETE FROM pastes WHERE id=$1 AND owner_id=$2")
+                .bind(stale_paste)
+                .bind(owner)
+                .execute(&mut *cleanup)
+                .await
+                .map_err(DomainError::internal)?;
+        }
+        cleanup.commit().await.map_err(DomainError::internal)?;
         if let Some(paste) = self
             .existing_idempotent_create(owner, &key_hash, request_hash)
             .await?
         {
-            return Ok((paste, true));
+            return Ok((paste, true, None));
         }
 
         if !principal.can("paste:write") && !matches!(principal, Principal::Session(_)) {
@@ -497,6 +524,8 @@ impl PasteService {
         let folder_id = input.folder_id.flatten();
         self.validate_folder_owner(owner, folder_id).await?;
         let id = Uuid::new_v4().simple().to_string()[..24].to_string();
+        let has_attachments = attachment_count > 0;
+        let operation_token = has_attachments.then(|| Uuid::new_v4().simple().to_string());
         let mut tx = self
             .storage
             .pool()
@@ -527,15 +556,18 @@ impl PasteService {
         .await
         .map_err(DomainError::internal)?;
         let idempotency_insert = sqlx::query(
-            "INSERT INTO idempotency_records(user_id,operation,key_hash,request_hash,paste_id,created_at,expires_at)
-             VALUES($1,'create_paste',$2,$3,$4,$5,$6)",
+            "INSERT INTO idempotency_records(user_id,operation,key_hash,request_hash,paste_id,created_at,expires_at,state,owner_token,expected_attachment_count)
+             VALUES($1,'create_paste',$2,$3,$4,$5,$6,$7,$8,$9)",
         )
         .bind(owner)
         .bind(&key_hash)
         .bind(request_hash)
         .bind(&id)
         .bind(now)
-        .bind(now + 86400)
+        .bind(now + if has_attachments { 300 } else { 86400 })
+        .bind(if has_attachments { "pending" } else { "completed" })
+        .bind(&operation_token)
+        .bind(attachment_count as i64)
         .execute(&mut *tx)
         .await;
         if let Err(error) = idempotency_insert {
@@ -544,7 +576,7 @@ impl PasteService {
                 .existing_idempotent_create(owner, &key_hash, request_hash)
                 .await?
             {
-                return Ok((paste, true));
+                return Ok((paste, true, None));
             }
             return Err(DomainError::internal(error));
         }
@@ -553,7 +585,7 @@ impl PasteService {
             .find_paste(&id)
             .await?
             .ok_or_else(|| DomainError::internal("Paste creation failed"))?;
-        Ok((paste, false))
+        Ok((paste, false, operation_token))
     }
 
     async fn existing_idempotent_create(
@@ -563,7 +595,7 @@ impl PasteService {
         request_hash: &str,
     ) -> DomainResult<Option<Paste>> {
         let existing = sqlx::query(
-            "SELECT request_hash,paste_id FROM idempotency_records
+            "SELECT request_hash,paste_id,state,expected_attachment_count FROM idempotency_records
              WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2 AND expires_at>$3",
         )
         .bind(owner)
@@ -583,6 +615,7 @@ impl PasteService {
                 "Idempotency key was already used with a different request",
             ));
         }
+        let state: String = row.try_get("state").map_err(DomainError::internal)?;
         let paste_id: Option<String> = row.try_get("paste_id").map_err(DomainError::internal)?;
         let paste_id = paste_id.ok_or_else(|| {
             DomainError::conflict(
@@ -590,36 +623,117 @@ impl PasteService {
                 "Idempotency resource no longer exists",
             )
         })?;
-        self.find_paste(&paste_id)
+        let paste = self
+            .find_paste(&paste_id)
             .await?
             .filter(|paste| paste.owner_id == Some(owner))
-            .map(Some)
             .ok_or_else(|| {
                 DomainError::conflict(
                     "idempotency_resource_gone",
                     "Idempotency resource no longer exists",
                 )
-            })
+            })?;
+        if state == "pending" {
+            let expected: i64 = row
+                .try_get("expected_attachment_count")
+                .map_err(DomainError::internal)?;
+            if paste.attachment_count != expected {
+                return Err(DomainError::conflict(
+                    "idempotency_in_progress",
+                    "An equivalent paste creation is still in progress",
+                ));
+            }
+            sqlx::query(
+                "UPDATE idempotency_records SET state='completed',owner_token=NULL,expires_at=$4
+                 WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2 AND state='pending' AND paste_id=$3",
+            )
+            .bind(owner)
+            .bind(key_hash)
+            .bind(&paste_id)
+            .bind(unix_timestamp() + 86400)
+            .execute(self.storage.pool())
+            .await
+            .map_err(DomainError::internal)?;
+        }
+        Ok(Some(paste))
     }
 
-    pub async fn clear_create_idempotency(
+    pub async fn complete_create_idempotency(
         &self,
         principal: &Principal,
         key: &str,
-    ) -> DomainResult<()> {
+        operation_token: &str,
+    ) -> DomainResult<bool> {
         let owner = principal
             .user_id()
             .ok_or_else(|| DomainError::forbidden("Authentication required"))?;
         sqlx::query(
-            "DELETE FROM idempotency_records
-             WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2",
+            "UPDATE idempotency_records SET state='completed',owner_token=NULL,expires_at=$4
+             WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2
+               AND state='pending' AND owner_token=$3
+               AND expected_attachment_count=(
+                 SELECT COUNT(*) FROM attachments
+                 WHERE paste_id=idempotency_records.paste_id
+               )",
         )
         .bind(owner)
         .bind(hash_token(key))
+        .bind(operation_token)
+        .bind(unix_timestamp() + 86400)
         .execute(self.storage.pool())
         .await
-        .map(|_| ())
+        .map(|result| result.rows_affected() == 1)
         .map_err(DomainError::internal)
+    }
+
+    pub async fn rollback_create_idempotency(
+        &self,
+        principal: &Principal,
+        key: &str,
+        operation_token: &str,
+    ) -> DomainResult<bool> {
+        let owner = principal
+            .user_id()
+            .ok_or_else(|| DomainError::forbidden("Authentication required"))?;
+        let _guard = self.storage.lock_writes().await;
+        let mut tx = self
+            .storage
+            .pool()
+            .begin()
+            .await
+            .map_err(DomainError::internal)?;
+        let paste_id: Option<String> = sqlx::query_scalar(
+            "SELECT paste_id FROM idempotency_records
+             WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2
+               AND state='pending' AND owner_token=$3",
+        )
+        .bind(owner)
+        .bind(hash_token(key))
+        .bind(operation_token)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(DomainError::internal)?;
+        let Some(paste_id) = paste_id else {
+            return Ok(false);
+        };
+        sqlx::query(
+            "DELETE FROM idempotency_records
+             WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2 AND owner_token=$3",
+        )
+        .bind(owner)
+        .bind(hash_token(key))
+        .bind(operation_token)
+        .execute(&mut *tx)
+        .await
+        .map_err(DomainError::internal)?;
+        sqlx::query("DELETE FROM pastes WHERE id=$1 AND owner_id=$2")
+            .bind(&paste_id)
+            .bind(owner)
+            .execute(&mut *tx)
+            .await
+            .map_err(DomainError::internal)?;
+        tx.commit().await.map_err(DomainError::internal)?;
+        Ok(true)
     }
 
     pub async fn update_paste(
@@ -878,6 +992,15 @@ mod tests {
         assert!(!can_read(&key("paste:delete"), &paste));
         assert!(can_read(&key("paste:read"), &paste));
         assert!(can_read(&key("paste:manage"), &paste));
+    }
+
+    #[test]
+    fn read_limit_bypass_requires_an_explicit_read_or_management_scope() {
+        assert!(!key("paste:write").can_bypass_read_limit(Some(7)));
+        assert!(!key("paste:delete").can_bypass_read_limit(Some(7)));
+        assert!(key("paste:read").can_bypass_read_limit(Some(7)));
+        assert!(key("paste:manage").can_bypass_read_limit(Some(7)));
+        assert!(!key("paste:read").can_bypass_read_limit(Some(8)));
     }
 
     #[actix_web::test]

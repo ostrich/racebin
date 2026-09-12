@@ -30,45 +30,67 @@ async fn retry_after(repo: &Database, keys: &[(&str, String, i64)]) -> DomainRes
     Ok(retry)
 }
 
-pub async fn login_retry_after(
+pub async fn reserve_login_attempt(
     repo: &Database,
     username: &str,
     client: &str,
 ) -> DomainResult<Option<u64>> {
-    retry_after(
-        repo,
-        &[
-            ("login_account", username.to_ascii_lowercase(), 5),
-            ("login_address", client.to_string(), 20),
-        ],
-    )
-    .await
+    let now = unix_timestamp();
+    let cutoff = now - ATTEMPT_WINDOW_SECONDS;
+    let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
+    for (kind, subject, limit) in [
+        ("login_account", username.to_ascii_lowercase(), 5_i64),
+        ("login_address", client.to_string(), 20_i64),
+    ] {
+        let (started, count): (i64, i64) = sqlx::query_as(
+            "INSERT INTO auth_buckets(kind,subject,window_started_at,attempt_count)
+             VALUES($1,$2,$3,1)
+             ON CONFLICT(kind,subject) DO UPDATE SET
+               window_started_at=CASE WHEN auth_buckets.window_started_at<=$4 THEN $3 ELSE auth_buckets.window_started_at END,
+               attempt_count=CASE WHEN auth_buckets.window_started_at<=$4 THEN 1 ELSE auth_buckets.attempt_count+1 END
+             RETURNING window_started_at,attempt_count",
+        )
+        .bind(kind)
+        .bind(subject)
+        .bind(now)
+        .bind(cutoff)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(DomainError::from)?;
+        if count > limit {
+            tx.rollback().await.map_err(DomainError::from)?;
+            return Ok(Some((started + ATTEMPT_WINDOW_SECONDS - now).max(1) as u64));
+        }
+    }
+    tx.commit().await.map_err(DomainError::from)?;
+    Ok(None)
 }
 
-pub async fn record_login_failure(
+pub async fn release_login_attempt(
     repo: &Database,
     username: &str,
     client: &str,
 ) -> DomainResult<()> {
-    let now = unix_timestamp();
     let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
     for (kind, subject) in [
         ("login_account", username.to_ascii_lowercase()),
         ("login_address", client.to_string()),
     ] {
-        sqlx::query("INSERT INTO auth_attempts(kind,subject,occurred_at) VALUES($1,$2,$3)")
-            .bind(kind)
-            .bind(subject)
-            .bind(now)
-            .execute(&mut *tx)
-            .await
-            .map_err(DomainError::from)?;
+        sqlx::query(
+            "UPDATE auth_buckets SET attempt_count=attempt_count-1
+             WHERE kind=$1 AND subject=$2 AND attempt_count>0",
+        )
+        .bind(kind)
+        .bind(subject)
+        .execute(&mut *tx)
+        .await
+        .map_err(DomainError::from)?;
     }
     tx.commit().await.map_err(DomainError::from)
 }
 
 pub async fn clear_login_failures(repo: &Database, username: &str) -> DomainResult<()> {
-    sqlx::query("DELETE FROM auth_attempts WHERE kind='login_account' AND subject=$1")
+    sqlx::query("DELETE FROM auth_buckets WHERE kind='login_account' AND subject=$1")
         .bind(username.to_ascii_lowercase())
         .execute(repo.pool())
         .await
