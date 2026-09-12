@@ -55,6 +55,7 @@ visual=true'
 
 assert_profile 'documentation only' "$none" docs/architecture.md CONTRIBUTING.md
 assert_profile 'generated package metadata only' "$none" packaging/arch/PKGBUILD
+assert_profile 'packaged service definition' "$backend" packaging/racebin.service
 assert_profile 'database migration' "$backend" migrations/postgres/001_initial.sql
 assert_profile 'backend domain change' "$backend" src/pastes/operations.rs
 assert_profile 'frontend component change' "$frontend" web/src/pages/PasteView.svelte

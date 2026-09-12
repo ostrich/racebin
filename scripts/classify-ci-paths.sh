@@ -42,7 +42,10 @@ enable_all() {
 classify_path() {
     path=$1
     case "$path" in
-        README.md|CONTRIBUTING.md|LICENSE|THIRD_PARTY_*.md|docs/*|packaging/*|.gitignore)
+        README.md|CONTRIBUTING.md|LICENSE|THIRD_PARTY_*.md|docs/*|packaging/arch/PKGBUILD|.gitignore)
+            ;;
+        packaging/*)
+            enable_backend
             ;;
         .github/workflows/*|scripts/classify-ci-paths.sh|scripts/test-classify-ci-paths.sh)
             enable_all
