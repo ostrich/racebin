@@ -1033,7 +1033,7 @@ export interface components {
         };
         MultipartCreateRequest: {
             content: string;
-            file: unknown[];
+            file?: unknown[];
             /** Format: int64 */
             folder_id?: number;
             format?: string;
@@ -1060,7 +1060,7 @@ export interface components {
              * @description Absolute RFC 3339 expiration time. Cannot be combined with `expires_in`.
              */
             expires_at: string;
-            file: unknown[];
+            file?: unknown[];
             /** Format: int64 */
             folder_id?: number;
             format?: string;
@@ -1092,7 +1092,7 @@ export interface components {
              * @description Positive lifetime in seconds from creation. Cannot be combined with `expires_at`.
              */
             expires_in: number;
-            file: unknown[];
+            file?: unknown[];
             /** Format: int64 */
             folder_id?: number;
             format?: string;

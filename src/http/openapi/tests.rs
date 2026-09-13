@@ -369,18 +369,23 @@ fn generated_client_schemas_preserve_binary_and_multipart_semantics() {
         .as_array()
         .unwrap();
     assert_eq!(multipart_variants.len(), 6);
+    let mut content_only = 0;
+    let mut file_only = 0;
     for variant in multipart_variants {
         assert_eq!(variant["additionalProperties"], false);
         let file = &variant["properties"]["file"];
         assert_eq!(file["type"], "array");
         assert_eq!(file["minItems"], 1);
         assert_eq!(file["items"], serde_json::json!({}));
-        assert!(variant["required"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|name| matches!(name.as_str(), Some("content" | "file"))));
+        let required = variant["required"].as_array().unwrap();
+        let requires_content = required.iter().any(|name| name == "content");
+        let requires_file = required.iter().any(|name| name == "file");
+        assert_ne!(requires_content, requires_file);
+        content_only += usize::from(requires_content);
+        file_only += usize::from(requires_file);
     }
+    assert_eq!(content_only, 3);
+    assert_eq!(file_only, 3);
     let uploaded_items =
         &value["components"]["schemas"]["AttachmentUploadResponse"]["properties"]["items"];
     assert_eq!(uploaded_items["minItems"], 1);
@@ -640,13 +645,30 @@ fn creation_contract_has_unambiguous_content_and_expiration_inputs() {
     assert!(multipart.iter().all(|variant| {
         variant["properties"]["title"]["maxLength"] == crate::limits::MAX_TITLE_CHARACTERS
     }));
-    assert!(multipart.iter().all(|variant| {
-        variant["required"]
-            .as_array()
-            .unwrap()
+    let requirement_shapes = multipart
+        .iter()
+        .map(|variant| {
+            let required = variant["required"].as_array().unwrap();
+            (
+                required.iter().any(|name| name == "content"),
+                required.iter().any(|name| name == "file"),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        requirement_shapes
             .iter()
-            .any(|name| matches!(name.as_str(), Some("content" | "file")))
-    }));
+            .filter(|shape| **shape == (true, false))
+            .count(),
+        3
+    );
+    assert_eq!(
+        requirement_shapes
+            .iter()
+            .filter(|shape| **shape == (false, true))
+            .count(),
+        3
+    );
     let description = operation["description"].as_str().unwrap();
     for phrase in [
         "text/plain creates text",

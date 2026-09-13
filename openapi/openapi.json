@@ -1440,7 +1440,6 @@
               }
             },
             "required": [
-              "file",
               "content"
             ],
             "type": "object"
@@ -1483,7 +1482,6 @@
               }
             },
             "required": [
-              "file",
               "file"
             ],
             "type": "object"
@@ -1531,7 +1529,6 @@
               }
             },
             "required": [
-              "file",
               "expires_at",
               "content"
             ],
@@ -1580,7 +1577,6 @@
               }
             },
             "required": [
-              "file",
               "expires_at",
               "file"
             ],
@@ -1630,7 +1626,6 @@
               }
             },
             "required": [
-              "file",
               "expires_in",
               "content"
             ],
@@ -1680,7 +1675,6 @@
               }
             },
             "required": [
-              "file",
               "expires_in",
               "file"
             ],

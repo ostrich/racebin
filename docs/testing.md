@@ -6,7 +6,7 @@ from the repository root unless a `cd web` is shown.
 
 ## Prerequisites
 
-Install the Rust toolchain declared by the project, Node.js 24 with npm, and a
+Install the current stable Rust toolchain, Node.js 24 with npm, and a
 Playwright-compatible Chromium build. Install frontend dependencies and the
 browser once per checkout:
 

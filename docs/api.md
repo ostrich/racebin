@@ -145,9 +145,9 @@ or `format` query parameters. A new paste must contain non-empty text/rich-text
 content or at least one attachment. Create fields may be omitted but may not be
 JSON `null`.
 
-Multipart creation is atomic from the caller's perspective and requires at
-least one file; a text or rich-text body is optional. Text fields use the JSON
-field names and every attachment uses a repeated `file` part:
+Multipart creation is atomic from the caller's perspective and requires
+nonempty text or rich-text content, at least one file, or both. Text fields use
+the JSON field names and every attachment uses a repeated `file` part:
 
 ```sh
 curl -X POST https://example.com/api/v1/pastes \

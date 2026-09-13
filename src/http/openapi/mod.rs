@@ -242,6 +242,9 @@ fn refine_component_schemas(openapi: &mut utoipa::openapi::OpenApi) {
         components.schemas.get_mut("MultipartCreateRequest")
     {
         schema.additional_properties = Some(Box::new(AdditionalProperties::FreeForm(false)));
+        schema
+            .required
+            .retain(|name| name != "content" && name != "file");
         if let Some(RefOr::T(Schema::Object(content))) = schema.properties.get_mut("content") {
             content.min_length = Some(1);
         }
