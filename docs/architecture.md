@@ -310,9 +310,14 @@ unsafe components.
 
 Uploads are streamed into temporary files while enforcing per-request limits.
 After all fields are valid, files are renamed to their final storage keys and
-their metadata is inserted. Cleanup guards remove staged or promoted files
-when a later step fails. Downloads re-check paste visibility and ownership
-before opening a file.
+their metadata is inserted. Multipart pastes remain in a durable `pending`
+state throughout this process and are invisible to every list, read, search,
+download, and administrative aggregate until attachment completion commits.
+Cleanup guards remove staged or promoted files when a later step fails.
+Reconciliation waits an hour before treating an unreferenced file as abandoned
+and rechecks paste existence immediately before removing a directory, so it
+cannot mistake an in-flight promotion for crash debris. Downloads re-check
+paste visibility and ownership before opening a file.
 
 The database and attachment directory therefore form one logical data set.
 Backups must include both. PostgreSQL does not make attachment storage
@@ -359,9 +364,13 @@ back/forward navigation restores the saved position without stealing focus.
 
 `App.svelte` is the frontend composition root. It bootstraps application state,
 provides the route access policy, and mounts the route outlet. Route identity
-excludes query parameters, so filter and pagination changes update an existing
-page rather than destroying it. Route parameters that identify a different
-resource do create a new page instance.
+normally excludes query parameters, so filter and pagination changes update an
+existing page rather than destroying it. The New Paste route deliberately
+includes its query in component identity because folder query changes describe
+a new form and a confirmed discard must reset the old draft. Route parameters
+that identify a different resource also create a new page instance. The home
+route reactively selects its authenticated editor, plain login, or public
+landing child, so session changes do not depend on redundant navigation.
 `Shell.svelte` owns the shared navigation and page frame. Pages compose
 reusable controls from `web/src/components`.
 
@@ -369,7 +378,9 @@ Dirty forms use one lifetime-owned helper. Confirmation does not disarm a
 mounted form: the component unregisters only when it is actually destroyed, or
 explicitly disarms itself after a successful save. Replaceable page requests
 use one generation-aware loader that suppresses stale successes and errors,
-coordinates loading state, and participates in navigation readiness.
+coordinates loading state, participates in navigation readiness, and owns
+cancellation of both reactive and imperative reloads for the component
+lifetime.
 
 Application-wide session and configuration state lives in a small Svelte
 store. Initial application bootstrap, session refresh, capabilities refresh,
@@ -499,8 +510,11 @@ A typical paste creation follows this path:
    limits, ownership, and Markdown structure.
 5. The multipart parser streams files to staging while calculating their
    digests and enforcing configured size, field, and attachment-count limits.
-6. SQLx records the paste, revision, idempotency result, and attachment metadata.
-7. The browser navigates to the paste view and reads it through the same
+6. SQLx records the paste as pending, independently records any idempotency
+   state, and records attachment metadata after promotion.
+7. Completion atomically makes the paste visible and completes any keyed retry
+   record. Equivalent completion attempts are successful no-ops.
+8. The browser navigates to the paste view and reads it through the same
    API available to other clients.
 
 `GET /api/v1/pastes/{id}` is metadata-only.
@@ -517,13 +531,16 @@ Revisions and ETags protect update and delete operations from lost updates.
 Racebin performs a cleanup pass at startup and then hourly. It:
 
 - deletes expired pastes;
+- deletes abandoned pending paste creations and their attachment data;
 - deletes consumed paste tombstones after the attachment-grant window;
 - deletes expired idempotency records, read receipts, and follow-up read grants;
 - deletes expired sessions and password-reset tokens;
 - deletes stale authentication-attempt records;
 - removes old expired invitations;
-- removes stale upload-staging files; and
-- removes attachment directories belonging to deleted or unknown pastes.
+- removes stale upload-staging and unreferenced promoted files after a grace
+  period; and
+- removes attachment directories belonging to deleted or unknown pastes after
+  rechecking current database state.
 
 This is an in-process task rather than a separate worker service. If Racebin
 is stopped, cleanup resumes at the next startup.

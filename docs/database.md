@@ -91,8 +91,9 @@ snapshot coordination, when an exact common point in time is required.
 
 After restoring either backend, verify database readiness and exercise a known
 attachment download. Racebin's startup cleanup removes orphaned attachment
-directories; it cannot reconstruct a file missing from a database-backed
-attachment record.
+directories and incomplete pending creations after a grace period, while
+protecting newly promoted files from being mistaken for debris. It cannot
+reconstruct a file missing from a database-backed attachment record.
 
 ## Copy SQLite to PostgreSQL
 
