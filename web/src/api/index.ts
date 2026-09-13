@@ -1,2 +1,2 @@
-export { ApiError } from "./transport";
+export { ApiError, isSessionInvalidError, setSessionInvalidHandler } from "./transport";
 export * from "./resources";

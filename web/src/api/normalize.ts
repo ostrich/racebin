@@ -1,12 +1,23 @@
 import type { components } from "./generated";
-import type { Attachment, Paste } from "../types";
+import type {
+  AdminUser,
+  ApiKey,
+  Config,
+  Folder,
+  FolderOverview,
+  Invitation,
+  Language,
+  Page,
+  Paste,
+  Session
+} from "../types";
 
-type WireAttachment = components["schemas"]["AttachmentResource"];
-type WirePasteResource = components["schemas"]["PasteResource"];
-type WirePasteMetadata = components["schemas"]["PasteMetadataResource"];
-type WirePasteSummary = components["schemas"]["PasteSummary"];
-type WirePaste = WirePasteResource | WirePasteMetadata | WirePasteSummary;
-type WireBody = components["schemas"]["BodyOutput"];
+type Schema = components["schemas"];
+type WirePaste = Schema["PasteResource"] | Schema["PasteMetadataResource"] | Schema["PasteSummary"];
+
+function isPasteResource(value: WirePaste): value is Schema["PasteResource"] {
+  return "body" in value;
+}
 
 export function unixTimestamp(value: string | null | undefined): number | null {
   if (value === null || value === undefined) return null;
@@ -14,24 +25,9 @@ export function unixTimestamp(value: string | null | undefined): number | null {
   return Number.isFinite(milliseconds) ? Math.floor(milliseconds / 1000) : null;
 }
 
-function isWirePaste(value: unknown): value is WirePaste {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<WirePaste>;
-  return (
-    typeof candidate.id === "string" &&
-    typeof candidate.url === "string" &&
-    (candidate.format === "text" || candidate.format === "markdown") &&
-    typeof candidate.created_at === "string"
-  );
-}
-
-function attachmentFromWire(value: WireAttachment): Attachment {
-  return { id: value.id, filename: value.filename, size_bytes: value.size_bytes, url: value.url };
-}
-
-function pasteFromWire(value: WirePaste, etag?: string | null): Paste {
+export function pasteFromWire(value: WirePaste, etag?: string | null): Paste {
   const resource = "attachments" in value ? value : undefined;
-  const body = resource && "body" in resource ? (resource.body as WireBody) : undefined;
+  const body = isPasteResource(value) ? value.body : undefined;
   return {
     id: value.id,
     url: value.url,
@@ -48,9 +44,12 @@ function pasteFromWire(value: WirePaste, etag?: string | null): Paste {
     content: body?.content ?? ("excerpt" in value ? (value.excerpt ?? "") : ""),
     rendered_html: body?.format === "markdown" ? body.rendered_html : null,
     plain_text: body?.format === "markdown" ? body.plain_text : (body?.content ?? ""),
-    format: value.format as "text" | "markdown",
+    format: value.format === "markdown" ? "markdown" : "text",
     language: body?.format === "text" ? body.language : (value.language ?? "plaintext"),
-    visibility: value.visibility as "public" | "unlisted" | "private",
+    visibility:
+      value.visibility === "public" || value.visibility === "private"
+        ? value.visibility
+        : "unlisted",
     created_at: unixTimestamp(value.created_at) ?? 0,
     updated_at: unixTimestamp(value.updated_at) ?? unixTimestamp(value.created_at) ?? 0,
     modified_at: unixTimestamp(value.modified_at),
@@ -61,39 +60,103 @@ function pasteFromWire(value: WirePaste, etag?: string | null): Paste {
     attachment_count: value.attachment_count,
     attachment_only_filename: value.attachment_only_filename ?? undefined,
     size_bytes: value.size_bytes,
-    attachments: resource?.attachments.map(attachmentFromWire) ?? []
+    attachments:
+      resource?.attachments.map((attachment) => ({
+        id: attachment.id,
+        filename: attachment.filename,
+        size_bytes: attachment.size_bytes,
+        url: attachment.url
+      })) ?? []
   };
 }
 
-export function normalizePayload(value: unknown, etag?: string | null): unknown {
-  if (Array.isArray(value)) return value.map((item) => normalizePayload(item));
-  if (!value || typeof value !== "object") return value;
-  if (isWirePaste(value)) return pasteFromWire(value, etag);
-  const object = value as Record<string, unknown>;
-  if (Array.isArray(object.items)) {
-    const pagination =
-      object.pagination && typeof object.pagination === "object"
-        ? (object.pagination as Record<string, unknown>)
-        : undefined;
-    return {
-      ...object,
-      items: object.items.map((item) => normalizePayload(item)),
-      ...(pagination
-        ? {
-            page: pagination.page,
-            page_size: pagination.page_size,
-            total_items: pagination.total_items,
-            total_pages: pagination.total_pages
-          }
-        : {})
-    };
-  }
-  const normalized = Object.fromEntries(
-    Object.entries(object).map(([key, item]) => [key, normalizePayload(item)])
-  );
-  for (const key of ["created_at", "last_login_at", "last_used_at", "expires_at", "redeemed_at"]) {
-    const timestamp = normalized[key];
-    if (typeof timestamp === "string") normalized[key] = unixTimestamp(timestamp);
-  }
-  return normalized;
+function pageFromWire<W, T>(
+  value: { items: W[]; pagination: Schema["Pagination"] },
+  convert: (item: W) => T
+): Page<T> {
+  return { ...value.pagination, items: value.items.map(convert) };
 }
+
+export const pastePageFromWire = (value: Schema["PastePage"]): Page<Paste> =>
+  pageFromWire(value, (paste) => pasteFromWire(paste));
+
+export function sessionFromWire(value: Schema["SessionResponse"]): Session {
+  return value;
+}
+
+export function configFromWire(value: Schema["Capabilities"]): Config {
+  return {
+    ...value,
+    web_base_url: value.web_base_url ?? undefined,
+    api_base_url: value.api_base_url ?? undefined,
+    default_expiration_seconds: value.default_expiration_seconds ?? null,
+    plain_home_enabled: value.plain_home_enabled,
+    default_format: value.default_format === "markdown" ? "markdown" : "text",
+    default_visibility:
+      value.default_visibility === "public" || value.default_visibility === "private"
+        ? value.default_visibility
+        : "unlisted",
+    formats: value.formats.filter(
+      (format): format is "text" | "markdown" => format === "text" || format === "markdown"
+    ),
+    visibility_modes: value.visibility_modes.filter(
+      (visibility): visibility is "public" | "unlisted" | "private" =>
+        visibility === "public" || visibility === "unlisted" || visibility === "private"
+    )
+  };
+}
+
+export function languagesFromWire(value: Schema["Language"][]): Language[] {
+  return value.map((language) => ({ ...language }));
+}
+
+export function folderFromWire(value: Schema["FolderResource"]): Folder {
+  return { ...value, created_at: unixTimestamp(value.created_at) ?? 0 };
+}
+
+export function folderOverviewFromWire(value: Schema["FolderOverviewResource"]): FolderOverview {
+  return { ...value, items: value.items.map(folderFromWire) };
+}
+
+export function apiKeyFromWire(value: Schema["ApiKeyResource"]): ApiKey {
+  return {
+    ...value,
+    user_id: value.user_id ?? null,
+    owner_username: value.owner_username ?? null,
+    created_at: unixTimestamp(value.created_at) ?? 0,
+    last_used_at: unixTimestamp(value.last_used_at)
+  };
+}
+
+export const apiKeyPageFromWire = (value: Schema["ApiKeyPage"]): Page<ApiKey> =>
+  pageFromWire(value, apiKeyFromWire);
+
+export function adminUserFromWire(value: Schema["AdminUserResource"]): AdminUser {
+  return {
+    ...value,
+    created_at: unixTimestamp(value.created_at) ?? 0,
+    last_login_at: unixTimestamp(value.last_login_at)
+  };
+}
+
+export const adminUserPageFromWire = (value: Schema["AdminUserPage"]): Page<AdminUser> =>
+  pageFromWire(value, adminUserFromWire);
+
+export function invitationFromWire(value: Schema["InvitationResource"]): Invitation {
+  return {
+    ...value,
+    created_at: unixTimestamp(value.created_at) ?? 0,
+    expires_at: unixTimestamp(value.expires_at) ?? 0,
+    redeemed_at: unixTimestamp(value.redeemed_at) ?? undefined
+  };
+}
+
+export const invitationPageFromWire = (value: Schema["InvitationPage"]): Page<Invitation> =>
+  pageFromWire(value, invitationFromWire);
+
+export type AuditEvent = Omit<Schema["AuditEventResource"], "created_at"> & { created_at: number };
+export const auditEventPageFromWire = (value: Schema["AuditEventPage"]): Page<AuditEvent> =>
+  pageFromWire(value, (event) => ({
+    ...event,
+    created_at: unixTimestamp(event.created_at) ?? 0
+  }));

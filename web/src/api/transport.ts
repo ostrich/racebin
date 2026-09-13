@@ -22,6 +22,23 @@ export class ApiError extends Error {
   }
 }
 
+let sessionInvalidHandler: (() => void) | undefined;
+
+export function setSessionInvalidHandler(handler?: () => void): void {
+  sessionInvalidHandler = handler;
+}
+
+export function isSessionInvalidError(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError &&
+    error.status === 401 &&
+    [
+      "urn:racebin:problem:invalid_session",
+      "urn:racebin:problem:authentication_required"
+    ].includes(error.problemType ?? "")
+  );
+}
+
 export type TransportOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   json?: unknown;
@@ -52,12 +69,14 @@ export async function transport<T>(
   });
   if (!response.ok) {
     const problem = (await response.json().catch(() => null)) as ProblemDetails | null;
-    throw new ApiError(
+    const error = new ApiError(
       response.status,
       problem?.detail ?? response.statusText,
       problem?.type,
       response.headers.get("Retry-After") ?? undefined
     );
+    if (currentState().session.user && isSessionInvalidError(error)) sessionInvalidHandler?.();
+    throw error;
   }
   if (options.invalidateQueries ?? method !== "GET") clearQueryCache();
   return {

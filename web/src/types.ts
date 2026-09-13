@@ -137,3 +137,16 @@ export type Config = {
 };
 
 export type Language = { id: string; label: string; aliases: string[] };
+
+export type Invitation = {
+  id: number;
+  token_prefix: string;
+  created_by_username: string;
+  redeemed_by_username?: string | null;
+  comment?: string | null;
+  url?: string | null;
+  status: "active" | "redeemed" | "revoked" | "expired";
+  created_at: number;
+  expires_at: number;
+  redeemed_at?: number;
+};
