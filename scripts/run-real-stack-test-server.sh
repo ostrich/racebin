@@ -15,8 +15,15 @@ trap cleanup EXIT HUP INT TERM
 cleanup
 mkdir -m 700 "$test_data_dir"
 printf '%s\n' 'correct horse battery staple' > "$password_file"
-npm --prefix "$repo_root/web" run build
-cargo build --manifest-path "$repo_root/Cargo.toml" --locked
+if [ "${RACEBIN_REAL_STACK_PREBUILT:-false}" = true ]; then
+  if [ ! -x "$racebin_binary" ]; then
+    printf '%s\n' "prebuilt real-stack binary not found: $racebin_binary" >&2
+    exit 1
+  fi
+else
+  npm --prefix "$repo_root/web" run build
+  cargo build --manifest-path "$repo_root/Cargo.toml" --locked
+fi
 "$racebin_binary" account create test-admin --admin \
   --password-file "$password_file" --data-dir "$test_data_dir"
 rm "$password_file"

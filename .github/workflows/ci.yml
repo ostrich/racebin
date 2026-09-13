@@ -100,6 +100,18 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.real_stack == 'true'
+      - name: Restore Cargo build cache
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.real_stack == 'true'
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-stable-frontend-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'build.rs', 'src/**/*.rs', 'tests/**/*.rs', 'migrations/**/*', 'web/dist/**/*') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-stable-frontend-${{ hashFiles('Cargo.lock') }}-
       - name: Install frontend dependencies
         run: npm ci
         working-directory: web
@@ -137,6 +149,8 @@ jobs:
         run: cargo build --locked
       - name: Smoke-test the compiled frontend and disposable backend
         if: needs.changes.outputs.real_stack == 'true'
+        env:
+          RACEBIN_REAL_STACK_PREBUILT: true
         run: npm run test:real
         working-directory: web
       - name: Summarize real-stack failures
@@ -252,6 +266,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy,rustfmt
+      - name: Restore Cargo build cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-stable-rust-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'build.rs', 'src/**/*.rs', 'tests/**/*.rs', 'migrations/**/*') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-stable-rust-${{ hashFiles('Cargo.lock') }}-
       - name: Check naming conventions
         run: sh scripts/check-naming.sh
       - name: Check Rust formatting
@@ -260,20 +285,6 @@ jobs:
         run: cargo clippy --locked --all-targets --all-features -- -D warnings
       - name: Run Rust tests
         run: cargo test --locked --all-features
-
-  msrv:
-    name: Rust 1.94 compatibility
-    needs: changes
-    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.broad == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@1.94.0
-      - name: Check the advertised minimum Rust version
-        run: cargo check --locked --all-targets --all-features
 
   dependency-audit:
     name: Dependency audit

@@ -159,10 +159,13 @@ temporary SQLite data directory and administrator, starts Racebin on loopback,
 and uses Chromium plus direct HTTP clients against the actual server:
 
 ```bash
-cargo build --locked
 cd web
 npm run test:real
 ```
+
+The harness builds both layers by default. CI first builds them as explicit
+verification steps, then sets `RACEBIN_REAL_STACK_PREBUILT=true` so the harness
+uses that exact binary instead of compiling both layers a second time.
 
 It covers the compiled frontend login/create/read path and real protocol
 behavior including:
