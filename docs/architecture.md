@@ -314,9 +314,13 @@ their metadata is inserted. Multipart pastes remain in a durable `pending`
 state throughout this process and are invisible to every list, read, search,
 download, and administrative aggregate until attachment completion commits.
 Cleanup guards remove staged or promoted files when a later step fails.
-Reconciliation waits an hour before treating an unreferenced file as abandoned
-and rechecks paste existence immediately before removing a directory, so it
-cannot mistake an in-flight promotion for crash debris. Downloads re-check
+An in-process upload lease follows each file from staging through promotion and
+the attachment-metadata commit. Reconciliation must claim a path before
+removing it and skips any path owned by a live upload. After a crash destroys
+those leases, reconciliation waits an hour before treating an unreferenced file
+as abandoned; promotion also refreshes the final file timestamp so the grace
+period begins at promotion rather than at the start of a slow upload. Directory
+cleanup rechecks paste existence immediately before removal. Downloads re-check
 paste visibility and ownership before opening a file.
 
 The database and attachment directory therefore form one logical data set.
@@ -369,8 +373,10 @@ existing page rather than destroying it. The New Paste route deliberately
 includes its query in component identity because folder query changes describe
 a new form and a confirmed discard must reset the old draft. Route parameters
 that identify a different resource also create a new page instance. The home
-route reactively selects its authenticated editor, plain login, or public
-landing child, so session changes do not depend on redundant navigation.
+route's authenticated editor, plain login, and public landing variants are
+part of component identity and are loaded independently. Session changes can
+therefore replace the home page without redundant navigation or downloading
+the other home variants.
 `Shell.svelte` owns the shared navigation and page frame. Pages compose
 reusable controls from `web/src/components`.
 
@@ -522,8 +528,10 @@ A typical paste creation follows this path:
 browser-session owners are exempt when viewing their own pastes, so routine
 owner previews do not affect analytics or consume read limits. A final read
 tombstones the paste instead of immediately deleting its row and issues a
-15-minute capability for its files; cleanup later removes the tombstone and
-storage. Owner and administrator source reads do not consume the paste.
+15-minute capability for its files; an idempotent replay may reproduce that
+capability but cannot extend its original deadline. Cleanup later removes the
+tombstone and storage. Owner and administrator source reads do not consume the
+paste.
 Revisions and ETags protect update and delete operations from lost updates.
 
 ## Background work and cleanup

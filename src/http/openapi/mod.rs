@@ -125,7 +125,7 @@ impl Modify for Security {
 }
 
 fn refine_component_schemas(openapi: &mut utoipa::openapi::OpenApi) {
-    use utoipa::openapi::schema::{AdditionalProperties, OneOf, Schema, SchemaType, Type};
+    use utoipa::openapi::schema::{AdditionalProperties, AnyOf, OneOf, Schema, SchemaType, Type};
     use utoipa::openapi::RefOr;
 
     let Some(components) = openapi.components.as_mut() else {
@@ -200,6 +200,7 @@ fn refine_component_schemas(openapi: &mut utoipa::openapi::OpenApi) {
                 "expires_at",
                 "expires_in",
                 "read_limit",
+                "file",
             ][..],
         ),
         ("UpdatePasteRequest", &["title", "body", "visibility"][..]),
@@ -214,11 +215,7 @@ fn refine_component_schemas(openapi: &mut utoipa::openapi::OpenApi) {
             }
         }
     }
-    for name in [
-        "CreatePasteRequest",
-        "FlatCreateRequest",
-        "MultipartCreateRequest",
-    ] {
+    for name in ["CreatePasteRequest", "FlatCreateRequest"] {
         let Some(RefOr::T(Schema::Object(schema))) = components.schemas.get_mut(name) else {
             continue;
         };
@@ -239,6 +236,44 @@ fn refine_component_schemas(openapi: &mut utoipa::openapi::OpenApi) {
                 RefOr::T(Schema::Object(relative)),
             ],
             ..OneOf::default()
+        }));
+    }
+    if let Some(RefOr::T(Schema::Object(schema))) =
+        components.schemas.get_mut("MultipartCreateRequest")
+    {
+        schema.additional_properties = Some(Box::new(AdditionalProperties::FreeForm(false)));
+        if let Some(RefOr::T(Schema::Object(content))) = schema.properties.get_mut("content") {
+            content.min_length = Some(1);
+        }
+        let mut expiration_variants = Vec::new();
+        let mut neither = schema.clone();
+        neither.properties.remove("expires_at");
+        neither.properties.remove("expires_in");
+        expiration_variants.push(neither);
+        let mut absolute = schema.clone();
+        absolute.properties.remove("expires_in");
+        absolute.required.push("expires_at".into());
+        expiration_variants.push(absolute);
+        let mut relative = schema.clone();
+        relative.properties.remove("expires_at");
+        relative.required.push("expires_in".into());
+        expiration_variants.push(relative);
+
+        let mut variants = Vec::with_capacity(expiration_variants.len() * 2);
+        for expiration in expiration_variants {
+            let mut content = expiration.clone();
+            content.required.push("content".into());
+            variants.push(RefOr::T(Schema::Object(content)));
+            let mut file = expiration;
+            file.required.push("file".into());
+            variants.push(RefOr::T(Schema::Object(file)));
+        }
+        *components
+            .schemas
+            .get_mut("MultipartCreateRequest")
+            .unwrap() = RefOr::T(Schema::AnyOf(AnyOf {
+            items: variants,
+            ..AnyOf::default()
         }));
     }
     for name in [

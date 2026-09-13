@@ -365,15 +365,21 @@ fn generated_client_schemas_preserve_binary_and_multipart_semantics() {
     assert_eq!(file["type"], "array");
     assert_eq!(file["minItems"], 1);
     assert_eq!(file["items"], serde_json::json!({}));
-    for variant in schemas["MultipartCreateRequest"]["oneOf"]
+    let multipart_variants = schemas["MultipartCreateRequest"]["anyOf"]
         .as_array()
-        .unwrap()
-    {
+        .unwrap();
+    assert_eq!(multipart_variants.len(), 6);
+    for variant in multipart_variants {
         assert_eq!(variant["additionalProperties"], false);
         let file = &variant["properties"]["file"];
         assert_eq!(file["type"], "array");
         assert_eq!(file["minItems"], 1);
         assert_eq!(file["items"], serde_json::json!({}));
+        assert!(variant["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|name| matches!(name.as_str(), Some("content" | "file"))));
     }
     let uploaded_items =
         &value["components"]["schemas"]["AttachmentUploadResponse"]["properties"]["items"];
@@ -604,11 +610,7 @@ fn creation_contract_has_unambiguous_content_and_expiration_inputs() {
     assert!(!parameters
         .iter()
         .any(|parameter| matches!(parameter["name"].as_str(), Some("content" | "format"))));
-    for name in [
-        "CreatePasteRequest",
-        "FlatCreateRequest",
-        "MultipartCreateRequest",
-    ] {
+    for name in ["CreatePasteRequest", "FlatCreateRequest"] {
         let variants = value["components"]["schemas"][name]["oneOf"]
             .as_array()
             .unwrap();
@@ -624,12 +626,34 @@ fn creation_contract_has_unambiguous_content_and_expiration_inputs() {
             variant["properties"]["title"]["maxLength"] == crate::limits::MAX_TITLE_CHARACTERS
         }));
     }
+    let multipart = value["components"]["schemas"]["MultipartCreateRequest"]["anyOf"]
+        .as_array()
+        .unwrap();
+    assert_eq!(multipart.len(), 6);
+    assert!(multipart.iter().all(|variant| {
+        !(variant["properties"]["expires_at"].is_object()
+            && variant["properties"]["expires_in"].is_object())
+    }));
+    assert!(multipart
+        .iter()
+        .all(|variant| variant["additionalProperties"] == false));
+    assert!(multipart.iter().all(|variant| {
+        variant["properties"]["title"]["maxLength"] == crate::limits::MAX_TITLE_CHARACTERS
+    }));
+    assert!(multipart.iter().all(|variant| {
+        variant["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|name| matches!(name.as_str(), Some("content" | "file")))
+    }));
     let description = operation["description"].as_str().unwrap();
     for phrase in [
         "text/plain creates text",
         "text/markdown creates canonical Markdown",
         "text/html imports supported markup into canonical Markdown",
         "raw request body is always the content",
+        "Multipart requests require nonempty content or at least one file",
     ] {
         assert!(
             description.contains(phrase),

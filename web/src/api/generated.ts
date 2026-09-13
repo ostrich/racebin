@@ -461,7 +461,7 @@ export interface paths {
         };
         get: operations["list_pastes"];
         put?: never;
-        /** @description Creates a paste. Query metadata is accepted only for raw bodies. text/plain creates text and accepts an optional language; text/markdown creates canonical Markdown; text/html imports supported markup into canonical Markdown. The raw request body is always the content. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. An omitted structured body creates empty text. expires_at and expires_in are mutually exclusive. Clients may request text/plain instead of JSON to receive only the created paste URL. */
+        /** @description Creates a paste. Query metadata is accepted only for raw bodies. text/plain creates text and accepts an optional language; text/markdown creates canonical Markdown; text/html imports supported markup into canonical Markdown. The raw request body is always the content. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. Multipart requests require nonempty content or at least one file; text-only multipart remains available when attachment uploads are disabled. An omitted structured body creates empty text. expires_at and expires_in are mutually exclusive. Clients may request text/plain instead of JSON to receive only the created paste URL. */
         post: operations["create_paste"];
         delete?: never;
         options?: never;
@@ -1032,7 +1032,34 @@ export interface components {
             ids: string[];
         };
         MultipartCreateRequest: {
+            content: string;
+            file: unknown[];
+            /** Format: int64 */
+            folder_id?: number;
+            format?: string;
+            language?: string;
+            /** Format: int64 */
+            read_limit?: number;
+            title?: string;
+            visibility?: string;
+        } | {
             content?: string;
+            file: unknown[];
+            /** Format: int64 */
+            folder_id?: number;
+            format?: string;
+            language?: string;
+            /** Format: int64 */
+            read_limit?: number;
+            title?: string;
+            visibility?: string;
+        } | {
+            content: string;
+            /**
+             * Format: date-time
+             * @description Absolute RFC 3339 expiration time. Cannot be combined with `expires_in`.
+             */
+            expires_at: string;
             file: unknown[];
             /** Format: int64 */
             folder_id?: number;
@@ -1049,6 +1076,22 @@ export interface components {
              * @description Absolute RFC 3339 expiration time. Cannot be combined with `expires_in`.
              */
             expires_at: string;
+            file: unknown[];
+            /** Format: int64 */
+            folder_id?: number;
+            format?: string;
+            language?: string;
+            /** Format: int64 */
+            read_limit?: number;
+            title?: string;
+            visibility?: string;
+        } | {
+            content: string;
+            /**
+             * Format: int64
+             * @description Positive lifetime in seconds from creation. Cannot be combined with `expires_at`.
+             */
+            expires_in: number;
             file: unknown[];
             /** Format: int64 */
             folder_id?: number;

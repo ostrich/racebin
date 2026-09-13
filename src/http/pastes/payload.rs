@@ -85,7 +85,7 @@ pub(super) struct MultipartCreateRequest {
     #[schema(minimum = 1)]
     read_limit: Option<i64>,
     #[schema(value_type = Vec<Value>, min_items = 1)]
-    file: Vec<String>,
+    file: Option<Vec<String>>,
 }
 
 impl FlatCreateRequest {

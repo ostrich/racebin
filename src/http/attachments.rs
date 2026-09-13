@@ -150,6 +150,7 @@ pub(crate) async fn upload_attachments(
         };
         let mut upload = match crate::attachment_storage::StagedUpload::create(
             &services.storage.data_dir,
+            services.storage.upload_leases(),
             filename,
         )
         .await

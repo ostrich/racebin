@@ -1401,12 +1401,13 @@
         "type": "object"
       },
       "MultipartCreateRequest": {
-        "oneOf": [
+        "anyOf": [
           {
             "additionalProperties": false,
             "description": "Schema-only representation of the atomic multipart create request.",
             "properties": {
               "content": {
+                "minLength": 1,
                 "type": "string"
               },
               "file": {
@@ -1439,6 +1440,50 @@
               }
             },
             "required": [
+              "file",
+              "content"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "description": "Schema-only representation of the atomic multipart create request.",
+            "properties": {
+              "content": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "file": {
+                "items": {},
+                "minItems": 1,
+                "type": "array"
+              },
+              "folder_id": {
+                "format": "int64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "format": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "read_limit": {
+                "format": "int64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "title": {
+                "maxLength": 200,
+                "type": "string"
+              },
+              "visibility": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "file",
               "file"
             ],
             "type": "object"
@@ -1448,6 +1493,7 @@
             "description": "Schema-only representation of the atomic multipart create request.",
             "properties": {
               "content": {
+                "minLength": 1,
                 "type": "string"
               },
               "expires_at": {
@@ -1486,7 +1532,8 @@
             },
             "required": [
               "file",
-              "expires_at"
+              "expires_at",
+              "content"
             ],
             "type": "object"
           },
@@ -1495,6 +1542,56 @@
             "description": "Schema-only representation of the atomic multipart create request.",
             "properties": {
               "content": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "expires_at": {
+                "description": "Absolute RFC 3339 expiration time. Cannot be combined with `expires_in`.",
+                "format": "date-time",
+                "type": "string"
+              },
+              "file": {
+                "items": {},
+                "minItems": 1,
+                "type": "array"
+              },
+              "folder_id": {
+                "format": "int64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "format": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "read_limit": {
+                "format": "int64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "title": {
+                "maxLength": 200,
+                "type": "string"
+              },
+              "visibility": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "file",
+              "expires_at",
+              "file"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "description": "Schema-only representation of the atomic multipart create request.",
+            "properties": {
+              "content": {
+                "minLength": 1,
                 "type": "string"
               },
               "expires_in": {
@@ -1534,7 +1631,58 @@
             },
             "required": [
               "file",
-              "expires_in"
+              "expires_in",
+              "content"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "description": "Schema-only representation of the atomic multipart create request.",
+            "properties": {
+              "content": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "expires_in": {
+                "description": "Positive lifetime in seconds from creation. Cannot be combined with `expires_at`.",
+                "format": "int64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "file": {
+                "items": {},
+                "minItems": 1,
+                "type": "array"
+              },
+              "folder_id": {
+                "format": "int64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "format": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "read_limit": {
+                "format": "int64",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "title": {
+                "maxLength": 200,
+                "type": "string"
+              },
+              "visibility": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "file",
+              "expires_in",
+              "file"
             ],
             "type": "object"
           }
@@ -5792,7 +5940,7 @@
         ]
       },
       "post": {
-        "description": "Creates a paste. Query metadata is accepted only for raw bodies. text/plain creates text and accepts an optional language; text/markdown creates canonical Markdown; text/html imports supported markup into canonical Markdown. The raw request body is always the content. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. An omitted structured body creates empty text. expires_at and expires_in are mutually exclusive. Clients may request text/plain instead of JSON to receive only the created paste URL.",
+        "description": "Creates a paste. Query metadata is accepted only for raw bodies. text/plain creates text and accepts an optional language; text/markdown creates canonical Markdown; text/html imports supported markup into canonical Markdown. The raw request body is always the content. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. Multipart requests require nonempty content or at least one file; text-only multipart remains available when attachment uploads are disabled. An omitted structured body creates empty text. expires_at and expires_in are mutually exclusive. Clients may request text/plain instead of JSON to receive only the created paste URL.",
         "operationId": "create_paste",
         "parameters": [
           {

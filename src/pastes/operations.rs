@@ -269,8 +269,9 @@ impl PasteService {
         let now = unix_timestamp();
         let key_hash = idempotency_key.map(hash_token);
         if let Some(key_hash) = key_hash.as_deref() {
-            let replay: Option<i64> = sqlx::query_scalar(
-                "SELECT 1 FROM paste_read_receipts WHERE paste_id=$1 AND key_hash=$2 AND expires_at>$3",
+            let replay_expires_at: Option<i64> = sqlx::query_scalar(
+                "SELECT expires_at FROM paste_read_receipts
+                 WHERE paste_id=$1 AND key_hash=$2 AND expires_at>$3",
             )
             .bind(id)
             .bind(key_hash)
@@ -278,7 +279,7 @@ impl PasteService {
             .fetch_optional(&mut *tx)
             .await
             .map_err(DomainError::internal)?;
-            if replay.is_some() {
+            if let Some(replay_expires_at) = replay_expires_at {
                 let Some(mut paste) = load_paste_for_read(&mut tx, principal, id).await? else {
                     return Ok(None);
                 };
@@ -291,7 +292,7 @@ impl PasteService {
                         replayed: false,
                     }));
                 }
-                let grant_token = create_read_grant(&mut tx, &paste, now).await?;
+                let grant_token = create_read_grant(&mut tx, &paste, replay_expires_at).await?;
                 paste = redact_folder(principal, paste, false);
                 tx.commit().await.map_err(DomainError::internal)?;
                 return Ok(Some(PasteRead {
@@ -352,18 +353,19 @@ impl PasteService {
                 .await
                 .map_err(DomainError::internal)?;
         }
+        let grant_expires_at = now + 900;
         if let Some(key_hash) = key_hash.as_deref() {
             sqlx::query(
                 "INSERT INTO paste_read_receipts(paste_id,key_hash,expires_at) VALUES($1,$2,$3)",
             )
             .bind(&paste.id)
             .bind(key_hash)
-            .bind(now + 900)
+            .bind(grant_expires_at)
             .execute(&mut *tx)
             .await
             .map_err(DomainError::internal)?;
         }
-        let grant_token = create_read_grant(&mut tx, &paste, now).await?;
+        let grant_token = create_read_grant(&mut tx, &paste, grant_expires_at).await?;
         tx.commit().await.map_err(DomainError::internal)?;
         paste.read_count = next_reads;
         paste.last_read_at = Some(now);
@@ -1008,7 +1010,7 @@ async fn load_paste_for_read(
 async fn create_read_grant(
     transaction: &mut sqlx::Transaction<'_, Any>,
     paste: &Paste,
-    now: i64,
+    expires_at: i64,
 ) -> DomainResult<Option<String>> {
     if paste.read_limit.is_none() {
         return Ok(None);
@@ -1017,7 +1019,7 @@ async fn create_read_grant(
     sqlx::query("INSERT INTO paste_read_grants(token_hash,paste_id,expires_at) VALUES($1,$2,$3)")
         .bind(hash_token(&token))
         .bind(&paste.id)
-        .bind(now + 900)
+        .bind(expires_at)
         .execute(&mut **transaction)
         .await
         .map_err(DomainError::internal)?;

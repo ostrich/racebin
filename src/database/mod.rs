@@ -22,6 +22,7 @@ pub struct Database {
     pool: AnyPool,
     kind: DatabaseKind,
     write_lock: Arc<Mutex<()>>,
+    upload_leases: crate::attachment_storage::UploadLeaseRegistry,
     pub data_dir: PathBuf,
 }
 
@@ -54,6 +55,7 @@ impl Database {
             pool,
             kind,
             write_lock: Arc::new(Mutex::new(())),
+            upload_leases: crate::attachment_storage::UploadLeaseRegistry::default(),
             data_dir: data_dir.as_ref().to_path_buf(),
         };
         Ok(repository)
@@ -69,6 +71,10 @@ impl Database {
 
     pub async fn lock_writes(&self) -> MutexGuard<'_, ()> {
         self.write_lock.lock().await
+    }
+
+    pub(crate) fn upload_leases(&self) -> crate::attachment_storage::UploadLeaseRegistry {
+        self.upload_leases.clone()
     }
 
     pub async fn migrate(&self) -> Result<(), String> {
@@ -217,6 +223,11 @@ impl Database {
                 if name == ".staging" {
                     if let Ok(mut staged) = tokio::fs::read_dir(entry.path()).await {
                         while let Ok(Some(file)) = staged.next_entry().await {
+                            let Some(_cleanup_lease) =
+                                self.upload_leases.claim_cleanup(&file.path())
+                            else {
+                                continue;
+                            };
                             if crate::attachment_storage::old_enough_for_cleanup(&file.path(), now)
                                 .await
                             {
@@ -229,6 +240,9 @@ impl Database {
                 if !entry.file_type().await.is_ok_and(|kind| kind.is_dir()) {
                     continue;
                 }
+                let Some(_cleanup_lease) = self.upload_leases.claim_cleanup(&entry.path()) else {
+                    continue;
+                };
                 let paste_exists: Option<i64> =
                     sqlx::query_scalar("SELECT 1 FROM pastes WHERE id=$1")
                         .bind(&name)

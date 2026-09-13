@@ -120,6 +120,10 @@ use their request body as content and can put the remaining metadata in the
 query string, which makes a generic uploader
 configuration straightforward:
 
+A multipart creation must contain nonempty paste content, at least one file,
+or both. Text-only multipart requests remain available when attachment uploads
+are disabled; only an actual file part is rejected in that configuration.
+
 ```sh
 curl -X POST \
   'https://example.com/api/v1/pastes?title=Example&visibility=unlisted&language=javascript' \

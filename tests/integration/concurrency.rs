@@ -27,6 +27,69 @@ pub(super) async fn concurrency_contract(repo: Database) {
         1
     );
 
+    let replay_limited = PasteInput {
+        read_limit: Some(Some(1)),
+        ..paste_input("idempotent final read", "public")
+    };
+    let replay_limited = services
+        .create_paste(&admin, &replay_limited)
+        .await
+        .unwrap();
+    services
+        .read_paste(
+            &Principal::Anonymous,
+            &replay_limited.id,
+            Some("final-read-key"),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let replay_deadline = racebin::time::unix_timestamp() + 60;
+    sqlx::query("UPDATE paste_read_receipts SET expires_at=$2 WHERE paste_id=$1")
+        .bind(&replay_limited.id)
+        .bind(replay_deadline)
+        .execute(repo.pool())
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM paste_read_grants WHERE paste_id=$1")
+        .bind(&replay_limited.id)
+        .execute(repo.pool())
+        .await
+        .unwrap();
+    let replay = services
+        .read_paste(
+            &Principal::Anonymous,
+            &replay_limited.id,
+            Some("final-read-key"),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(replay.replayed);
+    assert!(replay.grant_token.is_some());
+    let replay_grant_deadline: i64 =
+        sqlx::query_scalar("SELECT expires_at FROM paste_read_grants WHERE paste_id=$1")
+            .bind(&replay_limited.id)
+            .fetch_one(repo.pool())
+            .await
+            .unwrap();
+    assert_eq!(replay_grant_deadline, replay_deadline);
+    sqlx::query("UPDATE paste_read_receipts SET expires_at=$2 WHERE paste_id=$1")
+        .bind(&replay_limited.id)
+        .bind(racebin::time::unix_timestamp() - 1)
+        .execute(repo.pool())
+        .await
+        .unwrap();
+    assert!(services
+        .read_paste(
+            &Principal::Anonymous,
+            &replay_limited.id,
+            Some("final-read-key"),
+        )
+        .await
+        .unwrap()
+        .is_none());
+
     let invitation = accounts::create_invitation(&repo, 10, None).await.unwrap();
     let (left, right) = futures::join!(
         accounts::redeem_invitation(

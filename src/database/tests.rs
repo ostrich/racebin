@@ -24,6 +24,42 @@ async fn sqlite_schema_is_repeatable() {
 }
 
 #[actix_web::test]
+async fn cleanup_never_removes_an_actively_leased_upload() {
+    let data_dir =
+        std::env::temp_dir().join(format!("racebin-upload-lease-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&data_dir).unwrap();
+    let url = format!(
+        "sqlite://{}?mode=rwc",
+        data_dir.join("database.sqlite").display()
+    );
+    let repository = Database::open(&url, &data_dir).await.unwrap();
+    repository.migrate().await.unwrap();
+    let mut upload = crate::attachment_storage::StagedUpload::create(
+        &data_dir,
+        repository.upload_leases(),
+        "active.txt".to_string(),
+    )
+    .await
+    .unwrap();
+    std::fs::write(upload.path(), b"active").unwrap();
+    upload
+        .promote(&data_dir, "not-yet-committed")
+        .await
+        .unwrap();
+    let promoted = upload.path().to_path_buf();
+    let future = crate::time::unix_timestamp() + 7_200;
+
+    repository.purge_expired(future).await.unwrap();
+    assert!(promoted.exists());
+
+    drop(upload);
+    repository.purge_expired(future).await.unwrap();
+    assert!(!promoted.exists());
+    drop(repository);
+    let _ = std::fs::remove_dir_all(data_dir);
+}
+
+#[actix_web::test]
 async fn legacy_rich_documents_migrate_without_losing_dependent_rows() {
     let data_dir = std::env::temp_dir().join(format!(
         "racebin-markdown-migration-{}",

@@ -64,13 +64,6 @@ pub(super) async fn parse_multipart(
         .await
         .map_err(domain_error)?
         .attachments_enabled;
-    if !attachments_enabled {
-        return Err(error(
-            StatusCode::FORBIDDEN,
-            "uploads_disabled",
-            "Attachments are disabled",
-        ));
-    }
     let mut multipart = Multipart::new(req.headers(), payload);
     let mut values = HashMap::<String, String>::new();
     let mut files = Vec::new();
@@ -88,6 +81,13 @@ pub(super) async fn parse_multipart(
             .content_disposition()
             .and_then(|value| value.get_filename());
         if let Some(filename) = filename {
+            if !attachments_enabled {
+                return Err(error(
+                    StatusCode::FORBIDDEN,
+                    "uploads_disabled",
+                    "Attachments are disabled",
+                ));
+            }
             if name != "file" {
                 return Err(error(
                     StatusCode::UNPROCESSABLE_ENTITY,
@@ -113,9 +113,13 @@ pub(super) async fn parse_multipart(
                     "Attachment filename is invalid",
                 ));
             }
-            let mut staged = StagedFile::create(&services.storage.data_dir, filename)
-                .await
-                .map_err(|error| internal(error.to_string()))?;
+            let mut staged = StagedFile::create(
+                &services.storage.data_dir,
+                services.storage.upload_leases(),
+                filename,
+            )
+            .await
+            .map_err(|error| internal(error.to_string()))?;
             let mut output = tokio::fs::File::create(staged.path())
                 .await
                 .map_err(|error| internal(error.to_string()))?;
@@ -266,6 +270,9 @@ async fn remove_unreferenced_attachment_files(
         .data_dir
         .join("attachments")
         .join(&paste.id);
+    let Some(_cleanup_lease) = services.storage.upload_leases().claim_cleanup(&directory) else {
+        return;
+    };
     let referenced = paste
         .attachments
         .iter()

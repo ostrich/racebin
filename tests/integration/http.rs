@@ -770,6 +770,69 @@ mod tests {
             assert_eq!(invalid_create.status(), expected_status);
         }
 
+        sqlx::query("UPDATE instance_settings SET attachments_enabled=0 WHERE id=1")
+            .execute(repository.pool())
+            .await
+            .unwrap();
+        let text_boundary = "racebin-text-multipart";
+        let text_multipart = format!(
+            "--{text_boundary}\r\nContent-Disposition: form-data; name=\"content\"\r\n\r\ntext-only multipart\r\n--{text_boundary}--\r\n"
+        );
+        let text_only = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/pastes")
+                .insert_header(("Authorization", format!("Bearer {write_token}")))
+                .insert_header((
+                    "Content-Type",
+                    format!("multipart/form-data; boundary={text_boundary}"),
+                ))
+                .set_payload(text_multipart)
+                .to_request(),
+        )
+        .await;
+        assert_eq!(text_only.status(), StatusCode::CREATED);
+        let text_only: Value = test::read_body_json(text_only).await;
+        assert_eq!(text_only["body"]["content"], "text-only multipart");
+
+        let file_boundary = "racebin-disabled-file-multipart";
+        let disabled_file = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/pastes")
+                .insert_header(("Authorization", format!("Bearer {write_token}")))
+                .insert_header((
+                    "Content-Type",
+                    format!("multipart/form-data; boundary={file_boundary}"),
+                ))
+                .set_payload(format!(
+                    "--{file_boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"blocked.txt\"\r\nContent-Type: text/plain\r\n\r\nblocked\r\n--{file_boundary}--\r\n"
+                ))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(disabled_file.status(), StatusCode::FORBIDDEN);
+        sqlx::query("UPDATE instance_settings SET attachments_enabled=1 WHERE id=1")
+            .execute(repository.pool())
+            .await
+            .unwrap();
+
+        let empty_boundary = "racebin-empty-multipart";
+        let empty_multipart = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/v1/pastes")
+                .insert_header(("Authorization", format!("Bearer {write_token}")))
+                .insert_header((
+                    "Content-Type",
+                    format!("multipart/form-data; boundary={empty_boundary}"),
+                ))
+                .set_payload(format!("--{empty_boundary}--\r\n"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(empty_multipart.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
         let raw_replay = test::call_service(
             &app,
             test::TestRequest::post()
