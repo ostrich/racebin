@@ -138,6 +138,9 @@ test("rich text keeps its document hierarchy in the shared print frame", async (
 });
 
 test("Markdown pastes default to rendered output and expose canonical source", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.print = () => Object.assign(window, { __printed: true });
+  });
   await mockApi(page, false, {
     viewPaste: {
       ...paste,
@@ -155,10 +158,20 @@ test("Markdown pastes default to rendered output and expose canonical source", a
     .evaluate((element) => element.getBoundingClientRect().top);
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
   await expect(page.locator(".paste-code .content")).toContainText("## Scene");
+  await expect(page.locator(".paste-print-line")).toHaveCount(0);
+  await page.getByRole("button", { name: "Print" }).click();
+  await expect(page.locator(".paste-print-line")).toHaveCount(3);
+  await expect
+    .poll(() =>
+      page.evaluate(() => Boolean((window as Window & { __printed?: boolean }).__printed))
+    )
+    .toBe(true);
   const markdownControlTop = await page
     .getByRole("group", { name: "Paste representation" })
     .evaluate((element) => element.getBoundingClientRect().top);
   expect(markdownControlTop).toBe(renderedControlTop);
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator(".paste-print-code")).toBeVisible();
 });
 
 test("Markdown representation changes never render an empty transition frame", async ({ page }) => {

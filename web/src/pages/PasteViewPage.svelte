@@ -62,7 +62,9 @@
     if (!paste || preparingPrint) return;
     preparingPrint = true;
     try {
-      if (paste.format === "text") await codeViewer?.preparePrint();
+      if (paste.format === "text" || markdownView === "markdown") {
+        await codeViewer?.preparePrint();
+      }
       window.print();
     } finally {
       preparingPrint = false;
