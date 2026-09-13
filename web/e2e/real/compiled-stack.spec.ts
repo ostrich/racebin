@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { spaRouteSamples } from "../../src/navigation/routes";
+import routeManifest from "../../src/navigation/routes.json" with { type: "json" };
+
+const spaRouteSamples = routeManifest.map((route) =>
+  route.path.replace(":userId:int", "42").replace(":pasteId", "example").replace(":token", "token")
+);
 
 test("the compiled server serves every canonical browser route", async ({ request }) => {
   for (const path of spaRouteSamples) {
