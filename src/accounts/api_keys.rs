@@ -253,11 +253,13 @@ pub async fn list_page(
         let mut query = sqlx::QueryBuilder::<sqlx::Any>::new(
             "SELECT api_key_id,scope FROM api_key_scopes WHERE api_key_id IN (",
         );
-        let mut ids = query.separated(",");
-        for id in &page_ids {
-            ids.push_bind(id);
+        {
+            let mut ids = query.separated(",");
+            for id in &page_ids {
+                ids.push_bind(id);
+            }
         }
-        ids.push_unseparated(") ORDER BY api_key_id,scope");
+        query.push(") ORDER BY api_key_id,scope");
         for row in query
             .build()
             .fetch_all(repo.pool())

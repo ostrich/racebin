@@ -18,7 +18,7 @@ does not require a separate JavaScript server at runtime.
 
 Building from source requires:
 
-- Rust 1.88 or newer;
+- Rust 1.94 or newer;
 - Node.js 24 and npm;
 - Git; and
 - a C/C++ build toolchain suitable for Rust dependencies.
