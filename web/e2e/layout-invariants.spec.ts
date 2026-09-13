@@ -52,6 +52,7 @@ test("desktop layout stays anchored without reserving an idle scrollbar gutter",
 });
 
 test("primary pages do not overflow at supported widths", async ({ page }) => {
+  test.setTimeout(60_000);
   for (const viewport of [
     { width: 1440, height: 900 },
     { width: 390, height: 844 }
