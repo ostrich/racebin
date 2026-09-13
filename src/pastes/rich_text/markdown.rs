@@ -49,7 +49,7 @@ pub fn text_to_markdown(text: &str) -> String {
                         || ordered_marker
                         || matches!(
                             character,
-                            '\\' | '*' | '_' | '`' | '[' | ']' | '<' | '>' | '|' | '~'
+                            '\\' | '*' | '_' | '`' | '[' | ']' | '<' | '>' | '|' | '~' | '&'
                         )
                     {
                         escaped.push('\\');
@@ -248,6 +248,13 @@ mod tests {
         assert!(render_markdown("<script>alert(1)</script>").is_err());
         assert!(render_markdown("![alt](https://example.com/a.png)").is_err());
         assert!(render_markdown("[bad](javascript:alert(1))").is_err());
+    }
+
+    #[test]
+    fn text_conversion_escapes_named_character_references() {
+        let source = "Names such as &Pr; remain literal text";
+        let rendered = render_markdown(&text_to_markdown(source)).unwrap();
+        assert_eq!(rendered.plain_text.trim(), source);
     }
 
     #[test]
