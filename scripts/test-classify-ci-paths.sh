@@ -47,6 +47,11 @@ frontend=true
 api=true
 real_stack=false
 visual=true'
+route_manifest='backend=true
+frontend=true
+api=false
+real_stack=true
+visual=true'
 full='backend=true
 frontend=true
 api=true
@@ -60,6 +65,7 @@ assert_profile 'database migration' "$backend" migrations/postgres/001_initial.s
 assert_profile 'backend domain change' "$backend" src/pastes/operations.rs
 assert_profile 'frontend component change' "$frontend" web/src/pages/PasteView.svelte
 assert_profile 'frontend API client change' "$api_client" web/src/api/pastes.ts
+assert_profile 'shared browser/server route manifest' "$route_manifest" web/src/navigation/routes.json
 assert_profile 'HTTP contract change' "$contract" src/http/contract/pastes.rs
 assert_profile 'workflow change' "$full" .github/workflows/ci.yml
 assert_profile 'unknown area defaults to full coverage' "$full" tools/new-checker.rs

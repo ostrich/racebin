@@ -75,6 +75,11 @@ classify_path() {
             enable_api
             enable_real_stack
             ;;
+        web/src/navigation/routes.json)
+            enable_backend
+            enable_real_stack
+            enable_visual
+            ;;
         web/src/*)
             enable_frontend
             enable_visual
