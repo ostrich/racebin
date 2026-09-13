@@ -23,12 +23,13 @@ pub async fn admin_summary(repo: &Database) -> DomainResult<AdminSummary> {
         .fetch_one(repo.pool())
         .await
         .map_err(DomainError::from)?;
-    let paste_count = sqlx::query_scalar("SELECT COUNT(*) FROM pastes")
-        .fetch_one(repo.pool())
-        .await
-        .map_err(DomainError::from)?;
+    let paste_count =
+        sqlx::query_scalar("SELECT COUNT(*) FROM pastes WHERE creation_state='complete'")
+            .fetch_one(repo.pool())
+            .await
+            .map_err(DomainError::from)?;
     let storage_bytes = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-        "SELECT CAST(COALESCE(SUM({text_size} + COALESCE((SELECT SUM(a.size_bytes) FROM attachments a WHERE a.paste_id=p.id),0)),0) AS BIGINT) FROM pastes p"
+        "SELECT CAST(COALESCE(SUM({text_size} + COALESCE((SELECT SUM(a.size_bytes) FROM attachments a WHERE a.paste_id=p.id),0)),0) AS BIGINT) FROM pastes p WHERE p.creation_state='complete'"
     ))).fetch_one(repo.pool()).await.map_err(DomainError::from)?;
     let active_session_count =
         sqlx::query_scalar("SELECT COUNT(*) FROM sessions WHERE expires_at>$1")
@@ -75,8 +76,8 @@ fn admin_user_query(repo: &Database) -> String {
     };
     format!(
         "SELECT u.id,u.username,u.role,u.is_owner,u.enabled,u.password_change_required,u.created_at,u.last_login_at,
-          CAST((SELECT count(*) FROM pastes p WHERE p.owner_id=u.id) AS BIGINT) AS paste_count,
-          CAST(COALESCE((SELECT sum({text_size} + COALESCE((SELECT sum(a.size_bytes) FROM attachments a WHERE a.paste_id=p.id),0)) FROM pastes p WHERE p.owner_id=u.id),0) AS BIGINT) AS storage_bytes,
+          CAST((SELECT count(*) FROM pastes p WHERE p.owner_id=u.id AND p.creation_state='complete') AS BIGINT) AS paste_count,
+          CAST(COALESCE((SELECT sum({text_size} + COALESCE((SELECT sum(a.size_bytes) FROM attachments a WHERE a.paste_id=p.id),0)) FROM pastes p WHERE p.owner_id=u.id AND p.creation_state='complete'),0) AS BIGINT) AS storage_bytes,
           CAST((SELECT count(*) FROM sessions s WHERE s.user_id=u.id AND s.expires_at>$1) AS BIGINT) AS active_session_count,
           CAST((SELECT count(*) FROM api_keys k WHERE k.user_id=u.id) AS BIGINT) AS api_key_count,
           CAST((SELECT count(*) FROM api_keys k WHERE k.user_id=u.id AND k.enabled=1 AND u.enabled=1) AS BIGINT) AS active_api_key_count

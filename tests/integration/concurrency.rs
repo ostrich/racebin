@@ -167,15 +167,44 @@ pub(super) async fn concurrency_contract(repo: Database) {
             (paste, token.unwrap())
         })
         .unwrap();
+    assert!(services
+        .get_paste(&admin, &paste.id)
+        .await
+        .unwrap()
+        .is_none());
+    assert!(services
+        .read_paste(&admin, &paste.id, None)
+        .await
+        .unwrap()
+        .is_none());
+    assert!(!services
+        .list_pastes(&admin, &PasteQuery::default(), true)
+        .await
+        .unwrap()
+        .items
+        .iter()
+        .any(|item| item.id == paste.id));
     services
-        .add_attachments(
+        .add_creation_attachments(
             &admin,
             &paste.id,
             &[attachment("idempotent.txt", "idempotent-store", 1)],
-            None,
         )
         .await
         .unwrap();
+    let (recovered, was_recovered, recovered_token) = services
+        .create_paste_idempotent(
+            &admin,
+            &idempotent,
+            Some("shared-multipart-key"),
+            "shared-request-hash",
+            1,
+        )
+        .await
+        .unwrap();
+    assert_eq!(recovered.id, paste.id);
+    assert!(was_recovered);
+    assert!(recovered_token.is_none());
     assert!(services
         .complete_create_idempotency(&admin, "shared-multipart-key", &token)
         .await
@@ -193,6 +222,42 @@ pub(super) async fn concurrency_contract(repo: Database) {
     assert_eq!(replayed.id, paste.id);
     assert!(was_replayed);
     assert!(token.is_none());
+
+    let (abandoned, _, _) = services
+        .create_paste_idempotent(
+            &admin,
+            &paste_input("abandoned keyed multipart", "private"),
+            Some("abandoned-multipart-key"),
+            "abandoned-request-hash",
+            1,
+        )
+        .await
+        .unwrap();
+    sqlx::query("UPDATE pastes SET created_at=1 WHERE id=$1")
+        .bind(&abandoned.id)
+        .execute(repo.pool())
+        .await
+        .unwrap();
+    sqlx::query(
+        "UPDATE idempotency_records SET expires_at=1
+         WHERE operation='create_paste' AND paste_id=$1",
+    )
+    .bind(&abandoned.id)
+    .execute(repo.pool())
+    .await
+    .unwrap();
+    repo.purge_expired(racebin::time::unix_timestamp())
+        .await
+        .unwrap();
+    let abandoned_rows: i64 = sqlx::query_scalar(
+        "SELECT (SELECT count(*) FROM pastes WHERE id=$1) +
+                (SELECT count(*) FROM idempotency_records WHERE paste_id=$1)",
+    )
+    .bind(&abandoned.id)
+    .fetch_one(repo.pool())
+    .await
+    .unwrap();
+    assert_eq!(abandoned_rows, 0);
 
     let reservations = (0..20).map(|index| {
         let repo = repo.clone();

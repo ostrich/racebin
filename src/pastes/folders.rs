@@ -45,7 +45,7 @@ impl PasteService {
         let owner = folder_principal(principal, "paste:list")?;
         let items = sqlx::query_as(
             "SELECT f.id,f.owner_id,f.name,f.created_at,
-                    (SELECT count(*) FROM pastes p WHERE p.folder_id=f.id) AS paste_count
+                    (SELECT count(*) FROM pastes p WHERE p.folder_id=f.id AND p.creation_state='complete') AS paste_count
              FROM folders f WHERE f.owner_id=$1 ORDER BY f.name_key,f.id",
         )
         .bind(owner)
@@ -54,7 +54,7 @@ impl PasteService {
         .map_err(DomainError::internal)?;
         let (total_count, unfiled_count): (i64, i64) = sqlx::query_as(
             "SELECT count(*),coalesce(sum(CASE WHEN folder_id IS NULL THEN 1 ELSE 0 END),0)
-             FROM pastes WHERE owner_id=$1",
+             FROM pastes WHERE owner_id=$1 AND creation_state='complete'",
         )
         .bind(owner)
         .fetch_one(self.storage.pool())
@@ -223,7 +223,7 @@ impl PasteService {
     pub(super) async fn folder_by_id(&self, owner: i64, id: i64) -> DomainResult<Option<Folder>> {
         sqlx::query_as(
             "SELECT f.id,f.owner_id,f.name,f.created_at,
-                    (SELECT count(*) FROM pastes p WHERE p.folder_id=f.id) AS paste_count
+                    (SELECT count(*) FROM pastes p WHERE p.folder_id=f.id AND p.creation_state='complete') AS paste_count
              FROM folders f WHERE f.id=$1 AND f.owner_id=$2",
         )
         .bind(id)

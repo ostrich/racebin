@@ -740,6 +740,36 @@ pub(super) async fn backend_contract(repo: Database) {
     repo.purge_expired(cleanup_now + 3601).await.unwrap();
     assert!(!cleanup_directory.join("crashed-upload").exists());
     assert!(!fresh_orphan_directory.exists());
+
+    let (abandoned, replayed, token) = services
+        .create_paste_idempotent(
+            &owner,
+            &paste_input("abandoned multipart", "private"),
+            None,
+            "unkeyed-request",
+            1,
+        )
+        .await
+        .unwrap();
+    assert!(!replayed);
+    assert!(token.is_none());
+    assert!(services
+        .get_paste(&owner, &abandoned.id)
+        .await
+        .unwrap()
+        .is_none());
+    sqlx::query("UPDATE pastes SET created_at=1 WHERE id=$1")
+        .bind(&abandoned.id)
+        .execute(repo.pool())
+        .await
+        .unwrap();
+    repo.purge_expired(cleanup_now).await.unwrap();
+    let abandoned_count: i64 = sqlx::query_scalar("SELECT count(*) FROM pastes WHERE id=$1")
+        .bind(&abandoned.id)
+        .fetch_one(repo.pool())
+        .await
+        .unwrap();
+    assert_eq!(abandoned_count, 0);
     let expired_records: i64 = sqlx::query_scalar(
         "SELECT (SELECT count(*) FROM sessions WHERE token_hash='expired-session') +
                 (SELECT count(*) FROM invitations WHERE token_hash='expired-invitation') +

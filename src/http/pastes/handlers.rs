@@ -235,7 +235,9 @@ pub(crate) async fn create_paste(
                     .rollback_create_idempotency(&principal, key, token)
                     .await;
             } else if !replayed {
-                let _ = services.delete_paste(&principal, &paste.id, None).await;
+                let _ = services
+                    .rollback_pending_creation(&principal, &paste.id)
+                    .await;
             }
             return error(
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -255,6 +257,19 @@ pub(crate) async fn create_paste(
             }
             Err(value) => return domain_error(value),
         }
+        paste = match services.get_paste(&principal, &paste.id).await {
+            Ok(Some(paste)) => paste,
+            Ok(None) => return internal("Completed paste is unavailable"),
+            Err(value) => return domain_error(value),
+        };
+    } else if !staged.is_empty() && !replayed {
+        paste = match services
+            .complete_pending_creation(&principal, &paste.id)
+            .await
+        {
+            Ok(paste) => paste,
+            Err(value) => return domain_error(value),
+        };
     }
     let tag = contract::etag(&paste);
     let resource = match contract::resource(&req, &principal, paste, None) {

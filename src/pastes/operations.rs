@@ -84,7 +84,7 @@ impl PasteService {
             "DESC"
         };
         let filter = format!(
-            "consumed_at IS NULL
+            "creation_state='complete' AND consumed_at IS NULL
              AND (($1=1) OR (($2 IS NULL AND visibility='public') OR
               ($2 IS NOT NULL AND (visibility='public' OR owner_id=$2))))
              AND ($3 IS NULL OR visibility=$3)
@@ -209,10 +209,36 @@ impl PasteService {
     }
 
     pub(super) async fn find_paste(&self, id: &str) -> DomainResult<Option<Paste>> {
+        self.find_paste_record(id, false).await
+    }
+
+    pub(crate) async fn find_pending_paste(&self, id: &str) -> DomainResult<Option<Paste>> {
+        self.find_paste_record(id, true).await
+    }
+
+    pub(super) async fn find_paste_record_for_attachments(
+        &self,
+        id: &str,
+        include_pending: bool,
+    ) -> DomainResult<Option<Paste>> {
+        self.find_paste_record(id, include_pending).await
+    }
+
+    async fn find_paste_record(
+        &self,
+        id: &str,
+        include_pending: bool,
+    ) -> DomainResult<Option<Paste>> {
+        let creation_filter = if include_pending {
+            ""
+        } else {
+            " AND creation_state='complete'"
+        };
         let mut paste = sqlx::query_as::<_, Paste>(
-            "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,created_at,
+            sqlx::AssertSqlSafe(format!("SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,created_at,
                     updated_at,modified_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
-             FROM pastes WHERE id=$1 AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at>$2)",
+             FROM pastes WHERE id=$1{creation_filter} AND consumed_at IS NULL
+               AND (expires_at IS NULL OR expires_at>$2)")),
         )
         .bind(id)
         .bind(unix_timestamp())
@@ -283,7 +309,8 @@ impl PasteService {
         let mut paste = sqlx::query_as::<_, Paste>(sqlx::AssertSqlSafe(format!(
             "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,created_at,
                     updated_at,modified_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
-             FROM pastes WHERE id=$1 AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at>$2){lock}"
+             FROM pastes WHERE id=$1 AND creation_state='complete' AND consumed_at IS NULL
+               AND (expires_at IS NULL OR expires_at>$2){lock}"
         )))
         .bind(id)
         .bind(now)
@@ -370,7 +397,7 @@ impl PasteService {
         let mut paste = sqlx::query_as::<_, Paste>(
             "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,
                     created_at,updated_at,modified_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
-             FROM pastes WHERE id=$1",
+             FROM pastes WHERE id=$1 AND creation_state='complete'",
         )
         .bind(id)
         .fetch_optional(self.storage.pool())
@@ -409,6 +436,16 @@ impl PasteService {
         principal: &Principal,
         input: &PasteInput,
     ) -> DomainResult<Paste> {
+        self.create_paste_with_state(principal, input, "complete")
+            .await
+    }
+
+    async fn create_paste_with_state(
+        &self,
+        principal: &Principal,
+        input: &PasteInput,
+        creation_state: &str,
+    ) -> DomainResult<Paste> {
         let owner = principal
             .user_id()
             .ok_or_else(|| DomainError::forbidden("Authentication required"))?;
@@ -425,8 +462,8 @@ impl PasteService {
         self.validate_folder_owner(owner, folder_id).await?;
         sqlx::query(
             "INSERT INTO pastes(id,owner_id,folder_id,title,content,content_kind,language,visibility,
-                               created_at,updated_at,modified_at,revision,expires_at,last_read_at,read_count,read_limit)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,NULL,1,$10,NULL,0,$11)",
+                               created_at,updated_at,modified_at,revision,expires_at,last_read_at,read_count,read_limit,creation_state)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,NULL,1,$10,NULL,0,$11,$12)",
         )
         .bind(&id)
         .bind(owner)
@@ -443,10 +480,11 @@ impl PasteService {
         .bind(now)
         .bind(input.expires_at.flatten())
         .bind(input.read_limit.flatten())
+        .bind(creation_state)
         .execute(self.storage.pool())
         .await
         .map_err(DomainError::internal)?;
-        self.get_paste(principal, &id)
+        self.find_paste_record(&id, creation_state == "pending")
             .await?
             .ok_or_else(|| DomainError::internal("Paste creation failed"))
     }
@@ -460,8 +498,13 @@ impl PasteService {
         attachment_count: usize,
     ) -> DomainResult<(Paste, bool, Option<String>)> {
         let Some(key) = idempotency_key else {
+            let creation_state = if attachment_count > 0 {
+                "pending"
+            } else {
+                "complete"
+            };
             return self
-                .create_paste(principal, input)
+                .create_paste_with_state(principal, input, creation_state)
                 .await
                 .map(|paste| (paste, false, None));
         };
@@ -534,8 +577,8 @@ impl PasteService {
             .map_err(DomainError::internal)?;
         sqlx::query(
             "INSERT INTO pastes(id,owner_id,folder_id,title,content,content_kind,language,visibility,
-                                created_at,updated_at,modified_at,revision,expires_at,last_read_at,read_count,read_limit)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,NULL,1,$10,NULL,0,$11)",
+                                created_at,updated_at,modified_at,revision,expires_at,last_read_at,read_count,read_limit,creation_state)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,NULL,1,$10,NULL,0,$11,$12)",
         )
         .bind(&id)
         .bind(owner)
@@ -552,6 +595,7 @@ impl PasteService {
         .bind(now)
         .bind(input.expires_at.flatten())
         .bind(input.read_limit.flatten())
+        .bind(if has_attachments { "pending" } else { "complete" })
         .execute(&mut *tx)
         .await
         .map_err(DomainError::internal)?;
@@ -582,7 +626,7 @@ impl PasteService {
         }
         tx.commit().await.map_err(DomainError::internal)?;
         let paste = self
-            .find_paste(&id)
+            .find_paste_record(&id, has_attachments)
             .await?
             .ok_or_else(|| DomainError::internal("Paste creation failed"))?;
         Ok((paste, false, operation_token))
@@ -624,7 +668,7 @@ impl PasteService {
             )
         })?;
         let paste = self
-            .find_paste(&paste_id)
+            .find_paste_record(&paste_id, true)
             .await?
             .filter(|paste| paste.owner_id == Some(owner))
             .ok_or_else(|| {
@@ -643,6 +687,17 @@ impl PasteService {
                     "An equivalent paste creation is still in progress",
                 ));
             }
+            let mut transaction = self
+                .storage
+                .pool()
+                .begin()
+                .await
+                .map_err(DomainError::internal)?;
+            sqlx::query("UPDATE pastes SET creation_state='complete' WHERE id=$1 AND creation_state='pending'")
+                .bind(&paste_id)
+                .execute(&mut *transaction)
+                .await
+                .map_err(DomainError::internal)?;
             sqlx::query(
                 "UPDATE idempotency_records SET state='completed',owner_token=NULL,expires_at=$4
                  WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2 AND state='pending' AND paste_id=$3",
@@ -651,11 +706,12 @@ impl PasteService {
             .bind(key_hash)
             .bind(&paste_id)
             .bind(unix_timestamp() + 86400)
-            .execute(self.storage.pool())
+            .execute(&mut *transaction)
             .await
             .map_err(DomainError::internal)?;
+            transaction.commit().await.map_err(DomainError::internal)?;
         }
-        Ok(Some(paste))
+        self.find_paste(&paste_id).await
     }
 
     pub async fn complete_create_idempotency(
@@ -667,23 +723,113 @@ impl PasteService {
         let owner = principal
             .user_id()
             .ok_or_else(|| DomainError::forbidden("Authentication required"))?;
-        sqlx::query(
-            "UPDATE idempotency_records SET state='completed',owner_token=NULL,expires_at=$4
-             WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2
-               AND state='pending' AND owner_token=$3
-               AND expected_attachment_count=(
-                 SELECT COUNT(*) FROM attachments
-                 WHERE paste_id=idempotency_records.paste_id
-               )",
+        let _guard = self.storage.lock_writes().await;
+        let mut transaction = self
+            .storage
+            .pool()
+            .begin()
+            .await
+            .map_err(DomainError::internal)?;
+        let row = sqlx::query(
+            "SELECT paste_id,state,owner_token,expected_attachment_count
+             FROM idempotency_records
+             WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2",
         )
         .bind(owner)
         .bind(hash_token(key))
-        .bind(operation_token)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(DomainError::internal)?;
+        let Some(row) = row else {
+            return Ok(false);
+        };
+        use sqlx::Row;
+        let state: String = row.try_get("state").map_err(DomainError::internal)?;
+        if state == "completed" {
+            transaction.commit().await.map_err(DomainError::internal)?;
+            return Ok(true);
+        }
+        let stored_token: Option<String> =
+            row.try_get("owner_token").map_err(DomainError::internal)?;
+        if stored_token.as_deref() != Some(operation_token) {
+            return Ok(false);
+        }
+        let paste_id: Option<String> = row.try_get("paste_id").map_err(DomainError::internal)?;
+        let Some(paste_id) = paste_id else {
+            return Ok(false);
+        };
+        let expected: i64 = row
+            .try_get("expected_attachment_count")
+            .map_err(DomainError::internal)?;
+        let actual: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM attachments WHERE paste_id=$1")
+            .bind(&paste_id)
+            .fetch_one(&mut *transaction)
+            .await
+            .map_err(DomainError::internal)?;
+        if actual != expected {
+            return Ok(false);
+        }
+        sqlx::query("UPDATE pastes SET creation_state='complete' WHERE id=$1 AND owner_id=$2")
+            .bind(&paste_id)
+            .bind(owner)
+            .execute(&mut *transaction)
+            .await
+            .map_err(DomainError::internal)?;
+        sqlx::query(
+            "UPDATE idempotency_records SET state='completed',owner_token=NULL,expires_at=$3
+             WHERE user_id=$1 AND operation='create_paste' AND key_hash=$2",
+        )
+        .bind(owner)
+        .bind(hash_token(key))
         .bind(unix_timestamp() + 86400)
+        .execute(&mut *transaction)
+        .await
+        .map_err(DomainError::internal)?;
+        transaction.commit().await.map_err(DomainError::internal)?;
+        Ok(true)
+    }
+
+    pub async fn complete_pending_creation(
+        &self,
+        principal: &Principal,
+        id: &str,
+    ) -> DomainResult<Paste> {
+        let owner = principal
+            .user_id()
+            .ok_or_else(|| DomainError::forbidden("Authentication required"))?;
+        let changed = sqlx::query(
+            "UPDATE pastes SET creation_state='complete'
+             WHERE id=$1 AND owner_id=$2 AND creation_state='pending'",
+        )
+        .bind(id)
+        .bind(owner)
         .execute(self.storage.pool())
         .await
-        .map(|result| result.rows_affected() == 1)
-        .map_err(DomainError::internal)
+        .map_err(DomainError::internal)?
+        .rows_affected();
+        if changed != 1 {
+            return Err(DomainError::internal("Pending paste completion failed"));
+        }
+        self.find_paste(id)
+            .await?
+            .ok_or_else(|| DomainError::internal("Completed paste is unavailable"))
+    }
+
+    pub async fn rollback_pending_creation(
+        &self,
+        principal: &Principal,
+        id: &str,
+    ) -> DomainResult<bool> {
+        let owner = principal
+            .user_id()
+            .ok_or_else(|| DomainError::forbidden("Authentication required"))?;
+        sqlx::query("DELETE FROM pastes WHERE id=$1 AND owner_id=$2 AND creation_state='pending'")
+            .bind(id)
+            .bind(owner)
+            .execute(self.storage.pool())
+            .await
+            .map(|result| result.rows_affected() == 1)
+            .map_err(DomainError::internal)
     }
 
     pub async fn rollback_create_idempotency(
@@ -844,7 +990,7 @@ async fn load_paste_for_read(
     let mut paste = sqlx::query_as::<_, Paste>(
         "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,
                 created_at,updated_at,modified_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
-         FROM pastes WHERE id=$1",
+         FROM pastes WHERE id=$1 AND creation_state='complete'",
     )
     .bind(id)
     .fetch_optional(&mut **transaction)

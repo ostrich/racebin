@@ -160,11 +160,6 @@ impl Database {
             .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
-        sqlx::query("DELETE FROM idempotency_records WHERE expires_at<=$1")
-            .bind(now)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
         sqlx::query("DELETE FROM auth_attempts WHERE occurred_at<=$1-900")
             .bind(now)
             .execute(&mut *tx)
@@ -173,7 +168,8 @@ impl Database {
         let paste_ids: Vec<String> = sqlx::query_scalar(
             "SELECT id FROM pastes
              WHERE (expires_at IS NOT NULL AND expires_at<=$1)
-                OR (consumed_at IS NOT NULL AND consumed_at<=$1-900)",
+                OR (consumed_at IS NOT NULL AND consumed_at<=$1-900)
+                OR (creation_state='pending' AND created_at<=$1-3600)",
         )
         .bind(now)
         .fetch_all(&mut *tx)
@@ -182,12 +178,18 @@ impl Database {
         sqlx::query(
             "DELETE FROM pastes
              WHERE (expires_at IS NOT NULL AND expires_at<=$1)
-                OR (consumed_at IS NOT NULL AND consumed_at<=$1-900)",
+                OR (consumed_at IS NOT NULL AND consumed_at<=$1-900)
+                OR (creation_state='pending' AND created_at<=$1-3600)",
         )
         .bind(now)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
+        sqlx::query("DELETE FROM idempotency_records WHERE expires_at<=$1")
+            .bind(now)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
         sqlx::query("DELETE FROM sessions WHERE expires_at<=$1")
             .bind(now)
             .execute(&mut *tx)

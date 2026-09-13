@@ -40,9 +40,32 @@ impl PasteService {
         inputs: &[NewAttachment],
         expected_revision: Option<i64>,
     ) -> DomainResult<Vec<Attachment>> {
+        self.add_attachments_to_paste(principal, id, inputs, expected_revision, false)
+            .await
+    }
+
+    #[doc(hidden)]
+    pub async fn add_creation_attachments(
+        &self,
+        principal: &Principal,
+        id: &str,
+        inputs: &[NewAttachment],
+    ) -> DomainResult<Vec<Attachment>> {
+        self.add_attachments_to_paste(principal, id, inputs, None, true)
+            .await
+    }
+
+    async fn add_attachments_to_paste(
+        &self,
+        principal: &Principal,
+        id: &str,
+        inputs: &[NewAttachment],
+        expected_revision: Option<i64>,
+        include_pending: bool,
+    ) -> DomainResult<Vec<Attachment>> {
         let _write_guard = self.storage.lock_writes().await;
         let paste = self
-            .find_paste(id)
+            .find_paste_record_for_attachments(id, include_pending)
             .await?
             .ok_or_else(|| DomainError::not_found("Paste not found"))?;
         authorize_owner(principal, &paste, "paste:write")?;

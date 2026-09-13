@@ -81,13 +81,15 @@ pub async fn copy_database(
     let pastes = sqlx::query(
         "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,
                 created_at,updated_at,modified_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
-         FROM pastes",
+         FROM pastes WHERE creation_state='complete'",
     )
     .fetch_all(&mut *source_tx)
     .await
     .map_err(|e| e.to_string())?;
     let attachments = sqlx::query(
-        "SELECT id,paste_id,sort_order,filename,storage_key,size_bytes FROM attachments",
+        "SELECT a.id,a.paste_id,a.sort_order,a.filename,a.storage_key,a.size_bytes
+         FROM attachments a JOIN pastes p ON p.id=a.paste_id
+         WHERE p.creation_state='complete'",
     )
     .fetch_all(&mut *source_tx)
     .await

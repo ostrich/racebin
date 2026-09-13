@@ -239,14 +239,17 @@ pub(super) async fn promote_created_files(
         })
         .collect::<Vec<_>>();
     match services
-        .add_attachments(principal, &paste.id, &inputs, None)
+        .add_creation_attachments(principal, &paste.id, &inputs)
         .await
     {
         Ok(_) => {
             for file in staged.iter_mut() {
                 file.commit();
             }
-            *paste = services.ensure_can_update(principal, &paste.id).await?;
+            *paste = services
+                .find_pending_paste(&paste.id)
+                .await?
+                .ok_or_else(|| crate::pastes::DomainError::internal("Pending paste disappeared"))?;
             remove_unreferenced_attachment_files(services, paste).await;
             Ok(())
         }
