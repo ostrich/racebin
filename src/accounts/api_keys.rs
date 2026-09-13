@@ -195,6 +195,16 @@ pub struct ApiKeyListQuery<'a> {
     pub page_size: u32,
 }
 
+fn scopes_for_page_sql(id_count: usize) -> String {
+    let placeholders = (1..=id_count)
+        .map(|index| format!("${index}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "SELECT api_key_id,scope FROM api_key_scopes WHERE api_key_id IN ({placeholders}) ORDER BY api_key_id,scope"
+    )
+}
+
 pub async fn list_page(
     repo: &Database,
     query: &ApiKeyListQuery<'_>,
@@ -247,21 +257,14 @@ pub async fn list_page(
     let page_ids = rows
         .iter()
         .map(|row| row.try_get::<i64, _>("id").map_err(DomainError::from))
-        .collect::<DomainResult<std::collections::HashSet<_>>>()?;
+        .collect::<DomainResult<Vec<_>>>()?;
     let mut scopes_by_key = std::collections::HashMap::<i64, Vec<String>>::new();
     if !page_ids.is_empty() {
-        let mut query = sqlx::QueryBuilder::<sqlx::Any>::new(
-            "SELECT api_key_id,scope FROM api_key_scopes WHERE api_key_id IN (",
-        );
-        {
-            let mut ids = query.separated(",");
-            for id in &page_ids {
-                ids.push_bind(id);
-            }
+        let mut query = sqlx::query(sqlx::AssertSqlSafe(scopes_for_page_sql(page_ids.len())));
+        for id in page_ids {
+            query = query.bind(id);
         }
-        query.push(") ORDER BY api_key_id,scope");
         for row in query
-            .build()
             .fetch_all(repo.pool())
             .await
             .map_err(DomainError::from)?
@@ -363,7 +366,14 @@ pub async fn delete_all_for_user(repo: &Database, user_id: i64) -> DomainResult<
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_scopes;
+    use super::{normalize_scopes, scopes_for_page_sql};
+    #[test]
+    fn scope_batch_query_has_a_closed_nonempty_value_list() {
+        assert_eq!(
+            scopes_for_page_sql(2),
+            "SELECT api_key_id,scope FROM api_key_scopes WHERE api_key_id IN ($1,$2) ORDER BY api_key_id,scope"
+        );
+    }
 
     #[test]
     fn validates_and_normalizes_scopes() {
