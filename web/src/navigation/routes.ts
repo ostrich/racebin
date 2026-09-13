@@ -1,3 +1,5 @@
+import manifest from "./routes.json";
+
 export type Route =
   | { name: "home" }
   | { name: "explore" }
@@ -21,6 +23,8 @@ export type Route =
   | { name: "invitation"; token: string }
   | { name: "not-found" };
 
+export type RouteName = Route["name"];
+export type RouteAccess = "public" | "authenticated" | "admin" | "owner";
 export type RouteLocation = {
   route: Route;
   path: string;
@@ -28,32 +32,48 @@ export type RouteLocation = {
   hash: string;
 };
 
+type RouteDefinition = {
+  name: Exclude<RouteName, "not-found">;
+  path: string;
+  title: string;
+  access: RouteAccess;
+};
+
+export const routeDefinitions = manifest as RouteDefinition[];
+const definitionsByName = new Map<RouteName, RouteDefinition>(
+  routeDefinitions.map((definition) => [definition.name, definition])
+);
+
+function matchDefinition(definition: RouteDefinition, path: string): Route | null {
+  const expected = definition.path.split("/");
+  const actual = path.split("/");
+  if (expected.length !== actual.length) return null;
+  const parameters: Record<string, string | number> = {};
+  for (let index = 0; index < expected.length; index += 1) {
+    const segment = expected[index]!;
+    const value = actual[index]!;
+    if (!segment.startsWith(":")) {
+      if (segment !== value) return null;
+      continue;
+    }
+    if (!value) return null;
+    const [name, kind] = segment.slice(1).split(":");
+    if (!name) return null;
+    if (kind === "int") {
+      if (!/^\d+$/.test(value)) return null;
+      parameters[name] = Number(value);
+    } else {
+      parameters[name] = value;
+    }
+  }
+  return { name: definition.name, ...parameters } as Route;
+}
+
 export function parseRoute(path: string): Route {
-  if (path === "/") return { name: "home" };
-  if (path === "/explore") return { name: "explore" };
-  if (path === "/login") return { name: "login" };
-  if (path === "/pastes/new") return { name: "new-paste" };
-  if (path === "/pastes") return { name: "my-pastes" };
-  if (path === "/account") return { name: "account" };
-  if (path === "/account/password") return { name: "password" };
-  if (path === "/admin") return { name: "admin" };
-  if (path === "/admin/pastes") return { name: "admin-pastes" };
-  if (path === "/admin/users") return { name: "admin-users" };
-  if (path === "/admin/invitations") return { name: "admin-invitations" };
-  if (path === "/admin/api-keys") return { name: "admin-api-keys" };
-  if (path === "/admin/settings") return { name: "admin-settings" };
-  if (path === "/admin/audit") return { name: "admin-audit" };
-  if (path === "/help") return { name: "help" };
-  const adminUser = path.match(/^\/admin\/users\/(\d+)$/);
-  if (adminUser?.[1]) return { name: "admin-user", userId: Number(adminUser[1]) };
-  const reset = path.match(/^\/password-reset\/([^/]+)$/);
-  if (reset?.[1]) return { name: "password-reset", token: reset[1] };
-  const invitation = path.match(/^\/invitations\/([^/]+)$/);
-  if (invitation?.[1]) return { name: "invitation", token: invitation[1] };
-  const edit = path.match(/^\/pastes\/([^/]+)\/edit$/);
-  if (edit?.[1]) return { name: "edit-paste", pasteId: edit[1] };
-  const paste = path.match(/^\/pastes\/([^/]+)$/);
-  if (paste?.[1]) return { name: "paste", pasteId: paste[1] };
+  for (const definition of routeDefinitions) {
+    const route = matchDefinition(definition, path);
+    if (route) return route;
+  }
   return { name: "not-found" };
 }
 
@@ -62,48 +82,16 @@ export function parseLocation(path: string, search = "", hash = ""): RouteLocati
 }
 
 export function routeTitle(route: Route): string {
-  switch (route.name) {
-    case "home":
-      return "Home";
-    case "explore":
-      return "Explore";
-    case "login":
-      return "Log in";
-    case "new-paste":
-      return "New paste";
-    case "my-pastes":
-      return "My pastes";
-    case "paste":
-      return "Paste";
-    case "edit-paste":
-      return "Edit paste";
-    case "account":
-      return "Account";
-    case "password":
-      return "Change password";
-    case "admin":
-      return "Administration";
-    case "admin-pastes":
-      return "Manage pastes";
-    case "admin-users":
-      return "Manage users";
-    case "admin-user":
-      return "Manage user";
-    case "admin-invitations":
-      return "Invitations";
-    case "admin-api-keys":
-      return "API keys";
-    case "admin-settings":
-      return "Site settings";
-    case "admin-audit":
-      return "Audit log";
-    case "help":
-      return "Help";
-    case "password-reset":
-      return "Reset password";
-    case "invitation":
-      return "Invitation";
-    case "not-found":
-      return "Page not found";
-  }
+  return definitionsByName.get(route.name)?.title ?? "Page not found";
 }
+
+export function routeAccess(route: Route): RouteAccess {
+  return definitionsByName.get(route.name)?.access ?? "public";
+}
+
+export const spaRouteSamples = routeDefinitions.map((definition) =>
+  definition.path
+    .replace(":userId:int", "42")
+    .replace(":pasteId", "example")
+    .replace(":token", "token")
+);

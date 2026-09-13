@@ -1,0 +1,52 @@
+[
+  { "name": "home", "path": "/", "title": "Home", "access": "public" },
+  { "name": "explore", "path": "/explore", "title": "Explore", "access": "public" },
+  { "name": "login", "path": "/login", "title": "Log in", "access": "public" },
+  { "name": "new-paste", "path": "/pastes/new", "title": "New paste", "access": "authenticated" },
+  { "name": "my-pastes", "path": "/pastes", "title": "My pastes", "access": "authenticated" },
+  { "name": "paste", "path": "/pastes/:pasteId", "title": "Paste", "access": "public" },
+  {
+    "name": "edit-paste",
+    "path": "/pastes/:pasteId/edit",
+    "title": "Edit paste",
+    "access": "authenticated"
+  },
+  { "name": "account", "path": "/account", "title": "Account", "access": "authenticated" },
+  {
+    "name": "password",
+    "path": "/account/password",
+    "title": "Change password",
+    "access": "authenticated"
+  },
+  { "name": "admin", "path": "/admin", "title": "Administration", "access": "admin" },
+  { "name": "admin-pastes", "path": "/admin/pastes", "title": "Manage pastes", "access": "admin" },
+  { "name": "admin-users", "path": "/admin/users", "title": "Manage users", "access": "admin" },
+  {
+    "name": "admin-user",
+    "path": "/admin/users/:userId:int",
+    "title": "Manage user",
+    "access": "admin"
+  },
+  {
+    "name": "admin-invitations",
+    "path": "/admin/invitations",
+    "title": "Invitations",
+    "access": "admin"
+  },
+  { "name": "admin-api-keys", "path": "/admin/api-keys", "title": "API keys", "access": "admin" },
+  {
+    "name": "admin-settings",
+    "path": "/admin/settings",
+    "title": "Site settings",
+    "access": "owner"
+  },
+  { "name": "admin-audit", "path": "/admin/audit", "title": "Audit log", "access": "owner" },
+  { "name": "help", "path": "/help", "title": "Help", "access": "authenticated" },
+  {
+    "name": "password-reset",
+    "path": "/password-reset/:token",
+    "title": "Reset password",
+    "access": "public"
+  },
+  { "name": "invitation", "path": "/invitations/:token", "title": "Invitation", "access": "public" }
+]

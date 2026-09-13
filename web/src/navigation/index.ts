@@ -13,5 +13,5 @@ export {
   navigationReady,
   startNavigation
 } from "./runtime";
-export { parseLocation, parseRoute, routeTitle } from "./routes";
+export { parseLocation, parseRoute, routeAccess, routeTitle } from "./routes";
 export type { Route, RouteLocation } from "./routes";

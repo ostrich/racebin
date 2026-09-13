@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { parseLocation, parseRoute, routeTitle } from "./routes";
+import {
+  parseLocation,
+  parseRoute,
+  routeAccess,
+  routeDefinitions,
+  routeTitle,
+  spaRouteSamples
+} from "./routes";
 
 describe("routes", () => {
   it("parses static and parameterized routes without accepting trailing paths", () => {
@@ -29,5 +36,16 @@ describe("routes", () => {
   it("provides a title for every route", () => {
     expect(routeTitle({ name: "new-paste" })).toBe("New paste");
     expect(routeTitle({ name: "not-found" })).toBe("Page not found");
+  });
+
+  it("keeps every canonical route uniquely matchable and fully described", () => {
+    expect(new Set(routeDefinitions.map((route) => route.name)).size).toBe(routeDefinitions.length);
+    expect(new Set(routeDefinitions.map((route) => route.path)).size).toBe(routeDefinitions.length);
+    for (const [index, sample] of spaRouteSamples.entries()) {
+      const route = parseRoute(sample);
+      expect(route.name, sample).toBe(routeDefinitions[index]!.name);
+      expect(routeTitle(route), sample).toBe(routeDefinitions[index]!.title);
+      expect(routeAccess(route), sample).toBe(routeDefinitions[index]!.access);
+    }
   });
 });

@@ -1,64 +1,45 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import AccountPage from "./pages/AccountPage.svelte";
-  import AdminPage from "./pages/admin/DashboardPage.svelte";
-  import AdminPastesPage from "./pages/admin/PastesPage.svelte";
-  import AdminUserPage from "./pages/admin/UserPage.svelte";
-  import AdminUsersPage from "./pages/admin/UsersPage.svelte";
-  import AdminInvitationsPage from "./pages/admin/InvitationsPage.svelte";
-  import AdminApiKeysPage from "./pages/admin/ApiKeysPage.svelte";
-  import AdminSettingsPage from "./pages/admin/SettingsPage.svelte";
-  import AdminAuditPage from "./pages/admin/AuditPage.svelte";
-  import HelpPage from "./pages/HelpPage.svelte";
-  import HomePage from "./pages/HomePage.svelte";
-  import InvitationPage from "./pages/InvitationPage.svelte";
-  import LoginPage from "./pages/LoginPage.svelte";
-  import PasswordPage from "./pages/PasswordPage.svelte";
-  import PasswordResetPage from "./pages/PasswordResetPage.svelte";
-  import PasteFormPage from "./pages/PasteFormPage.svelte";
-  import PasteListPage from "./pages/PasteListPage.svelte";
-  import PasteViewPage from "./pages/PasteViewPage.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
-  import { setConfirmationPrompt } from "./app/confirmations";
-  import Link from "./components/Link.svelte";
   import Shell from "./components/Shell.svelte";
-  import { locationState, navigationReady, setDiscardPrompt, startNavigation } from "./navigation";
-  import type { RouteLocation } from "./navigation";
+  import { setConfirmationPrompt } from "./app/confirmations";
   import { loadSession } from "./app/session";
   import { appState } from "./app/state";
+  import { loadRouteComponent, routeProps } from "./navigation/components";
+  import {
+    holdNavigation,
+    locationState,
+    navigationReady,
+    routeAccess,
+    setDiscardPrompt,
+    startNavigation
+  } from "./navigation";
+  import type { Route, RouteLocation } from "./navigation";
 
   let discardDialog: ConfirmDialog;
   let startupError = $state("");
 
   function accessPolicy(location: RouteLocation): string | null {
     const user = $appState.session.user;
-    const authenticated = Boolean(user);
     if (location.route.name === "explore" && !$appState.config.public_explore_enabled) return "/";
     if (user?.password_change_required && location.route.name !== "password") {
       return "/account/password";
     }
-    const protectedRoute = [
-      "new-paste",
-      "my-pastes",
-      "edit-paste",
-      "account",
-      "password",
-      "help"
-    ].includes(location.route.name);
-    if (!authenticated && protectedRoute) return "/login";
-    if (authenticated && location.route.name === "login") return "/pastes";
-    const adminRoute = [
-      "admin",
-      "admin-pastes",
-      "admin-users",
-      "admin-user",
-      "admin-invitations",
-      "admin-api-keys"
-    ].includes(location.route.name);
-    if (user?.role !== "admin" && user?.role !== "owner" && adminRoute) return "/";
-    const ownerRoute = ["admin-settings", "admin-audit"].includes(location.route.name);
-    if (user?.role !== "owner" && ownerRoute) return "/admin";
+    const access = routeAccess(location.route);
+    if (!user && access !== "public") return "/login";
+    if (user && location.route.name === "login") return "/pastes";
+    if (access === "admin" && user?.role !== "admin" && user?.role !== "owner") return "/";
+    if (access === "owner" && user?.role !== "owner") return "/admin";
     return null;
+  }
+
+  async function loadPage(route: Route) {
+    const release = holdNavigation();
+    try {
+      return await loadRouteComponent(route);
+    } finally {
+      release();
+    }
   }
 
   onMount(() => {
@@ -86,7 +67,6 @@
   });
 
   let routeKey = $derived($locationState.path);
-  let authenticated = $derived(Boolean($appState.session.user));
   let minimalShell = $derived(!$appState.ready);
 </script>
 
@@ -102,59 +82,17 @@
   {:else}
     {#key routeKey}
       {@const route = $locationState.route}
-      {#if route.name === "home"}
-        {#if authenticated}
-          <PasteFormPage />
-        {:else if $appState.config.plain_home_enabled}
-          <LoginPage />
-        {:else}
-          <HomePage />
-        {/if}
-      {:else if route.name === "explore"}
-        <PasteListPage mine={false} query={$locationState.query} />
-      {:else if route.name === "login"}
-        <LoginPage />
-      {:else if route.name === "new-paste"}
-        <PasteFormPage />
-      {:else if route.name === "my-pastes"}
-        <PasteListPage mine query={$locationState.query} />
-      {:else if route.name === "paste"}
-        <PasteViewPage pasteId={route.pasteId} />
-      {:else if route.name === "edit-paste"}
-        <PasteFormPage pasteId={route.pasteId} />
-      {:else if route.name === "account"}
-        <AccountPage query={$locationState.query} />
-      {:else if route.name === "password"}
-        <PasswordPage />
-      {:else if route.name === "admin"}
-        <AdminPage />
-      {:else if route.name === "admin-pastes"}
-        <AdminPastesPage query={$locationState.query} />
-      {:else if route.name === "admin-users"}
-        <AdminUsersPage query={$locationState.query} />
-      {:else if route.name === "admin-user"}
-        <AdminUserPage userId={route.userId} />
-      {:else if route.name === "admin-invitations"}
-        <AdminInvitationsPage query={$locationState.query} />
-      {:else if route.name === "admin-api-keys"}
-        <AdminApiKeysPage query={$locationState.query} />
-      {:else if route.name === "admin-settings"}
-        <AdminSettingsPage />
-      {:else if route.name === "admin-audit"}
-        <AdminAuditPage query={$locationState.query} />
-      {:else if route.name === "help"}
-        <HelpPage />
-      {:else if route.name === "password-reset"}
-        <PasswordResetPage token={route.token} />
-      {:else if route.name === "invitation"}
-        <InvitationPage token={route.token} />
-      {:else}
+      {#await loadPage(route)}
+        <p class="muted">Loading page…</p>
+      {:then module}
+        {@const Page = module.default}
+        <Page {...routeProps(route, $locationState.query)} />
+      {:catch error}
         <section class="empty">
-          <h1>Page not found</h1>
-          <p>The requested page does not exist.</p>
-          <Link class="button" href="/">Return home</Link>
+          <h1>Unable to load this page</h1>
+          <p>{error instanceof Error ? error.message : "The page could not be loaded."}</p>
         </section>
-      {/if}
+      {/await}
     {/key}
   {/if}
 </Shell>

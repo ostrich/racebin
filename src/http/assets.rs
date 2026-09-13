@@ -1,6 +1,8 @@
 use super::errors::error;
 use actix_web::http::{header, Method, StatusCode};
 use actix_web::{web, HttpRequest, HttpResponse};
+use serde::Deserialize;
+use std::sync::OnceLock;
 
 const SPA_INDEX: &[u8] = include_bytes!("../../web/dist/index.html");
 include!(concat!(env!("OUT_DIR"), "/embedded_assets.rs"));
@@ -29,31 +31,32 @@ pub(super) async fn spa(request: HttpRequest) -> HttpResponse {
 }
 
 fn spa_route(path: &str) -> bool {
-    path == "/"
-        || matches!(
-            path,
-            "/explore"
-                | "/login"
-                | "/pastes"
-                | "/account"
-                | "/account/password"
-                | "/admin"
-                | "/admin/pastes"
-                | "/admin/users"
-                | "/help"
-        )
-        || path.strip_prefix("/admin/users/").is_some_and(|value| {
-            !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit())
+    #[derive(Deserialize)]
+    struct RouteDefinition {
+        path: String,
+    }
+    static ROUTES: OnceLock<Vec<RouteDefinition>> = OnceLock::new();
+    ROUTES
+        .get_or_init(|| {
+            serde_json::from_str(include_str!("../../web/src/navigation/routes.json"))
+                .expect("frontend route manifest must be valid")
         })
-        || path
-            .strip_prefix("/password-reset/")
-            .is_some_and(|value| !value.is_empty() && !value.contains('/'))
-        || path
-            .strip_prefix("/invitations/")
-            .is_some_and(|value| !value.is_empty() && !value.contains('/'))
-        || path.strip_prefix("/pastes/").is_some_and(|value| {
-            let pieces: Vec<_> = value.split('/').collect();
-            pieces.len() == 1 || (pieces.len() == 2 && pieces[1] == "edit")
+        .iter()
+        .any(|route| template_matches(&route.path, path))
+}
+
+fn template_matches(template: &str, path: &str) -> bool {
+    let expected = template.split('/').collect::<Vec<_>>();
+    let actual = path.split('/').collect::<Vec<_>>();
+    expected.len() == actual.len()
+        && expected.iter().zip(actual).all(|(expected, actual)| {
+            if *expected == ":userId:int" {
+                !actual.is_empty() && actual.bytes().all(|byte| byte.is_ascii_digit())
+            } else if expected.starts_with(':') {
+                !actual.is_empty()
+            } else {
+                *expected == actual
+            }
         })
 }
 
@@ -69,10 +72,16 @@ mod tests {
         assert!(spa_route("/invitations/token"));
         assert!(spa_route("/help"));
         assert!(spa_route("/admin/users/42"));
+        assert!(spa_route("/admin/invitations"));
+        assert!(spa_route("/admin/api-keys"));
+        assert!(spa_route("/admin/settings"));
+        assert!(spa_route("/admin/audit"));
         assert!(spa_route("/password-reset/token"));
         assert!(!spa_route("/api/v1/pastes"));
         assert!(!spa_route("/pastes/example/unknown"));
         assert!(!spa_route("/invitations/token/nested"));
+        assert!(!spa_route("/admin/users/not-a-number"));
+        assert!(!spa_route("/admin/settings/nested"));
     }
 
     #[test]

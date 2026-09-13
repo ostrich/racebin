@@ -1,4 +1,13 @@
 import { expect, test } from "@playwright/test";
+import { spaRouteSamples } from "../../src/navigation/routes";
+
+test("the compiled server serves every canonical browser route", async ({ request }) => {
+  for (const path of spaRouteSamples) {
+    const response = await request.get(path);
+    expect(response.status(), path).toBe(200);
+    expect(response.headers()["content-type"], path).toContain("text/html");
+  }
+});
 
 test("compiled frontend creates and reads a paste through a disposable backend", async ({
   page,
