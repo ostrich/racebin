@@ -32,10 +32,9 @@ export function isSessionInvalidError(error: unknown): error is ApiError {
   return (
     error instanceof ApiError &&
     error.status === 401 &&
-    [
-      "urn:racebin:problem:invalid_session",
-      "urn:racebin:problem:authentication_required"
-    ].includes(error.problemType ?? "")
+    ["urn:racebin:problem:invalid_session", "urn:racebin:problem:authentication_required"].includes(
+      error.problemType ?? ""
+    )
   );
 }
 

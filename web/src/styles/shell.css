@@ -322,6 +322,10 @@
 .switch input:checked + span {
   background: var(--accent);
 }
+.switch input:focus-visible + span {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
 .switch input:checked + span:after {
   left: 21px;
 }

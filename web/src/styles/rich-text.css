@@ -215,6 +215,9 @@
   grid-template-columns: repeat(8, 22px);
   gap: 3px;
 }
+.table-picker-grid [role="row"] {
+  display: contents;
+}
 .rich-text-toolbar .table-picker-grid button {
   width: 22px;
   height: 22px;

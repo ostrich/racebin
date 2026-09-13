@@ -121,6 +121,7 @@ test("user administration follows shared spacing and field primitives", async ({
   await mockApi(page, true);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/admin/users/1");
+  await expect(page.getByRole("heading", { name: "test-admin" })).toBeVisible();
   const gaps = await page.evaluate(() => {
     const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
     const metrics = box(".admin-user-metrics");

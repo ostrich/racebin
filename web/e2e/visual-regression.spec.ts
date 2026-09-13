@@ -70,6 +70,7 @@ test("public paste listing", { tag: "@visual" }, async ({ page }) => {
 test("paste editors", { tag: "@visual" }, async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/pastes/new");
+  await expect(page.getByRole("textbox", { name: "Paste content" })).toBeVisible();
   await expect(page).toHaveScreenshot("text-editor-desktop.png", screenshot);
   await page.locator(".form-grid select").first().selectOption("markdown");
   await expect(page.locator(".rich-text-editor")).toBeVisible();

@@ -1,6 +1,9 @@
 export type DiscardPrompt = () => Promise<boolean>;
 
-let unsavedCheck: (() => boolean) | undefined;
+type GuardOwner = { token: symbol; check: () => boolean };
+export type DirtyFormGuard = { disarm: () => void; unregister: () => void };
+
+let unsavedGuard: GuardOwner | undefined;
 let discardPrompt: DiscardPrompt = async () => false;
 
 export function setDiscardPrompt(prompt: DiscardPrompt): void {
@@ -8,16 +11,21 @@ export function setDiscardPrompt(prompt: DiscardPrompt): void {
 }
 
 /** Registers the single form owned by the current route. */
-export function guardUnsavedChanges(check?: () => boolean): void {
-  unsavedCheck = check;
+export function guardUnsavedChanges(check: () => boolean): DirtyFormGuard {
+  const owner = { token: Symbol("dirty form"), check };
+  unsavedGuard = owner;
+  const release = () => {
+    if (unsavedGuard?.token === owner.token) unsavedGuard = undefined;
+  };
+  return { disarm: release, unregister: release };
 }
 
 export function clearUnsavedChangesGuard(): void {
-  unsavedCheck = undefined;
+  unsavedGuard = undefined;
 }
 
 export function hasUnsavedChanges(): boolean {
-  return unsavedCheck?.() ?? false;
+  return unsavedGuard?.check() ?? false;
 }
 
 export async function confirmDiscardChanges(): Promise<boolean> {

@@ -1,7 +1,6 @@
 <script lang="ts">
   import { resetPassword } from "../api";
   import Link from "../components/Link.svelte";
-  import { loadSession } from "../app/session";
   import { appState } from "../app/state";
 
   let { token }: { token: string } = $props();
@@ -21,7 +20,6 @@
     saving = true;
     try {
       await resetPassword(token, { new_password: password });
-      await loadSession();
       complete = true;
       password = confirmation = "";
     } catch (reason) {

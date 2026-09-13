@@ -131,6 +131,7 @@
             <button
               type="button"
               class:active={markdownView === "rendered"}
+              aria-pressed={markdownView === "rendered"}
               onclick={() => {
                 markdownView = "rendered";
               }}>Rendered</button
@@ -138,6 +139,7 @@
             <button
               type="button"
               class:active={markdownView === "markdown"}
+              aria-pressed={markdownView === "markdown"}
               onclick={() => {
                 markdownView = "markdown";
               }}>Markdown</button

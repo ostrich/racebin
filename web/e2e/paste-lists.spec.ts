@@ -342,6 +342,21 @@ test("selection and its range anchor reset with list navigation", async ({ page 
   await expect(page.getByRole("button", { name: "Move 1" })).toBeEnabled();
 });
 
+test("paste deletion updates the owning page and clears its selection", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes");
+  await page.getByRole("checkbox", { name: "Select JavaScript example" }).check();
+  await expect(page.getByRole("button", { name: "Move 1" })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Delete paste" }).click();
+
+  await expect(page.getByRole("link", { name: "JavaScript example" })).toHaveCount(0);
+  await expect(page.getByText("No pastes found.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Move", exact: true })).toBeDisabled();
+  await expect(page.getByText("0 pastes")).toBeVisible();
+});
+
 test("query navigation retains list pages until their replacement is ready", async ({ page }) => {
   const filteredPaste = { ...paste, id: "filtered-paste", title: "Filtered result" };
   await mockApi(page, true, {
@@ -528,6 +543,7 @@ test("administrative paste columns align and collapse without crowding", async (
   await mockApi(page, true);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/admin/pastes");
+  await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
 
   const columns = await page.evaluate(() => {
     const bounds = (element: Element) => {

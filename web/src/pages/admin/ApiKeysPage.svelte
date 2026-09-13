@@ -4,7 +4,8 @@
   import Icon from "../../components/Icon.svelte";
   import Pagination from "../../components/Pagination.svelte";
   import { confirmAction } from "../../app/confirmations";
-  import { holdNavigation, navigate } from "../../navigation";
+  import { createPageLoader } from "../../app/pageLoader";
+  import { navigate } from "../../navigation";
   import { showNotice } from "../../app/notices";
   import type { ApiKey, Page } from "../../types";
 
@@ -12,30 +13,26 @@
   let page = $state<Page<ApiKey> | null>(null);
   let error = $state("");
   let search = $state("");
-  let initialLoadReady: (() => void) | null = holdNavigation();
-  let generation = 0;
+  const pageLoader = createPageLoader();
 
-  async function load(source = query): Promise<void> {
-    const current = ++generation;
+  function load(source = query): () => void {
     const params = new URLSearchParams(source);
     params.set("page_size", "25");
-    const value = await listAdminApiKeys(params);
-    if (current === generation) {
-      page = value;
-      error = "";
-    }
+    return pageLoader.load(() => listAdminApiKeys(params), {
+      success: (value) => {
+        page = value;
+        error = "";
+      },
+      failure: (reason) => {
+        error = reason instanceof Error ? reason.message : "Unable to load API keys";
+      }
+    });
   }
 
   $effect(() => {
     const source = new URLSearchParams(query);
-    const ready = initialLoadReady;
-    initialLoadReady = null;
     search = query.get("search") ?? "";
-    void load(source)
-      .catch((reason) => {
-        error = reason instanceof Error ? reason.message : "Unable to load API keys";
-      })
-      .finally(() => ready?.());
+    return load(source);
   });
 
   function ownerName(key: ApiKey): string {
@@ -62,7 +59,7 @@
   async function toggle(key: ApiKey): Promise<void> {
     try {
       await updateAdminApiKey(key.id, !key.enabled);
-      await load();
+      load();
     } catch (reason) {
       showNotice(reason instanceof Error ? reason.message : "Unable to update API key", "error");
     }
@@ -80,7 +77,7 @@
       return;
     try {
       await deleteAdminApiKey(key.id);
-      await load();
+      load();
     } catch (reason) {
       showNotice(reason instanceof Error ? reason.message : "Unable to delete API key", "error");
     }

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { logout as logoutSession } from "../api";
+  import { isSessionInvalidError, logout as logoutSession } from "../api";
   import { appState } from "../app/state";
   import { replaceSession } from "../app/session";
-  import { clearUnsavedChangesGuard, confirmDiscardChanges, navigate } from "../navigation";
-  import { clearNotice, notice } from "../app/notices";
+  import { confirmDiscardChanges, navigate } from "../navigation";
+  import { clearNotice, notice, showNotice } from "../app/notices";
   import { setColorTheme, uiPreferences, type ColorTheme } from "../app/uiPreferences";
   import Icon from "./Icon.svelte";
   import type { IconName } from "./icons";
@@ -19,10 +19,16 @@
 
   async function logout(): Promise<void> {
     if (!(await confirmDiscardChanges())) return;
-    clearUnsavedChangesGuard();
-    await logoutSession();
+    try {
+      await logoutSession();
+    } catch (error) {
+      if (!isSessionInvalidError(error)) {
+        showNotice(error instanceof Error ? error.message : "Unable to log out", "error");
+        return;
+      }
+    }
     replaceSession({ authenticated: false, permissions: [] });
-    await navigate("/");
+    await navigate("/", { discardConfirmed: true });
     clearNotice();
   }
 

@@ -7,7 +7,8 @@
   import Pagination from "../../components/Pagination.svelte";
   import { formatByteSize, formatDate } from "../../format";
   import { appState } from "../../app/state";
-  import { holdNavigation, navigate } from "../../navigation";
+  import { createPageLoader } from "../../app/pageLoader";
+  import { navigate } from "../../navigation";
   import type { AdminUser, Page } from "../../types";
 
   let { query }: { query: URLSearchParams } = $props();
@@ -16,31 +17,25 @@
   let error = $state("");
   let loading = $state(false);
   let invitationDialog: InvitationDialog;
-  let initialLoadReady: (() => void) | null = holdNavigation();
-  let generation = 0;
+  const pageLoader = createPageLoader();
 
   $effect(() => {
     const source = new URLSearchParams(query);
-    const current = ++generation;
-    const ready = initialLoadReady;
-    initialLoadReady = null;
     source.set("page_size", "25");
     loading = true;
-    void listAdminUsers(source)
-      .then((value) => {
-        if (current !== generation) return;
+    return pageLoader.load(() => listAdminUsers(source), {
+      success: (value) => {
         page = value;
         search = query.get("search") ?? "";
         error = "";
-      })
-      .catch((reason) => {
-        if (current === generation)
-          error = reason instanceof Error ? reason.message : "Unable to load users";
-      })
-      .finally(() => {
-        if (current === generation) loading = false;
-        ready?.();
-      });
+      },
+      failure: (reason) => {
+        error = reason instanceof Error ? reason.message : "Unable to load users";
+      },
+      settled: () => {
+        loading = false;
+      }
+    });
   });
 
   async function applySearch(event: SubmitEvent): Promise<void> {

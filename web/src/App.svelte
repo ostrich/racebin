@@ -3,18 +3,20 @@
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
   import Shell from "./components/Shell.svelte";
   import { setConfirmationPrompt } from "./app/confirmations";
-  import { loadSession } from "./app/session";
+  import { bootstrapApplication, replaceSession } from "./app/session";
+  import { showNotice } from "./app/notices";
+  import { setSessionInvalidHandler } from "./api";
   import { appState } from "./app/state";
-  import { loadRouteComponent, routeProps } from "./navigation/components";
+  import RouteOutlet from "./navigation/RouteOutlet.svelte";
   import {
-    holdNavigation,
     locationState,
+    navigate,
     navigationReady,
     routeAccess,
     setDiscardPrompt,
     startNavigation
   } from "./navigation";
-  import type { Route, RouteLocation } from "./navigation";
+  import type { RouteLocation } from "./navigation";
 
   let discardDialog: ConfirmDialog;
   let startupError = $state("");
@@ -33,15 +35,6 @@
     return null;
   }
 
-  async function loadPage(route: Route) {
-    const release = holdNavigation();
-    try {
-      return await loadRouteComponent(route);
-    } finally {
-      release();
-    }
-  }
-
   onMount(() => {
     setConfirmationPrompt((options) => discardDialog.ask(options));
     setDiscardPrompt(() =>
@@ -52,8 +45,13 @@
         dangerous: true
       })
     );
+    setSessionInvalidHandler(() => {
+      replaceSession({ authenticated: false, permissions: [] });
+      showNotice("Your session has ended. Log in again to continue.", "error");
+      void navigate("/login", { replace: true, discardConfirmed: true });
+    });
     let stopNavigation: (() => void) | undefined;
-    void loadSession()
+    void bootstrapApplication()
       .then(async () => {
         stopNavigation = await startNavigation({
           accessPolicy,
@@ -63,10 +61,15 @@
       .catch((error) => {
         startupError = error instanceof Error ? error.message : "Unable to start Racebin";
       });
-    return () => stopNavigation?.();
+    return () => {
+      setSessionInvalidHandler();
+      stopNavigation?.();
+    };
   });
 
-  let routeKey = $derived($locationState.path);
+  let routeKey = $derived(
+    `${$locationState.route.name}:${"pasteId" in $locationState.route ? $locationState.route.pasteId : ""}:${"userId" in $locationState.route ? $locationState.route.userId : ""}:${"token" in $locationState.route ? $locationState.route.token : ""}`
+  );
   let minimalShell = $derived(!$appState.ready);
 </script>
 
@@ -81,18 +84,7 @@
     <p class="muted">Loading Racebin…</p>
   {:else}
     {#key routeKey}
-      {@const route = $locationState.route}
-      {#await loadPage(route)}
-        <p class="muted">Loading page…</p>
-      {:then module}
-        {@const Page = module.default}
-        <Page {...routeProps(route, $locationState.query)} />
-      {:catch error}
-        <section class="empty">
-          <h1>Unable to load this page</h1>
-          <p>{error instanceof Error ? error.message : "The page could not be loaded."}</p>
-        </section>
-      {/await}
+      <RouteOutlet route={$locationState.route} query={$locationState.query} />
     {/key}
   {/if}
 </Shell>

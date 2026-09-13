@@ -7,7 +7,7 @@
     movePastes,
     renameFolder as renameFolderRequest
   } from "../api";
-  import FolderNameDialog from "../components/FolderNameDialog.svelte";
+  import TextInputDialog from "../components/TextInputDialog.svelte";
   import FolderPicker from "../components/FolderPicker.svelte";
   import Icon from "../components/Icon.svelte";
   import Link from "../components/Link.svelte";
@@ -16,8 +16,9 @@
   import PasteRows from "../components/PasteRows.svelte";
   import { confirmAction } from "../app/confirmations";
   import { showNotice } from "../app/notices";
+  import { createPageLoader } from "../app/pageLoader";
   import { cachedQuery, loadQuery } from "../app/queryCache";
-  import { holdNavigation, navigate } from "../navigation";
+  import { navigate } from "../navigation";
   import type { FolderOverview, Page, Paste, PasteRevisionResponse } from "../types";
   import { setPasteListView, uiPreferences } from "../app/uiPreferences";
 
@@ -69,7 +70,7 @@
   let reloadToken = $state(0);
   let selected = $state(new Set<string>());
   let selectAllCheckbox = $state<HTMLInputElement>();
-  let folderNameDialog: FolderNameDialog;
+  let folderNameDialog: TextInputDialog;
   let currentFolderId = $derived(
     appliedQuery.get("folder_id") ? Number(appliedQuery.get("folder_id")) : null
   );
@@ -84,8 +85,7 @@
         ? (folderNames.get(currentFolderId) ?? "Folder")
         : "My pastes"
   );
-  let loadGeneration = 0;
-  let initialRouteReady: (() => void) | null = holdNavigation();
+  const pageLoader = createPageLoader();
 
   $effect(() => {
     if (!selectAllCheckbox || !page) return;
@@ -95,9 +95,6 @@
   $effect(() => {
     reloadToken;
     const requestedQuery = new URLSearchParams(query);
-    const generation = ++loadGeneration;
-    const routeReady = initialRouteReady ?? holdNavigation();
-    initialRouteReady = null;
     loading = true;
     const paths = requestPaths(requestedQuery);
     const cachedPage = cachedQuery<Page<Paste>>(paths.paste);
@@ -109,33 +106,37 @@
       selected = new Set();
       error = "";
     }
-    void Promise.all([
-      loadQuery(paths.paste, () => listPastes(new URLSearchParams(paths.paste.split("?")[1]))),
-      paths.folders ? loadQuery(paths.folders, () => listFolders()) : Promise.resolve(null)
-    ])
-      .then(([result, loadedFolders]) => {
-        if (generation !== loadGeneration) return;
-        page = result;
-        folders = loadedFolders;
-        appliedQuery = requestedQuery;
-        selected = new Set();
-        error = "";
-      })
-      .catch((reason) => {
-        if (generation !== loadGeneration) return;
-        const message = reason instanceof Error ? reason.message : "Unable to load pastes";
-        if (!page) error = message;
-        showNotice(message, "error");
-      })
-      .finally(() => {
-        if (generation === loadGeneration) loading = false;
-        routeReady();
-      });
+    return pageLoader.load(
+      () =>
+        Promise.all([
+          loadQuery(paths.paste, () => listPastes(new URLSearchParams(paths.paste.split("?")[1]))),
+          paths.folders ? loadQuery(paths.folders, () => listFolders()) : Promise.resolve(null)
+        ]),
+      {
+        success: ([result, loadedFolders]) => {
+          page = result;
+          folders = loadedFolders;
+          appliedQuery = requestedQuery;
+          selected = new Set();
+          error = "";
+        },
+        failure: (reason) => {
+          const message = reason instanceof Error ? reason.message : "Unable to load pastes";
+          if (!page) error = message;
+          showNotice(message, "error");
+        },
+        settled: () => {
+          loading = false;
+        }
+      }
+    );
   });
 
   async function createFolder(): Promise<void> {
     const name = await folderNameDialog.ask({
       title: "Create folder",
+      label: "Folder name",
+      maximumLength: 64,
       submitLabel: "Create folder"
     });
     if (!name) return;
@@ -150,7 +151,9 @@
   async function renameFolder(id: number, current: string): Promise<void> {
     const name = await folderNameDialog.ask({
       title: "Rename folder",
+      label: "Folder name",
       value: current,
+      maximumLength: 64,
       submitLabel: "Rename"
     });
     if (!name || name === current) return;
@@ -212,9 +215,30 @@
       showNotice(reason instanceof Error ? reason.message : "Unable to move pastes", "error");
     }
   }
+
+  function pasteRemoved(paste: Paste): void {
+    if (!page) return;
+    const totalItems = Math.max(0, page.total_items - 1);
+    const totalPages = Math.max(1, Math.ceil(totalItems / page.page_size));
+    page = {
+      ...page,
+      items: page.items.filter((candidate) => candidate.id !== paste.id),
+      total_items: totalItems,
+      total_pages: totalPages
+    };
+    const nextSelected = new Set(selected);
+    nextSelected.delete(paste.id);
+    selected = nextSelected;
+    if (page.page > totalPages) {
+      const params = new URLSearchParams(appliedQuery);
+      if (totalPages > 1) params.set("page", String(totalPages));
+      else params.delete("page");
+      void navigate(`/pastes${params.size ? `?${params}` : ""}`);
+    }
+  }
 </script>
 
-<FolderNameDialog bind:this={folderNameDialog} />
+<TextInputDialog bind:this={folderNameDialog} />
 
 <section class:paste-workspace={mine} aria-busy={loading}>
   <div class="paste-workspace-main">
@@ -300,6 +324,7 @@
         view={mine ? $uiPreferences.pasteListView : "normal"}
         bind:selected
         folderNames={mine ? folderNames : undefined}
+        onremoved={mine ? pasteRemoved : undefined}
       />
       <Pagination {page} params={appliedQuery} />
     {:else if error}

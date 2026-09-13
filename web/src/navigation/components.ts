@@ -1,11 +1,18 @@
 import type { Component } from "svelte";
+import { get } from "svelte/store";
+import { appState } from "../app/state";
 import type { Route, RouteName } from "./routes";
 
 type PageModule = { default: Component<any> };
 type PageLoader = () => Promise<PageModule>;
 
 const loaders: Record<RouteName, PageLoader> = {
-  home: () => import("../pages/HomeRoutePage.svelte"),
+  home: () => {
+    const state = get(appState);
+    if (state.session.user) return import("../pages/PasteFormPage.svelte");
+    if (state.config.plain_home_enabled) return import("../pages/LoginPage.svelte");
+    return import("../pages/HomePage.svelte");
+  },
   explore: () => import("../pages/PasteListPage.svelte"),
   login: () => import("../pages/LoginPage.svelte"),
   "new-paste": () => import("../pages/PasteFormPage.svelte"),

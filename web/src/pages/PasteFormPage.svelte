@@ -22,14 +22,10 @@
   import Link from "../components/Link.svelte";
   import { pasteDisplayTitle } from "../format";
   import { confirmAction } from "../app/confirmations";
+  import { useDirtyForm } from "../app/dirtyForm";
   import { normalizeLanguage } from "../highlighting";
   import { showNotice } from "../app/notices";
-  import {
-    clearUnsavedChangesGuard,
-    guardUnsavedChanges,
-    holdNavigation,
-    navigate
-  } from "../navigation";
+  import { holdNavigation, navigate } from "../navigation";
   import { appState } from "../app/state";
   import type { Folder, FolderOverview, Paste } from "../types";
 
@@ -60,6 +56,7 @@
   let editorHeight = $state(410);
   let baseline = $state("");
   let initialized = $state(false);
+  const dirtyGuard = useDirtyForm(() => dirty);
   const initialLoadReady = holdNavigation();
   const drafts = new Map<ContentKind, string>();
   let canOrganize = $derived(!paste || paste.owner_id === $appState.session.user?.id);
@@ -131,11 +128,6 @@
     });
   }
   let dirty = $derived(initialized && snapshot() !== baseline);
-
-  $effect(() => {
-    guardUnsavedChanges(() => dirty);
-    return () => clearUnsavedChangesGuard();
-  });
 
   function initialize(source?: Paste): void {
     paste = source ?? null;
@@ -229,7 +221,7 @@
         drafts.set(source, content);
         const converted = await convert("text", "markdown");
         const convertedMarkdown = converted.body.content;
-        if (content && !(await conversionDialog.ask(target, content))) return;
+        if (content && !(await conversionDialog.ask(target, convertedMarkdown))) return;
         markdown = convertedMarkdown;
       }
       contentKind = target;
@@ -341,8 +333,8 @@
         }
       }
       initialized = false;
-      clearUnsavedChangesGuard();
-      await navigate(`/pastes/${created.id}`);
+      dirtyGuard.disarm();
+      await navigate(`/pastes/${created.id}`, { discardConfirmed: true });
     } catch (reason) {
       showNotice(reason instanceof Error ? reason.message : "Unable to save paste", "error");
     } finally {
@@ -364,8 +356,8 @@
     try {
       await deletePasteRequest(pasteId, paste?._etag ?? "*");
       initialized = false;
-      clearUnsavedChangesGuard();
-      await navigate("/pastes");
+      dirtyGuard.disarm();
+      await navigate("/pastes", { discardConfirmed: true });
     } catch (reason) {
       showNotice(reason instanceof Error ? reason.message : "Unable to delete paste", "error");
     }
@@ -418,6 +410,7 @@
               <button
                 type="button"
                 class:active={richMode === "visual"}
+                aria-pressed={richMode === "visual"}
                 onclick={() => {
                   void showVisualEditor();
                 }}>Visual</button
@@ -425,6 +418,7 @@
               <button
                 type="button"
                 class:active={richMode === "markdown"}
+                aria-pressed={richMode === "markdown"}
                 onclick={() => {
                   richMode = "markdown";
                 }}>Markdown</button

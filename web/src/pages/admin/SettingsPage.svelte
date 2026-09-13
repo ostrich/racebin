@@ -4,13 +4,17 @@
   import AdminNav from "../../components/AdminNav.svelte";
   import { availableLanguageOptions } from "../../highlighting";
   import { holdNavigation } from "../../navigation";
+  import { useDirtyForm } from "../../app/dirtyForm";
   import { showNotice } from "../../app/notices";
-  import { loadCapabilities } from "../../app/session";
+  import { refreshCapabilities } from "../../app/session";
   import { appState } from "../../app/state";
 
   let settings = $state<InstanceSettings | null>(null);
   let error = $state("");
   let saving = $state(false);
+  let baseline = $state("");
+  let dirty = $derived(Boolean(settings) && JSON.stringify(settings) !== baseline);
+  const dirtyGuard = useDirtyForm(() => dirty);
   let languageOptions = $derived(availableLanguageOptions($appState.languages));
   const initialLoadReady = holdNavigation();
 
@@ -18,6 +22,7 @@
     void getInstanceSettings()
       .then((value) => {
         settings = value;
+        baseline = JSON.stringify(value);
       })
       .catch((reason) => {
         error = reason instanceof Error ? reason.message : "Unable to load settings";
@@ -30,8 +35,16 @@
     saving = true;
     try {
       settings = await replaceInstanceSettings(settings);
-      await loadCapabilities();
-      showNotice("Settings saved.");
+      baseline = JSON.stringify(settings);
+      try {
+        await refreshCapabilities();
+        showNotice("Settings saved.");
+      } catch (reason) {
+        showNotice(
+          `Settings saved, but the current page could not refresh them: ${reason instanceof Error ? reason.message : "refresh failed"}`,
+          "error"
+        );
+      }
     } catch (reason) {
       showNotice(reason instanceof Error ? reason.message : "Unable to save settings", "error");
     } finally {

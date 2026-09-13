@@ -14,7 +14,7 @@ import {
 
 type NavigationKind = "initial" | "push" | "replace" | "pop";
 type AccessPolicy = (location: RouteLocation) => string | null | Promise<string | null>;
-type NavigationOptions = { replace?: boolean };
+type NavigationOptions = { replace?: boolean; discardConfirmed?: boolean };
 type RuntimeOptions = { accessPolicy?: AccessPolicy; siteName?: () => string };
 
 type NavigationTransaction = {
@@ -211,11 +211,14 @@ async function commit(
 }
 
 export async function navigate(path: string, navigation: NavigationOptions = {}): Promise<boolean> {
-  if (!(await confirmDiscardChanges())) return false;
-  clearUnsavedChangesGuard();
+  const requested = new URL(path, location.href);
+  const requestedPath = `${requested.pathname}${requested.search}${requested.hash}`;
+  if (requested.origin !== location.origin) throw new Error("Navigation must remain on this site");
+  if (requestedPath === currentPath) return true;
+  if (!navigation.discardConfirmed && !(await confirmDiscardChanges())) return false;
   persistCurrentScroll();
   const top = { x: 0, y: 0 };
-  return commit(path, navigation.replace ? "replace" : "push", top);
+  return commit(requestedPath, navigation.replace ? "replace" : "push", top);
 }
 
 export async function startNavigation(runtimeOptions: RuntimeOptions = {}): Promise<() => void> {
@@ -257,7 +260,6 @@ export async function startNavigation(runtimeOptions: RuntimeOptions = {}): Prom
         }
         return;
       }
-      clearUnsavedChangesGuard();
       const position =
         targetIndex === undefined
           ? savedScroll(event.state)

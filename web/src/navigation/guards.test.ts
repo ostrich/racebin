@@ -35,4 +35,11 @@ describe("navigation guards", () => {
     expect(event.defaultPrevented).toBe(true);
     stop();
   });
+
+  it("does not let a stale component unregister the current form's guard", () => {
+    const stale = guardUnsavedChanges(() => true);
+    guardUnsavedChanges(() => false);
+    stale.unregister();
+    expect(hasUnsavedChanges()).toBe(false);
+  });
 });

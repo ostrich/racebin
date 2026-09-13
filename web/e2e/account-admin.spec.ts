@@ -118,3 +118,51 @@ test("administrative lists keep server-side filters and pagination in the URL", 
   await expect(page).toHaveURL(/status=disabled/);
   expect(new URL(page.url()).searchParams.has("page")).toBe(false);
 });
+
+test("site settings protect unsaved edits", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/admin/settings");
+  await page.getByLabel("Site name").fill("Changed locally");
+  await page.getByRole("link", { name: "Audit log" }).click();
+  await expect(page.getByRole("heading", { name: "Discard unsaved changes?" })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page).toHaveURL(/\/admin\/settings$/);
+  await expect(page.getByLabel("Site name")).toHaveValue("Changed locally");
+});
+
+test("a completed settings save is not reported as failed when refresh fails", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/admin/settings");
+  await expect(page.getByLabel("Site name")).toHaveValue("Racebin");
+  await page.route("**/api/v1/capabilities", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/problem+json",
+      body: JSON.stringify({
+        type: "urn:racebin:problem:unavailable",
+        title: "Unavailable",
+        status: 503,
+        detail: "Capability refresh unavailable"
+      })
+    })
+  );
+
+  await page.getByLabel("Site name").fill("Saved name");
+  await page.getByRole("button", { name: "Save settings" }).click();
+
+  await expect(page.getByRole("status")).toContainText("Settings saved, but");
+  await expect(page.getByRole("status")).not.toContainText("Unable to save settings");
+});
+
+test("new API keys use a recoverable one-time secret dialog", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/account");
+  await page.locator(".key-form").getByLabel("Name").fill("Desktop client");
+  await page.getByLabel("paste:read").check();
+  await page.getByRole("button", { name: "Create key" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "API key created" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("API key")).toHaveValue("rbk_test_secret");
+  await expect(dialog.getByText("It will not be shown again.")).toBeVisible();
+});

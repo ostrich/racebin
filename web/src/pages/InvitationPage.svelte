@@ -2,7 +2,7 @@
   import { redeemInvitation } from "../api";
   import { showNotice } from "../app/notices";
   import { navigate } from "../navigation";
-  import { loadSession } from "../app/session";
+  import { refreshSession } from "../app/session";
   import { appState } from "../app/state";
 
   let { token }: { token: string } = $props();
@@ -16,8 +16,15 @@
         username: String(data.get("username") ?? ""),
         password: String(data.get("password") ?? "")
       });
-      await loadSession();
-      await navigate("/pastes");
+      try {
+        await refreshSession();
+        await navigate("/pastes");
+      } catch (error) {
+        showNotice(
+          `Your account was created, but its session could not be loaded: ${error instanceof Error ? error.message : "refresh failed"}. Reload the page to continue.`,
+          "error"
+        );
+      }
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Account creation failed", "error");
     } finally {

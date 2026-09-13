@@ -7,7 +7,8 @@
   import Pagination from "../../components/Pagination.svelte";
   import { confirmAction } from "../../app/confirmations";
   import { formatDate } from "../../format";
-  import { holdNavigation, navigate } from "../../navigation";
+  import { createPageLoader } from "../../app/pageLoader";
+  import { navigate } from "../../navigation";
   import { showNotice } from "../../app/notices";
   import { appState } from "../../app/state";
   import type { Page } from "../../types";
@@ -19,8 +20,7 @@
   let loading = $state(false);
   let search = $state("");
   let invitationDialog: InvitationDialog;
-  let generation = 0;
-  let initialRouteReady: (() => void) | null = holdNavigation();
+  const pageLoader = createPageLoader();
   let view = $derived(query.get("view") === "history" ? "history" : "active");
   const statusLabel = (status: Invitation["status"]) =>
     status.charAt(0).toUpperCase() + status.slice(1);
@@ -32,34 +32,36 @@
     return result;
   }
 
-  async function load(source = query): Promise<void> {
-    const current = ++generation;
+  function load(source = query): () => void {
     loading = true;
     const selected = apiQuery(source);
     const active = new URLSearchParams({ view: "active", page_size: "1" });
-    try {
-      const [result, activePage] = await Promise.all([
-        listInvitations(selected),
-        selected.get("view") === "active" ? Promise.resolve(null) : listInvitations(active)
-      ]);
-      if (current !== generation) return;
-      page = result;
-      activeCount = activePage?.total_items ?? result.total_items;
-      search = source.get("search") ?? "";
-      error = "";
-    } catch (reason) {
-      if (current !== generation) return;
-      error = reason instanceof Error ? reason.message : "Unable to load invitations";
-    } finally {
-      if (current === generation) loading = false;
-    }
+    return pageLoader.load(
+      () =>
+        Promise.all([
+          listInvitations(selected),
+          selected.get("view") === "active" ? Promise.resolve(null) : listInvitations(active)
+        ]),
+      {
+        success: ([result, activePage]) => {
+          page = result;
+          activeCount = activePage?.total_items ?? result.total_items;
+          search = source.get("search") ?? "";
+          error = "";
+        },
+        failure: (reason) => {
+          error = reason instanceof Error ? reason.message : "Unable to load invitations";
+        },
+        settled: () => {
+          loading = false;
+        }
+      }
+    );
   }
 
   $effect(() => {
     const source = new URLSearchParams(query);
-    const ready = initialRouteReady;
-    initialRouteReady = null;
-    void load(source).finally(() => ready?.());
+    return load(source);
   });
 
   function tabUrl(nextView: "active" | "history"): string {
@@ -94,12 +96,17 @@
     )
       return;
     await revokeInvitation(invitation.id);
-    await load();
+    load();
     showNotice("Invitation revoked.");
   }
 </script>
 
-<InvitationDialog bind:this={invitationDialog} oncreated={() => load()} />
+<InvitationDialog
+  bind:this={invitationDialog}
+  oncreated={() => {
+    load();
+  }}
+/>
 
 <section class="page-layout" aria-busy={loading}>
   <div class="page-heading">

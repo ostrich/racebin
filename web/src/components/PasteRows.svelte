@@ -35,10 +35,9 @@
     onremoved?: (paste: Paste) => void;
   } = $props();
 
-  let visible = $state<Paste[]>([]);
   let rangeAnchor = $state<number | null>(null);
   $effect(() => {
-    visible = items;
+    items;
     rangeAnchor = null;
   });
 
@@ -68,7 +67,6 @@
       return;
     try {
       await deletePaste(paste.id, paste._etag ?? "*");
-      visible = visible.filter((candidate) => candidate.id !== paste.id);
       onremoved?.(paste);
       showNotice("Paste deleted.");
     } catch (error) {
@@ -81,12 +79,12 @@
     if (extendRange && rangeAnchor !== null) {
       const start = Math.min(rangeAnchor, index);
       const end = Math.max(rangeAnchor, index);
-      for (const paste of visible.slice(start, end + 1)) {
+      for (const paste of items.slice(start, end + 1)) {
         if (checked) next.add(paste.id);
         else next.delete(paste.id);
       }
     } else {
-      const id = visible[index]?.id;
+      const id = items[index]?.id;
       if (id) {
         if (checked) next.add(id);
         else next.delete(id);
@@ -97,7 +95,7 @@
   }
 </script>
 
-{#if visible.length === 0}
+{#if items.length === 0}
   <div class="empty compact"><p>No pastes found.</p></div>
 {:else}
   {#if selectable}
@@ -120,7 +118,7 @@
       class:mobile-stack={context !== "admin" && view !== "compact"}
       class:admin-paste-list={context === "admin"}
     >
-      {#each visible as paste, index (paste.id)}
+      {#each items as paste, index (paste.id)}
         <article
           class="paste-row paste-list-row"
           class:selectable

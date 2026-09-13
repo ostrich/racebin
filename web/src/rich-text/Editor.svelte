@@ -9,12 +9,14 @@
   import { showNotice } from "../app/notices";
   import { confirmAction } from "../app/confirmations";
   import Icon from "../components/Icon.svelte";
+  import TextInputDialog from "../components/TextInputDialog.svelte";
   import { RichTextPasteNormalization } from "./pasteNormalization";
   import type { IconName } from "../components/icons";
 
   let { markdown = $bindable(), onchange }: { markdown: string; onchange?: () => void } = $props();
   let element: HTMLDivElement;
   let editor: Editor;
+  let linkDialog: TextInputDialog;
   let tableTool = $state<HTMLDivElement>();
   let tablePickerOpen = $state(false);
   let tableRows = $state(1);
@@ -164,7 +166,13 @@
         break;
       case "link": {
         const current = editor.getAttributes("link").href as string | undefined;
-        const href = prompt("Link URL", current ?? "https://");
+        const href = await linkDialog.ask({
+          title: current ? "Edit link" : "Add link",
+          label: "Link URL",
+          value: current ?? "https://",
+          submitLabel: "Apply",
+          allowEmpty: true
+        });
         if (href === null) break;
         if (!href.trim()) chain.unsetLink().run();
         else if (!safeLink(href.trim()))
@@ -324,6 +332,8 @@
   });
 </script>
 
+<TextInputDialog bind:this={linkDialog} />
+
 <div class="rich-text-toolbar" role="toolbar" aria-label="Rich-text formatting">
   {#each commands as item}
     {#if item.command === "table"}
@@ -354,25 +364,28 @@
               aria-label={`${tableRows} rows by ${tableColumns} columns`}
             >
               {#each Array(tablePickerSize) as _, row}
-                {#each Array(tablePickerSize) as _, column}
-                  <button
-                    type="button"
-                    role="gridcell"
-                    data-table-cell={`${row + 1}-${column + 1}`}
-                    class:selected={row < tableRows && column < tableColumns}
-                    aria-label={tableSizeLabel(row + 1, column + 1)}
-                    onmouseenter={() => {
-                      tableRows = row + 1;
-                      tableColumns = column + 1;
-                    }}
-                    onfocus={() => {
-                      tableRows = row + 1;
-                      tableColumns = column + 1;
-                    }}
-                    onkeydown={(event) => tablePickerKeydown(event, row + 1, column + 1)}
-                    onclick={() => insertTable(row + 1, column + 1)}
-                  ></button>
-                {/each}
+                <div role="row">
+                  {#each Array(tablePickerSize) as _, column}
+                    <button
+                      type="button"
+                      role="gridcell"
+                      tabindex={row + 1 === tableRows && column + 1 === tableColumns ? 0 : -1}
+                      data-table-cell={`${row + 1}-${column + 1}`}
+                      class:selected={row < tableRows && column < tableColumns}
+                      aria-label={tableSizeLabel(row + 1, column + 1)}
+                      onmouseenter={() => {
+                        tableRows = row + 1;
+                        tableColumns = column + 1;
+                      }}
+                      onfocus={() => {
+                        tableRows = row + 1;
+                        tableColumns = column + 1;
+                      }}
+                      onkeydown={(event) => tablePickerKeydown(event, row + 1, column + 1)}
+                      onclick={() => insertTable(row + 1, column + 1)}
+                    ></button>
+                  {/each}
+                </div>
               {/each}
             </div>
             <output aria-live="polite">{tableRows} × {tableColumns} table</output>

@@ -4,34 +4,29 @@
   import Icon from "../../components/Icon.svelte";
   import Pagination from "../../components/Pagination.svelte";
   import { formatDate } from "../../format";
-  import { holdNavigation, navigate } from "../../navigation";
+  import { createPageLoader } from "../../app/pageLoader";
+  import { navigate } from "../../navigation";
   import type { Page } from "../../types";
 
   let { query }: { query: URLSearchParams } = $props();
   let page = $state<Page<AuditEvent> | null>(null);
   let error = $state("");
   let search = $state("");
-  let initialLoadReady: (() => void) | null = holdNavigation();
-  let generation = 0;
+  const pageLoader = createPageLoader();
 
   $effect(() => {
     const source = new URLSearchParams(query);
     source.set("page_size", "25");
-    const current = ++generation;
-    const ready = initialLoadReady;
-    initialLoadReady = null;
     search = query.get("search") ?? "";
-    void listAuditEvents(source)
-      .then((value) => {
-        if (current === generation) {
-          page = value;
-          error = "";
-        }
-      })
-      .catch((reason) => {
+    return pageLoader.load(() => listAuditEvents(source), {
+      success: (value) => {
+        page = value;
+        error = "";
+      },
+      failure: (reason) => {
         error = reason instanceof Error ? reason.message : "Unable to load audit log";
-      })
-      .finally(() => ready?.());
+      }
+    });
   });
 
   async function applySearch(event: SubmitEvent): Promise<void> {

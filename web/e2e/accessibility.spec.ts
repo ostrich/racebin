@@ -41,3 +41,24 @@ test("primary authenticated workflows are accessible", async ({ page }) => {
   await page.getByRole("button", { name: "Create invitation" }).click();
   await expectNoAccessibilityViolations(page);
 });
+
+test("opened custom controls expose accessible interaction state", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  const language = page.getByRole("combobox", { name: /Language/ });
+  await language.click();
+  await page.keyboard.press("ArrowDown");
+  await expect(language).toHaveAttribute("aria-activedescendant", /language-option-/);
+  await expectNoAccessibilityViolations(page);
+
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  const visual = page.getByRole("button", { name: "Visual", exact: true });
+  const markdown = page.getByRole("button", { name: "Markdown", exact: true });
+  await expect(visual).toHaveAttribute("aria-pressed", "true");
+  await expect(markdown).toHaveAttribute("aria-pressed", "false");
+  await page.getByRole("button", { name: "Insert table" }).click();
+  const grid = page.getByRole("grid", { name: /rows by/ });
+  await expect(grid.getByRole("row")).toHaveCount(8);
+  await expect(grid.locator('[role="gridcell"][tabindex="0"]')).toHaveCount(1);
+  await expectNoAccessibilityViolations(page);
+});

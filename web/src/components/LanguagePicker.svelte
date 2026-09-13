@@ -105,6 +105,9 @@
         aria-autocomplete="list"
         aria-expanded={open}
         aria-controls="language-options-menu"
+        aria-activedescendant={open && active >= 0
+          ? `language-option-${filtered[active]?.id}`
+          : undefined}
         placeholder="Type or choose"
         onfocus={show}
         oninput={filter}
@@ -122,8 +125,10 @@
       >
         {#each filtered as language, index (language.id)}
           <button
+            id={`language-option-${language.id}`}
             type="button"
             role="option"
+            tabindex="-1"
             class:active={index === active}
             class:selected={language.id === value}
             aria-selected={language.id === value}

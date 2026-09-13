@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
-import { clearUnsavedChangesGuard, setDiscardPrompt } from "./guards";
+import {
+  clearUnsavedChangesGuard,
+  guardUnsavedChanges,
+  hasUnsavedChanges,
+  setDiscardPrompt
+} from "./guards";
 import {
   holdNavigation,
   locationState,
@@ -126,6 +131,35 @@ describe("navigation runtime", () => {
     expect(replaceState.mock.calls[0]?.[0]).toMatchObject({
       racebin: { index: 0, scroll: { x: 0, y: 720 } }
     });
+    stop();
+  });
+
+  it("treats exact same-location navigation as a no-op without disarming the form", async () => {
+    const prompt = vi.fn(async () => true);
+    setDiscardPrompt(prompt);
+    const stop = await startNavigation();
+    guardUnsavedChanges(() => true);
+    const pushState = vi.spyOn(history, "pushState");
+
+    expect(await navigate("/")).toBe(true);
+    expect(pushState).not.toHaveBeenCalled();
+    expect(prompt).not.toHaveBeenCalled();
+    expect(hasUnsavedChanges()).toBe(true);
+    stop();
+  });
+
+  it("retains the current form guard when navigation policy fails", async () => {
+    const stop = await startNavigation({
+      accessPolicy: (candidate) => {
+        if (candidate.path === "/help") throw new Error("policy unavailable");
+        return null;
+      }
+    });
+    guardUnsavedChanges(() => true);
+
+    await expect(navigate("/help")).rejects.toThrow("policy unavailable");
+    expect(location.pathname).toBe("/");
+    expect(hasUnsavedChanges()).toBe(true);
     stop();
   });
 });

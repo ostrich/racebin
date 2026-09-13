@@ -18,6 +18,7 @@ test("desktop layout stays anchored without reserving an idle scrollbar gutter",
 }) => {
   await page.setViewportSize({ width: 1440, height: 1400 });
   await page.goto("/pastes/new");
+  await expect(page.getByRole("heading", { name: "New paste" })).toBeVisible();
   const measure = () =>
     page.evaluate(() => {
       const root = document.documentElement;
@@ -270,6 +271,7 @@ test("filter selects follow their widest option instead of their grid track", as
 
 test("standard form controls use the shared control height", async ({ page }) => {
   await page.goto("/pastes/new");
+  await expect(page.getByRole("textbox", { name: "Paste content" })).toBeVisible();
   const heights = await page
     .locator(
       '.form-grid input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), .form-grid select'
@@ -434,6 +436,7 @@ test("interactive control families use consistent hover states", async ({ page }
 test("paste editor uses the page width without stretching metadata controls", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/pastes/new");
+  await expect(page.getByRole("textbox", { name: "Paste content" })).toBeVisible();
 
   const geometry = await page.locator("main, .editor, .form-grid > *").evaluateAll(
     (elements, mainSelector) =>

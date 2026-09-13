@@ -87,8 +87,8 @@ different responsibilities:
 
 - Vitest covers route parsing, navigation transactions, access policy,
   readiness holds, superseded navigation, history/scroll state, dirty-form
-  guards, query caching, formatting, API transport/resource behavior, and
-  Svelte components in jsdom.
+  ownership, replaceable page requests, query caching, formatting, API
+  transport/resource normalization, and Svelte components in jsdom.
 - Functional Playwright tests use deterministic API fixtures for editing,
   highlighting, folder/list behavior, caching, back/forward restoration,
   administration, responsive geometry, and WCAG A/AA accessibility scans of
@@ -98,6 +98,13 @@ different responsibilities:
 - Layout-invariant tests express measurable requirements such as common content
   edges, stable filter boundaries, shared control heights, and no horizontal
   page overflow.
+
+Because production pages are split into route-level bundles, browser tests wait
+for a page-specific heading, control, or result before measuring layout or
+interacting. The compiled real-stack suite directly requests every canonical
+route in `web/src/navigation/routes.json`; this checks both route generation and
+the Rust server's SPA fallback rather than relying on Vite's development
+fallback.
 
 `test:e2e:gate` is the deliberately small, reliable push gate. `test:e2e`
 runs the complete functional suite and remains available locally and in the

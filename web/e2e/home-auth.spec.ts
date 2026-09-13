@@ -65,7 +65,7 @@ test("plain home presents login within the standard public shell", async ({ page
   await expect(page.getByRole("link", { name: "Racebin" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Explore" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Color theme: Automatic theme" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Log in" })).toBeVisible();
+  await expect(page.getByRole("banner").getByRole("link", { name: "Log in" })).toBeVisible();
   await expect(page.getByText("Recently shared")).toHaveCount(0);
   expect(homepagePasteRequests).toBe(0);
 
@@ -87,6 +87,21 @@ test("plain-home login and authenticated homepage retain normal behavior", async
   await page.getByRole("link", { name: "Racebin" }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { name: "New paste" })).toBeVisible();
+});
+
+test("standard home remains coherent when public discovery is disabled", async ({ page }) => {
+  let pasteRequests = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/v1/pastes") pasteRequests += 1;
+  });
+  await mockApi(page, false, { publicExplore: false });
+  await page.goto("/");
+
+  await expect(page.getByRole("heading", { name: "Racebin" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Explore/ })).toHaveCount(0);
+  await expect(page.getByText("Recently shared")).toHaveCount(0);
+  await expect(page.getByRole("main").getByRole("link", { name: "Log in" })).toBeVisible();
+  expect(pasteRequests).toBe(0);
 });
 
 test("logout discards stale protected-page failures", async ({ page }) => {

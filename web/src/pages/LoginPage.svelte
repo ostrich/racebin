@@ -2,7 +2,7 @@
   import { login } from "../api";
   import { showNotice } from "../app/notices";
   import { navigate } from "../navigation";
-  import { loadSession } from "../app/session";
+  import { replaceSession } from "../app/session";
 
   let submitting = $state(false);
 
@@ -10,12 +10,12 @@
     const data = new FormData(event.currentTarget as HTMLFormElement);
     submitting = true;
     try {
-      await login({
+      const session = await login({
         username: String(data.get("username") ?? ""),
         password: String(data.get("password") ?? ""),
         remember: data.has("remember")
       });
-      await loadSession();
+      replaceSession({ ...session, authenticated: true });
       await navigate("/pastes");
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Login failed", "error");

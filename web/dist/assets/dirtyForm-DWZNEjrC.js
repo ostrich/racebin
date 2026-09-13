@@ -1,0 +1,1 @@
+import{t as e}from"./index-client-CV7z6EZ9.js";import{d as t}from"./app.js";function n(n){let r=t(n);return e(r.unregister),r}export{n as t};

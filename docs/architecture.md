@@ -327,7 +327,11 @@ Racebin does not use SvelteKit. It has a deliberately application-specific
 navigation runtime under `web/src/navigation`. The implementation is divided
 by responsibility:
 
-- `routes.ts` defines route parsing and page titles;
+- `routes.json` is the canonical browser-route manifest shared with the Rust
+  SPA fallback, while `routes.ts` provides typed matching, titles, and access
+  metadata;
+- `components.ts` is the exhaustive route-to-component registry and loads
+  route pages on demand;
 - `guards.ts` owns the active form's unsaved-change guard and the common
   discard prompt used by links, back/forward navigation, logout, and browser
   unloads;
@@ -339,8 +343,10 @@ by responsibility:
 
 A navigation is resolved before it is published. Authentication,
 administrator access, and forced-password-change redirects therefore happen
-before a protected page can mount. Once the destination is published, a page
-may call `holdNavigation()` while its initial data or lazy component loads.
+before a protected page can mount. Once the destination is published, the
+route outlet holds its navigation while the page bundle loads and hands that
+hold to the mounted page. A page may call `holdNavigation()` while its initial
+data loads.
 The transaction restores scroll and completes only after all holds are
 released and Svelte has rendered. Holds and asynchronous policy decisions are
 transaction-scoped, so stale work cannot complete or overwrite a newer
@@ -351,14 +357,29 @@ position without replacing unrelated `history.state` fields. Internal
 push/replace navigation starts at the top and moves focus to the page heading;
 back/forward navigation restores the saved position without stealing focus.
 
-`App.svelte` is the frontend composition root. It loads the current session,
-provides the route access policy, and chooses the page component.
+`App.svelte` is the frontend composition root. It bootstraps application state,
+provides the route access policy, and mounts the route outlet. Route identity
+excludes query parameters, so filter and pagination changes update an existing
+page rather than destroying it. Route parameters that identify a different
+resource do create a new page instance.
 `Shell.svelte` owns the shared navigation and page frame. Pages compose
 reusable controls from `web/src/components`.
 
+Dirty forms use one lifetime-owned helper. Confirmation does not disarm a
+mounted form: the component unregisters only when it is actually destroyed, or
+explicitly disarms itself after a successful save. Replaceable page requests
+use one generation-aware loader that suppresses stale successes and errors,
+coordinates loading state, and participates in navigation readiness.
+
 Application-wide session and configuration state lives in a small Svelte
-store. The browser API boundary is divided into generated wire types,
-normalization, named resource operations, and one private transport under
+store. Initial application bootstrap, session refresh, capabilities refresh,
+and language refresh are separate operations so a secondary metadata failure
+cannot turn a successful login into an apparent authentication failure. Stable
+session-expiration problem types reconcile the global session and redirect to
+login; ordinary credential errors do not.
+
+The browser API boundary is divided into generated wire types,
+resource-specific normalization, named resource operations, and one private transport under
 `web/src/api`. The transport alone performs network requests and owns JSON and
 multipart serialization, CSRF, conditional and idempotency headers, protocol
 response headers, problem-details errors, and query invalidation. Pages call
@@ -372,9 +393,11 @@ change to the runtime, contract, generated types, resource client, and tests.
 
 The query cache is kept separate from navigation: it deduplicates and retains
 resource reads, invalidates them after mutations, and lets list pages render
-cached data while revalidating. Page request generations prevent an older
-response from replacing a newer query, while navigation readiness determines
-only when the new page is structurally ready for focus and scroll restoration.
+cached data while revalidating. The shared page loader prevents an older
+response or error from replacing a newer query, while navigation readiness
+determines only when the new page is structurally ready for focus and scroll
+restoration. Collection pages own their page envelope, totals, pagination, and
+selection; row components emit mutations instead of maintaining shadow copies.
 
 Growing collection endpoints return a common page envelope and perform search,
 filtering, ordering, counting, and slicing in SQL. The browser stores those

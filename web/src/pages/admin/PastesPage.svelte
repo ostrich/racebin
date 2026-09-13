@@ -5,8 +5,9 @@
   import PasteFilters from "../../components/PasteFilters.svelte";
   import PasteRows from "../../components/PasteRows.svelte";
   import { showNotice } from "../../app/notices";
+  import { createPageLoader } from "../../app/pageLoader";
   import { cachedQuery, loadQuery } from "../../app/queryCache";
-  import { holdNavigation } from "../../navigation";
+  import { navigate } from "../../navigation";
   import { appState } from "../../app/state";
   import type { Page, Paste } from "../../types";
 
@@ -52,14 +53,10 @@
         .map((paste) => [paste.owner_id!, paste.owner_username!]) ?? []
     )
   );
-  let loadGeneration = 0;
-  let initialRouteReady: (() => void) | null = holdNavigation();
+  const pageLoader = createPageLoader();
 
   $effect(() => {
     const requestedQuery = new URLSearchParams(query);
-    const generation = ++loadGeneration;
-    const routeReady = initialRouteReady ?? holdNavigation();
-    initialRouteReady = null;
     loading = true;
     const requestedPastePath = pastePath(requestedQuery);
     const cachedPage = cachedQuery<Page<Paste>>(requestedPastePath);
@@ -68,38 +65,45 @@
       appliedQuery = requestedQuery;
       error = "";
     }
-    void loadQuery(requestedPastePath, () =>
-      listAdminPastes(new URLSearchParams(requestedPastePath.split("?")[1]))
-    )
-      .then((result) => {
-        if (generation !== loadGeneration) return;
-        page = result;
-        appliedQuery = requestedQuery;
-        error = "";
-      })
-      .catch((reason) => {
-        if (generation !== loadGeneration) return;
-        const message = reason instanceof Error ? reason.message : "Unable to load pastes";
-        if (!page) error = message;
-        showNotice(message, "error");
-      })
-      .finally(() => {
-        if (generation === loadGeneration) loading = false;
-        routeReady();
-      });
-    return () => {
-      if (generation === loadGeneration) loadGeneration += 1;
-      routeReady();
-    };
+    return pageLoader.load(
+      () =>
+        loadQuery(requestedPastePath, () =>
+          listAdminPastes(new URLSearchParams(requestedPastePath.split("?")[1]))
+        ),
+      {
+        success: (result) => {
+          page = result;
+          appliedQuery = requestedQuery;
+          error = "";
+        },
+        failure: (reason) => {
+          const message = reason instanceof Error ? reason.message : "Unable to load pastes";
+          if (!page) error = message;
+          showNotice(message, "error");
+        },
+        settled: () => {
+          loading = false;
+        }
+      }
+    );
   });
 
   function pasteRemoved(paste: Paste): void {
-    if (page)
-      page = {
-        ...page,
-        items: page.items.filter((candidate) => candidate.id !== paste.id),
-        total_items: page.total_items - 1
-      };
+    if (!page) return;
+    const totalItems = Math.max(0, page.total_items - 1);
+    const totalPages = Math.max(1, Math.ceil(totalItems / page.page_size));
+    page = {
+      ...page,
+      items: page.items.filter((candidate) => candidate.id !== paste.id),
+      total_items: totalItems,
+      total_pages: totalPages
+    };
+    if (page.page > totalPages) {
+      const params = new URLSearchParams(appliedQuery);
+      if (totalPages > 1) params.set("page", String(totalPages));
+      else params.delete("page");
+      void navigate(`/admin/pastes${params.size ? `?${params}` : ""}`);
+    }
   }
 </script>
 

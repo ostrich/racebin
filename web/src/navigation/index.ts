@@ -15,3 +15,4 @@ export {
 } from "./runtime";
 export { parseLocation, parseRoute, routeAccess, routeTitle } from "./routes";
 export type { Route, RouteLocation } from "./routes";
+export type { DirtyFormGuard } from "./guards";

@@ -191,6 +191,8 @@ export async function mockApi(
     delay?: number;
     viewPaste?: typeof paste;
     plainHome?: boolean;
+    publicExplore?: boolean;
+    convertedMarkdown?: string;
     pastePage?: (url: URL) => { items: Array<typeof paste>; delay?: number };
     adminPastePage?: (url: URL) => { items: Array<typeof paste>; delay?: number };
   } = {}
@@ -229,7 +231,11 @@ export async function mockApi(
     }
     if (url.pathname === "/api/v1/session/reauthenticate") return route.fulfill({ status: 204 });
     if (url.pathname === "/api/v1/capabilities") {
-      return json(route, { ...config, plain_home_enabled: options.plainHome ?? false });
+      return json(route, {
+        ...config,
+        plain_home_enabled: options.plainHome ?? false,
+        public_explore_enabled: options.publicExplore ?? true
+      });
     }
     if (url.pathname === "/api/v1/languages") return json(route, languages);
     if (url.pathname === "/api/v1/folders") {
@@ -264,7 +270,10 @@ export async function mockApi(
     }
     if (url.pathname.endsWith("/reads")) return json(route, viewPaste);
     if (url.pathname === "/api/v1/pastes/sample-paste/source") return json(route, viewPaste);
-    if (url.pathname === "/api/v1/pastes/sample-paste") return json(route, viewPaste);
+    if (url.pathname === "/api/v1/pastes/sample-paste") {
+      if (route.request().method() === "DELETE") return route.fulfill({ status: 204 });
+      return json(route, viewPaste);
+    }
     if (url.pathname === "/api/v1/content-conversions") {
       const body = route.request().postDataJSON() as {
         source: { format: string; content: string };
@@ -273,7 +282,12 @@ export async function mockApi(
       return json(
         route,
         body.target_format === "markdown"
-          ? { body: { format: "markdown", content: body.source.content } }
+          ? {
+              body: {
+                format: "markdown",
+                content: options.convertedMarkdown ?? body.source.content
+              }
+            }
           : { body: { format: "text", content: paste.content, language: "plaintext" } }
       );
     }

@@ -2,16 +2,14 @@
   import { changePassword } from "../api";
   import Link from "../components/Link.svelte";
   import { showNotice } from "../app/notices";
-  import { clearUnsavedChangesGuard, guardUnsavedChanges, navigate } from "../navigation";
+  import { useDirtyForm } from "../app/dirtyForm";
+  import { navigate } from "../navigation";
   import { replaceSession } from "../app/session";
   import { appState } from "../app/state";
 
   let submitting = $state(false);
   let dirty = $state(false);
-  $effect(() => {
-    guardUnsavedChanges(() => dirty);
-    return () => clearUnsavedChangesGuard();
-  });
+  const dirtyGuard = useDirtyForm(() => dirty);
 
   async function submit(event: SubmitEvent): Promise<void> {
     const data = new FormData(event.currentTarget as HTMLFormElement);
@@ -22,9 +20,9 @@
         new_password: String(data.get("new_password") ?? "")
       });
       dirty = false;
-      clearUnsavedChangesGuard();
+      dirtyGuard.disarm();
       replaceSession({ authenticated: false, permissions: [] });
-      await navigate("/login");
+      await navigate("/login", { discardConfirmed: true });
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Password update failed", "error");
     } finally {

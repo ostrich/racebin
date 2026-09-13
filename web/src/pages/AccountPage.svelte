@@ -3,10 +3,12 @@
   import Icon from "../components/Icon.svelte";
   import Link from "../components/Link.svelte";
   import Pagination from "../components/Pagination.svelte";
+  import SecretDialog from "../components/SecretDialog.svelte";
   import { formatDate } from "../format";
   import { confirmAction } from "../app/confirmations";
   import { showNotice } from "../app/notices";
-  import { holdNavigation, navigate } from "../navigation";
+  import { createPageLoader } from "../app/pageLoader";
+  import { navigate } from "../navigation";
   import { appState } from "../app/state";
   import type { ApiKey, Page } from "../types";
 
@@ -25,24 +27,24 @@
   let loading = $state(true);
   let submitting = $state(false);
   let search = $state("");
-  let initialLoadReady: (() => void) | null = holdNavigation();
-  let generation = 0;
+  const pageLoader = createPageLoader();
+  let secretDialog: SecretDialog;
 
-  async function load(source = query): Promise<void> {
-    const current = ++generation;
+  function load(source = query): () => void {
     loading = true;
-    try {
-      const params = new URLSearchParams(source);
-      params.set("page_size", "25");
-      const value = await listApiKeys(params);
-      if (current === generation) page = value;
-    } catch (error) {
-      showNotice(error instanceof Error ? error.message : "Unable to load API keys", "error");
-    } finally {
-      if (current === generation) loading = false;
-      initialLoadReady?.();
-      initialLoadReady = null;
-    }
+    const params = new URLSearchParams(source);
+    params.set("page_size", "25");
+    return pageLoader.load(() => listApiKeys(params), {
+      success: (value) => {
+        page = value;
+      },
+      failure: (error) => {
+        showNotice(error instanceof Error ? error.message : "Unable to load API keys", "error");
+      },
+      settled: () => {
+        loading = false;
+      }
+    });
   }
 
   async function toggle(key: ApiKey, enabled: boolean): Promise<void> {
@@ -89,9 +91,9 @@
         name: String(data.get("name") ?? ""),
         scopes: data.getAll("scopes").map(String)
       });
-      prompt("API key created. Store it now; it will not be shown again.", result.token);
+      secretDialog.open(result.token);
       form.reset();
-      await load();
+      load();
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Unable to create API key", "error");
     } finally {
@@ -118,9 +120,11 @@
 
   $effect(() => {
     search = query.get("search") ?? "";
-    void load(new URLSearchParams(query));
+    return load(new URLSearchParams(query));
   });
 </script>
+
+<SecretDialog bind:this={secretDialog} />
 
 <section class="page-layout">
   <div class="page-heading">

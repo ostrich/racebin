@@ -10,6 +10,19 @@ test("untouched paste form navigates without a discard prompt", async ({ page })
   await expect(page.getByRole("heading", { name: "My pastes" })).toBeVisible();
 });
 
+test("same-location navigation preserves both the form and its unsaved guard", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/");
+  const title = page.getByLabel("Title");
+  await title.fill("Unsaved title");
+  await page.getByRole("link", { name: "Racebin" }).click();
+  await expect(title).toHaveValue("Unsaved title");
+  await expect(page.getByRole("heading", { name: "Discard unsaved changes?" })).toHaveCount(0);
+
+  await page.getByRole("link", { name: "My pastes" }).click();
+  await expect(page.getByRole("heading", { name: "Discard unsaved changes?" })).toBeVisible();
+});
+
 test("switching an empty paste to rich text does not create unsaved content", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");
@@ -188,6 +201,16 @@ test("empty rich-text conversion skips preview and disables language", async ({ 
   await expect(language).toHaveValue("javascript");
 });
 
+test("text conversion previews the converted Markdown", async ({ page }) => {
+  await mockApi(page, true, { convertedMarkdown: paste.content });
+  await page.goto("/pastes/new");
+  await page.getByRole("textbox", { name: "Paste content" }).fill("Original plain text");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  await expect(page.getByRole("heading", { name: "Convert to rich text?" })).toBeVisible();
+  await expect(page.locator(".site-dialog pre")).toContainText(paste.content);
+  await expect(page.locator(".site-dialog pre")).not.toContainText("Original plain text");
+});
+
 test("paste form labels share the same dark-mode color", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await mockApi(page, true);
@@ -238,6 +261,16 @@ test("rich-text formatting uses a single-row icon toolbar and confirms clearing"
   await toolbar.getByRole("button", { name: "Clear all formatting" }).click();
   await expect(page.getByRole("heading", { name: "Clear all formatting?" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
+});
+
+test("rich-text links use the application input dialog", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("markdown");
+  await page.getByRole("button", { name: "Link", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Add link" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("Link URL")).toHaveValue("https://");
 });
 
 test("ordered rich-text lists can be submitted", async ({ page }) => {
