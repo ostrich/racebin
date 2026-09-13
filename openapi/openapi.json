@@ -1449,7 +1449,6 @@
             "description": "Schema-only representation of the atomic multipart create request.",
             "properties": {
               "content": {
-                "minLength": 1,
                 "type": "string"
               },
               "file": {
@@ -1539,7 +1538,6 @@
             "description": "Schema-only representation of the atomic multipart create request.",
             "properties": {
               "content": {
-                "minLength": 1,
                 "type": "string"
               },
               "expires_at": {
@@ -1636,7 +1634,6 @@
             "description": "Schema-only representation of the atomic multipart create request.",
             "properties": {
               "content": {
-                "minLength": 1,
                 "type": "string"
               },
               "expires_in": {

@@ -381,6 +381,11 @@ fn generated_client_schemas_preserve_binary_and_multipart_semantics() {
         let requires_content = required.iter().any(|name| name == "content");
         let requires_file = required.iter().any(|name| name == "file");
         assert_ne!(requires_content, requires_file);
+        if requires_content {
+            assert_eq!(variant["properties"]["content"]["minLength"], 1);
+        } else {
+            assert!(variant["properties"]["content"].get("minLength").is_none());
+        }
         content_only += usize::from(requires_content);
         file_only += usize::from(requires_file);
     }

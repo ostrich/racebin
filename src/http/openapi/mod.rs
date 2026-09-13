@@ -245,9 +245,6 @@ fn refine_component_schemas(openapi: &mut utoipa::openapi::OpenApi) {
         schema
             .required
             .retain(|name| name != "content" && name != "file");
-        if let Some(RefOr::T(Schema::Object(content))) = schema.properties.get_mut("content") {
-            content.min_length = Some(1);
-        }
         let mut expiration_variants = Vec::new();
         let mut neither = schema.clone();
         neither.properties.remove("expires_at");
@@ -266,6 +263,10 @@ fn refine_component_schemas(openapi: &mut utoipa::openapi::OpenApi) {
         for expiration in expiration_variants {
             let mut content = expiration.clone();
             content.required.push("content".into());
+            if let Some(RefOr::T(Schema::Object(property))) = content.properties.get_mut("content")
+            {
+                property.min_length = Some(1);
+            }
             variants.push(RefOr::T(Schema::Object(content)));
             let mut file = expiration;
             file.required.push("file".into());
