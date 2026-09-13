@@ -675,6 +675,9 @@ pub(super) async fn backend_contract(repo: Database) {
     std::fs::create_dir_all(&cleanup_directory).unwrap();
     std::fs::write(cleanup_directory.join("kept-storage"), b"kept").unwrap();
     std::fs::write(cleanup_directory.join("crashed-upload"), b"orphan").unwrap();
+    let fresh_orphan_directory = repo.data_dir.join("attachments").join("fresh-orphan");
+    std::fs::create_dir_all(&fresh_orphan_directory).unwrap();
+    std::fs::write(fresh_orphan_directory.join("uncommitted"), b"uploading").unwrap();
 
     let orphaned = services
         .create_paste(
@@ -728,15 +731,15 @@ pub(super) async fn backend_contract(repo: Database) {
     .execute(repo.pool())
     .await
     .unwrap();
-    assert!(
-        repo.purge_expired(racebin::time::unix_timestamp())
-            .await
-            .unwrap()
-            >= 1
-    );
+    let cleanup_now = racebin::time::unix_timestamp();
+    assert!(repo.purge_expired(cleanup_now).await.unwrap() >= 1);
     assert!(!expiration_dir.exists());
     assert!(cleanup_directory.join("kept-storage").exists());
+    assert!(cleanup_directory.join("crashed-upload").exists());
+    assert!(fresh_orphan_directory.exists());
+    repo.purge_expired(cleanup_now + 3601).await.unwrap();
     assert!(!cleanup_directory.join("crashed-upload").exists());
+    assert!(!fresh_orphan_directory.exists());
     let expired_records: i64 = sqlx::query_scalar(
         "SELECT (SELECT count(*) FROM sessions WHERE token_hash='expired-session') +
                 (SELECT count(*) FROM invitations WHERE token_hash='expired-invitation') +

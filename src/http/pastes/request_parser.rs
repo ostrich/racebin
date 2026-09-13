@@ -277,7 +277,14 @@ async fn remove_unreferenced_attachment_files(
             continue;
         };
         if !name.starts_with('.') && !referenced.contains(name) {
-            let _ = tokio::fs::remove_file(entry.path()).await;
+            let stale = crate::attachment_storage::old_enough_for_cleanup(
+                &entry.path(),
+                crate::time::unix_timestamp(),
+            )
+            .await;
+            if stale {
+                let _ = tokio::fs::remove_file(entry.path()).await;
+            }
         }
     }
 }

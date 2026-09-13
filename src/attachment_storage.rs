@@ -2,6 +2,21 @@ use std::path::{Component, Path, PathBuf};
 
 use uuid::Uuid;
 
+pub(crate) const CLEANUP_GRACE_SECONDS: i64 = 3600;
+
+pub(crate) async fn old_enough_for_cleanup(path: &Path, now: i64) -> bool {
+    let Ok(modified) = tokio::fs::metadata(path)
+        .await
+        .and_then(|value| value.modified())
+    else {
+        return false;
+    };
+    let Ok(modified) = modified.duration_since(std::time::UNIX_EPOCH) else {
+        return false;
+    };
+    modified.as_secs() as i64 <= now.saturating_sub(CLEANUP_GRACE_SECONDS)
+}
+
 pub(crate) struct StagedUpload {
     pub(crate) path: PathBuf,
     pub(crate) filename: String,

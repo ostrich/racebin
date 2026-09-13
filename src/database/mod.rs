@@ -1,6 +1,5 @@
 use sqlx::any::{install_default_drivers, AnyPoolOptions};
 use sqlx::AnyPool;
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 use tokio::sync::{Mutex, MutexGuard};
@@ -209,12 +208,6 @@ impl Database {
             let _ =
                 tokio::fs::remove_dir_all(self.data_dir.join("attachments").join(paste_id)).await;
         }
-        let valid: HashSet<String> = sqlx::query_scalar("SELECT id FROM pastes")
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|e| e.to_string())?
-            .into_iter()
-            .collect();
         let attachment_root = self.data_dir.join("attachments");
         if let Ok(mut entries) = tokio::fs::read_dir(attachment_root).await {
             while let Ok(Some(entry)) = entries.next_entry().await {
@@ -222,26 +215,30 @@ impl Database {
                 if name == ".staging" {
                     if let Ok(mut staged) = tokio::fs::read_dir(entry.path()).await {
                         while let Ok(Some(file)) = staged.next_entry().await {
-                            let stale = file
-                                .metadata()
+                            if crate::attachment_storage::old_enough_for_cleanup(&file.path(), now)
                                 .await
-                                .and_then(|metadata| metadata.modified())
-                                .and_then(|modified| {
-                                    modified.elapsed().map_err(std::io::Error::other)
-                                })
-                                .is_ok_and(|age| age.as_secs() >= 3600);
-                            if stale {
+                            {
                                 let _ = tokio::fs::remove_file(file.path()).await;
                             }
                         }
                     }
                     continue;
                 }
-                if entry.file_type().await.is_ok_and(|kind| kind.is_dir()) && !valid.contains(&name)
-                {
-                    let _ = tokio::fs::remove_dir_all(entry.path()).await;
-                } else if valid.contains(&name) {
-                    let referenced: HashSet<String> =
+                if !entry.file_type().await.is_ok_and(|kind| kind.is_dir()) {
+                    continue;
+                }
+                let paste_exists: Option<i64> =
+                    sqlx::query_scalar("SELECT 1 FROM pastes WHERE id=$1")
+                        .bind(&name)
+                        .fetch_optional(&self.pool)
+                        .await
+                        .map_err(|error| error.to_string())?;
+                if paste_exists.is_none() {
+                    if crate::attachment_storage::old_enough_for_cleanup(&entry.path(), now).await {
+                        let _ = tokio::fs::remove_dir_all(entry.path()).await;
+                    }
+                } else {
+                    let referenced: std::collections::HashSet<String> =
                         sqlx::query_scalar("SELECT storage_key FROM attachments WHERE paste_id=$1")
                             .bind(&name)
                             .fetch_all(&self.pool)
@@ -254,6 +251,11 @@ impl Database {
                             let key = file.file_name().to_string_lossy().into_owned();
                             if file.file_type().await.is_ok_and(|kind| kind.is_file())
                                 && !referenced.contains(&key)
+                                && crate::attachment_storage::old_enough_for_cleanup(
+                                    &file.path(),
+                                    now,
+                                )
+                                .await
                             {
                                 let _ = tokio::fs::remove_file(file.path()).await;
                             }

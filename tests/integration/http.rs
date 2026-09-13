@@ -852,7 +852,9 @@ mod tests {
         );
         let recovered: Value = test::read_body_json(recovered).await;
         assert_eq!(recovered["attachments"].as_array().unwrap().len(), 1);
-        assert!(!recovery_directory.join("orphaned-crash-file").exists());
+        // A concurrent upload may have promoted an unreferenced file moments ago. The
+        // scheduled reconciler removes this crash debris only after the cleanup grace.
+        assert!(recovery_directory.join("orphaned-crash-file").exists());
 
         let write_allowed = test::call_service(
             &app,
