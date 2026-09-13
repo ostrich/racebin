@@ -21,7 +21,7 @@ describe("page loader", () => {
   beforeEach(() => releaseNavigation.mockClear());
 
   it("publishes only the latest request", async () => {
-    const loader = createPageLoader();
+    const loader = createPageLoader(() => {});
     const first = deferred<string>();
     const second = deferred<string>();
     const success = vi.fn();
@@ -39,7 +39,7 @@ describe("page loader", () => {
   });
 
   it("suppresses stale errors and settles navigation holds", async () => {
-    const loader = createPageLoader();
+    const loader = createPageLoader(() => {});
     const first = deferred<string>();
     const second = deferred<string>();
     const failure = vi.fn();
@@ -55,7 +55,7 @@ describe("page loader", () => {
   });
 
   it("cancels publication when its owning effect is destroyed", async () => {
-    const loader = createPageLoader();
+    const loader = createPageLoader(() => {});
     const request = deferred<string>();
     const success = vi.fn();
     const cancel = loader.load(() => request.promise, { success, failure: vi.fn() });
@@ -65,6 +65,25 @@ describe("page loader", () => {
     await request.promise;
 
     expect(success).not.toHaveBeenCalled();
+    expect(releaseNavigation).toHaveBeenCalledOnce();
+  });
+
+  it("owns imperative reloads until the component is destroyed", async () => {
+    let destroy = () => {};
+    const loader = createPageLoader((dispose) => {
+      destroy = dispose;
+    });
+    const request = deferred<string>();
+    const success = vi.fn();
+    const failure = vi.fn();
+
+    loader.load(() => request.promise, { success, failure });
+    destroy();
+    request.reject(new Error("late failure"));
+    await request.promise.catch(() => {});
+
+    expect(success).not.toHaveBeenCalled();
+    expect(failure).not.toHaveBeenCalled();
     expect(releaseNavigation).toHaveBeenCalledOnce();
   });
 });

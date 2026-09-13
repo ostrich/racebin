@@ -8,6 +8,7 @@
   import { setSessionInvalidHandler } from "./api";
   import { appState } from "./app/state";
   import RouteOutlet from "./navigation/RouteOutlet.svelte";
+  import { routeComponentKey } from "./navigation/components";
   import {
     locationState,
     navigate,
@@ -67,9 +68,7 @@
     };
   });
 
-  let routeKey = $derived(
-    `${$locationState.route.name}:${"pasteId" in $locationState.route ? $locationState.route.pasteId : ""}:${"userId" in $locationState.route ? $locationState.route.userId : ""}:${"token" in $locationState.route ? $locationState.route.token : ""}`
-  );
+  let routeKey = $derived(routeComponentKey($locationState.route, $locationState.query));
   let minimalShell = $derived(!$appState.ready);
 </script>
 

@@ -23,6 +23,22 @@ test("same-location navigation preserves both the form and its unsaved guard", a
   await expect(page.getByRole("heading", { name: "Discard unsaved changes?" })).toBeVisible();
 });
 
+test("changing the new-paste folder query discards and remounts the confirmed draft", async ({
+  page
+}) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new?folder_id=5");
+  await page.getByLabel("Title").fill("Discard this draft");
+
+  await page.getByRole("link", { name: /New/ }).click();
+  await expect(page.getByRole("heading", { name: "Discard unsaved changes?" })).toBeVisible();
+  await page.getByRole("button", { name: "Discard changes" }).click();
+
+  await expect(page).toHaveURL(/\/pastes\/new$/);
+  await expect(page.getByLabel("Title")).toHaveValue("");
+  await expect(page.getByRole("combobox", { name: "Folder" })).toHaveValue("");
+});
+
 test("switching an empty paste to rich text does not create unsaved content", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes/new");

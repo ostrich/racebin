@@ -89,6 +89,20 @@ test("plain-home login and authenticated homepage retain normal behavior", async
   await expect(page.getByRole("heading", { name: "New paste" })).toBeVisible();
 });
 
+test("logging out from the authenticated home replaces its state-dependent page", async ({
+  page
+}) => {
+  await mockApi(page, true, { plainHome: true });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "New paste" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Log out" }).click();
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { name: "Log in" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "New paste" })).toHaveCount(0);
+});
+
 test("standard home remains coherent when public discovery is disabled", async ({ page }) => {
   let pasteRequests = 0;
   page.on("request", (request) => {

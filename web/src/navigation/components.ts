@@ -1,18 +1,11 @@
 import type { Component } from "svelte";
-import { get } from "svelte/store";
-import { appState } from "../app/state";
 import type { Route, RouteName } from "./routes";
 
 type PageModule = { default: Component<any> };
 type PageLoader = () => Promise<PageModule>;
 
 const loaders: Record<RouteName, PageLoader> = {
-  home: () => {
-    const state = get(appState);
-    if (state.session.user) return import("../pages/PasteFormPage.svelte");
-    if (state.config.plain_home_enabled) return import("../pages/LoginPage.svelte");
-    return import("../pages/HomePage.svelte");
-  },
+  home: () => import("../pages/HomeRoute.svelte"),
   explore: () => import("../pages/PasteListPage.svelte"),
   login: () => import("../pages/LoginPage.svelte"),
   "new-paste": () => import("../pages/PasteFormPage.svelte"),
@@ -37,6 +30,19 @@ const loaders: Record<RouteName, PageLoader> = {
 
 export function loadRouteComponent(route: Route): Promise<PageModule> {
   return loaders[route.name]();
+}
+
+export function routeComponentKey(route: Route, query: URLSearchParams): string {
+  const parameter =
+    "pasteId" in route
+      ? route.pasteId
+      : "userId" in route
+        ? route.userId
+        : "token" in route
+          ? route.token
+          : "";
+  const queryIdentity = route.name === "new-paste" ? query.toString() : "";
+  return `${route.name}:${parameter}:${queryIdentity}`;
 }
 
 export function routeProps(route: Route, query: URLSearchParams): Record<string, unknown> {
