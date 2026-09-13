@@ -20,6 +20,8 @@ export default defineConfig({
     command: "../scripts/run-real-stack-test-server.sh",
     url: "http://127.0.0.1:4174/readyz",
     reuseExistingServer: false,
-    timeout: 30_000
+    // Includes a clean frontend build, Rust relink, migrations, and Argon2
+    // account bootstrap before the state-based readiness probe can succeed.
+    timeout: 60_000
   }
 });

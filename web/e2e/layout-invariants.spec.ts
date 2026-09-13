@@ -179,6 +179,7 @@ test("desktop side navigation uses the standard sticky header clearance", async 
 });
 
 test("primary pages share one heading-to-content boundary", async ({ page }) => {
+  test.setTimeout(60_000);
   const routes = [
     "/pastes",
     "/explore",

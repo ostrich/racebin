@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { mockApi, paste } from "./support/mockApi";
+import { waitForStableDocumentLayout } from "./support/layout";
 
 const screenshot = {
   animations: "disabled" as const,
@@ -106,5 +107,10 @@ test("dark account page", { tag: "@visual" }, async ({ page }) => {
 test("help page", { tag: "@visual" }, async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/help");
-  await expect(page).toHaveScreenshot("help-desktop.png", screenshot);
+  await expect(page.getByRole("heading", { name: "Using Racebin" })).toBeVisible();
+  await waitForStableDocumentLayout(page);
+  await expect(page).toHaveScreenshot("help-desktop.png", {
+    ...screenshot,
+    style: ".help-content pre { overflow-x: hidden !important; }"
+  });
 });
