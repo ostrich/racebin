@@ -9,6 +9,7 @@
   import { appState } from "./app/state";
   import RouteOutlet from "./navigation/RouteOutlet.svelte";
   import { routeComponentKey } from "./navigation/components";
+  import type { HomeRouteVariant } from "./navigation/components";
   import {
     locationState,
     navigate,
@@ -68,7 +69,16 @@
     };
   });
 
-  let routeKey = $derived(routeComponentKey($locationState.route, $locationState.query));
+  let homeVariant = $derived<HomeRouteVariant>(
+    $appState.session.user
+      ? "authenticated"
+      : $appState.config.plain_home_enabled
+        ? "login"
+        : "public"
+  );
+  let routeKey = $derived(
+    routeComponentKey($locationState.route, $locationState.query, homeVariant)
+  );
   let minimalShell = $derived(!$appState.ready);
 </script>
 
@@ -83,7 +93,7 @@
     <p class="muted">Loading Racebin…</p>
   {:else}
     {#key routeKey}
-      <RouteOutlet route={$locationState.route} query={$locationState.query} />
+      <RouteOutlet route={$locationState.route} query={$locationState.query} {homeVariant} />
     {/key}
   {/if}
 </Shell>

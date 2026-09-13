@@ -3,9 +3,15 @@ import type { Route, RouteName } from "./routes";
 
 type PageModule = { default: Component<any> };
 type PageLoader = () => Promise<PageModule>;
+export type HomeRouteVariant = "public" | "login" | "authenticated";
 
-const loaders: Record<RouteName, PageLoader> = {
-  home: () => import("../pages/HomeRoute.svelte"),
+const homeLoaders: Record<HomeRouteVariant, PageLoader> = {
+  public: () => import("../pages/HomePage.svelte"),
+  login: () => import("../pages/LoginPage.svelte"),
+  authenticated: () => import("../pages/PasteFormPage.svelte")
+};
+
+const loaders: Record<Exclude<RouteName, "home">, PageLoader> = {
   explore: () => import("../pages/PasteListPage.svelte"),
   login: () => import("../pages/LoginPage.svelte"),
   "new-paste": () => import("../pages/PasteFormPage.svelte"),
@@ -28,11 +34,18 @@ const loaders: Record<RouteName, PageLoader> = {
   "not-found": () => import("../pages/NotFoundPage.svelte")
 };
 
-export function loadRouteComponent(route: Route): Promise<PageModule> {
-  return loaders[route.name]();
+export function loadRouteComponent(
+  route: Route,
+  homeVariant: HomeRouteVariant
+): Promise<PageModule> {
+  return route.name === "home" ? homeLoaders[homeVariant]() : loaders[route.name]();
 }
 
-export function routeComponentKey(route: Route, query: URLSearchParams): string {
+export function routeComponentKey(
+  route: Route,
+  query: URLSearchParams,
+  homeVariant: HomeRouteVariant = "public"
+): string {
   const parameter =
     "pasteId" in route
       ? route.pasteId
@@ -42,7 +55,8 @@ export function routeComponentKey(route: Route, query: URLSearchParams): string 
           ? route.token
           : "";
   const queryIdentity = route.name === "new-paste" ? query.toString() : "";
-  return `${route.name}:${parameter}:${queryIdentity}`;
+  const stateIdentity = route.name === "home" ? homeVariant : "";
+  return `${route.name}:${parameter}:${queryIdentity}:${stateIdentity}`;
 }
 
 export function routeProps(route: Route, query: URLSearchParams): Record<string, unknown> {

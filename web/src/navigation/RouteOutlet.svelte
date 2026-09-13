@@ -2,15 +2,22 @@
   import { untrack } from "svelte";
   import { holdNavigation } from "./runtime";
   import { loadRouteComponent, routeProps } from "./components";
+  import type { HomeRouteVariant } from "./components";
   import RouteReady from "./RouteReady.svelte";
   import type { Route } from "./routes";
 
-  let { route, query }: { route: Route; query: URLSearchParams } = $props();
+  let {
+    route,
+    query,
+    homeVariant
+  }: { route: Route; query: URLSearchParams; homeVariant: HomeRouteVariant } = $props();
   const release = holdNavigation();
-  const component = untrack(() => loadRouteComponent(route)).catch((error: unknown) => {
-    release();
-    throw error;
-  });
+  const component = untrack(() => loadRouteComponent(route, homeVariant)).catch(
+    (error: unknown) => {
+      release();
+      throw error;
+    }
+  );
 </script>
 
 {#await component}

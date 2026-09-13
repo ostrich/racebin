@@ -13,4 +13,10 @@ describe("route component identity", () => {
       routeComponentKey({ name: "my-pastes" }, new URLSearchParams())
     );
   });
+
+  it("remounts the state-dependent home route when its variant changes", () => {
+    expect(routeComponentKey({ name: "home" }, new URLSearchParams(), "authenticated")).not.toBe(
+      routeComponentKey({ name: "home" }, new URLSearchParams(), "login")
+    );
+  });
 });
