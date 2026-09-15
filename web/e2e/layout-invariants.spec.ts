@@ -473,3 +473,27 @@ test("paste editor uses the page width without stretching metadata controls", as
   }));
   expect(readLimitWidths).toEqual({ field: 120, input: 120 });
 });
+
+test("segmented controls retain standard and intrinsic compact sizes", async ({ page }) => {
+  await page.goto("/pastes");
+  const standard = page.locator(".paste-view-switch");
+  await expect(standard).toBeVisible();
+  await expect(standard).toHaveCSS("height", "40px");
+
+  await page.goto("/pastes/new");
+  await page.locator(".form-grid select").first().selectOption("markdown");
+  const compact = page.locator(".rich-text-mode");
+  await expect(compact).toBeVisible();
+  const geometry = await page
+    .locator(".content-editor-rich, .rich-text-mode, .rich-editor-pane")
+    .evaluateAll(([editor, control, pane]) => ({
+      editorWidth: editor!.getBoundingClientRect().width,
+      controlWidth: control!.getBoundingClientRect().width,
+      controlHeight: control!.getBoundingClientRect().height,
+      controlToEditorGap:
+        pane!.getBoundingClientRect().top - control!.getBoundingClientRect().bottom
+    }));
+  expect(geometry.controlHeight).toBe(30);
+  expect(geometry.controlWidth).toBeLessThan(geometry.editorWidth / 2);
+  expect(geometry.controlToEditorGap).toBe(8);
+});
