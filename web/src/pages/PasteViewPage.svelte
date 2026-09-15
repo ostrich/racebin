@@ -126,7 +126,7 @@
             {/if}
           </div>
           <div
-            class="paste-view-options markdown-view-options segmented-control"
+            class="paste-view-options markdown-view-options segmented-control segmented-control--compact"
             role="group"
             aria-label="Paste representation"
           >

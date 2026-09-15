@@ -116,6 +116,46 @@ select:hover:not(:disabled) {
   gap: 9px;
 }
 
+.segmented-control {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  height: var(--control-height);
+  padding: 3px;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-md);
+  background: var(--color-code-gutter);
+}
+.segmented-control button {
+  min-width: 86px;
+  padding: 4px 11px;
+  border: 0;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  color: var(--color-label);
+  cursor: pointer;
+  font-weight: 650;
+}
+.segmented-control button:hover:not(:disabled, .active, [aria-pressed="true"]) {
+  background: var(--color-surface-subtle);
+}
+.segmented-control button:is(.active, [aria-pressed="true"]) {
+  background: var(--color-surface);
+  color: var(--color-heading);
+  box-shadow: var(--shadow-control);
+}
+.segmented-control--compact {
+  height: 30px;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+}
+.segmented-control--compact button {
+  min-width: 0;
+  padding: 2px 9px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  font-size: 13px;
+}
+
 .site-dialog {
   width: min(680px, calc(100vw - 32px));
   padding: var(--space-5);

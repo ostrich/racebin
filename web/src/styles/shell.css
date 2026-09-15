@@ -1,9 +1,5 @@
 /* Application components. Shared foundations live in styles/. */
 
-.segmented-control button:hover:not(:disabled, .active, [aria-pressed="true"]) {
-  background: var(--color-surface-subtle);
-}
-
 .site-header {
   height: var(--header-height);
   border-bottom: 1px solid var(--color-line);

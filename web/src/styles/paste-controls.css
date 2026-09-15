@@ -526,30 +526,6 @@
   justify-content: flex-end;
   min-height: 18px;
 }
-.rich-text-mode,
-.markdown-view-options {
-  display: flex;
-  gap: 2px;
-}
-.rich-text-mode {
-  padding: 4px;
-  background: var(--color-code-gutter);
-}
-.rich-text-mode button,
-.markdown-view-options button {
-  padding: 4px 10px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-.rich-text-mode button.active,
-.markdown-view-options button.active {
-  border-color: var(--line);
-  background: var(--color-surface);
-  color: inherit;
-}
 .markdown-view-options {
   justify-content: flex-end;
 }

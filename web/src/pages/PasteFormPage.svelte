@@ -403,7 +403,7 @@
             use:trackEditorResize
           >
             <div
-              class="rich-text-mode segmented-control"
+              class="rich-text-mode segmented-control segmented-control--compact"
               role="group"
               aria-label="Rich-text editing mode"
             >
