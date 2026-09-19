@@ -184,9 +184,9 @@
           <section>
             <h3>Organize and manage</h3>
             <p>
-              <Link href="/pastes">My pastes</Link> is your working library. Search its contents and metadata,
-              filter and sort the list, switch between normal and compact views, and use folders to group
-              related items.
+              <Link href="/explore">Explore</Link> and <Link href="/pastes">My pastes</Link> both support
+              searching, filtering, sorting, and normal or compact views. My pastes is your working library,
+              where folders can group related items.
             </p>
             <p>
               Select one or more pastes to move them together. Open a paste to edit or delete it.

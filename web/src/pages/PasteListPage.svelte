@@ -312,8 +312,24 @@
             >{page.total_items} paste{page.total_items === 1 ? "" : "s"}</span
           >
         </div>
-      {:else}
-        <p class="result-count">{page.total_items} paste{page.total_items === 1 ? "" : "s"}</p>
+      {:else if !mine}
+        <div class="paste-display-bar">
+          <span class="result-count"
+            >{page.total_items} paste{page.total_items === 1 ? "" : "s"}</span
+          >
+          <div class="paste-view-switch segmented-control" role="group" aria-label="Paste view">
+            <button
+              type="button"
+              aria-pressed={$uiPreferences.pasteListView === "normal"}
+              onclick={() => setPasteListView("normal")}>Normal</button
+            >
+            <button
+              type="button"
+              aria-pressed={$uiPreferences.pasteListView === "compact"}
+              onclick={() => setPasteListView("compact")}>Compact</button
+            >
+          </div>
+        </div>
       {/if}
       <PasteRows
         items={page.items}
@@ -321,7 +337,7 @@
         filterable
         selectable={mine}
         context={mine ? "workspace" : "public"}
-        view={mine ? $uiPreferences.pasteListView : "normal"}
+        view={$uiPreferences.pasteListView}
         bind:selected
         folderNames={mine ? folderNames : undefined}
         onremoved={mine ? pasteRemoved : undefined}

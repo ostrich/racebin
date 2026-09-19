@@ -305,6 +305,15 @@ test("compact view is persistent and preserves paste selection", async ({ page }
   await page.reload();
   await expect(compact).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".paste-list")).toHaveClass(/compact/);
+
+  await page.goto("/explore");
+  await expect(page.getByRole("button", { name: "Compact", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  );
+  await expect(page.locator(".paste-list")).toHaveClass(/compact/);
+  await page.getByRole("button", { name: "Normal", exact: true }).click();
+  await expect(page.locator(".paste-list")).not.toHaveClass(/compact/);
 });
 
 test("compact view remains usable without horizontal overflow on mobile", async ({ page }) => {

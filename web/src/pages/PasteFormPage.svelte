@@ -54,22 +54,95 @@
   let submitting = $state(false);
   let switching = $state(false);
   let editorHeight = $state(410);
+  let editorHeightCustomized = false;
   let baseline = $state("");
   let initialized = $state(false);
   const dirtyGuard = useDirtyForm(() => dirty);
   const initialLoadReady = holdNavigation();
   const drafts = new Map<ContentKind, string>();
+  const minimumEditorHeight = 240;
+  const minimumAutomaticEditorHeight = 340;
+  const defaultPageBottomBuffer = 80;
   let canOrganize = $derived(!paste || paste.owner_id === $appState.session.user?.id);
 
   function trackEditorResize(node: HTMLElement): { destroy: () => void } {
+    const form = node.closest("form");
+    let pointerStartHeight: number | null = null;
+    let fitFrame = 0;
+    let expectedAutomaticHeight: number | null = null;
+
+    function fitToViewport(): void {
+      if (editorHeightCustomized) return;
+      if (!form) return;
+      const editorBounds = node.getBoundingClientRect();
+      const formBounds = form.getBoundingClientRect();
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const viewportBuffer =
+        Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--page-padding-bottom")
+        ) || defaultPageBottomBuffer;
+      const remainingFormHeight = formBounds.bottom - editorBounds.bottom;
+      if (remainingFormHeight < 0) {
+        scheduleFit();
+        return;
+      }
+      expectedAutomaticHeight = Math.max(
+        minimumAutomaticEditorHeight,
+        viewportHeight - editorBounds.top - remainingFormHeight - viewportBuffer
+      );
+      editorHeight = expectedAutomaticHeight;
+    }
+
+    function scheduleFit(): void {
+      cancelAnimationFrame(fitFrame);
+      fitFrame = requestAnimationFrame(fitToViewport);
+    }
+
     const observer = new ResizeObserver(() => {
       const resizedHeight = Number.parseFloat(node.style.height);
+      if (
+        expectedAutomaticHeight !== null &&
+        Math.abs(resizedHeight - expectedAutomaticHeight) <= 1
+      ) {
+        expectedAutomaticHeight = null;
+        return;
+      }
       if (Number.isFinite(resizedHeight) && Math.abs(resizedHeight - editorHeight) > 1) {
-        editorHeight = Math.max(240, Math.round(resizedHeight));
+        editorHeightCustomized = true;
+        editorHeight = Math.max(minimumEditorHeight, Math.round(resizedHeight));
       }
     });
+    const layoutObserver = new ResizeObserver(scheduleFit);
+    const beginResize = (): void => {
+      pointerStartHeight = node.getBoundingClientRect().height;
+    };
+    const finishResize = (): void => {
+      if (
+        pointerStartHeight !== null &&
+        Math.abs(node.getBoundingClientRect().height - pointerStartHeight) > 1
+      ) {
+        editorHeightCustomized = true;
+      }
+      pointerStartHeight = null;
+    };
     observer.observe(node);
-    return { destroy: () => observer.disconnect() };
+    if (form) layoutObserver.observe(form);
+    node.addEventListener("pointerdown", beginResize);
+    window.addEventListener("pointerup", finishResize);
+    window.addEventListener("resize", scheduleFit);
+    window.visualViewport?.addEventListener("resize", scheduleFit);
+    scheduleFit();
+    return {
+      destroy: () => {
+        cancelAnimationFrame(fitFrame);
+        observer.disconnect();
+        layoutObserver.disconnect();
+        node.removeEventListener("pointerdown", beginResize);
+        window.removeEventListener("pointerup", finishResize);
+        window.removeEventListener("resize", scheduleFit);
+        window.visualViewport?.removeEventListener("resize", scheduleFit);
+      }
+    };
   }
 
   function localDateTime(date: Date): string {
@@ -394,14 +467,16 @@
           placeholder="Optional title"
         /></label
       >
-      {#if contentKind === "markdown"}
-        <div class="field content-field">
-          <span>Content</span>
-          <div
-            class="content-editor content-editor-rich"
-            style={`height:${editorHeight}px`}
-            use:trackEditorResize
-          >
+      <div class="field content-field">
+        <span>Content</span>
+        <div
+          class:content-editor-rich={contentKind === "markdown"}
+          class:content-editor-text={contentKind === "text"}
+          class="content-editor"
+          style={`height:${editorHeight}px`}
+          use:trackEditorResize
+        >
+          {#if contentKind === "markdown"}
             <div
               class="rich-text-mode segmented-control segmented-control--compact"
               role="group"
@@ -438,24 +513,15 @@
                 />
               {/if}
             </div>
-          </div>
-        </div>
-      {:else}
-        <div class="field content-field">
-          <span>Content</span>
-          <div
-            class="content-editor content-editor-text"
-            style={`height:${editorHeight}px`}
-            use:trackEditorResize
-          >
+          {:else}
             <CodeEditor
               bind:value={content}
               bind:language
               maxLength={$appState.config.max_content_size_bytes}
             />
-          </div>
+          {/if}
         </div>
-      {/if}
+      </div>
       <div class:without-folder={!canOrganize} class="form-grid">
         <label class="field type-field"
           ><span>Type</span><select value={contentKind} disabled={switching} onchange={changeKind}>
