@@ -115,11 +115,11 @@
       {$notice.message}
     </div>{/if}
   <button
-    class="back-to-top icon-button"
+    class="page-start-control icon-button"
     class:visible={showBackToTop}
     type="button"
-    title="Back to top"
-    aria-label="Back to top"
+    title="Jump to page start"
+    aria-label="Jump to page start"
     aria-hidden={!showBackToTop}
     tabindex={showBackToTop ? 0 : -1}
     onclick={backToTop}

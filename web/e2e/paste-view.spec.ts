@@ -477,7 +477,7 @@ test("wide paste offers synchronized sticky scrolling and aligned wrapped lines"
   expect(Math.abs(lineLayout.firstNumber.top - unwrappedFirstNumber.top)).toBeLessThan(1);
 });
 
-test("long pages offer a reduced-motion-aware back-to-top control", async ({ page }) => {
+test("long pages offer a reduced-motion-aware page-start control", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 1440, height: 600 });
   const content = Array.from({ length: 180 }, (_, index) => `Line ${index + 1}`).join("\n");
@@ -490,7 +490,10 @@ test("long pages offer a reduced-motion-aware back-to-top control", async ({ pag
     .poll(() => page.evaluate(() => document.documentElement.scrollHeight))
     .toBeGreaterThan(2_000);
 
-  const backToTop = page.getByRole("button", { name: "Back to top", includeHidden: true });
+  const backToTop = page.getByRole("button", {
+    name: "Jump to page start",
+    includeHidden: true
+  });
   await expect(backToTop).toBeHidden();
   await page.evaluate(() => window.scrollTo(0, window.innerHeight + 100));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(600);

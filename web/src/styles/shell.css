@@ -38,7 +38,7 @@
 .toast.error {
   background: var(--danger);
 }
-.back-to-top {
+.page-start-control {
   border-color: var(--color-control-border);
   box-shadow: var(--shadow-menu);
   opacity: 0;
@@ -49,19 +49,19 @@
     transform 120ms ease,
     visibility 0s linear 120ms;
 }
-.back-to-top.visible {
+.page-start-control.visible {
   opacity: 1;
   visibility: visible;
   transform: none;
   transition-delay: 0s;
 }
-body:has(dialog[open]) .back-to-top {
+body:has(dialog[open]) .page-start-control {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .back-to-top {
+  .page-start-control {
     transition: none;
   }
 }
