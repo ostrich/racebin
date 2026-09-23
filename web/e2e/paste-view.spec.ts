@@ -476,3 +476,27 @@ test("wide paste offers synchronized sticky scrolling and aligned wrapped lines"
   expect(Math.abs(lineLayout.firstNumber.left - unwrappedFirstNumber.left)).toBeLessThan(1);
   expect(Math.abs(lineLayout.firstNumber.top - unwrappedFirstNumber.top)).toBeLessThan(1);
 });
+
+test("long pages offer a reduced-motion-aware back-to-top control", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1440, height: 600 });
+  const content = Array.from({ length: 180 }, (_, index) => `Line ${index + 1}`).join("\n");
+  await mockApi(page, false, {
+    viewPaste: { ...paste, content, plain_text: content, body: { ...paste.body, content } }
+  });
+  await page.goto("/pastes/sample-paste");
+  await expect(page.getByRole("heading", { name: paste.title })).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollHeight))
+    .toBeGreaterThan(2_000);
+
+  const backToTop = page.getByRole("button", { name: "Back to top", includeHidden: true });
+  await expect(backToTop).toBeHidden();
+  await page.evaluate(() => window.scrollTo(0, window.innerHeight + 100));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(600);
+  await expect(backToTop).toBeVisible();
+
+  await backToTop.click();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await expect(backToTop).toBeHidden();
+});

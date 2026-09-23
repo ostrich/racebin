@@ -329,6 +329,9 @@
   border-radius: 5px;
   overflow: hidden;
   background: var(--color-code-surface);
+  font-family: var(--code-font-family);
+  font-size: var(--code-font-size);
+  line-height: var(--code-line-height);
 }
 .code-editor pre,
 .code-editor textarea {
@@ -338,9 +341,7 @@
   padding: 10px 11px 10px calc(var(--line-number-width) + 16px);
   border: 0;
   border-radius: 0;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: inherit;
-  line-height: 1.55;
+  font: inherit;
   tab-size: 4;
   white-space: pre;
 }
@@ -427,9 +428,7 @@
   overflow: hidden;
   background: var(--color-code-gutter);
   border-right: 1px solid var(--line);
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: inherit;
-  line-height: 1.55;
+  font: inherit;
 }
 .code-editor .hljs,
 .paste-code .hljs {
@@ -448,11 +447,9 @@
   border-radius: 6px;
   background: var(--color-code-surface);
   color: var(--color-code-text);
-  font:
-    14px/1.55 ui-monospace,
-    SFMono-Regular,
-    Consolas,
-    monospace;
+  font-family: var(--code-font-family);
+  font-size: var(--code-font-size);
+  line-height: var(--code-line-height);
 }
 .paste-code-shell {
   position: relative;

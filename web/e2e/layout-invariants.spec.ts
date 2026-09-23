@@ -474,6 +474,33 @@ test("paste editor uses the page width without stretching metadata controls", as
   expect(readLimitWidths).toEqual({ field: 120, input: 120 });
 });
 
+test("editable and read-only code share the same typography", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes/new");
+  const editorTypography = await page
+    .getByRole("textbox", { name: "Paste content" })
+    .evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        family: style.fontFamily,
+        size: style.fontSize,
+        lineHeight: style.lineHeight
+      };
+    });
+
+  await page.goto("/pastes/sample-paste");
+  const viewerTypography = await page.locator(".paste-code .content").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      family: style.fontFamily,
+      size: style.fontSize,
+      lineHeight: style.lineHeight
+    };
+  });
+
+  expect(editorTypography).toEqual(viewerTypography);
+});
+
 test("segmented controls retain standard and intrinsic compact sizes", async ({ page }) => {
   await page.goto("/pastes");
   const standard = page.locator(".paste-view-switch");

@@ -1,4 +1,5 @@
 import type { LucideIcon } from "@lucide/svelte";
+import ArrowUp from "@lucide/svelte/icons/arrow-up";
 import ArrowUpDown from "@lucide/svelte/icons/arrow-up-down";
 import Archive from "@lucide/svelte/icons/archive";
 import Check from "@lucide/svelte/icons/check";
@@ -47,6 +48,7 @@ export const icons = {
   "align-center": TextAlignCenter,
   "align-left": TextAlignStart,
   "align-right": TextAlignEnd,
+  "arrow-up": ArrowUp,
   "arrow-up-down": ArrowUpDown,
   archive: Archive,
   check: Check,

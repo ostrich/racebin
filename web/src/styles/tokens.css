@@ -62,6 +62,9 @@
   --radius-sm: 5px;
   --radius-md: 6px;
   --control-height: 40px;
+  --code-font-family: ui-monospace, "SFMono-Regular", "Consolas", monospace;
+  --code-font-size: 14px;
+  --code-line-height: 1.55;
   --header-height: 64px;
   --page-max-width: 1120px;
   --page-gutter: 24px;

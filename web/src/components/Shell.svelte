@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { isSessionInvalidError, logout as logoutSession } from "../api";
   import { appState } from "../app/state";
   import { replaceSession } from "../app/session";
@@ -38,6 +39,28 @@
     light: { next: "auto", label: "Light theme", icon: "sun" }
   };
   let currentTheme = $derived(themes[$uiPreferences.colorTheme]);
+  let showBackToTop = $state(false);
+
+  function updateBackToTop(): void {
+    showBackToTop =
+      window.scrollY >= window.innerHeight &&
+      document.documentElement.scrollHeight > window.innerHeight;
+  }
+
+  function backToTop(): void {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+  }
+
+  onMount(() => {
+    window.addEventListener("scroll", updateBackToTop, { passive: true });
+    window.addEventListener("resize", updateBackToTop, { passive: true });
+    updateBackToTop();
+    return () => {
+      window.removeEventListener("scroll", updateBackToTop);
+      window.removeEventListener("resize", updateBackToTop);
+    };
+  });
 </script>
 
 <header class="site-header">
@@ -82,12 +105,25 @@
   {/if}
 </header>
 <main>{@render children()}</main>
-<div
-  class="toast"
-  class:show={$notice}
-  class:error={$notice?.variant === "error"}
-  role="status"
-  aria-live="polite"
->
-  {$notice?.message ?? ""}
+<div class="fixed-utilities">
+  {#if $notice}<div
+      class="toast show"
+      class:error={$notice.variant === "error"}
+      role="status"
+      aria-live="polite"
+    >
+      {$notice.message}
+    </div>{/if}
+  <button
+    class="back-to-top icon-button"
+    class:visible={showBackToTop}
+    type="button"
+    title="Back to top"
+    aria-label="Back to top"
+    aria-hidden={!showBackToTop}
+    tabindex={showBackToTop ? 0 : -1}
+    onclick={backToTop}
+  >
+    <Icon name="arrow-up" />
+  </button>
 </div>
