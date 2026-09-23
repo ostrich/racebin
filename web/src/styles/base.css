@@ -78,6 +78,6 @@ main {
     font-size: 34px;
   }
   main {
-    padding-bottom: 80px;
+    padding-bottom: var(--page-padding-bottom);
   }
 }

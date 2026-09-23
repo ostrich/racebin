@@ -66,7 +66,7 @@
   --page-max-width: 1120px;
   --page-gutter: 24px;
   --page-padding-top: 42px;
-  --page-padding-bottom: 80px;
+  --page-padding-bottom: var(--page-padding-top);
   --sticky-page-top: calc(var(--header-height) + var(--space-4));
   --z-header: 5;
   --z-menu: 10;
@@ -133,5 +133,6 @@
   :root {
     --page-gutter: 15px;
     --page-padding-top: 28px;
+    --page-padding-bottom: 80px;
   }
 }

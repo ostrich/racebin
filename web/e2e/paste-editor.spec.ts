@@ -195,37 +195,41 @@ test("paste editors fill available viewport space without displacing form contro
   await expect(page.locator(".editor > form > .actions")).toBeVisible();
 
   const geometry = async () =>
-    page.locator(".content-editor, .editor > form > .actions").evaluateAll(([editor, actions]) => ({
-      editorHeight: editor!.getBoundingClientRect().height,
-      actionsBottom: actions!.getBoundingClientRect().bottom,
-      viewportHeight: window.visualViewport?.height ?? window.innerHeight
-    }));
+    page
+      .locator(".site-header, .editor .eyebrow, .content-editor, .editor > form > .actions")
+      .evaluateAll(([header, eyebrow, editor, actions]) => ({
+        editorHeight: editor!.getBoundingClientRect().height,
+        topGap: eyebrow!.getBoundingClientRect().top - header!.getBoundingClientRect().bottom,
+        bottomGap:
+          (window.visualViewport?.height ?? window.innerHeight) -
+          actions!.getBoundingClientRect().bottom
+      }));
 
   await expect.poll(async () => (await geometry()).editorHeight).toBeGreaterThan(410);
   const text = await geometry();
-  expect(text.viewportHeight - text.actionsBottom).toBe(80);
+  expect(text.bottomGap).toBe(text.topGap);
 
   await page.setViewportSize({ width: 1440, height: 1400 });
   await expect
     .poll(async () => (await geometry()).editorHeight)
     .toBeCloseTo(text.editorHeight + 200, 0);
   const expanded = await geometry();
-  expect(expanded.viewportHeight - expanded.actionsBottom).toBe(80);
+  expect(expanded.bottomGap).toBe(expanded.topGap);
 
   await page.locator(".form-grid select").first().selectOption("markdown");
   await expect(page.locator(".rich-text-editor")).toBeVisible();
   const rich = await geometry();
   expect(rich.editorHeight).toBe(expanded.editorHeight);
-  expect(rich.viewportHeight - rich.actionsBottom).toBe(80);
+  expect(rich.bottomGap).toBe(rich.topGap);
 
   await page.goto("/pastes/sample-paste/edit");
   await expect(page.getByRole("heading", { name: "JavaScript example" })).toBeVisible();
   await expect
     .poll(async () => {
       const edit = await geometry();
-      return edit.viewportHeight - edit.actionsBottom;
+      return edit.bottomGap - edit.topGap;
     })
-    .toBe(80);
+    .toBe(0);
 });
 
 test("empty rich-text conversion skips preview and disables language", async ({ page }) => {

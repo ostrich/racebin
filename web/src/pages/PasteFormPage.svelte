@@ -62,7 +62,7 @@
   const drafts = new Map<ContentKind, string>();
   const minimumEditorHeight = 240;
   const minimumAutomaticEditorHeight = 340;
-  const defaultPageBottomBuffer = 80;
+  const defaultPageBottomBuffer = 42;
   let canOrganize = $derived(!paste || paste.owner_id === $appState.session.user?.id);
 
   function trackEditorResize(node: HTMLElement): { destroy: () => void } {
