@@ -174,6 +174,25 @@ test("Markdown pastes default to rendered output and expose canonical source", a
   await expect(page.locator(".paste-print-code")).toBeVisible();
 });
 
+test("rendered Markdown highlights fenced code with a declared language", async ({ page }) => {
+  await mockApi(page, false, {
+    viewPaste: {
+      ...paste,
+      format: "markdown",
+      language: "plaintext",
+      content: "```js\nconst answer = 42;\n```",
+      plain_text: "const answer = 42;",
+      rendered_html: '<pre><code class="language-js">const answer = 42;\n</code></pre>'
+    }
+  });
+
+  await page.goto("/pastes/sample-paste");
+  const code = page.locator(".rich-text-viewer pre > code");
+  await expect(code).toHaveClass(/hljs/);
+  await expect(code.locator(".hljs-keyword")).toHaveText("const");
+  await expect(code.locator(".hljs-number")).toHaveText("42");
+});
+
 test("Markdown representation changes never render an empty transition frame", async ({ page }) => {
   await mockApi(page, false, {
     viewPaste: {
