@@ -501,6 +501,84 @@ pub(super) async fn backend_contract(repo: Database) {
     assert_eq!(literal_wildcard_search.items.len(), 1);
     assert_eq!(literal_wildcard_search.items[0].id, rich.id);
 
+    let oldest_created = services
+        .create_paste(&owner, &paste_input("sorting fixture oldest", "public"))
+        .await
+        .unwrap();
+    let middle_created = services
+        .create_paste(&owner, &paste_input("sorting fixture middle", "public"))
+        .await
+        .unwrap();
+    let newest_created = services
+        .create_paste(&owner, &paste_input("sorting fixture newest", "public"))
+        .await
+        .unwrap();
+    for (id, created_at, modified_at) in [
+        (&oldest_created.id, 100_i64, Some(500_i64)),
+        (&middle_created.id, 200_i64, None),
+        (&newest_created.id, 300_i64, Some(350_i64)),
+    ] {
+        sqlx::query(
+            "UPDATE pastes SET created_at=$2,updated_at=COALESCE($3,$2),modified_at=$3 WHERE id=$1",
+        )
+        .bind(id)
+        .bind(created_at)
+        .bind(modified_at)
+        .execute(repo.pool())
+        .await
+        .unwrap();
+    }
+    let sorted_by_creation = services
+        .list_pastes(
+            &anonymous,
+            &PasteQuery {
+                search: Some("sorting fixture".into()),
+                sort: Some("created".into()),
+                direction: Some("desc".into()),
+                ..PasteQuery::default()
+            },
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        sorted_by_creation
+            .items
+            .iter()
+            .map(|paste| paste.id.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            newest_created.id.as_str(),
+            middle_created.id.as_str(),
+            oldest_created.id.as_str()
+        ]
+    );
+    let sorted_by_modification = services
+        .list_pastes(
+            &anonymous,
+            &PasteQuery {
+                search: Some("sorting fixture".into()),
+                sort: Some("modified".into()),
+                direction: Some("desc".into()),
+                ..PasteQuery::default()
+            },
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        sorted_by_modification
+            .items
+            .iter()
+            .map(|paste| paste.id.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            oldest_created.id.as_str(),
+            newest_created.id.as_str(),
+            middle_created.id.as_str()
+        ]
+    );
+
     for index in 0..35 {
         services
             .create_paste(&owner, &paste_input(&format!("page-{index:02}"), "public"))

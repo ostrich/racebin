@@ -48,11 +48,12 @@ pub(crate) fn validate_paste_query(query: &PasteQuery) -> DomainResult<()> {
     {
         return Err(invalid_query("Read limit must be unlimited or limited"));
     }
-    if query
-        .sort
-        .as_deref()
-        .is_some_and(|value| !matches!(value, "created" | "title" | "reads" | "expires" | "size"))
-    {
+    if query.sort.as_deref().is_some_and(|value| {
+        !matches!(
+            value,
+            "created" | "modified" | "title" | "reads" | "expires" | "size"
+        )
+    }) {
         return Err(invalid_query("Unknown sort field"));
     }
     if query

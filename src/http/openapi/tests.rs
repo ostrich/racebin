@@ -452,7 +452,7 @@ fn list_filters_are_typed_constrained_and_documented() {
     );
     assert_eq!(
         parameter("sort")["schema"]["enum"],
-        serde_json::json!(["created", "title", "reads", "expires", "size"])
+        serde_json::json!(["created", "modified", "title", "reads", "expires", "size"])
     );
     assert_eq!(
         parameter("direction")["schema"]["enum"],

@@ -274,7 +274,7 @@ likewise accept only non-null `enabled` and `role` values.
 
 Pages are one-based. `page` defaults to `1`; `page_size` defaults to `30` and
 must be between `1` and `100`. Results default to `sort=created&direction=desc`.
-Valid sort fields are `created`, `title`, `reads`, `expires`, and `size`, and
+Valid sort fields are `created`, `modified`, `title`, `reads`, `expires`, and `size`, and
 direction is `asc` or `desc`.
 
 `q` performs a case-insensitive search over paste ID, title, content, language,

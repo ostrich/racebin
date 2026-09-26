@@ -1333,7 +1333,7 @@ export interface operations {
                 /** @description Restrict results to `enabled` or `disabled` keys. */
                 status?: string;
                 /** @description Order by `created`, `name`, or `used`. */
-                sort?: "created" | "title" | "reads" | "expires" | "size";
+                sort?: "created" | "modified" | "title" | "reads" | "expires" | "size";
                 /** @description Sort in `asc` or `desc` order. */
                 direction?: "asc" | "desc";
                 /** @description One-based result page. */
@@ -1650,7 +1650,7 @@ export interface operations {
                 /** @description Restrict results to `enabled` or `disabled` keys. */
                 status?: string;
                 /** @description Order by `created`, `name`, `owner`, or `used`. */
-                sort?: "created" | "title" | "reads" | "expires" | "size";
+                sort?: "created" | "modified" | "title" | "reads" | "expires" | "size";
                 /** @description Sort in `asc` or `desc` order. */
                 direction?: "asc" | "desc";
                 /** @description One-based result page. */
@@ -2225,7 +2225,7 @@ export interface operations {
                 /** @description Restrict results according to whether a read limit is configured. */
                 read_limit?: components["schemas"]["ReadLimitFilter"];
                 /** @description Field used to order results. Defaults to `created`. */
-                sort?: "created" | "title" | "reads" | "expires" | "size";
+                sort?: "created" | "modified" | "title" | "reads" | "expires" | "size";
                 /** @description Sort direction. Defaults to `desc`. */
                 direction?: "asc" | "desc";
                 /** @description Restrict results to pastes owned by this positive user ID. */
@@ -2403,7 +2403,7 @@ export interface operations {
                 /** @description Restrict results to `enabled` or `disabled` accounts. */
                 status?: string;
                 /** @description Order by `username`, `created`, `login`, `pastes`, or `storage`. */
-                sort?: "created" | "title" | "reads" | "expires" | "size";
+                sort?: "created" | "modified" | "title" | "reads" | "expires" | "size";
                 /** @description Sort in `asc` or `desc` order. */
                 direction?: "asc" | "desc";
                 /** @description One-based result page. */
@@ -3387,7 +3387,7 @@ export interface operations {
                 /** @description Restrict results according to whether a read limit is configured. */
                 read_limit?: components["schemas"]["ReadLimitFilter"];
                 /** @description Field used to order results. Defaults to `created`. */
-                sort?: "created" | "title" | "reads" | "expires" | "size";
+                sort?: "created" | "modified" | "title" | "reads" | "expires" | "size";
                 /** @description Sort direction. Defaults to `desc`. */
                 direction?: "asc" | "desc";
             };

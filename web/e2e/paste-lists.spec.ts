@@ -62,7 +62,7 @@ test("paste list controls separate search, filters, and sorting", async ({ page 
     await page.goto(path);
     await expect(page.getByLabel("Search")).toBeVisible();
     await expect(page.getByRole("button", { name: /^Filters/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sort: Newest" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sort: Newest created" })).toBeVisible();
     await expect(page.getByLabel("Format")).toHaveCount(0);
 
     await page.getByRole("button", { name: /^Filters/ }).click();
@@ -122,7 +122,7 @@ test("search, filters, and sort preserve unrelated list state", async ({ page })
   await expect(page.getByRole("link", { name: /Format: Text/ })).toBeVisible();
 
   await page.getByRole("button", { name: "Sort: Largest" }).click();
-  await page.getByRole("menuitemradio", { name: "Oldest" }).click();
+  await page.getByRole("menuitemradio", { name: "Oldest created" }).click();
   await expect(page).toHaveURL(/sort=created/);
   await expect(page).toHaveURL(/direction=asc/);
   await expect(page).toHaveURL(/format=text/);
@@ -138,14 +138,33 @@ test("search, filters, and sort preserve unrelated list state", async ({ page })
 test("sort menu supports keyboard selection and dismissal", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/pastes");
-  const sort = page.getByRole("button", { name: "Sort: Newest" });
+  const sort = page.getByRole("button", { name: "Sort: Newest created" });
   await sort.click();
-  await expect(page.getByRole("menuitemradio", { name: "Newest" })).toBeFocused();
+  await expect(page.getByRole("menuitemradio", { name: "Newest created" })).toBeFocused();
   await page.keyboard.press("ArrowDown");
-  await expect(page.getByRole("menuitemradio", { name: "Oldest" })).toBeFocused();
+  await expect(page.getByRole("menuitemradio", { name: "Oldest created" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(sort).toBeFocused();
   await expect(page.getByRole("menu")).toHaveCount(0);
+});
+
+test("paste lists expose modification chronology separately from creation chronology", async ({
+  page
+}) => {
+  await mockApi(page, true, {
+    items: [{ ...paste, modified_at: 1_700_086_400 }]
+  });
+  await page.goto("/pastes");
+
+  await expect(page.locator(".paste-meta")).toContainText("Created Nov 14, 2023");
+  await expect(page.locator(".paste-meta")).toContainText("Modified Nov 15, 2023");
+
+  await page.getByRole("button", { name: "Sort: Newest created" }).click();
+  await page.getByRole("menuitemradio", { name: "Recently modified", exact: true }).click();
+
+  await expect(page).toHaveURL(/sort=modified/);
+  await expect(page).toHaveURL(/direction=desc/);
+  await expect(page.getByRole("button", { name: "Sort: Recently modified" })).toBeVisible();
 });
 
 test("paste checkboxes support range selection and indeterminate select-all", async ({ page }) => {
@@ -342,8 +361,8 @@ test("selection and its range anchor reset with list navigation", async ({ page 
   await mockApi(page, true, { items });
   await page.goto("/pastes");
   await page.getByRole("checkbox", { name: "Select Reset paste 1" }).check();
-  await page.getByRole("button", { name: "Sort: Newest" }).click();
-  await page.getByRole("menuitemradio", { name: "Oldest" }).click();
+  await page.getByRole("button", { name: "Sort: Newest created" }).click();
+  await page.getByRole("menuitemradio", { name: "Oldest created" }).click();
   await expect(page.getByRole("button", { name: "Move", exact: true })).toBeDisabled();
   await page
     .getByRole("checkbox", { name: "Select Reset paste 3" })

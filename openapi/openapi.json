@@ -2380,6 +2380,7 @@
               "default": "created",
               "enum": [
                 "created",
+                "modified",
                 "title",
                 "reads",
                 "expires",
@@ -2876,6 +2877,7 @@
               "default": "created",
               "enum": [
                 "created",
+                "modified",
                 "title",
                 "reads",
                 "expires",
@@ -3903,6 +3905,7 @@
               "default": "created",
               "enum": [
                 "created",
+                "modified",
                 "title",
                 "reads",
                 "expires",
@@ -4184,6 +4187,7 @@
               "default": "created",
               "enum": [
                 "created",
+                "modified",
                 "title",
                 "reads",
                 "expires",
@@ -5739,6 +5743,7 @@
               "default": "created",
               "enum": [
                 "created",
+                "modified",
                 "title",
                 "reads",
                 "expires",

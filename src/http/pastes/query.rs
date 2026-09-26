@@ -84,6 +84,7 @@ pub(crate) enum ReadLimitFilter {
 #[serde(rename_all = "lowercase")]
 pub(crate) enum PasteSort {
     Created,
+    Modified,
     Title,
     Reads,
     Expires,
@@ -117,6 +118,7 @@ filter_as_str!(ReadLimitFilter, {
 });
 filter_as_str!(PasteSort, {
     PasteSort::Created => "created",
+    PasteSort::Modified => "modified",
     PasteSort::Title => "title",
     PasteSort::Reads => "reads",
     PasteSort::Expires => "expires",

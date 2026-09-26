@@ -72,6 +72,7 @@ impl PasteService {
              WHERE size_files.paste_id=pastes.id),0)) AS BIGINT)"
         );
         let order = match query.sort.as_deref().unwrap_or("created") {
+            "modified" => "COALESCE(modified_at,created_at)",
             "title" => "lower(title)",
             "reads" => "read_count",
             "expires" => "expires_at",

@@ -55,7 +55,12 @@
   <span class="meta-detail">{paste.read_count} view{paste.read_count === 1 ? "" : "s"}</span>
   {#if includeDate}
     <time class="meta-detail" datetime={new Date(paste.created_at * 1000).toISOString()}
-      >{formatDate(paste.created_at)}</time
+      >Created {formatDate(paste.created_at)}</time
     >
+    {#if paste.modified_at}
+      <time class="meta-detail" datetime={new Date(paste.modified_at * 1000).toISOString()}
+        >Modified {formatDate(paste.modified_at)}</time
+      >
+    {/if}
   {/if}
 </div>

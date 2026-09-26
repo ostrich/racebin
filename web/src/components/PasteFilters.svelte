@@ -34,8 +34,10 @@
   };
   const filterKeys = Object.keys(labels);
   const sortChoices = [
-    { label: "Newest", sort: "created", direction: "desc", default: true },
-    { label: "Oldest", sort: "created", direction: "asc" },
+    { label: "Newest created", sort: "created", direction: "desc", default: true },
+    { label: "Oldest created", sort: "created", direction: "asc" },
+    { label: "Recently modified", sort: "modified", direction: "desc" },
+    { label: "Least recently modified", sort: "modified", direction: "asc" },
     { label: "Title A–Z", sort: "title", direction: "asc" },
     { label: "Title Z–A", sort: "title", direction: "desc" },
     { label: "Most viewed", sort: "reads", direction: "desc" },
