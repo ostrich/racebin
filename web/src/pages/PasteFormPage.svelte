@@ -279,9 +279,13 @@
     if (source === target) return;
     switching = true;
     try {
-      if (source === "text" && target === "markdown" && !content) {
-        drafts.set(source, content);
-        markdown = "";
+      if (
+        (source === "text" && target === "markdown" && !content) ||
+        (source === "markdown" && target === "text" && !markdown)
+      ) {
+        drafts.set(source, source === "markdown" ? markdown : content);
+        if (target === "markdown") markdown = "";
+        else content = "";
         contentKind = target;
         return;
       }

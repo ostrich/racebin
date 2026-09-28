@@ -247,8 +247,14 @@ test("paste editors fill available viewport space without displacing form contro
     .toBe(0);
 });
 
-test("empty rich-text conversion skips preview and disables language", async ({ page }) => {
+test("empty type changes skip conversion in both directions", async ({ page }) => {
   await mockApi(page, true);
+  const conversions: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/pastes/convert")) {
+      conversions.push(request.url());
+    }
+  });
   await page.goto("/pastes/new");
   const language = page.getByRole("combobox", { name: /Language/ });
   await language.click();
@@ -274,9 +280,11 @@ test("empty rich-text conversion skips preview and disables language", async ({ 
   expect(richTextEditorHeight).toBe(textEditorHeight);
   expect(richTextControlsTop).toBe(textControlsTop);
   await page.locator(".form-grid select").first().selectOption("text");
-  await page.getByRole("button", { name: "Convert" }).click();
+  await expect(page.getByRole("heading", { name: /Convert to/ })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Paste content" })).toBeVisible();
   await expect(language).toBeEnabled();
   await expect(language).toHaveValue("javascript");
+  expect(conversions).toEqual([]);
 });
 
 test("text conversion previews the converted Markdown", async ({ page }) => {
