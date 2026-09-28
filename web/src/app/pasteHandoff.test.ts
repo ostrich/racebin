@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { paste } from "../../e2e/support/mockApi";
-import { pasteFromWire } from "../api/normalize";
+import type { Paste } from "../types";
 import { stagePasteHandoff, takePasteHandoff } from "./pasteHandoff";
 
-const resource = pasteFromWire(paste);
+const resource: Paste = {
+  ...paste,
+  source_url: paste.source_url ?? undefined,
+  visibility: "unlisted",
+  created_at: Date.parse(paste.created_at) / 1000,
+  updated_at: Date.parse(paste.updated_at) / 1000
+};
 
 describe("paste navigation handoff", () => {
   it("transfers an authoritative mutation result exactly once", () => {
