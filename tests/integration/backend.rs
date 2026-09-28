@@ -529,7 +529,7 @@ pub(super) async fn backend_contract(repo: Database) {
             &owner,
             &PasteInput {
                 title: Some("bounded excerpt".into()),
-                content: Some("x".repeat(400)),
+                content: Some("x".repeat(700)),
                 ..paste_input("", "public")
             },
         )
@@ -547,7 +547,7 @@ pub(super) async fn backend_contract(repo: Database) {
         .await
         .unwrap();
     assert_eq!(excerpt_page.items[0].id, long_excerpt.id);
-    assert_eq!(excerpt_page.items[0].content.chars().count(), 200);
+    assert_eq!(excerpt_page.items[0].content.chars().count(), 500);
 
     let oldest_created = services
         .create_paste(&owner, &paste_input("sorting fixture oldest", "public"))
