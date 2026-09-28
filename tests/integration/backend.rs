@@ -524,6 +524,31 @@ pub(super) async fn backend_contract(repo: Database) {
     assert_eq!(literal_wildcard_search.items.len(), 1);
     assert_eq!(literal_wildcard_search.items[0].id, rich.id);
 
+    let long_excerpt = services
+        .create_paste(
+            &owner,
+            &PasteInput {
+                title: Some("bounded excerpt".into()),
+                content: Some("x".repeat(400)),
+                ..paste_input("", "public")
+            },
+        )
+        .await
+        .unwrap();
+    let excerpt_page = services
+        .list_pastes(
+            &anonymous,
+            &PasteQuery {
+                search: Some("bounded excerpt".into()),
+                ..PasteQuery::default()
+            },
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(excerpt_page.items[0].id, long_excerpt.id);
+    assert_eq!(excerpt_page.items[0].content.chars().count(), 200);
+
     let oldest_created = services
         .create_paste(&owner, &paste_input("sorting fixture oldest", "public"))
         .await

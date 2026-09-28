@@ -339,8 +339,10 @@ by responsibility:
 - `routes.json` is the canonical browser-route manifest shared with the Rust
   SPA fallback, while `routes.ts` provides typed matching, titles, and access
   metadata;
-- `components.ts` is the exhaustive route-to-component registry and loads
-  route pages on demand;
+- `components.ts` is the exhaustive route-to-component registry, loads route
+  pages on demand, and prefetches an internal destination after intentional
+  pointer or keyboard focus unless the browser requests reduced data use or
+  reports a 2G connection;
 - `guards.ts` owns the active form's unsaved-change guard and the common
   discard prompt used by links, back/forward navigation, logout, and browser
   unloads;
@@ -409,8 +411,9 @@ network access outside the transport. This makes an API change a coordinated
 change to the runtime, contract, generated types, resource client, and tests.
 
 The query cache is kept separate from navigation: it deduplicates and retains
-resource reads, invalidates them after mutations, and lets list pages render
-cached data while revalidating. The shared page loader prevents an older
+resource reads, treats successful reads as fresh for a short bounded interval,
+invalidates them after mutations, and lets list pages render cached data while
+refreshing stale entries. The shared page loader prevents an older
 response or error from replacing a newer query, while navigation readiness
 determines only when the new page is structurally ready for focus and scroll
 restoration. Collection pages own their page envelope, totals, pagination, and
@@ -429,7 +432,9 @@ Notable browser-side technologies are:
 
 - **Tiptap/ProseMirror** for structured rich-text editing;
 - **Comrak** for server-side CommonMark/GFM validation and rendering;
-- **Highlight.js** for syntax highlighting and language detection;
+- **Highlight.js** for syntax highlighting and language detection, loaded
+  separately from the lightweight language catalog only when highlighting is
+  requested;
 - **Inter 4.1** as a bundled variable font for consistent layout across hosts;
 - **Vite** for bundling and code splitting;
 - **Vitest** with jsdom for unit and component tests; and
@@ -498,6 +503,11 @@ content type, and generates Rust source containing `include_bytes!` entries.
 The SPA entry document is included directly by `src/http/assets.rs`. The
 resulting executable contains the HTML, CSS, JavaScript, and lazy-loaded
 chunks needed by the browser.
+
+Vite content-hashes executable, stylesheet, font, and lazy-chunk names. The
+server gives those immutable assets long-lived cache headers, keeps the SPA
+entry uncached so deployments are discovered promptly, and compresses
+compressible HTTP responses according to the client's accepted encodings.
 
 This provides a single deployable binary and prevents runtime asset-version
 mismatches. The tradeoff is that every frontend change requires rebuilding

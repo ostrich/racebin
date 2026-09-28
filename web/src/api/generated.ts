@@ -575,7 +575,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Consumes a permitted read and returns JSON by default. A browser-session owner reading their own paste does not increment its read count or consume its read limit. Clients may instead negotiate text/plain, or text/html for rich-text pastes. */
+        /** @description Consumes a permitted read and returns JSON by default. An authorized owner or paste manager does not increment the read count or consume the read limit. Clients may instead negotiate text/plain, or text/html for rich-text pastes. */
         post: operations["read_paste"];
         delete?: never;
         options?: never;

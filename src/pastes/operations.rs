@@ -145,7 +145,7 @@ impl PasteService {
         .await
         .map_err(DomainError::internal)?;
         let items = sqlx::query_as::<_, Paste>(sqlx::AssertSqlSafe(format!(
-            "SELECT id,owner_id,folder_id,title,substr(content,1,500) AS content,
+            "SELECT id,owner_id,folder_id,title,substr(content,1,200) AS content,
                     content_kind,language,visibility,created_at,updated_at,modified_at,revision,consumed_at,
                     expires_at,last_read_at,read_count,read_limit,
                     (SELECT count(*) FROM attachments summary_files
