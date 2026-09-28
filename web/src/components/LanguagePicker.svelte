@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { availableLanguageOptions, normalizeLanguage } from "../highlighting";
+  import { availableLanguageOptions, normalizeLanguage } from "../languages";
   import { appState } from "../app/state";
 
   let {

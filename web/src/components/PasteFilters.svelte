@@ -1,6 +1,6 @@
 <script lang="ts">
   import { formatByteSize } from "../format";
-  import { availableLanguageOptions } from "../highlighting";
+  import { availableLanguageOptions } from "../languages";
   import { appState } from "../app/state";
   import { navigate } from "../navigation";
   import Icon from "./Icon.svelte";

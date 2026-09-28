@@ -24,7 +24,7 @@
   import { confirmAction } from "../app/confirmations";
   import { useDirtyForm } from "../app/dirtyForm";
   import { stagePasteHandoff } from "../app/pasteHandoff";
-  import { normalizeLanguage } from "../highlighting";
+  import { normalizeLanguage } from "../languages";
   import { showNotice } from "../app/notices";
   import { holdNavigation, navigate } from "../navigation";
   import { appState } from "../app/state";

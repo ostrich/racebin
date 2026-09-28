@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { highlightedCode, normalizeLanguage } from "../highlighting";
+  import { normalizeLanguage } from "../languages";
 
   let {
     value = $bindable(),
@@ -21,10 +21,20 @@
   let lineNumbers = $derived(Array.from({ length: lineCount }, (_, index) => index + 1).join("\n"));
   let width = $derived(`${Math.max(4, String(lineCount).length + 2)}ch`);
 
+  function escapeCode(code: string): string {
+    return code.replace(
+      /[&<>]/g,
+      (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[character]!
+    );
+  }
+
   async function render(code: string, syntax: string): Promise<void> {
     const current = ++revision;
     const requested = normalizeLanguage(syntax);
-    const result = await highlightedCode(code, syntax);
+    const result =
+      requested === "plaintext" || !requested
+        ? { html: escapeCode(code), language: undefined }
+        : await (await import("../highlighting")).highlightedCode(code, syntax);
     if (current !== revision) return;
     html = `${result.html}\n`;
     if (requested === "auto" && result.language) language = result.language;

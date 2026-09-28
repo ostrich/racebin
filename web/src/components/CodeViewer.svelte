@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import { highlightedCode } from "../highlighting";
+  import { normalizeLanguage } from "../languages";
 
   let {
     code,
@@ -32,6 +32,18 @@
   let count = $derived(code.split("\n").length);
   let lines = $derived(Array.from({ length: count }, (_, index) => index + 1).join("\n"));
   let width = $derived(`${Math.max(4, String(count).length + 2)}ch`);
+
+  async function highlight(code: string, syntax: string): Promise<{ html: string }> {
+    if ((normalizeLanguage(syntax) ?? "plaintext") === "plaintext") {
+      return {
+        html: code.replace(
+          /[&<>]/g,
+          (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[character]!
+        )
+      };
+    }
+    return (await import("../highlighting")).highlightedCode(code, syntax);
+  }
 
   function updateLineOffsets(): void {
     if (!wrap || !gutter || !highlighted) return;
@@ -75,7 +87,7 @@
     const source = code;
     const sourceLanguage = language;
     const results = await Promise.all(
-      source.split("\n").map((line) => highlightedCode(line || " ", sourceLanguage))
+      source.split("\n").map((line) => highlight(line || " ", sourceLanguage))
     );
     if (current !== printRevision || source !== code || sourceLanguage !== language) return;
     printLines = results.map((result) => result.html);
@@ -104,7 +116,7 @@
     const current = ++revision;
     printRevision += 1;
     printLines = [];
-    void highlightedCode(code, language).then((result) => {
+    void highlight(code, language).then((result) => {
       if (current !== revision) return;
       html = result.html;
       void tick().then(() => {

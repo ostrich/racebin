@@ -1,6 +1,5 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { highlightedCode } from "../highlighting";
 
   let { html, onready }: { html: string; onready?: () => void } = $props();
 
@@ -23,6 +22,7 @@
           const language = declaredLanguage(code);
           if (!language) return null;
           try {
+            const { highlightedCode } = await import("../highlighting");
             const result = await highlightedCode(code.textContent ?? "", language);
             return { code, html: result.html };
           } catch {

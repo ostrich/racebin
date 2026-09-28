@@ -19,6 +19,20 @@ describe("query cache", () => {
     expect(loader).toHaveBeenCalledOnce();
   });
 
+  it("reuses a fresh response without another request", async () => {
+    const loader = vi.fn(async () => ({ count: 1 }));
+    await loadQuery("/items", loader);
+    await loadQuery("/items", loader);
+    expect(loader).toHaveBeenCalledOnce();
+  });
+
+  it("refreshes data when its freshness window has elapsed", async () => {
+    const loader = vi.fn(async () => ({ count: 1 }));
+    await loadQuery("/items", loader);
+    await loadQuery("/items", loader, { freshForMs: 0 });
+    expect(loader).toHaveBeenCalledTimes(2);
+  });
+
   it("does not restore an in-flight result after invalidation", async () => {
     let resolveRequest: (value: { count: number }) => void = () => {};
     const pending = loadQuery(

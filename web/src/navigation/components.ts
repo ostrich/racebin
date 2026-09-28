@@ -1,5 +1,5 @@
 import type { Component } from "svelte";
-import type { Route, RouteName } from "./routes";
+import { parseRoute, type Route, type RouteName } from "./routes";
 
 type PageModule = { default: Component<any> };
 type PageLoader = () => Promise<PageModule>;
@@ -34,11 +34,43 @@ const loaders: Record<Exclude<RouteName, "home">, PageLoader> = {
   "not-found": () => import("../pages/NotFoundPage.svelte")
 };
 
+const loaded = new Map<string, Promise<PageModule>>();
+
+function load(key: string, loader: PageLoader): Promise<PageModule> {
+  let request = loaded.get(key);
+  if (!request) {
+    request = loader().catch((error) => {
+      loaded.delete(key);
+      throw error;
+    });
+    loaded.set(key, request);
+  }
+  return request;
+}
+
 export function loadRouteComponent(
   route: Route,
   homeVariant: HomeRouteVariant
 ): Promise<PageModule> {
-  return route.name === "home" ? homeLoaders[homeVariant]() : loaders[route.name]();
+  return route.name === "home"
+    ? load(`home:${homeVariant}`, homeLoaders[homeVariant])
+    : load(route.name, loaders[route.name]);
+}
+
+type NetworkInformation = { saveData?: boolean; effectiveType?: string };
+
+export function routePrefetchAllowed(connection?: NetworkInformation): boolean {
+  return !connection?.saveData && !["slow-2g", "2g"].includes(connection?.effectiveType ?? "");
+}
+
+export function prefetchRoute(href: string): void {
+  const connection = (navigator as Navigator & { connection?: NetworkInformation }).connection;
+  if (!routePrefetchAllowed(connection)) return;
+  const url = new URL(href, location.href);
+  if (url.origin !== location.origin) return;
+  const route = parseRoute(url.pathname);
+  if (route.name === "home" || route.name === "not-found") return;
+  void load(route.name, loaders[route.name]);
 }
 
 export function routeComponentKey(

@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { getInstanceSettings, replaceInstanceSettings, type InstanceSettings } from "../../api";
   import AdminNav from "../../components/AdminNav.svelte";
-  import { availableLanguageOptions } from "../../highlighting";
+  import { availableLanguageOptions } from "../../languages";
   import { holdNavigation } from "../../navigation";
   import { useDirtyForm } from "../../app/dirtyForm";
   import { showNotice } from "../../app/notices";

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { navigate } from "../navigation";
+  import { prefetchRoute } from "../navigation/components";
 
   let {
     href,
@@ -32,4 +33,11 @@
   }
 </script>
 
-<a {href} class={className} onclick={activate} {...attributes}>{@render children()}</a>
+<a
+  {href}
+  class={className}
+  onclick={activate}
+  onpointerenter={() => prefetchRoute(href)}
+  onfocus={() => prefetchRoute(href)}
+  {...attributes}>{@render children()}</a
+>
