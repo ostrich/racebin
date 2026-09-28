@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { deletePaste, getPaste, getPasteSource, pasteQrUrl, readPaste } from "../api";
+  import { deletePaste, pasteQrUrl, readPaste } from "../api";
   import AttachmentList from "../components/AttachmentList.svelte";
   import CodeViewer from "../components/CodeViewer.svelte";
   import Icon from "../components/Icon.svelte";
@@ -11,6 +11,7 @@
   import { showNotice } from "../app/notices";
   import { holdNavigation, navigate } from "../navigation";
   import { appState } from "../app/state";
+  import { takePasteHandoff } from "../app/pasteHandoff";
   import type { Paste } from "../types";
 
   let { pasteId }: { pasteId: string } = $props();
@@ -37,12 +38,13 @@
   );
 
   onMount(() => {
-    void getPaste(pasteId)
-      .then((metadata) =>
-        metadata.source_url
-          ? getPasteSource(pasteId)
-          : readPaste(pasteId, crypto.randomUUID()).then((result) => result.paste)
-      )
+    const handedOff = takePasteHandoff(pasteId);
+    if (handedOff) {
+      paste = handedOff;
+      return;
+    }
+    void readPaste(pasteId, crypto.randomUUID())
+      .then((result) => result.paste)
       .then((result) => {
         paste = result;
       })

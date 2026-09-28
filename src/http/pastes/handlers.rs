@@ -424,7 +424,7 @@ pub(crate) async fn get_paste_raw(
 
 #[utoipa::path(
     post, path = "/pastes/{paste_id}/reads", tag = "pastes",
-    description = "Consumes a permitted read and returns JSON by default. A browser-session owner reading their own paste does not increment its read count or consume its read limit. Clients may instead negotiate text/plain, or text/html for rich-text pastes.",
+    description = "Consumes a permitted read and returns JSON by default. An authorized owner or paste manager does not increment the read count or consume the read limit. Clients may instead negotiate text/plain, or text/html for rich-text pastes.",
     params(("paste_id" = String, Path, description = "Paste ID"),
         ("Idempotency-Key" = Option<String>, Header, description = "Recommended key for safely retrying a consuming read")),
     responses(

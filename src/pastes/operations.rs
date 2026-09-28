@@ -284,7 +284,7 @@ impl PasteService {
                 let Some(mut paste) = load_paste_for_read(&mut tx, principal, id).await? else {
                     return Ok(None);
                 };
-                if principal.is_session_owner(paste.owner_id) {
+                if principal.can_bypass_read_limit(paste.owner_id) {
                     paste = redact_folder(principal, paste, false);
                     tx.commit().await.map_err(DomainError::internal)?;
                     return Ok(Some(PasteRead {
@@ -329,7 +329,7 @@ impl PasteService {
         paste.attachments = load_attachments_from(&mut *tx, &paste.id).await?;
         paste.attachment_count = paste.attachments.len() as i64;
         paste.size_bytes = paste_size(&paste);
-        if principal.is_session_owner(paste.owner_id) {
+        if principal.can_bypass_read_limit(paste.owner_id) {
             tx.commit().await.map_err(DomainError::internal)?;
             return Ok(Some(PasteRead {
                 paste: redact_folder(principal, paste, false),

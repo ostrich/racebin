@@ -71,7 +71,30 @@ pub(super) async fn backend_contract(repo: Database) {
         .unwrap();
     let services = PasteService::new(repo.clone());
     let owner = principal(2, "paste-owner", "user");
+    let administrator = principal(1, "administrator", "admin");
     let anonymous = Principal::Anonymous;
+
+    let mut managed_limited_input = paste_input("managed limited read", "unlisted");
+    managed_limited_input.read_limit = Some(Some(1));
+    let managed_limited = services
+        .create_paste(&owner, &managed_limited_input)
+        .await
+        .unwrap();
+    let managed_read = services
+        .read_paste(&administrator, &managed_limited.id, None)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(managed_read.paste.read_count, 0);
+    assert_eq!(managed_read.grant_token, None);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT read_count FROM pastes WHERE id=$1")
+            .bind(&managed_limited.id)
+            .fetch_one(repo.pool())
+            .await
+            .unwrap(),
+        0
+    );
 
     let attachment_limit_paste = services
         .create_paste(&owner, &paste_input("attachment limit", "private"))

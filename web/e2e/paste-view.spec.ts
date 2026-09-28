@@ -1,6 +1,21 @@
 import { expect, test } from "@playwright/test";
 import { mockApi, paste } from "./support/mockApi";
 
+test("paste view loads content through one API request", async ({ page }) => {
+  await mockApi(page, true);
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.includes("/api/v1/pastes/sample-paste")) {
+      requests.push(`${request.method()} ${url.pathname}`);
+    }
+  });
+
+  await page.goto("/pastes/sample-paste");
+  await expect(page.getByRole("heading", { name: "JavaScript example" })).toBeVisible();
+  expect(requests).toEqual(["POST /api/v1/pastes/sample-paste/reads"]);
+});
+
 test("paste footer shows a distinct modification time only after an edit", async ({ page }) => {
   await mockApi(page, false);
   await page.goto("/pastes/sample-paste");

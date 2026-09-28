@@ -10,6 +10,21 @@ test("untouched paste form navigates without a discard prompt", async ({ page })
   await expect(page.getByRole("heading", { name: "My pastes" })).toBeVisible();
 });
 
+test("created paste is handed directly to the viewer", async ({ page }) => {
+  await mockApi(page, true);
+  const reads: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/reads")) reads.push(request.url());
+  });
+  await page.goto("/pastes/new");
+  await page.getByRole("textbox", { name: "Paste content" }).fill("new content");
+  await page.getByRole("button", { name: "Create paste" }).click();
+
+  await expect(page).toHaveURL(/\/pastes\/sample-paste$/);
+  await expect(page.getByRole("heading", { name: "JavaScript example" })).toBeVisible();
+  expect(reads).toEqual([]);
+});
+
 test("same-location navigation preserves both the form and its unsaved guard", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/");

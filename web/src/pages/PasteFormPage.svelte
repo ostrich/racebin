@@ -23,6 +23,7 @@
   import { pasteDisplayTitle } from "../format";
   import { confirmAction } from "../app/confirmations";
   import { useDirtyForm } from "../app/dirtyForm";
+  import { stagePasteHandoff } from "../app/pasteHandoff";
   import { normalizeLanguage } from "../highlighting";
   import { showNotice } from "../app/notices";
   import { holdNavigation, navigate } from "../navigation";
@@ -407,6 +408,7 @@
       }
       initialized = false;
       dirtyGuard.disarm();
+      if (!pasteId || !selected.length) stagePasteHandoff(created);
       await navigate(`/pastes/${created.id}`, { discardConfirmed: true });
     } catch (reason) {
       showNotice(reason instanceof Error ? reason.message : "Unable to save paste", "error");
