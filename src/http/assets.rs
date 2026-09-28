@@ -11,10 +11,30 @@ pub(super) async fn asset(path: web::Path<String>) -> HttpResponse {
     match embedded_asset(path.as_str()) {
         Some((bytes, content_type)) => HttpResponse::Ok()
             .insert_header((header::CONTENT_TYPE, content_type))
-            .insert_header((header::CACHE_CONTROL, "no-cache"))
+            .insert_header((
+                header::CACHE_CONTROL,
+                if is_fingerprinted(path.as_str()) {
+                    "public, max-age=31536000, immutable"
+                } else {
+                    "public, max-age=3600"
+                },
+            ))
             .body(bytes),
         None => HttpResponse::NotFound().finish(),
     }
+}
+
+fn is_fingerprinted(path: &str) -> bool {
+    let Some((stem, _)) = path.rsplit_once('.') else {
+        return false;
+    };
+    let Some(hash) = stem.rsplit('-').next() else {
+        return false;
+    };
+    hash.len() >= 8
+        && hash
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
 pub(super) async fn spa(request: HttpRequest) -> HttpResponse {
@@ -62,7 +82,9 @@ fn template_matches(template: &str, path: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{embedded_asset, spa_route, EMBEDDED_ASSET_PATHS};
+    use super::{embedded_asset, is_fingerprinted, spa_route, EMBEDDED_ASSET_PATHS};
+    use actix_web::http::header;
+    use actix_web::{middleware, test as awtest, web, App};
 
     #[test]
     fn only_known_spa_routes_are_accepted() {
@@ -86,17 +108,31 @@ mod tests {
 
     #[test]
     fn every_built_frontend_asset_is_embedded() {
-        assert!(EMBEDDED_ASSET_PATHS.contains(&"app.js"));
-        assert!(EMBEDDED_ASSET_PATHS.contains(&"app.css"));
         assert!(EMBEDDED_ASSET_PATHS.contains(&"theme-init.js"));
         assert!(EMBEDDED_ASSET_PATHS.contains(&"favicon-32x32.png"));
         assert!(EMBEDDED_ASSET_PATHS.contains(&"apple-touch-icon.png"));
-        assert!(EMBEDDED_ASSET_PATHS.contains(&"InterVariable.woff2"));
-        assert!(EMBEDDED_ASSET_PATHS.contains(&"InterVariable-Italic.woff2"));
+        assert!(EMBEDDED_ASSET_PATHS
+            .iter()
+            .any(|path| path.starts_with("InterVariable-") && path.ends_with(".woff2")));
+        assert!(EMBEDDED_ASSET_PATHS
+            .iter()
+            .any(|path| path.starts_with("InterVariable-Italic-") && path.ends_with(".woff2")));
         assert!(
             EMBEDDED_ASSET_PATHS
                 .iter()
-                .any(|path| path.ends_with(".js") && *path != "app.js"),
+                .any(|path| path.starts_with("index-") && path.ends_with(".js")),
+            "the frontend entry point should be content-hashed"
+        );
+        assert!(
+            EMBEDDED_ASSET_PATHS
+                .iter()
+                .any(|path| path.ends_with(".css") && is_fingerprinted(path)),
+            "the frontend stylesheet should be content-hashed"
+        );
+        assert!(
+            EMBEDDED_ASSET_PATHS
+                .iter()
+                .any(|path| path.ends_with(".js") && !path.starts_with("index-")),
             "the frontend build should include at least one lazy-loaded JavaScript chunk"
         );
         for path in EMBEDDED_ASSET_PATHS {
@@ -105,5 +141,58 @@ mod tests {
             assert!(!contents.is_empty(), "{path} is empty");
             assert!(!content_type.is_empty(), "{path} has no content type");
         }
+    }
+
+    #[test]
+    fn only_content_hashed_assets_are_immutable() {
+        assert!(is_fingerprinted("app-CV7z6EZ9.js"));
+        assert!(is_fingerprinted("InterVariable-D7YiKFrg.woff2"));
+        assert!(!is_fingerprinted("theme-init.js"));
+        assert!(!is_fingerprinted("favicon-32x32.png"));
+    }
+
+    #[actix_web::test]
+    async fn asset_delivery_is_cacheable_and_compressed() {
+        let hashed_javascript = EMBEDDED_ASSET_PATHS
+            .iter()
+            .copied()
+            .find(|path| path.starts_with("index-") && path.ends_with(".js"))
+            .expect("frontend entry point");
+        let app = awtest::init_service(
+            App::new()
+                .wrap(middleware::Compress::default())
+                .service(web::resource("/assets/{path:.*}").route(web::get().to(super::asset))),
+        )
+        .await;
+        let response = awtest::call_service(
+            &app,
+            awtest::TestRequest::get()
+                .uri(&format!("/assets/{hashed_javascript}"))
+                .insert_header((header::ACCEPT_ENCODING, "gzip"))
+                .to_request(),
+        )
+        .await;
+        assert!(response.status().is_success());
+        assert_eq!(
+            response.headers().get(header::CACHE_CONTROL).unwrap(),
+            "public, max-age=31536000, immutable"
+        );
+        assert_eq!(
+            response.headers().get(header::CONTENT_ENCODING).unwrap(),
+            "gzip"
+        );
+        assert!(response.headers().contains_key(header::VARY));
+
+        let response = awtest::call_service(
+            &app,
+            awtest::TestRequest::get()
+                .uri("/assets/theme-init.js")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(
+            response.headers().get(header::CACHE_CONTROL).unwrap(),
+            "public, max-age=3600"
+        );
     }
 }

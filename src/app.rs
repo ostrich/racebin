@@ -104,6 +104,7 @@ pub async fn run() -> std::io::Result<()> {
                     )),
             )
             .wrap(middleware::NormalizePath::trim())
+            .wrap(middleware::Compress::default())
             .wrap(
                 middleware::Logger::new(ACCESS_LOG_FORMAT)
                     .custom_request_replace("METHOD", |request| request.method().to_string()),
