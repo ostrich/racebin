@@ -11,6 +11,7 @@ export {
   locationState,
   navigate,
   navigationReady,
+  setPageTitle,
   startNavigation
 } from "./runtime";
 export { parseLocation, parseRoute, routeAccess, routeTitle } from "./routes";

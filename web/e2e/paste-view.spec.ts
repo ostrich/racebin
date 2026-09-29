@@ -13,7 +13,16 @@ test("paste view loads content through one API request", async ({ page }) => {
 
   await page.goto("/pastes/sample-paste");
   await expect(page.getByRole("heading", { name: "JavaScript example" })).toBeVisible();
+  await expect(page).toHaveTitle("JavaScript example · Racebin");
   expect(requests).toEqual(["POST /api/v1/pastes/sample-paste/reads"]);
+});
+
+test("paste title falls back for untitled content and resets on navigation", async ({ page }) => {
+  await mockApi(page, true, { viewPaste: { ...paste, title: "" } });
+  await page.goto("/pastes/sample-paste");
+  await expect(page).toHaveTitle("Untitled · Racebin");
+  await page.getByRole("link", { name: "Explore" }).click();
+  await expect(page).toHaveTitle("Explore · Racebin");
 });
 
 test("paste footer shows a distinct modification time only after an edit", async ({ page }) => {

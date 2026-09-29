@@ -9,7 +9,7 @@
   import { formatDate, pasteDisplayTitle, pasteFormatLabel } from "../format";
   import { confirmAction } from "../app/confirmations";
   import { showNotice } from "../app/notices";
-  import { holdNavigation, navigate } from "../navigation";
+  import { holdNavigation, locationState, navigate, setPageTitle } from "../navigation";
   import { appState } from "../app/state";
   import { takePasteHandoff } from "../app/pasteHandoff";
   import type { Paste } from "../types";
@@ -36,6 +36,16 @@
           paste.language)
       : ""
   );
+
+  $effect(() => {
+    if (
+      paste &&
+      $locationState.route.name === "paste" &&
+      $locationState.route.pasteId === pasteId
+    ) {
+      setPageTitle(pasteDisplayTitle(paste));
+    }
+  });
 
   onMount(() => {
     const handedOff = takePasteHandoff(pasteId);

@@ -119,9 +119,13 @@ async function allowedLocation(path: string): Promise<{ path: string; location: 
   throw new Error("Navigation access policy produced a redirect loop");
 }
 
-function updateDocument(location: RouteLocation): void {
+function updateDocument(location: RouteLocation, title = routeTitle(location.route)): void {
   const siteName = options.siteName?.() || "Racebin";
-  document.title = `${routeTitle(location.route)} · ${siteName}`;
+  document.title = `${title} · ${siteName}`;
+}
+
+export function setPageTitle(title: string): void {
+  updateDocument(get(locationState), title);
 }
 
 function focusRoute(): void {
