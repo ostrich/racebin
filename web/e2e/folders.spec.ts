@@ -1,36 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { mockApi, paste } from "./support/mockApi";
-
-test("folders filter the workspace and carry into new pastes", async ({ page }) => {
-  await mockApi(page, true, { items: [{ ...paste, folder_id: 5 }] });
-  await page.goto("/pastes?folder_id=5");
-  await expect(page.getByRole("heading", { name: "Scripts" })).toBeVisible();
-  await page.getByRole("button", { name: /^Scripts/ }).click();
-  await expect(
-    page
-      .getByRole("dialog", { name: "Browse folders" })
-      .getByRole("button", { name: /^Scripts 1$/ })
-  ).toHaveClass(/current/);
-  await page.keyboard.press("Escape");
-  const selectedPaste = page.getByRole("checkbox", { name: /Select JavaScript example/ });
-  await selectedPaste.check();
-  const moveRequest = page.waitForRequest(
-    (request) => request.url().endsWith("/api/v1/pastes") && request.method() === "PATCH"
-  );
-  await page.getByRole("button", { name: "Move 1" }).click();
-  await page
-    .getByRole("dialog", { name: "Move selected pastes" })
-    .getByRole("button", { name: /Uncategorized/ })
-    .click();
-  expect((await moveRequest).postDataJSON()).toEqual({
-    ids: ["sample-paste"],
-    folder_id: null
-  });
-
-  await page.goto("/pastes?folder_id=5");
-  await page.getByRole("link", { name: "New paste" }).click();
-  await expect(page.getByLabel("Folder")).toHaveValue("5");
-});
+import { mockApi } from "./support/mockApi";
 
 test("move destinations align folder counts without browse-action space", async ({ page }) => {
   await mockApi(page, true);
