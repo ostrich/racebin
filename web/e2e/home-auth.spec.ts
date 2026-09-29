@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { deferred } from "./support/deferred";
 import { mockApi } from "./support/mockApi";
 
 test("renders the public homepage and paste viewer", async ({ page }) => {
@@ -120,9 +121,13 @@ test("standard home remains coherent when public discovery is disabled", async (
 
 test("logout discards stale protected-page failures", async ({ page }) => {
   let requests = 0;
+  const staleResponse = deferred();
   await mockApi(page, true, {
     plainHome: true,
-    adminPastePage: () => ({ items: [], delay: ++requests > 1 ? 250 : 0 })
+    adminPastePage: async () => {
+      if (++requests > 1) await staleResponse.promise;
+      return { items: [] };
+    }
   });
   await page.goto("/admin/pastes");
   await page.getByLabel("Search").fill("pending");
@@ -136,7 +141,12 @@ test("logout discards stale protected-page failures", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { name: "Log in" })).toBeVisible();
-  await page.waitForTimeout(300);
+  const rejectedResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/v1/admin/pastes" && url.searchParams.get("q") === "pending";
+  });
+  staleResponse.release();
+  expect((await rejectedResponse).status()).toBe(401);
   await expect(page.locator(".toast.show")).toHaveCount(0);
   await expect(page.getByText("Authentication required")).toHaveCount(0);
 });

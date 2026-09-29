@@ -21,6 +21,8 @@ mod copy;
 mod http;
 #[path = "integration/migration.rs"]
 mod migration;
+#[path = "integration/owner_read.rs"]
+mod owner_read;
 #[path = "integration/runners.rs"]
 mod runners;
 

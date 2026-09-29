@@ -193,8 +193,16 @@ export async function mockApi(
     plainHome?: boolean;
     publicExplore?: boolean;
     convertedMarkdown?: string;
-    pastePage?: (url: URL) => { items: Array<typeof paste>; delay?: number };
-    adminPastePage?: (url: URL) => { items: Array<typeof paste>; delay?: number };
+    pastePage?: (
+      url: URL
+    ) =>
+      | { items: Array<typeof paste>; delay?: number }
+      | Promise<{ items: Array<typeof paste>; delay?: number }>;
+    adminPastePage?: (
+      url: URL
+    ) =>
+      | { items: Array<typeof paste>; delay?: number }
+      | Promise<{ items: Array<typeof paste>; delay?: number }>;
   } = {}
 ): Promise<void> {
   const viewPaste = options.viewPaste ?? paste;
@@ -347,7 +355,7 @@ export async function mockApi(
     if (url.pathname === "/api/v1/password-resets/sample-reset-token")
       return route.fulfill({ status: 204 });
     if (url.pathname === "/api/v1/admin/pastes") {
-      const response = options.adminPastePage?.(url) ?? {
+      const response = (await options.adminPastePage?.(url)) ?? {
         items: options.items ?? [paste],
         delay: options.delay
       };
@@ -460,7 +468,7 @@ export async function mockApi(
       });
     if (url.pathname === "/api/v1/pastes") {
       if (route.request().method() === "POST") return json(route, paste, 201);
-      const response = options.pastePage?.(url) ?? {
+      const response = (await options.pastePage?.(url)) ?? {
         items: options.items ?? [paste],
         delay: options.delay
       };
@@ -475,6 +483,8 @@ export async function mockApi(
         }
       });
     }
-    return json(route, {});
+    throw new Error(
+      `Unmocked API request: ${route.request().method()} ${url.pathname}${url.search}`
+    );
   });
 }

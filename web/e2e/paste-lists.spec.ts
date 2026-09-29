@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { deferred } from "./support/deferred";
 import { mockApi, paste } from "./support/mockApi";
 
 test("back and forward navigation restore list scroll positions after loading", async ({
@@ -28,21 +29,27 @@ test("back and forward navigation restore list scroll positions after loading", 
 
 test("returning from a paste renders the cached list while it revalidates", async ({ page }) => {
   let listRequests = 0;
+  const revalidation = deferred();
   await mockApi(page, true, {
-    pastePage: () => {
+    pastePage: async () => {
       listRequests += 1;
-      return { items: [paste], delay: listRequests > 1 ? 250 : 0 };
+      if (listRequests > 1) await revalidation.promise;
+      return { items: [paste] };
     }
   });
   await page.goto("/pastes");
   await page.getByRole("link", { name: "JavaScript example" }).click();
   await expect(page).toHaveURL(/\/pastes\/sample-paste$/);
+  await page.evaluate(() => {
+    const now = Date.now;
+    Date.now = () => now() + 31_000;
+  });
   await page.getByRole("link", { name: "My pastes" }).click();
-  await page.waitForTimeout(50);
   await expect(page).toHaveURL(/\/pastes$/);
+  await expect.poll(() => listRequests).toBe(2);
   await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
   await expect(page.getByText("Loading pastes…")).toHaveCount(0);
-  expect(listRequests).toBe(2);
+  revalidation.release();
   await expect(page.locator(".paste-workspace")).toHaveAttribute("aria-busy", "false");
 });
 
@@ -387,11 +394,19 @@ test("paste deletion updates the owning page and clears its selection", async ({
 
 test("query navigation retains list pages until their replacement is ready", async ({ page }) => {
   const filteredPaste = { ...paste, id: "filtered-paste", title: "Filtered result" };
+  const workspaceReplacement = deferred();
+  const adminReplacement = deferred();
   await mockApi(page, true, {
-    pastePage: (url) =>
-      url.searchParams.has("q") ? { items: [filteredPaste], delay: 150 } : { items: [paste] },
-    adminPastePage: (url) =>
-      url.searchParams.has("q") ? { items: [filteredPaste], delay: 150 } : { items: [paste] }
+    pastePage: async (url) => {
+      if (!url.searchParams.has("q")) return { items: [paste] };
+      await workspaceReplacement.promise;
+      return { items: [filteredPaste] };
+    },
+    adminPastePage: async (url) => {
+      if (!url.searchParams.has("q")) return { items: [paste] };
+      await adminReplacement.promise;
+      return { items: [filteredPaste] };
+    }
   });
 
   await page.goto("/pastes");
@@ -400,8 +415,12 @@ test("query navigation retains list pages until their replacement is ready", asy
     Object.assign(window, { __retainedList: document.querySelector(".paste-workspace") });
   });
   await page.getByLabel("Search").fill("filtered");
+  const workspaceRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/v1/pastes" && url.searchParams.get("q") === "filtered";
+  });
   await page.getByRole("button", { name: "Search" }).click();
-  await page.waitForTimeout(50);
+  await workspaceRequest;
   await expect(page.getByRole("button", { name: /^My pastes/ })).toBeVisible();
   await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
   expect(
@@ -411,6 +430,7 @@ test("query navigation retains list pages until their replacement is ready", asy
         document.querySelector(".paste-workspace")
     )
   ).toBe(true);
+  workspaceReplacement.release();
   await expect(page.getByRole("link", { name: "Filtered result" })).toBeVisible();
 
   await page.goto("/admin/pastes");
@@ -419,8 +439,12 @@ test("query navigation retains list pages until their replacement is ready", asy
     Object.assign(window, { __retainedAdmin: document.querySelector("main > section") });
   });
   await page.getByLabel("Search").fill("filtered");
+  const adminRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/v1/admin/pastes" && url.searchParams.get("q") === "filtered";
+  });
   await page.getByRole("button", { name: "Search" }).click();
-  await page.waitForTimeout(50);
+  await adminRequest;
   await expect(page.getByRole("link", { name: "JavaScript example" })).toBeVisible();
   expect(
     await page.evaluate(
@@ -429,33 +453,47 @@ test("query navigation retains list pages until their replacement is ready", asy
         document.querySelector("main > section")
     )
   ).toBe(true);
+  adminReplacement.release();
   await expect(page.getByRole("link", { name: "Filtered result" })).toBeVisible();
 });
 
 test("the newest query response wins when list requests overlap", async ({ page }) => {
   const slowPaste = { ...paste, id: "slow-paste", title: "Slow result" };
   const fastPaste = { ...paste, id: "fast-paste", title: "Fast result" };
+  const slowRequest = deferred();
   await mockApi(page, true, {
-    pastePage: (url) => {
-      if (url.searchParams.get("folder_id") === "5") return { items: [slowPaste], delay: 250 };
-      if (url.searchParams.get("unfiled") === "true") return { items: [fastPaste], delay: 25 };
+    pastePage: async (url) => {
+      if (url.searchParams.get("folder_id") === "5") {
+        await slowRequest.promise;
+        return { items: [slowPaste] };
+      }
+      if (url.searchParams.get("unfiled") === "true") return { items: [fastPaste] };
       return { items: [paste] };
     }
   });
   await page.goto("/pastes");
   await page.getByRole("button", { name: /^My pastes/ }).click();
+  const folderRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/v1/pastes" && url.searchParams.get("folder_id") === "5";
+  });
   await page
     .getByRole("dialog", { name: "Browse folders" })
     .getByRole("button", { name: /^Scripts 1$/ })
     .click();
-  await page.waitForTimeout(20);
-  await page.getByRole("button", { name: /^Scripts/ }).click();
+  await folderRequest;
+  await page.getByRole("button", { name: /^My pastes/ }).click();
   await page
     .getByRole("dialog", { name: "Browse folders" })
     .getByRole("button", { name: /^Uncategorized 0$/ })
     .click();
   await expect(page.getByRole("link", { name: "Fast result" })).toBeVisible();
-  await page.waitForTimeout(300);
+  const lateResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/v1/pastes" && url.searchParams.get("folder_id") === "5";
+  });
+  slowRequest.release();
+  await lateResponse;
   await expect(page.getByRole("link", { name: "Fast result" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Slow result" })).toHaveCount(0);
 });
