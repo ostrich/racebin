@@ -45,11 +45,11 @@ function normalizeTableCells(document: Document): void {
 }
 
 function normalizeTaskLists(document: Document): void {
-  const taskItems = document.querySelectorAll<HTMLElement>(
-    "li[data-task-list-item], li:has(> input[type=checkbox]), li:has(> :not(ul, ol) > input[type=checkbox])"
-  );
-  for (const item of taskItems) {
-    const checkbox = item.querySelector<HTMLInputElement>("input[type=checkbox]");
+  for (const item of document.querySelectorAll<HTMLElement>("li")) {
+    const checkbox = [...item.querySelectorAll<HTMLInputElement>("input[type=checkbox]")].find(
+      (candidate) => candidate.closest("li") === item
+    );
+    if (!item.hasAttribute("data-task-list-item") && !checkbox) continue;
     const checked = item.dataset.checked === "true" || checkbox?.checked === true;
     item.dataset.type = "taskItem";
     item.dataset.checked = String(checked);
@@ -62,7 +62,7 @@ function normalizeTaskLists(document: Document): void {
   }
 }
 
-function normalizeClipboardHtml(html: string): string {
+export function normalizeClipboardHtml(html: string): string {
   const document = new DOMParser().parseFromString(html, "text/html");
   normalizeTableCells(document);
   normalizeTaskLists(document);
@@ -179,7 +179,7 @@ function insertBreakAtTextOffset(cell: Element, offset: number, document: Docume
   return false;
 }
 
-function recoverMarkdownTableBreaks(html: string, text: string): string | null {
+export function recoverMarkdownTableBreaks(html: string, text: string): string | null {
   const sourceTables = markdownTables(text);
   if (!sourceTables.length) return null;
 

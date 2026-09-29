@@ -47,6 +47,33 @@ The Rust suite includes:
   HTML import, and the attachment lifecycle; and
 - OpenAPI structural and behavioral contract assertions.
 
+### Test placement
+
+Keep focused Rust unit tests inline beside the implementation when they need
+private access. Existing directory modules can put a larger private test suite
+in a sibling `tests.rs`. Put cross-module contracts and real database or HTTP
+workflows under top-level `tests/`, with independently named tests and shared
+fixtures where useful. Do not create a directory solely to hold tests for an
+otherwise single-file module, and do not move or drop assertions merely to
+meet a file-size rule.
+
+Frontend unit tests stay beside their source as `*.test.ts`. Browser scenarios
+live under `web/e2e`, with compiled-server scenarios under `web/e2e/real`.
+Mocked API routes should fail visibly if a scenario requests an endpoint that
+its fixture does not implement. Prefer awaiting observable requests, responses,
+or page state over fixed sleeps.
+
+### Diagnostic coverage reports
+
+Run `scripts/coverage.sh frontend` for a Vitest V8 report, or
+`scripts/coverage.sh rust` after installing `cargo-llvm-cov` and LLVM tools
+matching the Rust compiler. `scripts/coverage.sh` runs both. Reports are
+written beneath ignored `target/coverage/`; frontend reports include source
+modules that unit tests never import. These reports guide targeted tests, not
+a global pass/fail percentage. Browser and disposable-stack workflows are not
+represented by Vitest unit coverage, so review their behavioral coverage
+separately.
+
 ## Frontend gates
 
 Install the repository's pre-push hook once per checkout:
