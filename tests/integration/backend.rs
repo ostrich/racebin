@@ -74,6 +74,64 @@ pub(super) async fn backend_contract(repo: Database) {
     let administrator = principal(1, "administrator", "admin");
     let anonymous = Principal::Anonymous;
 
+    for key in [None, Some("creation-attachment-timestamps")] {
+        let (pending, _, token) = services
+            .create_paste_idempotent(
+                &owner,
+                &paste_input("initial attachment timestamps", "private"),
+                key,
+                "initial-attachment",
+                1,
+            )
+            .await
+            .unwrap();
+        services
+            .add_creation_attachments(
+                &owner,
+                &pending.id,
+                &[attachment("initial.txt", "initial-file", 1)],
+            )
+            .await
+            .unwrap();
+        if let Some(key) = key {
+            assert!(services
+                .complete_create_idempotency(&owner, key, token.as_deref().unwrap())
+                .await
+                .unwrap());
+        } else {
+            services
+                .complete_pending_creation(&owner, &pending.id)
+                .await
+                .unwrap();
+        }
+        let created = services
+            .get_paste(&owner, &pending.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(created.modified_at, None);
+        assert_eq!(created.attachments.len(), 1);
+        services
+            .add_attachments(
+                &owner,
+                &pending.id,
+                &[attachment("later.txt", "later-file", 1)],
+                Some(created.revision),
+            )
+            .await
+            .unwrap();
+        let edited = services
+            .get_paste(&owner, &pending.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(edited.modified_at.is_some());
+        services
+            .delete_paste(&owner, &pending.id, None)
+            .await
+            .unwrap();
+    }
+
     let mut managed_limited_input = paste_input("managed limited read", "unlisted");
     managed_limited_input.read_limit = Some(Some(1));
     let managed_limited = services

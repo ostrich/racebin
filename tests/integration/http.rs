@@ -899,6 +899,7 @@ mod tests {
             );
         }
         let recovery_created: Value = test::read_body_json(recovery_created).await;
+        assert!(recovery_created["modified_at"].is_null());
         let recovery_id = recovery_created["id"].as_str().unwrap();
         sqlx::query("DELETE FROM attachments WHERE paste_id=$1")
             .bind(recovery_id)

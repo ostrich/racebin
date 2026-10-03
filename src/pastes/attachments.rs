@@ -149,7 +149,9 @@ impl PasteService {
             });
         }
         let changed = sqlx::query(
-            "UPDATE pastes SET updated_at=$2,modified_at=$2,revision=revision+1
+            "UPDATE pastes SET updated_at=$2,
+             modified_at=CASE WHEN creation_state='pending' THEN modified_at ELSE $2 END,
+             revision=revision+1
              WHERE id=$1 AND ($3 IS NULL OR revision=$3)",
         )
         .bind(&paste.id)
