@@ -22,7 +22,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [alloc-no-stdlib](https://github.com/dropbox/rust-alloc-no-stdlib) | 2.0.4 | BSD-3-Clause |
 | [alloc-stdlib](https://github.com/dropbox/rust-alloc-no-stdlib) | 0.2.4 | BSD-3-Clause |
 | [allocator-api2](https://github.com/zakarumych/allocator-api2) | 0.2.21 | MIT OR Apache-2.0 |
-| [ammonia](https://github.com/rust-ammonia/ammonia) | 4.1.4 | MIT OR Apache-2.0 |
+| [ammonia](https://github.com/rust-ammonia/ammonia) | 4.2.3 | MIT OR Apache-2.0 |
 | [anstream](https://github.com/rust-cli/anstyle.git) | 1.0.0 | MIT OR Apache-2.0 |
 | [anstyle](https://github.com/rust-cli/anstyle.git) | 1.0.14 | MIT OR Apache-2.0 |
 | [anstyle-parse](https://github.com/rust-cli/anstyle.git) | 1.0.0 | MIT OR Apache-2.0 |
@@ -73,7 +73,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [crossbeam-utils](https://github.com/crossbeam-rs/crossbeam) | 0.8.22 | MIT OR Apache-2.0 |
 | [crypto-common](https://github.com/RustCrypto/traits) | 0.1.7 | MIT OR Apache-2.0 |
 | [crypto-common](https://github.com/RustCrypto/traits) | 0.2.2 | MIT OR Apache-2.0 |
-| [cssparser](https://github.com/servo/rust-cssparser) | 0.37.0 | MPL-2.0 |
+| [cssparser](https://github.com/servo/rust-cssparser) | 0.38.0 | MPL-2.0 |
 | [ctutils](https://github.com/RustCrypto/utils) | 0.4.2 | Apache-2.0 OR MIT |
 | [darling](https://github.com/TedDriggs/darling) | 0.23.0 | MIT |
 | [darling_core](https://github.com/TedDriggs/darling) | 0.23.0 | MIT |
@@ -128,6 +128,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [hmac](https://github.com/RustCrypto/MACs) | 0.13.0 | MIT OR Apache-2.0 |
 | [html-escape](https://github.com/magiclen/html-escape) | 0.2.15 | MIT |
 | [html5ever](https://github.com/servo/html5ever) | 0.39.0 | MIT OR Apache-2.0 |
+| [html5ever](https://github.com/servo/html5ever) | 0.40.1 | MIT OR Apache-2.0 |
 | [http](https://github.com/hyperium/http) | 0.2.12 | MIT OR Apache-2.0 |
 | [http-range](https://github.com/bancek/rust-http-range.git) | 0.1.5 | MIT |
 | [httparse](https://github.com/seanmonstar/httparse) | 1.10.1 | MIT OR Apache-2.0 |
@@ -161,6 +162,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [log](https://github.com/rust-lang/log) | 0.4.34 | MIT OR Apache-2.0 |
 | [maplit](https://github.com/bluss/maplit) | 1.0.2 | MIT OR Apache-2.0 |
 | [markup5ever](https://github.com/servo/html5ever) | 0.39.0 | MIT OR Apache-2.0 |
+| [markup5ever](https://github.com/servo/html5ever) | 0.40.0 | MIT OR Apache-2.0 |
 | [markup5ever_rcdom](https://github.com/servo/html5ever) | 0.39.0+unofficial | MIT OR Apache-2.0 |
 | [md-5](https://github.com/RustCrypto/hashes) | 0.11.0 | MIT OR Apache-2.0 |
 | [memchr](https://github.com/BurntSushi/memchr) | 2.8.3 | Unlicense OR MIT |
@@ -181,9 +183,13 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [password-hash](https://github.com/RustCrypto/traits/tree/master/password-hash) | 0.5.0 | MIT OR Apache-2.0 |
 | [percent-encoding](https://github.com/servo/rust-url/) | 2.3.2 | MIT OR Apache-2.0 |
 | [phf](https://github.com/rust-phf/rust-phf) | 0.13.1 | MIT |
+| [phf](https://github.com/rust-phf/rust-phf) | 0.14.0 | MIT |
 | [phf_codegen](https://github.com/rust-phf/rust-phf) | 0.13.1 | MIT |
+| [phf_codegen](https://github.com/rust-phf/rust-phf) | 0.14.0 | MIT |
 | [phf_generator](https://github.com/rust-phf/rust-phf) | 0.13.1 | MIT |
+| [phf_generator](https://github.com/rust-phf/rust-phf) | 0.14.0 | MIT |
 | [phf_shared](https://github.com/rust-phf/rust-phf) | 0.13.1 | MIT |
+| [phf_shared](https://github.com/rust-phf/rust-phf) | 0.14.0 | MIT |
 | [pin-project-lite](https://github.com/taiki-e/pin-project-lite) | 0.2.17 | Apache-2.0 OR MIT |
 | [pkg-config](https://github.com/rust-lang/pkg-config-rs) | 0.3.34 | MIT OR Apache-2.0 |
 | [png](https://github.com/image-rs/image-png) | 0.18.1 | MIT OR Apache-2.0 |
@@ -220,7 +226,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [rustc-hash](https://github.com/rust-lang/rustc-hash) | 2.1.3 | Apache-2.0 OR MIT |
 | [rustc_version](https://github.com/djc/rustc-version-rs) | 0.4.1 | MIT OR Apache-2.0 |
 | [rustix](https://github.com/bytecodealliance/rustix) | 1.1.4 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
-| [rustls](https://github.com/rustls/rustls) | 0.23.43 | Apache-2.0 OR ISC OR MIT |
+| [rustls](https://github.com/rustls/rustls) | 0.23.45 | Apache-2.0 OR ISC OR MIT |
 | [rustls-pki-types](https://github.com/rustls/pki-types) | 1.15.1 | MIT OR Apache-2.0 |
 | [rustls-webpki](https://github.com/rustls/webpki) | 0.103.15 | ISC |
 | [rusty-fork](https://github.com/altsysrq/rusty-fork) | 0.3.1 | MIT OR Apache-2.0 |
@@ -251,7 +257,9 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [sqlx-sqlite](https://github.com/launchbadge/sqlx) | 0.9.0 | MIT OR Apache-2.0 |
 | [stable_deref_trait](https://github.com/storyyeller/stable_deref_trait) | 1.2.1 | MIT OR Apache-2.0 |
 | [string_cache](https://github.com/servo/string-cache) | 0.9.0 | MIT OR Apache-2.0 |
+| [string_cache](https://github.com/servo/string-cache) | 0.11.0 | MIT OR Apache-2.0 |
 | [string_cache_codegen](https://github.com/servo/string-cache) | 0.6.1 | MIT OR Apache-2.0 |
+| [string_cache_codegen](https://github.com/servo/string-cache) | 0.11.2 | MIT OR Apache-2.0 |
 | [stringprep](https://github.com/sfackler/rust-stringprep) | 0.1.5 | MIT OR Apache-2.0 |
 | [strsim](https://github.com/rapidfuzz/strsim-rs) | 0.11.1 | MIT |
 | [subtle](https://github.com/dalek-cryptography/subtle) | 2.6.1 | BSD-3-Clause |
@@ -299,6 +307,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [wasi](https://github.com/bytecodealliance/wasi) | 0.11.1+wasi-snapshot-preview1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | [wasip2](https://github.com/bytecodealliance/wasi-rs) | 1.0.4+wasi-0.2.12 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | [web_atoms](https://github.com/servo/html5ever) | 0.2.6 | MIT OR Apache-2.0 |
+| [web_atoms](https://github.com/servo/html5ever) | 0.3.0 | MIT OR Apache-2.0 |
 | [webpki-roots](https://github.com/rustls/webpki-roots) | 1.0.9 | CDLA-Permissive-2.0 |
 | [whoami](https://github.com/ardaku/whoami) | 2.1.3 | Apache-2.0 OR BSL-1.0 OR MIT |
 | [windows-link](https://github.com/microsoft/windows-rs) | 0.2.1 | MIT OR Apache-2.0 |
