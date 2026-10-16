@@ -226,7 +226,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [rustc-hash](https://github.com/rust-lang/rustc-hash) | 2.1.3 | Apache-2.0 OR MIT |
 | [rustc_version](https://github.com/djc/rustc-version-rs) | 0.4.1 | MIT OR Apache-2.0 |
 | [rustix](https://github.com/bytecodealliance/rustix) | 1.1.4 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
-| [rustls](https://github.com/rustls/rustls) | 0.23.45 | Apache-2.0 OR ISC OR MIT |
+| [rustls](https://github.com/rustls/rustls) | 0.23.46 | Apache-2.0 OR ISC OR MIT |
 | [rustls-pki-types](https://github.com/rustls/pki-types) | 1.15.1 | MIT OR Apache-2.0 |
 | [rustls-webpki](https://github.com/rustls/webpki) | 0.103.15 | ISC |
 | [rusty-fork](https://github.com/altsysrq/rusty-fork) | 0.3.1 | MIT OR Apache-2.0 |
