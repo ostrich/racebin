@@ -22,7 +22,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [alloc-no-stdlib](https://github.com/dropbox/rust-alloc-no-stdlib) | 2.0.4 | BSD-3-Clause |
 | [alloc-stdlib](https://github.com/dropbox/rust-alloc-no-stdlib) | 0.2.4 | BSD-3-Clause |
 | [allocator-api2](https://github.com/zakarumych/allocator-api2) | 0.2.21 | MIT OR Apache-2.0 |
-| [ammonia](https://github.com/rust-ammonia/ammonia) | 4.2.3 | MIT OR Apache-2.0 |
+| [ammonia](https://github.com/rust-ammonia/ammonia) | 4.2.4 | MIT OR Apache-2.0 |
 | [anstream](https://github.com/rust-cli/anstyle.git) | 1.0.0 | MIT OR Apache-2.0 |
 | [anstyle](https://github.com/rust-cli/anstyle.git) | 1.0.14 | MIT OR Apache-2.0 |
 | [anstyle-parse](https://github.com/rust-cli/anstyle.git) | 1.0.0 | MIT OR Apache-2.0 |
