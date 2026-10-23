@@ -74,7 +74,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [crypto-common](https://github.com/RustCrypto/traits) | 0.1.7 | MIT OR Apache-2.0 |
 | [crypto-common](https://github.com/RustCrypto/traits) | 0.2.2 | MIT OR Apache-2.0 |
 | [cssparser](https://github.com/servo/rust-cssparser) | 0.38.0 | MPL-2.0 |
-| [ctutils](https://github.com/RustCrypto/utils) | 0.4.2 | Apache-2.0 OR MIT |
+| [ctutils](https://github.com/RustCrypto/utils) | 0.4.4 | Apache-2.0 OR MIT |
 | [darling](https://github.com/TedDriggs/darling) | 0.23.0 | MIT |
 | [darling_core](https://github.com/TedDriggs/darling) | 0.23.0 | MIT |
 | [darling_macro](https://github.com/TedDriggs/darling) | 0.23.0 | MIT |
