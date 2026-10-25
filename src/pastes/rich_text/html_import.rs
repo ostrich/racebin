@@ -316,6 +316,15 @@ fn collect_inline(node: &Handle, marks: &[Value], output: &mut Vec<Value>) {
     }
 }
 
+fn collect_text(node: &Handle, output: &mut String) {
+    if let NodeData::Text { contents } = &node.data {
+        output.push_str(&contents.borrow());
+    }
+    for child in node.children.borrow().iter() {
+        collect_text(child, output);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -352,14 +361,5 @@ mod tests {
             document["content"][0]["content"][0]["marks"],
             json!([{"type":"bold"}])
         );
-    }
-}
-
-fn collect_text(node: &Handle, output: &mut String) {
-    if let NodeData::Text { contents } = &node.data {
-        output.push_str(&contents.borrow());
-    }
-    for child in node.children.borrow().iter() {
-        collect_text(child, output);
     }
 }
