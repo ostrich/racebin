@@ -5,11 +5,18 @@ use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 
 const MAX_DOCUMENT_BYTES: usize = 2 * 1024 * 1024;
+const MAX_HTML_DEPTH: usize = 64;
+const MAX_HTML_NODES: usize = 100_000;
 
 pub fn html_to_document(input: &str) -> Result<Value, String> {
     if input.len() > MAX_DOCUMENT_BYTES {
         return Err("Rich-text HTML exceeds 2 MiB".into());
     }
+    // Reject pathological trees before sanitization and recursive conversion.
+    // RcDom's destructor is iterative, including when this check rejects a tree.
+    let original = parse_html(input);
+    validate_html_tree(&original.document)?;
+    drop(original);
     let tags = [
         "p",
         "h1",
@@ -55,14 +62,8 @@ pub fn html_to_document(input: &str) -> Result<Value, String> {
         })
         .clean(input)
         .to_string();
-    let dom = parse_fragment(
-        RcDom::default(),
-        Default::default(),
-        QualName::new(None, ns!(html), local_name!("div")),
-        Vec::new(),
-        false,
-    )
-    .one(cleaned);
+    let dom = parse_html(&cleaned);
+    validate_html_tree(&dom.document)?;
     let mut content = Vec::new();
     let root = dom.document.clone();
     collect_blocks(&root, &mut content);
@@ -72,6 +73,46 @@ pub fn html_to_document(input: &str) -> Result<Value, String> {
     let document = json!({"type":"doc","content":content});
     validate_document(&document)?;
     Ok(document)
+}
+
+fn parse_html(input: &str) -> RcDom {
+    parse_fragment(
+        RcDom::default(),
+        Default::default(),
+        QualName::new(None, ns!(html), local_name!("div")),
+        Vec::new(),
+        false,
+    )
+    .one(input)
+}
+
+fn validate_html_tree(root: &Handle) -> Result<(), String> {
+    let mut pending = vec![(root.clone(), 0)];
+    let mut nodes = 0;
+    while let Some((node, depth)) = pending.pop() {
+        nodes += 1;
+        if depth > MAX_HTML_DEPTH {
+            return Err("Rich-text HTML is nested too deeply".into());
+        }
+        if nodes > MAX_HTML_NODES {
+            return Err("Rich-text HTML contains too many nodes".into());
+        }
+        if let NodeData::Element {
+            template_contents, ..
+        } = &node.data
+        {
+            if let Some(contents) = template_contents.borrow().as_ref() {
+                pending.push((contents.clone(), depth + 1));
+            }
+        }
+        pending.extend(
+            node.children
+                .borrow()
+                .iter()
+                .map(|child| (child.clone(), depth + 1)),
+        );
+    }
+    Ok(())
 }
 
 fn normalize_language_class(value: &str) -> Option<std::borrow::Cow<'_, str>> {
@@ -262,11 +303,55 @@ fn collect_inline(node: &Handle, marks: &[Value], output: &mut Vec<Value>) {
                 _ => None,
             };
             if let Some(mark) = mark {
-                next_marks.push(mark);
+                if !next_marks
+                    .iter()
+                    .any(|current| current["type"] == mark["type"])
+                {
+                    next_marks.push(mark);
+                }
             }
             collect_inline_children(node, &next_marks, output);
         }
         _ => collect_inline_children(node, marks, output),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn import_rejects_deep_markup_before_recursive_conversion() {
+        for tag in ["strong", "div", "blockquote", "template"] {
+            let source = format!(
+                "{}text{}",
+                format!("<{tag}>").repeat(256),
+                format!("</{tag}>").repeat(256)
+            );
+            assert!(
+                html_to_document(&source)
+                    .unwrap_err()
+                    .contains("nested too deeply"),
+                "{tag}"
+            );
+        }
+    }
+
+    #[test]
+    fn import_rejects_excessive_nodes() {
+        let source = "<br>".repeat(MAX_HTML_NODES + 1);
+        assert!(html_to_document(&source)
+            .unwrap_err()
+            .contains("too many nodes"));
+    }
+
+    #[test]
+    fn repeated_inline_marks_are_normalized() {
+        let document = html_to_document("<p><strong><b>bold</b></strong></p>").unwrap();
+        assert_eq!(
+            document["content"][0]["content"][0]["marks"],
+            json!([{"type":"bold"}])
+        );
     }
 }
 

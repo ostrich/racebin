@@ -25,6 +25,9 @@ pub fn text_to_document(text: &str) -> Value {
 }
 
 pub(super) fn validate_document(document: &Value) -> Result<String, String> {
+    // Validate shape and nesting before the serializer recursively visits it.
+    let mut node_count = 0;
+    validate_node(document, 0, &mut node_count, None)?;
     if serde_json::to_vec(document)
         .map_err(|error| error.to_string())?
         .len()
@@ -32,8 +35,6 @@ pub(super) fn validate_document(document: &Value) -> Result<String, String> {
     {
         return Err("Rich-text document exceeds 2 MiB".into());
     }
-    let mut node_count = 0;
-    validate_node(document, 0, &mut node_count, None)?;
     let text = document_to_text(document);
     if text.chars().count() > 1_000_000 {
         return Err("Rich-text content exceeds 1,000,000 characters".into());

@@ -209,6 +209,10 @@ operator-owned reverse-proxy policy. Session cookies are HTTP-only,
 `SameSite=Lax`, scoped to `/`, and secure except in explicit insecure-cookie
 development mode.
 
+The API scope applies `Cache-Control: private, no-store` to every response,
+including authentication failures and file responses, independently of each
+handler. Embedded static assets retain their separate cache policy.
+
 Passwords are hashed with Argon2id. Session, invitation, and API-key secrets
 are random values, and their hashes are used for authentication. Session and
 API-key plaintext secrets are never retained. Active invitations additionally
@@ -260,6 +264,7 @@ The main relational entities are:
 | `paste_read_receipts` | Expiring replay records for idempotent read requests |
 | `paste_read_grants` | Short-lived capabilities for raw content and attachment downloads after limited reads |
 | `auth_attempts` | Expiring authentication-failure records used for rate limiting |
+| `auth_buckets` | Bounded login-attempt reservations with expiring account/address windows |
 | `instance_settings` | Singleton database-owned site identity, feature switches, and new-paste defaults |
 | `audit_events` | Append-only snapshots of sensitive administrative activity |
 
@@ -267,6 +272,13 @@ Rich text is stored as canonical GitHub-Flavored Markdown. Comrak validates it
 and derives sanitized HTML and plain text on demand. Tiptap's ProseMirror model
 exists only while visual editing is active; it is never persisted or exposed as
 the wire contract.
+
+HTML clipboard import limits source size to 2 MiB and checks the parsed tree
+iteratively (at most 64 levels and 100,000 nodes) before sanitization and
+recursive conversion. The sanitized tree is checked again before conversion;
+the resulting document has its own stricter structural validation. Repeated
+inline formatting marks are normalized rather than accumulated. Legacy document
+validation checks shape and depth before recursively serializing the value.
 
 Foreign keys implement ownership cleanup where possible. A deleted user
 leaves their pastes intact with a null owner, while their sessions and

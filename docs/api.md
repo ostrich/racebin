@@ -41,6 +41,11 @@ part of the JSON API used by the bundled UI, but there is no owner API-key
 scope. `POST /session/reauthenticate` establishes the short recent-password
 window required by role changes and ownership transfer.
 
+All `/api/v1` responses use `Cache-Control: private, no-store`, including errors,
+one-time credentials, raw content, and attachment downloads. Clients may keep
+their own explicitly managed in-memory state, but browser/shared HTTP caches
+must not retain API responses. Content-hashed browser assets remain cacheable.
+
 Errors use `application/problem+json` with `type`, `title`, `status`, and
 `detail` fields. The `type` is a stable Racebin URN suitable for programmatic
 classification; clients should not branch on the human-readable title or

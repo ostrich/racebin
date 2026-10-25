@@ -4,6 +4,7 @@ use crate::pastes::{PasteInput, PasteQuery, PasteService, Principal};
 use actix_files::NamedFile;
 use actix_multipart::Multipart;
 use actix_web::cookie::{Cookie, SameSite};
+use actix_web::dev::Service;
 use actix_web::http::{header, StatusCode};
 use actix_web::{delete, get, patch, post, put, web, HttpRequest, HttpResponse, Responder};
 use auth::{principal, require_admin, require_auth, require_mutation};
@@ -66,6 +67,17 @@ pub fn configure(config: &mut web::ServiceConfig) {
         .service(web::resource("/readyz").route(web::get().to(openapi::ready)))
         .service(
             web::scope("/api/v1")
+                .wrap_fn(|request, service| {
+                    let response = service.call(request);
+                    async move {
+                        let mut response = response.await?;
+                        response.headers_mut().insert(
+                            header::CACHE_CONTROL,
+                            header::HeaderValue::from_static("private, no-store"),
+                        );
+                        Ok(response)
+                    }
+                })
                 .configure(openapi::configure)
                 .configure(account::configure)
                 .configure(folders::configure)

@@ -13,6 +13,8 @@ use std::path::{Path, PathBuf};
 
 #[path = "integration/backend.rs"]
 mod backend;
+#[path = "integration/cache.rs"]
+mod cache;
 #[path = "integration/concurrency.rs"]
 mod concurrency;
 #[path = "integration/copy.rs"]
