@@ -35,6 +35,10 @@ impl PasteService {
             .clamp(1, crate::limits::MAX_PAGE_SIZE);
         let offset = i64::from(page - 1).saturating_mul(i64::from(page_size));
         let user_id = principal.user_id();
+        let owner_can_read = matches!(principal, Principal::Session(_))
+            || matches!(principal, Principal::ApiKey(key) if key.has_scope("paste:read"));
+        let preview_content = "($20=1 OR ((visibility<>'private' OR (owner_id=$2 AND $21=1))
+            AND (read_limit IS NULL OR (owner_id=$2 AND $21=1))))";
         let search = crate::database::literal_like_pattern(query.search.as_deref().unwrap_or(""));
         let visibility = query.visibility.as_deref();
         let content_kind = query.content_kind.as_deref();
@@ -91,7 +95,7 @@ impl PasteService {
              AND ($3 IS NULL OR visibility=$3)
              AND ($4 IS NULL OR owner_id=$4)
              AND (expires_at IS NULL OR expires_at>$5)
-             AND (lower(title) LIKE lower($6) ESCAPE '\\' OR lower(content) LIKE lower($6) ESCAPE '\\'
+             AND (lower(title) LIKE lower($6) ESCAPE '\\' OR ({preview_content} AND lower(content) LIKE lower($6) ESCAPE '\\')
                   OR lower(id) LIKE lower($6) ESCAPE '\\' OR lower(language) LIKE lower($6) ESCAPE '\\'
                   OR lower(content_kind) LIKE lower($6) ESCAPE '\\'
                   OR EXISTS(SELECT 1 FROM attachments search_files
@@ -141,11 +145,13 @@ impl PasteService {
         .bind(query.max_size_bytes)
         .bind(folder_id)
         .bind(unfiled)
+        .bind(i64::from(principal.can("paste:manage")))
+        .bind(i64::from(owner_can_read))
         .fetch_one(self.storage.pool())
         .await
         .map_err(DomainError::internal)?;
         let items = sqlx::query_as::<_, Paste>(sqlx::AssertSqlSafe(format!(
-            "SELECT id,owner_id,folder_id,title,substr(content,1,500) AS content,
+            "SELECT id,owner_id,folder_id,title,CASE WHEN {preview_content} THEN substr(content,1,500) ELSE '' END AS content,
                     content_kind,language,visibility,created_at,updated_at,modified_at,revision,consumed_at,
                     expires_at,last_read_at,read_count,read_limit,
                     (SELECT count(*) FROM attachments summary_files
@@ -156,7 +162,7 @@ impl PasteService {
                        ORDER BY sort_order,id LIMIT 1)
                     ELSE NULL END AS attachment_only_filename,
                     {total_size} AS size_bytes
-             FROM pastes WHERE {filter} ORDER BY {order} {direction},id ASC LIMIT $20 OFFSET $21"
+             FROM pastes WHERE {filter} ORDER BY {order} {direction},id ASC LIMIT $22 OFFSET $23"
         )))
         .bind(i64::from(admin))
         .bind(user_id)
@@ -177,6 +183,8 @@ impl PasteService {
         .bind(query.max_size_bytes)
         .bind(folder_id)
         .bind(unfiled)
+        .bind(i64::from(principal.can("paste:manage")))
+        .bind(i64::from(owner_can_read))
         .bind(i64::from(page_size))
         .bind(offset)
         .fetch_all(self.storage.pool())
@@ -380,29 +388,20 @@ impl PasteService {
         }))
     }
 
-    pub async fn valid_read_grant(&self, paste_id: &str, token: &str) -> DomainResult<bool> {
-        let found: Option<i64> = sqlx::query_scalar(
-            "SELECT 1 FROM paste_read_grants WHERE paste_id=$1 AND token_hash=$2 AND expires_at>$3",
-        )
-        .bind(paste_id)
-        .bind(hash_token(token))
-        .bind(unix_timestamp())
-        .fetch_optional(self.storage.pool())
-        .await
-        .map_err(DomainError::internal)?;
-        Ok(found.is_some())
-    }
-
     pub async fn get_paste_with_grant(&self, id: &str, token: &str) -> DomainResult<Option<Paste>> {
-        if !self.valid_read_grant(id, token).await? {
-            return Ok(None);
-        }
+        // Keep validation, content and attachment loading in the same lifecycle
+        // critical section as mutations that revoke grants.
+        let _write_guard = self.storage.lock_writes().await;
         let mut paste = sqlx::query_as::<_, Paste>(
             "SELECT id,owner_id,folder_id,title,content,content_kind,language,visibility,
                     created_at,updated_at,modified_at,revision,consumed_at,expires_at,last_read_at,read_count,read_limit
-             FROM pastes WHERE id=$1 AND creation_state='complete'",
+             FROM pastes WHERE id=$1 AND creation_state='complete'
+               AND EXISTS (SELECT 1 FROM paste_read_grants
+                 WHERE paste_id=pastes.id AND token_hash=$2 AND expires_at>$3)",
         )
         .bind(id)
+        .bind(hash_token(token))
+        .bind(unix_timestamp())
         .fetch_optional(self.storage.pool())
         .await
         .map_err(DomainError::internal)?;
@@ -500,6 +499,9 @@ impl PasteService {
         request_hash: &str,
         attachment_count: usize,
     ) -> DomainResult<(Paste, bool, Option<String>)> {
+        if !principal.can("paste:write") && !matches!(principal, Principal::Session(_)) {
+            return Err(DomainError::forbidden("Missing paste:write scope"));
+        }
         let Some(key) = idempotency_key else {
             let creation_state = if attachment_count > 0 {
                 "pending"
@@ -557,12 +559,14 @@ impl PasteService {
             .existing_idempotent_create(owner, &key_hash, request_hash)
             .await?
         {
+            if !super::validation::can_preview_content(principal, &paste) {
+                return Err(DomainError::forbidden(
+                    "Reading the current replay response requires paste content access",
+                ));
+            }
             return Ok((paste, true, None));
         }
 
-        if !principal.can("paste:write") && !matches!(principal, Principal::Session(_)) {
-            return Err(DomainError::forbidden("Missing paste:write scope"));
-        }
         validate_input(input, now)?;
         let content_kind = input.content_kind.as_deref().unwrap_or("text");
         let (content, _) =
@@ -623,6 +627,11 @@ impl PasteService {
                 .existing_idempotent_create(owner, &key_hash, request_hash)
                 .await?
             {
+                if !super::validation::can_preview_content(principal, &paste) {
+                    return Err(DomainError::forbidden(
+                        "Reading the current replay response requires paste content access",
+                    ));
+                }
                 return Ok((paste, true, None));
             }
             return Err(DomainError::internal(error));
@@ -892,6 +901,7 @@ impl PasteService {
         input: &PasteInput,
         expected_revision: Option<i64>,
     ) -> DomainResult<Option<Paste>> {
+        let _write_guard = self.storage.lock_writes().await;
         let now = unix_timestamp();
         validate_input(input, now)?;
         let current = match self.find_paste(id).await? {
@@ -900,7 +910,7 @@ impl PasteService {
         };
         authorize_owner(principal, &current, "paste:write")?;
         let folder_id = if let Some(folder) = input.folder_id {
-            if current.owner_id != principal.user_id() {
+            if !principal.owns_paste(current.owner_id) {
                 return Err(DomainError::forbidden(
                     "Folder organization is private to the paste owner",
                 ));
@@ -922,6 +932,12 @@ impl PasteService {
         } else {
             "plaintext"
         };
+        let mut tx = self
+            .storage
+            .pool()
+            .begin()
+            .await
+            .map_err(DomainError::internal)?;
         let result = sqlx::query(
             "UPDATE pastes SET title=coalesce($2,title),content=$3,
              content_kind=$4,language=$5,visibility=coalesce($6,visibility),
@@ -943,12 +959,14 @@ impl PasteService {
         .bind(folder_id)
         .bind(now)
         .bind(expected_revision)
-        .execute(self.storage.pool())
+        .execute(&mut *tx)
         .await
         .map_err(DomainError::internal)?;
         if result.rows_affected() == 0 {
             return Err(DomainError::precondition("Paste revision changed"));
         }
+        revoke_read_capabilities(&mut tx, id).await?;
+        tx.commit().await.map_err(DomainError::internal)?;
         Ok(self
             .find_paste(id)
             .await?
@@ -960,8 +978,25 @@ impl PasteService {
     }
 }
 
+pub(super) async fn revoke_read_capabilities(
+    tx: &mut sqlx::Transaction<'_, Any>,
+    paste_id: &str,
+) -> DomainResult<()> {
+    for statement in [
+        "DELETE FROM paste_read_grants WHERE paste_id=$1",
+        "DELETE FROM paste_read_receipts WHERE paste_id=$1",
+    ] {
+        sqlx::query(statement)
+            .bind(paste_id)
+            .execute(&mut **tx)
+            .await
+            .map_err(DomainError::internal)?;
+    }
+    Ok(())
+}
+
 fn redact_folder(principal: &Principal, mut paste: Paste, administrative: bool) -> Paste {
-    if administrative || principal.user_id() != paste.owner_id {
+    if administrative || !principal.owns_paste(paste.owner_id) {
         paste.folder_id = None;
     }
     paste
@@ -1131,6 +1166,24 @@ mod tests {
             last_used_at: None,
             enabled: true,
         })
+    }
+
+    #[test]
+    fn missing_owner_ids_do_not_confer_ownership() {
+        let mut paste = owner_paste();
+        paste.owner_id = None;
+        for scope in ["paste:read", "paste:write", "paste:delete"] {
+            let Principal::ApiKey(mut api_key) = key(scope) else {
+                unreachable!()
+            };
+            api_key.user_id = None;
+            let principal = Principal::ApiKey(api_key);
+            assert!(!principal.owns_paste(None));
+            assert!(!can_read(&principal, &paste));
+            assert!(!principal.can_bypass_read_limit(None));
+            assert!(super::authorize_owner(&principal, &paste, scope).is_err());
+        }
+        assert!(can_read(&key("paste:manage"), &paste));
     }
 
     #[test]

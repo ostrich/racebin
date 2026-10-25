@@ -10,7 +10,7 @@ pub(crate) struct ApiPasteQuery {
     /// Results per page. Defaults to 30; the maximum is 100.
     #[param(minimum = 1, maximum = 100, default = 30)]
     page_size: Option<u32>,
-    /// Case-insensitive search across paste ID, title, content, language, and attachment filename. Administrative listings also search owner usernames.
+    /// Case-insensitive search across paste ID, title, readable content, language, and attachment filename. Content search requires read access and a non-consuming owner/administrator exemption for limited-read pastes. Administrative listings also search owner usernames.
     q: Option<String>,
     /// Visibility identifier advertised by `/capabilities`.
     visibility: Option<String>,

@@ -99,9 +99,16 @@ pub(super) fn can_read(principal: &Principal, paste: &Paste) -> bool {
     principal.can("paste:manage")
         || match principal {
             Principal::Session(session) => Some(session.user.id) == paste.owner_id,
-            Principal::ApiKey(key) => key.user_id == paste.owner_id && key.has_scope("paste:read"),
+            Principal::ApiKey(key) => {
+                principal.owns_paste(paste.owner_id) && key.has_scope("paste:read")
+            }
             Principal::Anonymous => false,
         }
+}
+
+pub(crate) fn can_preview_content(principal: &Principal, paste: &Paste) -> bool {
+    can_read(principal, paste)
+        && (paste.read_limit.is_none() || principal.can_bypass_read_limit(paste.owner_id))
 }
 
 pub(super) fn authorize_owner(
@@ -110,7 +117,7 @@ pub(super) fn authorize_owner(
     scope: &str,
 ) -> DomainResult<()> {
     if principal.can("paste:manage")
-        || (principal.user_id() == paste.owner_id
+        || (principal.owns_paste(paste.owner_id)
             && (matches!(principal, Principal::Session(_)) || principal.can(scope)))
     {
         Ok(())

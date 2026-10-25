@@ -86,7 +86,7 @@ pub(crate) async fn list_pastes(
     description = "Creates a paste. Query metadata is accepted only for raw bodies. text/plain creates text and accepts an optional language; text/markdown creates canonical Markdown; text/html imports supported markup into canonical Markdown. The raw request body is always the content. JSON, URL-encoded, and multipart requests carry creation fields exclusively in the body. Multipart requests require nonempty content or at least one file; text-only multipart remains available when attachment uploads are disabled. An omitted structured body creates empty text. expires_at and expires_in are mutually exclusive. Clients may request text/plain instead of JSON to receive only the created paste URL.",
     params(
         RawCreateQuery,
-        ("Idempotency-Key" = Option<String>, Header, description = "Recommended unique key for safely retrying creation"),
+        ("Idempotency-Key" = Option<String>, Header, description = "Recommended unique key for safely retrying creation. Replays return the current resource and require current non-consuming content access; a write-only key cannot replay a private or limited-read response."),
         ("X-CSRF-Token" = Option<String>, Header, description = "Required for session-cookie mutations; not used with bearer keys")
     ),
     request_body(

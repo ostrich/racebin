@@ -17,4 +17,4 @@ pub use model::{
 pub use operations::PasteService;
 pub(crate) use rich_text::document_to_markdown;
 pub use rich_text::{html_to_document, render_markdown, text_to_markdown, MarkdownOutput};
-pub(crate) use validation::validate_paste_query;
+pub(crate) use validation::{can_preview_content, validate_paste_query};

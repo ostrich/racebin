@@ -23,6 +23,8 @@ mod http;
 mod migration;
 #[path = "integration/owner_read.rs"]
 mod owner_read;
+#[path = "integration/paste_security.rs"]
+mod paste_security;
 #[path = "integration/runners.rs"]
 mod runners;
 

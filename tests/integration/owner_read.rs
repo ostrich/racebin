@@ -59,7 +59,11 @@ async fn owner_session_reads_do_not_increment_or_consume() {
     let grant = consumed
         .grant_token
         .expect("a limited read produces a follow-up access grant");
-    assert!(services.valid_read_grant("limited", &grant).await.unwrap());
+    assert!(services
+        .get_paste_with_grant("limited", &grant)
+        .await
+        .unwrap()
+        .is_some());
     let remaining: i64 =
         sqlx::query_scalar("SELECT count(*) FROM pastes WHERE id=$1 AND consumed_at IS NULL")
             .bind("limited")

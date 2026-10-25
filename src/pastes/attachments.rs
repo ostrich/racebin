@@ -164,6 +164,7 @@ impl PasteService {
         if changed == 0 {
             return Err(DomainError::precondition("Paste revision changed"));
         }
+        super::operations::revoke_read_capabilities(&mut tx, id).await?;
         tx.commit().await.map_err(DomainError::internal)?;
         Ok(attachments)
     }
@@ -228,6 +229,7 @@ impl PasteService {
                 .await
                 .map_err(DomainError::internal)?
                 .ok_or_else(|| DomainError::precondition("Paste revision changed"))?;
+                super::operations::revoke_read_capabilities(&mut transaction, id).await?;
                 transaction.commit().await.map_err(DomainError::internal)?;
                 return Ok::<Option<i64>, DomainError>(Some(revision));
             }

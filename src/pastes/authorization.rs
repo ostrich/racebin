@@ -72,6 +72,10 @@ impl Principal {
         matches!(self, Self::Session(session) if session.user.is_admin())
     }
 
+    pub(crate) fn owns_paste(&self, owner_id: Option<i64>) -> bool {
+        owner_id.is_some_and(|owner| self.user_id() == Some(owner))
+    }
+
     pub fn is_owner(&self) -> bool {
         matches!(self, Self::Session(session) if session.user.is_owner())
     }
@@ -112,7 +116,7 @@ impl Principal {
     pub fn can_bypass_read_limit(&self, owner_id: Option<i64>) -> bool {
         self.can("paste:manage")
             || self.is_session_owner(owner_id)
-            || matches!(self, Self::ApiKey(key) if key.user_id == owner_id && key.has_scope("paste:read"))
+            || matches!(self, Self::ApiKey(key) if self.owns_paste(owner_id) && key.has_scope("paste:read"))
     }
 
     pub fn can(&self, scope: &str) -> bool {

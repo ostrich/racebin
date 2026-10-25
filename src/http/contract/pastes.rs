@@ -212,6 +212,7 @@ pub(crate) struct PasteSummary {
     #[schema(minimum = 0)]
     pub size_bytes: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Omitted unless the caller may preview content without consuming a read.
     pub excerpt: Option<String>,
 }
 
@@ -367,7 +368,7 @@ pub(crate) fn metadata_resource(
     paste: Paste,
     grant_token: Option<&str>,
 ) -> PasteMetadataResource {
-    let own = principal.can("paste:manage") || principal.user_id() == paste.owner_id;
+    let own = principal.can("paste:manage") || principal.owns_paste(paste.owner_id);
     let attachment_count = paste.attachments.len() as i64;
     let attachments = paste
         .attachments
@@ -459,8 +460,8 @@ pub(crate) fn summary(
     administrative: bool,
 ) -> PasteSummary {
     let own =
-        administrative || principal.can("paste:manage") || principal.user_id() == paste.owner_id;
-    let excerpt = (own || paste.read_limit.is_none()).then(|| {
+        administrative || principal.can("paste:manage") || principal.owns_paste(paste.owner_id);
+    let excerpt = crate::pastes::can_preview_content(principal, &paste).then(|| {
         if paste.content_kind == "markdown" {
             render_markdown(&paste.content)
                 .map(|value| value.plain_text)

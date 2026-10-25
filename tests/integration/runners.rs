@@ -36,6 +36,7 @@ async fn postgres_backend_contract_concurrency_and_copy() {
     backend_contract(repo.clone()).await;
     concurrency_contract(repo.clone()).await;
     account_security_contract(&repo).await;
+    super::paste_security::paste_content_contract(&repo).await;
     drop(repo);
 
     sqlx::query(

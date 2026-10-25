@@ -1207,6 +1207,7 @@ export interface components {
             attachment_only_filename?: string | null;
             /** Format: date-time */
             created_at: string;
+            /** @description Omitted unless the caller may preview content without consuming a read. */
             excerpt?: string | null;
             /** Format: date-time */
             expires_at?: string | null;
@@ -2192,7 +2193,7 @@ export interface operations {
                 page?: number;
                 /** @description Results per page. Defaults to 30; the maximum is 100. */
                 page_size?: number;
-                /** @description Case-insensitive search across paste ID, title, content, language, and attachment filename. Administrative listings also search owner usernames. */
+                /** @description Case-insensitive search across paste ID, title, readable content, language, and attachment filename. Content search requires read access and a non-consuming owner/administrator exemption for limited-read pastes. Administrative listings also search owner usernames. */
                 q?: string;
                 /** @description Visibility identifier advertised by `/capabilities`. */
                 visibility?: string;
@@ -3354,7 +3355,7 @@ export interface operations {
                 page?: number;
                 /** @description Results per page. Defaults to 30; the maximum is 100. */
                 page_size?: number;
-                /** @description Case-insensitive search across paste ID, title, content, language, and attachment filename. Administrative listings also search owner usernames. */
+                /** @description Case-insensitive search across paste ID, title, readable content, language, and attachment filename. Content search requires read access and a non-consuming owner/administrator exemption for limited-read pastes. Administrative listings also search owner usernames. */
                 q?: string;
                 /** @description Visibility identifier advertised by `/capabilities`. */
                 visibility?: string;
@@ -3462,7 +3463,7 @@ export interface operations {
                 read_limit?: number;
             };
             header?: {
-                /** @description Recommended unique key for safely retrying creation */
+                /** @description Recommended unique key for safely retrying creation. Replays return the current resource and require current non-consuming content access; a write-only key cannot replay a private or limited-read response. */
                 "Idempotency-Key"?: string;
                 /** @description Required for session-cookie mutations; not used with bearer keys */
                 "X-CSRF-Token"?: string;

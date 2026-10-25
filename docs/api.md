@@ -138,6 +138,10 @@ curl -X POST \
 With `Accept: text/plain`, creation returns only the absolute paste URL. JSON is
 the default. `Idempotency-Key` is optional but recommended for retried uploads;
 reuse with different content returns `409 Conflict`.
+Replays return the current resource, not a snapshot of the original body, and
+therefore require current non-consuming content access. A write-only key can
+create a private paste but receives `403` when replaying its creation; include
+`paste:read` when private creation retries must retrieve the response.
 
 The raw media type determines the representation: `text/plain` creates plain
 text and may use the `language` query parameter, `text/markdown` creates
@@ -281,6 +285,10 @@ direction is `asc` or `desc`.
 
 `q` performs a case-insensitive search over paste ID, title, content, language,
 and attachment filename; administrative listings also search owner usernames.
+Body search and excerpts require content-read permission. Limited-read content
+is excluded unless the caller has the owner/administrator non-consuming read
+exemption; searches never spend a read or disclose a body through match results.
+List-only keys can still retrieve private metadata, but not its body or excerpt.
 `owner` currently accepts `me`. Folder filters require `owner=me`, and
 `folder_id` cannot be combined with `unfiled=true`. Creation-time and numeric
 range endpoints are inclusive. `expiration` accepts `never` or `scheduled`, and

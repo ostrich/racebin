@@ -550,6 +550,13 @@ capability but cannot extend its original deadline. Cleanup later removes the
 tombstone and storage. Owner and administrator source reads do not consume the
 paste.
 Revisions and ETags protect update and delete operations from lost updates.
+Paste edits and attachment mutations revoke earlier read grants and read replay
+receipts in the same transaction. Grant-based retrieval validates the grant and
+loads content/attachments under the mutation lifecycle lock. A saved grant
+therefore cannot expose a later private revision. List excerpts and body search
+follow the same non-consuming content policy, independently of metadata-list
+permission. Idempotent creation replays require current content access because
+they return the current resource rather than an immutable response snapshot.
 
 ## Background work and cleanup
 
