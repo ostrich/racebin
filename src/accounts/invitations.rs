@@ -121,7 +121,7 @@ pub async fn redeem_invitation(
     token: &str,
     username: &str,
     password: &str,
-) -> DomainResult<User> {
+) -> DomainResult<VerifiedUser> {
     let _write_guard = repo.lock_writes().await;
     let username = validate_username(username)?.to_string();
     let token_hash = hash(token);
@@ -164,7 +164,7 @@ pub async fn redeem_invitation(
          VALUES($1,$2,'user',0,$3) RETURNING id",
     )
     .bind(&username)
-    .bind(encoded)
+    .bind(&encoded)
     .bind(unix_timestamp())
     .fetch_one(&mut *tx)
     .await
@@ -177,12 +177,15 @@ pub async fn redeem_invitation(
         .await
         .map_err(DomainError::from)?;
     tx.commit().await.map_err(DomainError::from)?;
-    Ok(User {
-        id,
-        username,
-        role: "user".to_string(),
-        is_owner: false,
-        enabled: true,
-        password_change_required: false,
+    Ok(VerifiedUser {
+        user: User {
+            id,
+            username,
+            role: "user".to_string(),
+            is_owner: false,
+            enabled: true,
+            password_change_required: false,
+        },
+        password_hash: encoded,
     })
 }

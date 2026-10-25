@@ -103,7 +103,12 @@ mod tests {
             .create_paste(&principal, &owner_preview_input)
             .await
             .unwrap();
-        let (owner_session, _, _) = accounts::create_session(&repository, 1, false)
+        let verified =
+            accounts::verify_user(&repository, "http-user", "correct horse battery staple")
+                .await
+                .unwrap()
+                .unwrap();
+        let (owner_session, _, _) = accounts::create_session(&repository, &verified, false)
             .await
             .unwrap();
         let final_read_directory = data_dir.join("attachments").join(&final_read.id);
@@ -557,6 +562,11 @@ mod tests {
         .await;
         assert_eq!(key_folders.status(), StatusCode::FORBIDDEN);
 
+        // Administrative scopes must belong to a currently administrative account.
+        sqlx::query("UPDATE users SET role='admin' WHERE id=1")
+            .execute(repository.pool())
+            .await
+            .unwrap();
         let positive_get_scopes = [
             (
                 "paste:read",
@@ -1129,7 +1139,7 @@ mod tests {
         )
         .await;
         assert_eq!(delegation_denied.status(), StatusCode::FORBIDDEN);
-        let browser_admin_scope_denied = test::call_service(
+        let browser_admin_scope_allowed = test::call_service(
             &app,
             test::TestRequest::post()
                 .uri("/api/v1/account/api-keys")
@@ -1140,7 +1150,7 @@ mod tests {
                 .to_request(),
         )
         .await;
-        assert_eq!(browser_admin_scope_denied.status(), StatusCode::FORBIDDEN);
+        assert_eq!(browser_admin_scope_allowed.status(), StatusCode::CREATED);
 
         let (disabled_key, disabled_token) = api_keys::create(
             &repository,

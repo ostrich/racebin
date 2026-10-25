@@ -232,7 +232,9 @@ pub(super) async fn backend_contract(repo: Database) {
             .unwrap()
             .is_none()
     );
-    let (session_token, _, _) = accounts::create_session(&repo, 2, false).await.unwrap();
+    let (session_token, _, _) = accounts::create_session(&repo, &verified, false)
+        .await
+        .unwrap();
     let last_login: Option<i64> = sqlx::query_scalar("SELECT last_login_at FROM users WHERE id=2")
         .fetch_one(repo.pool())
         .await
@@ -870,7 +872,7 @@ pub(super) async fn backend_contract(repo: Database) {
         )
         .await
         .unwrap();
-    let (invited_session, _, _) = accounts::create_session(&repo, invited.id, false)
+    let (invited_session, _, _) = accounts::create_session(&repo, &invited, false)
         .await
         .unwrap();
     sqlx::query("DELETE FROM users WHERE id=$1")
@@ -979,6 +981,20 @@ pub(super) async fn backend_contract(repo: Database) {
     accounts::reset_password(&repo, &reset, "replacement password phrase")
         .await
         .unwrap();
+    assert_eq!(
+        accounts::create_session(&repo, &verified, false)
+            .await
+            .unwrap_err()
+            .code,
+        "invalid_credentials"
+    );
+    assert_eq!(
+        accounts::set_verified_password(&repo, &verified, "stale replacement password")
+            .await
+            .unwrap_err()
+            .code,
+        "invalid_credentials"
+    );
     assert!(accounts::session_user(&repo, &session_token)
         .await
         .unwrap()
@@ -1165,8 +1181,14 @@ pub(super) async fn backend_contract(repo: Database) {
             .is_some()
     );
 
+    let refreshed = accounts::verify_user(&repo, "paste-owner", "replacement password phrase")
+        .await
+        .unwrap()
+        .unwrap();
     for _ in 0..25 {
-        accounts::create_session(&repo, 2, false).await.unwrap();
+        accounts::create_session(&repo, &refreshed, false)
+            .await
+            .unwrap();
     }
     let capped_sessions: i64 =
         sqlx::query_scalar("SELECT count(*) FROM sessions WHERE user_id=2 AND expires_at>$1")

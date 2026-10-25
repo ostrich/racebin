@@ -30,8 +30,10 @@ Ownership requirements and administrative alternatives are separate from that
 list; operations with nontrivial alternatives expose
 `x-racebin-authorization`. Discovery also returns the supported scope catalog.
 The user-facing scopes are `paste:read`, `paste:write`, `paste:delete`,
-`paste:list`, and `api_key:manage`; administrative keys can additionally use
-`paste:manage`, `user:manage`, and `invitation:manage`.
+and `paste:list`; administrative keys can additionally use `paste:manage`,
+`user:manage`, `invitation:manage`, and `api_key:manage`. Administrative scopes
+require the key owner to remain an enabled administrator. Demotion disables
+these keys; they cannot be reactivated while the owner remains non-administrative.
 
 Owner-only endpoints for settings, administrator roles, ownership transfer,
 and audit events deliberately accept browser sessions only. They are still

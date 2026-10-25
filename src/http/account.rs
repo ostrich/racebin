@@ -218,12 +218,8 @@ pub(crate) async fn login(
             {
                 return domain_error(error);
             }
-            match accounts::create_session(
-                &services.storage,
-                user.id,
-                body.remember.unwrap_or(false),
-            )
-            .await
+            match accounts::create_session(&services.storage, &user, body.remember.unwrap_or(false))
+                .await
             {
                 Ok((token, csrf, _)) => HttpResponse::Ok()
                     .cookie(cookies::session_cookie(
@@ -245,7 +241,7 @@ pub(crate) async fn login(
                         } else {
                             Vec::new()
                         },
-                        user: user.into(),
+                        user: user.into_user().into(),
                         csrf_token: csrf,
                     }),
                 Err(e) => domain_error(e),
@@ -347,7 +343,6 @@ pub(crate) async fn change_password(
         }
         Err(response) => return response,
     };
-    let user_id = value.user.id;
     let result = match accounts::verify_user(
         &services.storage,
         &value.user.username,
@@ -355,8 +350,8 @@ pub(crate) async fn change_password(
     )
     .await
     {
-        Ok(Some(_)) => {
-            accounts::set_password(&services.storage, user_id, &body.new_password, false)
+        Ok(Some(verified)) => {
+            accounts::set_verified_password(&services.storage, &verified, &body.new_password)
                 .await
                 .map(|_| true)
         }
@@ -491,12 +486,12 @@ pub(crate) async fn redeem_invitation(
     let username = body.username.clone();
     let password = body.password.clone();
     match accounts::redeem_invitation(&services.storage, &token, &username, &password).await {
-        Ok(user) => match accounts::create_session(&services.storage, user.id, false).await {
+        Ok(user) => match accounts::create_session(&services.storage, &user, false).await {
             Ok((session, csrf, _)) => HttpResponse::Created()
                 .cookie(cookies::session_cookie(session, false))
                 .json(contract::SessionCreatedResponse {
                     permissions: Vec::new(),
-                    user: user.into(),
+                    user: user.into_user().into(),
                     csrf_token: csrf,
                 }),
             Err(e) => domain_error(e),

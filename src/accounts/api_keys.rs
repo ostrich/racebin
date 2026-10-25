@@ -17,6 +17,42 @@ pub const VALID_SCOPES: &[&str] = &[
     "api_key:manage",
 ];
 
+pub fn administrative_scope(scope: &str) -> bool {
+    matches!(
+        scope,
+        "paste:manage" | "user:manage" | "invitation:manage" | "api_key:manage"
+    )
+}
+
+async fn check_owner_scopes(
+    repo: &Database,
+    tx: &mut sqlx::Transaction<'_, Any>,
+    user_id: Option<i64>,
+    scopes: &[String],
+) -> DomainResult<()> {
+    let Some(user_id) = user_id else {
+        return Ok(());
+    };
+    let sql = if repo.kind() == crate::database::DatabaseKind::Postgres {
+        "SELECT role,is_owner,enabled FROM users WHERE id=$1 FOR UPDATE"
+    } else {
+        "SELECT role,is_owner,enabled FROM users WHERE id=$1"
+    };
+    let (role, owner, enabled): (String, i64, i64) = sqlx::query_as(sql)
+        .bind(user_id)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(DomainError::from)?;
+    if enabled == 0
+        || (owner == 0 && role != "admin" && scopes.iter().any(|s| administrative_scope(s)))
+    {
+        return Err(DomainError::forbidden(
+            "The key owner cannot hold these scopes",
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug)]
 pub struct ApiKey {
     pub id: i64,
@@ -115,7 +151,9 @@ pub async fn create(
         .collect();
     let token = format!("rbk_{token_prefix}_{secret}");
     let created_at = unix_timestamp();
+    let _write_guard = repo.lock_writes().await;
     let mut transaction = repo.pool().begin().await.map_err(DomainError::from)?;
+    check_owner_scopes(repo, &mut transaction, user_id, &scopes).await?;
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO api_keys(user_id,name,token_prefix,token_hash,created_at)
          VALUES($1,$2,$3,$4,$5) RETURNING id",
@@ -161,7 +199,12 @@ pub async fn authenticate(repo: &Database, token: &str) -> DomainResult<Option<A
         "SELECT k.id,k.user_id,k.name,k.token_prefix,k.created_at,k.last_used_at,k.enabled,u.username AS owner_username
          FROM api_keys k LEFT JOIN users u ON u.id=k.user_id
          WHERE k.token_hash=$1 AND k.enabled=1
-           AND (k.user_id IS NULL OR u.enabled=1)",
+           AND (k.user_id IS NULL OR (u.enabled=1 AND (
+             u.role='admin' OR u.is_owner=1 OR NOT EXISTS (
+               SELECT 1 FROM api_key_scopes s WHERE s.api_key_id=k.id
+               AND s.scope IN ('paste:manage','user:manage','invitation:manage','api_key:manage')
+             )
+           )))",
     )
     .bind(token_hash(token))
     .fetch_optional(repo.pool())
@@ -316,14 +359,7 @@ pub async fn set_enabled_for_user(
     user_id: i64,
     enabled: bool,
 ) -> DomainResult<bool> {
-    sqlx::query("UPDATE api_keys SET enabled=$3 WHERE id=$1 AND user_id=$2")
-        .bind(id)
-        .bind(user_id)
-        .bind(i64::from(enabled))
-        .execute(repo.pool())
-        .await
-        .map(|result| result.rows_affected() == 1)
-        .map_err(DomainError::from)
+    change_enabled(repo, id, Some(user_id), enabled).await
 }
 
 pub async fn delete_for_user(repo: &Database, id: i64, user_id: i64) -> DomainResult<bool> {
@@ -337,13 +373,41 @@ pub async fn delete_for_user(repo: &Database, id: i64, user_id: i64) -> DomainRe
 }
 
 pub async fn set_enabled(repo: &Database, id: i64, enabled: bool) -> DomainResult<bool> {
+    change_enabled(repo, id, None, enabled).await
+}
+
+async fn change_enabled(
+    repo: &Database,
+    id: i64,
+    owner: Option<i64>,
+    enabled: bool,
+) -> DomainResult<bool> {
+    let _write_guard = repo.lock_writes().await;
+    let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
+    let key_owner: Option<Option<i64>> =
+        sqlx::query_scalar("SELECT user_id FROM api_keys WHERE id=$1")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(DomainError::from)?;
+    let Some(key_owner) = key_owner else {
+        return Ok(false);
+    };
+    if owner.is_some() && owner != key_owner {
+        return Ok(false);
+    }
+    if enabled {
+        let scopes = scopes_for(&mut *tx, id).await?;
+        check_owner_scopes(repo, &mut tx, key_owner, &scopes).await?;
+    }
     sqlx::query("UPDATE api_keys SET enabled=$2 WHERE id=$1")
         .bind(id)
         .bind(i64::from(enabled))
-        .execute(repo.pool())
+        .execute(&mut *tx)
         .await
-        .map(|result| result.rows_affected() == 1)
-        .map_err(DomainError::from)
+        .map_err(DomainError::from)?;
+    tx.commit().await.map_err(DomainError::from)?;
+    Ok(true)
 }
 
 pub async fn delete(repo: &Database, id: i64) -> DomainResult<bool> {

@@ -25,6 +25,60 @@ pub struct User {
     pub password_change_required: bool,
 }
 
+/// Proof of the exact credentials verified outside the database transaction.
+/// Rechecked while locking the account before issuing a session or changing its password.
+pub struct VerifiedUser {
+    pub(super) user: User,
+    pub(super) password_hash: String,
+}
+
+impl std::fmt::Debug for VerifiedUser {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("VerifiedUser")
+            .field("user", &self.user)
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::ops::Deref for VerifiedUser {
+    type Target = User;
+
+    fn deref(&self) -> &User {
+        &self.user
+    }
+}
+
+impl VerifiedUser {
+    pub fn into_user(self) -> User {
+        self.user
+    }
+
+    pub(super) async fn check(
+        &self,
+        repo: &Database,
+        tx: &mut sqlx::Transaction<'_, sqlx::Any>,
+    ) -> DomainResult<()> {
+        let sql = if repo.kind() == crate::database::DatabaseKind::Postgres {
+            "SELECT password_hash FROM users WHERE id=$1 AND enabled=1 FOR UPDATE"
+        } else {
+            "SELECT password_hash FROM users WHERE id=$1 AND enabled=1"
+        };
+        let current: Option<String> = sqlx::query_scalar(sql)
+            .bind(self.id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(DomainError::from)?;
+        if current.as_deref() != Some(self.password_hash.as_str()) {
+            return Err(DomainError::unauthorized(
+                "invalid_credentials",
+                "Account credentials changed; sign in again",
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct AdminUser {
     pub id: i64,
@@ -200,7 +254,7 @@ pub async fn verify_user(
     repo: &Database,
     username: &str,
     password: &str,
-) -> DomainResult<Option<User>> {
+) -> DomainResult<Option<VerifiedUser>> {
     #[derive(FromRow)]
     struct UserPassword {
         id: i64,
@@ -229,27 +283,33 @@ pub async fn verify_user(
             .is_ok()
     });
     Ok(row.and_then(|value| {
-        (valid && value.enabled != 0).then_some(User {
-            id: value.id,
-            username: value.username,
-            role: value.role,
-            is_owner: value.is_owner != 0,
-            enabled: value.enabled != 0,
-            password_change_required: value.password_change_required != 0,
+        (valid && value.enabled != 0).then_some(VerifiedUser {
+            user: User {
+                id: value.id,
+                username: value.username,
+                role: value.role,
+                is_owner: value.is_owner != 0,
+                enabled: value.enabled != 0,
+                password_change_required: value.password_change_required != 0,
+            },
+            password_hash: value.password_hash,
         })
     }))
 }
 
 pub async fn create_session(
     repo: &Database,
-    user_id: i64,
+    verified: &VerifiedUser,
     remember: bool,
 ) -> DomainResult<(String, String, i64)> {
     let token = random_token(64);
     let csrf = random_token(48);
     let created_at = unix_timestamp();
     let expires_at = created_at + if remember { 30 * 86400 } else { 12 * 3600 };
+    let _write_guard = repo.lock_writes().await;
     let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
+    verified.check(repo, &mut tx).await?;
+    let user_id = verified.id;
     sqlx::query("DELETE FROM sessions WHERE user_id=$1 AND expires_at<=$2")
         .bind(user_id)
         .bind(created_at)

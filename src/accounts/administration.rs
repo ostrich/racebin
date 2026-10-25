@@ -350,7 +350,30 @@ pub async fn set_password(
     force: bool,
 ) -> DomainResult<()> {
     let encoded = password_hash(password)?;
+    replace_password(repo, id, &encoded, force, None).await
+}
+
+pub async fn set_verified_password(
+    repo: &Database,
+    verified: &VerifiedUser,
+    password: &str,
+) -> DomainResult<()> {
+    let encoded = password_hash(password)?;
+    replace_password(repo, verified.id, &encoded, false, Some(verified)).await
+}
+
+async fn replace_password(
+    repo: &Database,
+    id: i64,
+    encoded: &str,
+    force: bool,
+    verified: Option<&VerifiedUser>,
+) -> DomainResult<()> {
+    let _write_guard = repo.lock_writes().await;
     let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
+    if let Some(verified) = verified {
+        verified.check(repo, &mut tx).await?;
+    }
     sqlx::query("UPDATE users SET password_hash=$2,password_change_required=$3 WHERE id=$1")
         .bind(id)
         .bind(encoded)

@@ -65,7 +65,11 @@ impl PasteService {
                     "A key can only grant scopes it holds",
                 ));
             }
-        } else if !principal.is_admin() && scopes.iter().any(|scope| scope.ends_with(":manage")) {
+        } else if !principal.is_admin()
+            && scopes
+                .iter()
+                .any(|scope| api_keys::administrative_scope(scope))
+        {
             return Err(DomainError::forbidden(
                 "Only administrators can grant administrative scopes",
             ));
@@ -79,7 +83,21 @@ impl PasteService {
         id: i64,
         enabled: bool,
     ) -> DomainResult<bool> {
-        api_keys::set_enabled_for_user(&self.storage, id, key_owner(principal)?, enabled).await
+        let owner = key_owner(principal)?;
+        if enabled {
+            if let Principal::ApiKey(actor) = principal {
+                if let Some(target) = api_keys::get(&self.storage, id).await? {
+                    if target.user_id == Some(owner)
+                        && target.scopes.iter().any(|scope| !actor.has_scope(scope))
+                    {
+                        return Err(DomainError::forbidden(
+                            "A key can only enable scopes it holds",
+                        ));
+                    }
+                }
+            }
+        }
+        api_keys::set_enabled_for_user(&self.storage, id, owner, enabled).await
     }
 
     pub async fn delete_api_key(&self, principal: &Principal, id: i64) -> DomainResult<bool> {

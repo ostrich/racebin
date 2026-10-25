@@ -171,6 +171,11 @@ impl Database {
             .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
+        sqlx::query("DELETE FROM auth_buckets WHERE window_started_at<=$1-900")
+            .bind(now)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
         let paste_ids: Vec<String> = sqlx::query_scalar(
             "SELECT id FROM pastes
              WHERE (expires_at IS NOT NULL AND expires_at<=$1)

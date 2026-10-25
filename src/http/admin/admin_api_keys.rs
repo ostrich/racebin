@@ -141,6 +141,19 @@ pub(crate) async fn admin_update_key(
     if let Err(response) = require_manageable_key(&services, &value, *id).await {
         return response;
     }
+    if body.enabled {
+        if let Principal::ApiKey(actor) = &value {
+            match api_keys::get(&services.storage, *id).await {
+                Ok(Some(target)) if target.scopes.iter().any(|scope| !actor.has_scope(scope)) => {
+                    return domain_error(crate::domain_error::DomainError::forbidden(
+                        "A key can only enable scopes it holds",
+                    ));
+                }
+                Err(error) => return domain_error(error),
+                _ => {}
+            }
+        }
+    }
     match api_keys::set_enabled(&services.storage, *id, body.enabled).await {
         Ok(true) => {
             let _ = crate::instance::audit::record(

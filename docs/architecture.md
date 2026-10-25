@@ -234,6 +234,13 @@ Disabled users cannot authenticate, and disabling an account or changing its
 password revokes its sessions. A forced password change limits the session to
 the session and password endpoints until the password is replaced.
 
+Session issuance and password changes recheck the exact verified password hash
+under the account write lock, so a concurrent reset cannot leave a session from
+superseded credentials. Login throttle subjects are bounded, case-sensitive
+digests; expired buckets are removed by routine cleanup. Administrative API-key
+scopes require a currently enabled administrator both at creation/activation and
+authentication. Delegated keys cannot activate scopes they do not hold.
+
 ## Data model
 
 The main relational entities are:

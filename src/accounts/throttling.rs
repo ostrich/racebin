@@ -2,6 +2,11 @@ use super::*;
 
 const ATTEMPT_WINDOW_SECONDS: i64 = 900;
 
+// Account names are case-sensitive; unknown inputs must also have bounded keys.
+fn account_subject(username: &str) -> String {
+    hash(username)
+}
+
 async fn retry_after(repo: &Database, keys: &[(&str, String, i64)]) -> DomainResult<Option<u64>> {
     let now = unix_timestamp();
     let cutoff = now - ATTEMPT_WINDOW_SECONDS;
@@ -39,7 +44,7 @@ pub async fn reserve_login_attempt(
     let cutoff = now - ATTEMPT_WINDOW_SECONDS;
     let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
     for (kind, subject, limit) in [
-        ("login_account", username.to_ascii_lowercase(), 5_i64),
+        ("login_account", account_subject(username), 5_i64),
         ("login_address", client.to_string(), 20_i64),
     ] {
         let (started, count): (i64, i64) = sqlx::query_as(
@@ -73,7 +78,7 @@ pub async fn release_login_attempt(
 ) -> DomainResult<()> {
     let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
     for (kind, subject) in [
-        ("login_account", username.to_ascii_lowercase()),
+        ("login_account", account_subject(username)),
         ("login_address", client.to_string()),
     ] {
         sqlx::query(
@@ -91,7 +96,7 @@ pub async fn release_login_attempt(
 
 pub async fn clear_login_failures(repo: &Database, username: &str) -> DomainResult<()> {
     sqlx::query("DELETE FROM auth_buckets WHERE kind='login_account' AND subject=$1")
-        .bind(username.to_ascii_lowercase())
+        .bind(account_subject(username))
         .execute(repo.pool())
         .await
         .map(|_| ())
