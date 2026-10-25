@@ -4,7 +4,7 @@ set -eu
 pattern='\b(pasta|pasta_file|app_user|user_session|user_invite|slug|owner_user_id|burn_after_reads|force_password_change|paste:admin|user:admin|invite:admin|invitation:admin|key:admin|RACEBIN_TITLE|RACEBIN_NO_FILE_UPLOAD|RACEBIN_MAX_FILE_SIZE_MB|RACEBIN_QR)\b'
 
 if find . \
-    \( -path './.git' -o -path './target' -o -path './web/dist' \
+    \( -path './.git' -o -path './local' -o -path './target' -o -path './web/dist' \
        -o -path './web/node_modules' -o -path './packaging/arch/src' \
        -o -path './packaging/arch/pkg' \) -prune -o \
     -type f ! -path './scripts/check-naming.sh' \
