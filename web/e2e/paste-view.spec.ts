@@ -17,6 +17,46 @@ test("paste view loads content through one API request", async ({ page }) => {
   expect(requests).toEqual(["POST /api/v1/pastes/sample-paste/reads"]);
 });
 
+for (const authenticated of [false, true]) {
+  test(`attachment card is fully clickable (${authenticated ? "owner" : "visitor"})`, async ({
+    page
+  }) => {
+    await mockApi(page, authenticated);
+    await page.goto("/pastes/sample-paste");
+    const card = page.locator(".attachment-row").first();
+    const link = card.getByRole("link");
+    await expect(link).toHaveAttribute("href", paste.attachments[0].url);
+    await link.evaluate((element) => {
+      element.addEventListener("click", (event) => {
+        event.preventDefault();
+        element.setAttribute(
+          "data-clicks",
+          String(Number(element.getAttribute("data-clicks") ?? 0) + 1)
+        );
+      });
+    });
+    await link.focus();
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+    await expect(link).toBeFocused();
+    expect(
+      await link.evaluate((element) => getComputedStyle(element, "::after").outlineWidth)
+    ).toBe("2px");
+    await page.keyboard.press("Enter");
+    const box = await card.boundingBox();
+    if (!box) throw new Error("Attachment card is not visible");
+    // The padded corners lie outside the filename link's original line box.
+    await page.mouse.click(box.x + 4, box.y + 4);
+    await page.mouse.click(box.x + box.width - 4, box.y + box.height - 4);
+    await expect(link).toHaveAttribute("data-clicks", "3");
+    if (authenticated) {
+      await card.getByRole("button", { name: "Delete example.txt" }).click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await expect(link).toHaveAttribute("data-clicks", "3");
+    }
+  });
+}
+
 test("paste title falls back for untitled content and resets on navigation", async ({ page }) => {
   await mockApi(page, true, { viewPaste: { ...paste, title: "" } });
   await page.goto("/pastes/sample-paste");

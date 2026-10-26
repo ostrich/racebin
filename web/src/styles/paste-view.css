@@ -81,6 +81,7 @@
   height: auto;
 }
 .attachment-row {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
@@ -89,6 +90,23 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
+}
+.attachment-row > a::after {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+  content: "";
+}
+.attachment-row > .icon-button {
+  position: relative;
+  z-index: 1;
+}
+.attachment-row > a:focus-visible {
+  outline: none;
+}
+.attachment-row > a:focus-visible::after {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 .attachment-row:has(a:hover) {
   background: var(--color-surface-subtle);

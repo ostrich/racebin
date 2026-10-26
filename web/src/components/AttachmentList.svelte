@@ -46,9 +46,9 @@
 <div class="attachments">
   {#each attachments as attachment (attachment.id)}
     <div class="attachment-row">
-      <a href={attachment.url}>
+      <a href={attachment.url} title={attachment.filename}>
         <Icon name="file-text" />
-        <span title={attachment.filename}>{attachment.filename}</span>
+        <span>{attachment.filename}</span>
         <small>{formatByteSize(attachment.size_bytes)}</small>
       </a>
       {#if canDelete}
