@@ -66,8 +66,33 @@
 
   async function copyContent(): Promise<void> {
     if (!paste) return;
-    await navigator.clipboard.writeText(paste.content);
-    showNotice("Paste copied.");
+    const rendered = paste.format === "markdown" && markdownView === "rendered";
+    try {
+      const clipboard = navigator.clipboard;
+      if (!clipboard) throw new Error("Clipboard access is unavailable in this browser.");
+      if (
+        rendered &&
+        paste.rendered_html &&
+        typeof clipboard.write === "function" &&
+        typeof ClipboardItem !== "undefined" &&
+        (typeof ClipboardItem.supports !== "function" || ClipboardItem.supports("text/html"))
+      ) {
+        await clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([paste.rendered_html], { type: "text/html" }),
+            "text/plain": new Blob([paste.plain_text], { type: "text/plain" })
+          })
+        ]);
+        showNotice("Rich text copied.");
+      } else {
+        await clipboard.writeText(rendered ? paste.plain_text : paste.content);
+        showNotice(
+          rendered ? "Copied as plain text; rich-text copying is unavailable." : "Paste copied."
+        );
+      }
+    } catch (reason) {
+      showNotice(reason instanceof Error ? reason.message : "Unable to copy paste", "error");
+    }
   }
 
   async function printPaste(): Promise<void> {

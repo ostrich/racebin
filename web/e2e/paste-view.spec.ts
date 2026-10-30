@@ -1,6 +1,107 @@
 import { expect, test } from "@playwright/test";
 import { mockApi, paste } from "./support/mockApi";
 
+const richClipboardPaste = {
+  ...paste,
+  format: "markdown" as const,
+  content: "## Scene\n\n**Dialogue** and *emphasis*.\n\n- First\n- Second",
+  rendered_html:
+    "<h2>Scene</h2><p><strong>Dialogue</strong> and <em>emphasis</em>.</p><ul><li>First</li><li>Second</li></ul>",
+  plain_text: "Scene\n\nDialogue and emphasis.\n\n- First\n- Second"
+};
+
+test("copy follows the rendered or Markdown representation using native clipboard formats", async ({
+  page,
+  context
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await mockApi(page, false, { viewPaste: richClipboardPaste });
+  await page.goto("/pastes/sample-paste");
+  await page.getByRole("button", { name: "Copy", exact: true }).click();
+  await expect(page.getByText("Rich text copied.", { exact: true })).toBeVisible();
+  const clipboard = await page.evaluate(async () => {
+    const [item] = await navigator.clipboard.read();
+    return {
+      types: item.types,
+      html: await (await item.getType("text/html")).text(),
+      text: await (await item.getType("text/plain")).text()
+    };
+  });
+  expect(clipboard.types).toEqual(expect.arrayContaining(["text/html", "text/plain"]));
+  expect(clipboard.html).toContain("<strong>Dialogue</strong>");
+  expect(clipboard.html).toContain("<em>emphasis</em>");
+  expect(clipboard.html).toContain("<li>First</li>");
+  expect(clipboard.text).toBe(richClipboardPaste.plain_text);
+
+  // Exercise an actual rich-text receiver, not just the clipboard payload.
+  await page.evaluate(() => {
+    const receiver = document.createElement("div");
+    receiver.contentEditable = "true";
+    receiver.setAttribute("aria-label", "Rich clipboard receiver");
+    document.body.append(receiver);
+  });
+  const receiver = page.getByLabel("Rich clipboard receiver");
+  await receiver.focus();
+  await page.keyboard.press("Control+V");
+  await expect(receiver.locator("strong")).toHaveText("Dialogue");
+  await expect(receiver.locator("em")).toHaveText("emphasis");
+  await expect(receiver.locator("li")).toHaveText(["First", "Second"]);
+
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await page.getByRole("button", { name: "Copy", exact: true }).click();
+  const source = await page.evaluate(async () => ({
+    types: (await navigator.clipboard.read())[0].types,
+    text: await navigator.clipboard.readText()
+  }));
+  expect(source.text).toBe(richClipboardPaste.content);
+  expect(source.types).not.toContain("text/html");
+});
+
+test("plain-text pastes copy their literal source", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await mockApi(page, false);
+  await page.goto("/pastes/sample-paste");
+  await page.getByRole("button", { name: "Copy", exact: true }).click();
+  await expect(page.getByText("Paste copied.", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(paste.content);
+});
+
+test("rendered copy falls back to readable text when rich clipboard writing is unavailable", async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: (text: string) => Object.assign(window, { __copiedText: text }) }
+    });
+  });
+  await mockApi(page, false, { viewPaste: richClipboardPaste });
+  await page.goto("/pastes/sample-paste");
+  await page.getByRole("button", { name: "Copy", exact: true }).click();
+  await expect(
+    page.getByText("Copied as plain text; rich-text copying is unavailable.", { exact: true })
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => (window as Window & { __copiedText?: string }).__copiedText)
+  ).toBe(richClipboardPaste.plain_text);
+});
+
+test("clipboard rejection reports an error rather than claiming success", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: {
+        write: async () => {
+          throw new DOMException("Clipboard permission denied", "NotAllowedError");
+        }
+      }
+    });
+  });
+  await mockApi(page, false, { viewPaste: richClipboardPaste });
+  await page.goto("/pastes/sample-paste");
+  await page.getByRole("button", { name: "Copy", exact: true }).click();
+  await expect(page.getByText("Clipboard permission denied", { exact: true })).toBeVisible();
+  await expect(page.getByText("Rich text copied.", { exact: true })).not.toBeVisible();
+});
+
 test("paste view loads content through one API request", async ({ page }) => {
   await mockApi(page, true);
   const requests: string[] = [];

@@ -168,6 +168,11 @@
                 the page interface.
               </li>
               <li>
+                In <strong>Rendered</strong> view, Copy preserves rich-text formatting in compatible
+                apps and provides readable text for plain-text apps. In <strong>Markdown</strong>
+                view, it copies the Markdown source instead.
+              </li>
+              <li>
                 Long code displays a horizontal scrollbar. Use <strong>Wrap</strong> when it appears to
                 fit long lines to the viewer.
               </li>
