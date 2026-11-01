@@ -248,7 +248,8 @@ pub(super) async fn promote_created_files(
     {
         Ok(_) => {
             for file in staged.iter_mut() {
-                file.commit();
+                file.commit()
+                    .map_err(crate::pastes::DomainError::internal)?;
             }
             *paste = services
                 .find_pending_paste(&paste.id)

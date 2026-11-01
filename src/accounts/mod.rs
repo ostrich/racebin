@@ -7,6 +7,7 @@ mod administration;
 pub mod api_keys;
 mod identity;
 mod invitations;
+mod lifecycle;
 mod throttling;
 
 pub use administration::*;

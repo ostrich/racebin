@@ -3,6 +3,7 @@ mod api_keys;
 mod attachments;
 mod authorization;
 mod folders;
+mod lifecycle;
 mod model;
 mod operations;
 mod rich_text;
@@ -10,6 +11,7 @@ mod validation;
 
 pub(crate) use api_keys::ApiKeyListOptions;
 pub use authorization::{Permission, Principal, ADMIN_PERMISSIONS, OWNER_PERMISSIONS};
+pub use lifecycle::{CreationOwnership, PasteCreation};
 pub use model::{
     Attachment, Folder, FolderOverview, NewAttachment, Page, Paste, PasteInput, PasteQuery,
     PasteRead,

@@ -930,6 +930,29 @@ mod tests {
         // scheduled reconciler removes this crash debris only after the cleanup grace.
         assert!(recovery_directory.join("orphaned-crash-file").exists());
 
+        // A completed operation may attempt repair, but never regains ownership
+        // of the published paste. A conflicting replacement must leave it alive.
+        sqlx::query("UPDATE attachments SET size_bytes=size_bytes+1 WHERE paste_id=$1")
+            .bind(recovery_id)
+            .execute(repository.pool())
+            .await
+            .unwrap();
+        let conflicting_repair = test::call_service(&app, create_recovery()).await;
+        assert_eq!(
+            conflicting_repair.status(),
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+        let survivors: (i64, i64, i64) = sqlx::query_as(
+            "SELECT (SELECT count(*) FROM pastes WHERE id=$1),
+                    (SELECT count(*) FROM attachments WHERE paste_id=$1),
+                    (SELECT count(*) FROM idempotency_records WHERE paste_id=$1 AND state='completed')",
+        )
+        .bind(recovery_id)
+        .fetch_one(repository.pool())
+        .await
+        .unwrap();
+        assert_eq!(survivors, (1, 1, 1));
+
         let write_allowed = test::call_service(
             &app,
             test::TestRequest::patch()

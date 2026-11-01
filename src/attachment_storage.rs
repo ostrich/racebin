@@ -39,8 +39,7 @@ impl UploadLeaseRegistry {
         drop(state);
         Ok(UploadLease {
             registry: self.clone(),
-            path,
-            reserved: None,
+            location: LeaseLocation::Owned(path),
         })
     }
 
@@ -66,12 +65,22 @@ impl UploadLeaseRegistry {
 
 struct UploadLease {
     registry: UploadLeaseRegistry,
-    path: PathBuf,
-    reserved: Option<PathBuf>,
+    location: LeaseLocation,
+}
+
+enum LeaseLocation {
+    Owned(PathBuf),
+    Transferring {
+        source: PathBuf,
+        destination: PathBuf,
+    },
 }
 
 impl UploadLease {
     fn reserve(&mut self, destination: &Path) -> Result<(), String> {
+        let LeaseLocation::Owned(source) = &self.location else {
+            return Err("Upload already has a reserved destination".to_string());
+        };
         let mut state = self.registry.lock();
         if state.active.contains(destination)
             || state
@@ -82,33 +91,53 @@ impl UploadLease {
             return Err("Attachment destination is already owned".to_string());
         }
         state.active.insert(destination.to_path_buf());
-        self.reserved = Some(destination.to_path_buf());
+        self.location = LeaseLocation::Transferring {
+            source: source.clone(),
+            destination: destination.to_path_buf(),
+        };
         Ok(())
     }
 
     fn finish_transfer(&mut self) {
-        let Some(destination) = self.reserved.take() else {
+        let LeaseLocation::Transferring {
+            source,
+            destination,
+        } = &self.location
+        else {
             return;
         };
         let mut state = self.registry.lock();
-        state.active.remove(&self.path);
-        self.path = destination;
+        state.active.remove(source);
+        self.location = LeaseLocation::Owned(destination.clone());
     }
 
     fn cancel_transfer(&mut self) {
-        let Some(destination) = self.reserved.take() else {
+        let LeaseLocation::Transferring {
+            source,
+            destination,
+        } = &self.location
+        else {
             return;
         };
-        self.registry.lock().active.remove(&destination);
+        self.registry.lock().active.remove(destination);
+        self.location = LeaseLocation::Owned(source.clone());
     }
 }
 
 impl Drop for UploadLease {
     fn drop(&mut self) {
         let mut state = self.registry.lock();
-        state.active.remove(&self.path);
-        if let Some(destination) = self.reserved.take() {
-            state.active.remove(&destination);
+        match &self.location {
+            LeaseLocation::Owned(path) => {
+                state.active.remove(path);
+            }
+            LeaseLocation::Transferring {
+                source,
+                destination,
+            } => {
+                state.active.remove(source);
+                state.active.remove(destination);
+            }
         }
     }
 }
@@ -138,12 +167,18 @@ pub(crate) async fn old_enough_for_cleanup(path: &Path, now: i64) -> bool {
 }
 
 pub(crate) struct StagedUpload {
-    pub(crate) path: PathBuf,
+    path: PathBuf,
     pub(crate) filename: String,
     pub(crate) storage_key: String,
     pub(crate) size_bytes: i64,
     pub(crate) digest: String,
-    lease: Option<UploadLease>,
+    state: UploadState,
+}
+
+enum UploadState {
+    Staged(UploadLease),
+    Promoted(UploadLease),
+    Committed,
 }
 
 impl StagedUpload {
@@ -162,7 +197,7 @@ impl StagedUpload {
             storage_key: Uuid::new_v4().simple().to_string(),
             size_bytes: 0,
             digest: String::new(),
-            lease: Some(lease),
+            state: UploadState::Staged(lease),
         })
     }
 
@@ -172,10 +207,9 @@ impl StagedUpload {
 
     pub(crate) async fn promote(&mut self, data_dir: &Path, paste_id: &str) -> Result<(), String> {
         let destination = attachment_path(data_dir, paste_id, &self.storage_key)?;
-        let lease = self
-            .lease
-            .as_mut()
-            .ok_or_else(|| "Upload lease is no longer active".to_string())?;
+        let UploadState::Staged(lease) = &mut self.state else {
+            return Err("Only a staged upload can be promoted".to_string());
+        };
         lease.reserve(&destination)?;
         let parent = destination
             .parent()
@@ -190,6 +224,12 @@ impl StagedUpload {
         }
         lease.finish_transfer();
         self.path = destination;
+        // Rename transferred ownership even if the subsequent timestamp refresh fails.
+        if let UploadState::Staged(lease) =
+            std::mem::replace(&mut self.state, UploadState::Committed)
+        {
+            self.state = UploadState::Promoted(lease);
+        }
         std::fs::OpenOptions::new()
             .write(true)
             .open(&self.path)
@@ -198,15 +238,26 @@ impl StagedUpload {
         Ok(())
     }
 
-    pub(crate) fn commit(&mut self) {
-        self.path = PathBuf::new();
-        self.lease.take();
+    pub(crate) fn commit(&mut self) -> Result<(), String> {
+        match &self.state {
+            UploadState::Promoted(_) => {
+                // Releasing this lease follows, never precedes, metadata commit.
+                if let UploadState::Promoted(lease) =
+                    std::mem::replace(&mut self.state, UploadState::Committed)
+                {
+                    drop(lease);
+                }
+                Ok(())
+            }
+            UploadState::Committed => Ok(()),
+            UploadState::Staged(_) => Err("An upload cannot commit before promotion".to_string()),
+        }
     }
 }
 
 impl Drop for StagedUpload {
     fn drop(&mut self) {
-        if !self.path.as_os_str().is_empty() {
+        if !matches!(self.state, UploadState::Committed) {
             let _ = std::fs::remove_file(&self.path);
         }
     }
@@ -250,5 +301,61 @@ mod tests {
         drop(upload);
 
         assert!(registry.claim_cleanup(&destination).is_some());
+    }
+
+    #[test]
+    fn cancelled_transfer_releases_only_its_reservation() {
+        let registry = UploadLeaseRegistry::default();
+        let staging = PathBuf::from("attachments/.staging/example");
+        let destination = PathBuf::from("attachments/example/file");
+        let mut lease = registry.register(staging.clone()).unwrap();
+        lease.reserve(&destination).unwrap();
+        assert!(lease.reserve(Path::new("attachments/other/file")).is_err());
+        lease.cancel_transfer();
+        assert!(registry.claim_cleanup(&destination).is_some());
+        assert!(registry.claim_cleanup(&staging).is_none());
+        lease.reserve(&destination).unwrap();
+        drop(lease);
+        assert!(registry.claim_cleanup(&staging).is_some());
+        assert!(registry.claim_cleanup(&destination).is_some());
+    }
+
+    #[actix_web::test]
+    async fn uploads_require_promotion_before_commit_and_cannot_promote_twice() {
+        let directory = tempfile::tempdir().unwrap();
+        let registry = UploadLeaseRegistry::default();
+        let mut upload =
+            StagedUpload::create(directory.path(), registry.clone(), "example.txt".into())
+                .await
+                .unwrap();
+        tokio::fs::write(upload.path(), b"example").await.unwrap();
+        assert!(upload.commit().is_err());
+        upload.promote(directory.path(), "example").await.unwrap();
+        let path = upload.path().to_path_buf();
+        assert!(registry.claim_cleanup(&path).is_none());
+        assert!(upload.promote(directory.path(), "other").await.is_err());
+        upload.commit().unwrap();
+        upload.commit().unwrap();
+        assert!(registry.claim_cleanup(&path).is_some());
+        drop(upload);
+        assert!(path.exists());
+    }
+
+    #[actix_web::test]
+    async fn failed_or_abandoned_uploads_release_ownership_and_remove_bytes() {
+        let directory = tempfile::tempdir().unwrap();
+        let registry = UploadLeaseRegistry::default();
+        let mut upload =
+            StagedUpload::create(directory.path(), registry.clone(), "example.txt".into())
+                .await
+                .unwrap();
+        let staging = upload.path().to_path_buf();
+        tokio::fs::write(&staging, b"example").await.unwrap();
+        upload.promote(directory.path(), "example").await.unwrap();
+        let final_path = upload.path().to_path_buf();
+        assert!(registry.claim_cleanup(&staging).is_some());
+        drop(upload);
+        assert!(!final_path.exists());
+        assert!(registry.claim_cleanup(&final_path).is_some());
     }
 }

@@ -207,7 +207,9 @@ pub(crate) async fn upload_attachments(
         Err(e) => return domain_error(e),
     };
     for upload in &mut staged {
-        upload.commit();
+        if let Err(error) = upload.commit() {
+            return internal(error);
+        }
     }
     let current = match services.ensure_can_update(&value, &paste_id).await {
         Ok(current) => current,

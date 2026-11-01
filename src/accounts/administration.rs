@@ -1,3 +1,4 @@
+use super::lifecycle::AccountState;
 use super::*;
 use std::collections::{HashMap, HashSet};
 
@@ -221,42 +222,27 @@ pub async fn update_user(
     .map_err(DomainError::from)?;
     let (current_role, currently_enabled, is_owner) =
         target.ok_or_else(|| DomainError::not_found("User not found"))?;
-    if is_owner != 0 && (enabled == Some(false) || admin == Some(false)) {
-        return Err(DomainError::validation_code(
-            "owner_protected",
-            "The owner cannot be disabled or demoted",
-        ));
-    }
-    let final_enabled = enabled.unwrap_or(currently_enabled != 0);
-    let final_admin = admin.unwrap_or(current_role == "admin");
-    if current_role == "admin" && currently_enabled != 0 && (!final_enabled || !final_admin) {
+    let current = AccountState::stored(&current_role, currently_enabled != 0, is_owner != 0)?;
+    let next = current.update(enabled, admin)?;
+    if current.enabled_admin() && !next.enabled_admin() {
         let admins: i64 =
             sqlx::query_scalar("SELECT count(*) FROM users WHERE role='admin' AND enabled=1")
                 .fetch_one(&mut *tx)
                 .await
                 .map_err(DomainError::from)?;
-        if admins <= 1 {
-            return Err(DomainError::validation_code(
-                "last_administrator",
-                if !final_enabled {
-                    "The last enabled administrator cannot be disabled"
-                } else {
-                    "The last administrator cannot be demoted"
-                },
-            ));
-        }
+        next.require_successor(admins)?;
     }
     let result = sqlx::query("UPDATE users SET enabled=$2,role=$3 WHERE id=$1")
         .bind(id)
-        .bind(i64::from(final_enabled))
-        .bind(if final_admin { "admin" } else { "user" })
+        .bind(i64::from(next.enabled()))
+        .bind(if next.admin() { "admin" } else { "user" })
         .execute(&mut *tx)
         .await
         .map_err(DomainError::from)?;
     if result.rows_affected() == 0 {
         return Err(DomainError::not_found("User not found"));
     }
-    if !final_enabled {
+    if !next.enabled() {
         sqlx::query("DELETE FROM sessions WHERE user_id=$1")
             .bind(id)
             .execute(&mut *tx)
@@ -268,7 +254,7 @@ pub async fn update_user(
             .await
             .map_err(DomainError::from)?;
     }
-    if !final_admin {
+    if !next.admin() {
         sqlx::query(
             "UPDATE api_keys SET enabled=0 WHERE user_id=$1 AND EXISTS (
                SELECT 1 FROM api_key_scopes
@@ -316,12 +302,14 @@ pub async fn transfer_ownership(
             .map_err(DomainError::from)?;
     match target {
         None => return Err(DomainError::not_found("User not found")),
-        Some((role, 1)) if role == "admin" => {}
-        Some(_) => {
-            return Err(DomainError::validation_code(
-                "invalid_owner",
-                "The new owner must be an enabled administrator",
-            ))
+        Some((role, enabled)) => {
+            let state = AccountState::stored(&role, enabled != 0, false)?;
+            if !state.enabled_admin() {
+                return Err(DomainError::validation_code(
+                    "invalid_owner",
+                    "The new owner must be an enabled administrator",
+                ));
+            }
         }
     }
     sqlx::query("UPDATE users SET is_owner=0 WHERE id=$1")

@@ -225,9 +225,15 @@ pub(super) async fn concurrency_contract(repo: Database) {
     let (paste, token) = [left, right]
         .into_iter()
         .find_map(|result| result.ok())
-        .map(|(paste, replayed, token)| {
-            assert!(!replayed);
-            (paste, token.unwrap())
+        .map(|creation| {
+            let racebin::pastes::PasteCreation::Pending {
+                paste,
+                ownership: racebin::pastes::CreationOwnership::Idempotent { token, .. },
+            } = creation
+            else {
+                panic!("expected owned pending creation");
+            };
+            (paste, token)
         })
         .unwrap();
     assert!(services
@@ -255,7 +261,7 @@ pub(super) async fn concurrency_contract(repo: Database) {
         )
         .await
         .unwrap();
-    let (recovered, was_recovered, recovered_token) = services
+    let recovered = services
         .create_paste_idempotent(
             &admin,
             &idempotent,
@@ -265,14 +271,13 @@ pub(super) async fn concurrency_contract(repo: Database) {
         )
         .await
         .unwrap();
-    assert_eq!(recovered.id, paste.id);
-    assert!(was_recovered);
-    assert!(recovered_token.is_none());
+    assert_eq!(recovered.paste().id, paste.id);
+    assert!(recovered.is_replay());
     assert!(services
         .complete_create_idempotency(&admin, "shared-multipart-key", &token)
         .await
         .unwrap());
-    let (replayed, was_replayed, token) = services
+    let replayed = services
         .create_paste_idempotent(
             &admin,
             &idempotent,
@@ -282,11 +287,10 @@ pub(super) async fn concurrency_contract(repo: Database) {
         )
         .await
         .unwrap();
-    assert_eq!(replayed.id, paste.id);
-    assert!(was_replayed);
-    assert!(token.is_none());
+    assert_eq!(replayed.paste().id, paste.id);
+    assert!(replayed.is_replay());
 
-    let (abandoned, _, _) = services
+    let abandoned = services
         .create_paste_idempotent(
             &admin,
             &paste_input("abandoned keyed multipart", "private"),
@@ -296,6 +300,7 @@ pub(super) async fn concurrency_contract(repo: Database) {
         )
         .await
         .unwrap();
+    let abandoned = abandoned.paste();
     sqlx::query("UPDATE pastes SET created_at=1 WHERE id=$1")
         .bind(&abandoned.id)
         .execute(repo.pool())

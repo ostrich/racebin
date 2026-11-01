@@ -75,7 +75,7 @@ pub(super) async fn backend_contract(repo: Database) {
     let anonymous = Principal::Anonymous;
 
     for key in [None, Some("creation-attachment-timestamps")] {
-        let (pending, _, token) = services
+        let creation = services
             .create_paste_idempotent(
                 &owner,
                 &paste_input("initial attachment timestamps", "private"),
@@ -85,6 +85,13 @@ pub(super) async fn backend_contract(repo: Database) {
             )
             .await
             .unwrap();
+        let racebin::pastes::PasteCreation::Pending {
+            paste: pending,
+            ownership,
+        } = creation
+        else {
+            panic!("attachment creation must be pending");
+        };
         services
             .add_creation_attachments(
                 &owner,
@@ -93,9 +100,9 @@ pub(super) async fn backend_contract(repo: Database) {
             )
             .await
             .unwrap();
-        if let Some(key) = key {
+        if let racebin::pastes::CreationOwnership::Idempotent { key, token } = ownership {
             assert!(services
-                .complete_create_idempotency(&owner, key, token.as_deref().unwrap())
+                .complete_create_idempotency(&owner, &key, &token)
                 .await
                 .unwrap());
         } else {
@@ -927,7 +934,7 @@ pub(super) async fn backend_contract(repo: Database) {
     assert!(!cleanup_directory.join("crashed-upload").exists());
     assert!(!fresh_orphan_directory.exists());
 
-    let (abandoned, replayed, token) = services
+    let abandoned = services
         .create_paste_idempotent(
             &owner,
             &paste_input("abandoned multipart", "private"),
@@ -937,8 +944,14 @@ pub(super) async fn backend_contract(repo: Database) {
         )
         .await
         .unwrap();
-    assert!(!replayed);
-    assert!(token.is_none());
+    assert!(matches!(
+        abandoned,
+        racebin::pastes::PasteCreation::Pending {
+            ownership: racebin::pastes::CreationOwnership::Unkeyed,
+            ..
+        }
+    ));
+    let abandoned = abandoned.paste();
     assert!(services
         .get_paste(&owner, &abandoned.id)
         .await

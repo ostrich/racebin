@@ -205,7 +205,7 @@ pub(crate) async fn create_paste(
         Ok(value) => value,
         Err(message) => return error(StatusCode::UNPROCESSABLE_ENTITY, "invalid_paste", message),
     };
-    let (mut paste, replayed, operation_token) = match services
+    let creation = match services
         .create_paste_idempotent(
             &principal,
             &input,
@@ -218,26 +218,46 @@ pub(crate) async fn create_paste(
         Ok(value) => value,
         Err(value) => return domain_error(value),
     };
-    let attachments_complete = replayed
-        && staged.iter().all(|file| {
-            paste.attachments.iter().any(|attachment| {
+    use crate::pastes::{CreationOwnership, PasteCreation};
+    let replayed = creation.is_replay();
+    let (mut paste, ownership) = match creation {
+        PasteCreation::Complete(paste) | PasteCreation::Replayed(paste) => (paste, None),
+        PasteCreation::Pending { paste, ownership } => (paste, Some(ownership)),
+    };
+    // A completed replay may repair missing attachment metadata, but never owns
+    // rollback of the published paste (even if that repair conflicts or fails).
+    if replayed
+        && staged.iter().any(|file| {
+            !paste.attachments.iter().any(|attachment| {
                 attachment.filename == file.filename && attachment.size_bytes == file.size_bytes
             })
-        });
-    if !staged.is_empty() && !attachments_complete {
+        })
+    {
+        if let Err(value) =
+            promote_created_files(&services, &principal, &mut paste, &mut staged).await
+        {
+            return error(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "invalid_attachment",
+                value,
+            );
+        }
+    }
+    if let Some(ownership) = ownership {
         if let Err(message) =
             promote_created_files(&services, &principal, &mut paste, &mut staged).await
         {
-            if let (Some(key), Some(token)) =
-                (idempotency_key.as_deref(), operation_token.as_deref())
-            {
-                let _ = services
-                    .rollback_create_idempotency(&principal, key, token)
-                    .await;
-            } else if !replayed {
-                let _ = services
-                    .rollback_pending_creation(&principal, &paste.id)
-                    .await;
+            match &ownership {
+                CreationOwnership::Idempotent { key, token } => {
+                    let _ = services
+                        .rollback_create_idempotency(&principal, key, token)
+                        .await;
+                }
+                CreationOwnership::Unkeyed => {
+                    let _ = services
+                        .rollback_pending_creation(&principal, &paste.id)
+                        .await;
+                }
             }
             return error(
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -245,31 +265,32 @@ pub(crate) async fn create_paste(
                 message,
             );
         }
-    }
-    if let (Some(key), Some(token)) = (idempotency_key.as_deref(), operation_token.as_deref()) {
-        match services
-            .complete_create_idempotency(&principal, key, token)
-            .await
-        {
-            Ok(true) => {}
-            Ok(false) => {
-                return internal("Paste creation operation ownership was lost");
+        match ownership {
+            CreationOwnership::Idempotent { key, token } => {
+                match services
+                    .complete_create_idempotency(&principal, &key, &token)
+                    .await
+                {
+                    Ok(true) => {}
+                    Ok(false) => return internal("Paste creation operation ownership was lost"),
+                    Err(value) => return domain_error(value),
+                }
+                paste = match services.get_paste(&principal, &paste.id).await {
+                    Ok(Some(paste)) => paste,
+                    Ok(None) => return internal("Completed paste is unavailable"),
+                    Err(value) => return domain_error(value),
+                };
             }
-            Err(value) => return domain_error(value),
+            CreationOwnership::Unkeyed => {
+                paste = match services
+                    .complete_pending_creation(&principal, &paste.id)
+                    .await
+                {
+                    Ok(paste) => paste,
+                    Err(value) => return domain_error(value),
+                };
+            }
         }
-        paste = match services.get_paste(&principal, &paste.id).await {
-            Ok(Some(paste)) => paste,
-            Ok(None) => return internal("Completed paste is unavailable"),
-            Err(value) => return domain_error(value),
-        };
-    } else if !staged.is_empty() && !replayed {
-        paste = match services
-            .complete_pending_creation(&principal, &paste.id)
-            .await
-        {
-            Ok(paste) => paste,
-            Err(value) => return domain_error(value),
-        };
     }
     let tag = contract::etag(&paste);
     let resource = match contract::resource(&req, &principal, paste, None) {

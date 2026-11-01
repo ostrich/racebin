@@ -1,3 +1,5 @@
+use super::lifecycle::{CreationState, IdempotencyState, ReadCapabilityExpiry, ReadTransition};
+use super::{CreationOwnership, PasteCreation};
 use crate::crypto::sha256_hex;
 use crate::database::Database;
 use sqlx::{Any, Executor};
@@ -301,7 +303,9 @@ impl PasteService {
                         replayed: false,
                     }));
                 }
-                let grant_token = create_read_grant(&mut tx, &paste, replay_expires_at).await?;
+                let expiry = ReadCapabilityExpiry::replay(replay_expires_at, now)
+                    .ok_or_else(|| DomainError::internal("Expired read receipt selected"))?;
+                let grant_token = create_read_grant(&mut tx, &paste, expiry).await?;
                 paste = redact_folder(principal, paste, false);
                 tx.commit().await.map_err(DomainError::internal)?;
                 return Ok(Some(PasteRead {
@@ -330,21 +334,21 @@ impl PasteService {
         let Some(mut paste) = paste.take().filter(|paste| can_read(principal, paste)) else {
             return Ok(None);
         };
-        let next_reads = paste.read_count + 1;
-        let consumed = paste
-            .read_limit
-            .is_some_and(|read_limit| next_reads >= read_limit);
         paste.attachments = load_attachments_from(&mut *tx, &paste.id).await?;
         paste.attachment_count = paste.attachments.len() as i64;
         paste.size_bytes = paste_size(&paste);
-        if principal.can_bypass_read_limit(paste.owner_id) {
-            tx.commit().await.map_err(DomainError::internal)?;
-            return Ok(Some(PasteRead {
-                paste: redact_folder(principal, paste, false),
-                grant_token: None,
-                replayed: false,
-            }));
-        }
+        let (next_reads, consumed) = match ReadTransition::decide(principal, &paste) {
+            ReadTransition::Exempt => {
+                tx.commit().await.map_err(DomainError::internal)?;
+                return Ok(Some(PasteRead {
+                    paste: redact_folder(principal, paste, false),
+                    grant_token: None,
+                    replayed: false,
+                }));
+            }
+            ReadTransition::Counted { count } => (count, false),
+            ReadTransition::Final { count } => (count, true),
+        };
         if consumed {
             sqlx::query("UPDATE pastes SET read_count=$2,last_read_at=$3,consumed_at=$3,updated_at=$3,revision=revision+1 WHERE id=$1")
                 .bind(&paste.id)
@@ -362,14 +366,14 @@ impl PasteService {
                 .await
                 .map_err(DomainError::internal)?;
         }
-        let grant_expires_at = now + 900;
+        let grant_expires_at = ReadCapabilityExpiry::fresh(now);
         if let Some(key_hash) = key_hash.as_deref() {
             sqlx::query(
                 "INSERT INTO paste_read_receipts(paste_id,key_hash,expires_at) VALUES($1,$2,$3)",
             )
             .bind(&paste.id)
             .bind(key_hash)
-            .bind(grant_expires_at)
+            .bind(grant_expires_at.timestamp())
             .execute(&mut *tx)
             .await
             .map_err(DomainError::internal)?;
@@ -438,7 +442,7 @@ impl PasteService {
         principal: &Principal,
         input: &PasteInput,
     ) -> DomainResult<Paste> {
-        self.create_paste_with_state(principal, input, "complete")
+        self.create_paste_with_state(principal, input, CreationState::Complete)
             .await
     }
 
@@ -446,7 +450,7 @@ impl PasteService {
         &self,
         principal: &Principal,
         input: &PasteInput,
-        creation_state: &str,
+        creation_state: CreationState,
     ) -> DomainResult<Paste> {
         let owner = principal
             .user_id()
@@ -482,11 +486,11 @@ impl PasteService {
         .bind(now)
         .bind(input.expires_at.flatten())
         .bind(input.read_limit.flatten())
-        .bind(creation_state)
+        .bind(creation_state.as_str())
         .execute(self.storage.pool())
         .await
         .map_err(DomainError::internal)?;
-        self.find_paste_record(&id, creation_state == "pending")
+        self.find_paste_record(&id, creation_state == CreationState::Pending)
             .await?
             .ok_or_else(|| DomainError::internal("Paste creation failed"))
     }
@@ -498,20 +502,22 @@ impl PasteService {
         idempotency_key: Option<&str>,
         request_hash: &str,
         attachment_count: usize,
-    ) -> DomainResult<(Paste, bool, Option<String>)> {
+    ) -> DomainResult<PasteCreation> {
         if !principal.can("paste:write") && !matches!(principal, Principal::Session(_)) {
             return Err(DomainError::forbidden("Missing paste:write scope"));
         }
         let Some(key) = idempotency_key else {
-            let creation_state = if attachment_count > 0 {
-                "pending"
-            } else {
-                "complete"
-            };
+            let creation_state = CreationState::for_attachments(attachment_count);
             return self
                 .create_paste_with_state(principal, input, creation_state)
                 .await
-                .map(|paste| (paste, false, None));
+                .map(|paste| match creation_state {
+                    CreationState::Complete => PasteCreation::Complete(paste),
+                    CreationState::Pending => PasteCreation::Pending {
+                        paste,
+                        ownership: CreationOwnership::Unkeyed,
+                    },
+                });
         };
         let owner = principal
             .user_id()
@@ -564,7 +570,7 @@ impl PasteService {
                     "Reading the current replay response requires paste content access",
                 ));
             }
-            return Ok((paste, true, None));
+            return Ok(PasteCreation::Replayed(paste));
         }
 
         validate_input(input, now)?;
@@ -602,7 +608,7 @@ impl PasteService {
         .bind(now)
         .bind(input.expires_at.flatten())
         .bind(input.read_limit.flatten())
-        .bind(if has_attachments { "pending" } else { "complete" })
+        .bind(CreationState::for_attachments(attachment_count).as_str())
         .execute(&mut *tx)
         .await
         .map_err(DomainError::internal)?;
@@ -632,7 +638,7 @@ impl PasteService {
                         "Reading the current replay response requires paste content access",
                     ));
                 }
-                return Ok((paste, true, None));
+                return Ok(PasteCreation::Replayed(paste));
             }
             return Err(DomainError::internal(error));
         }
@@ -641,7 +647,16 @@ impl PasteService {
             .find_paste_record(&id, has_attachments)
             .await?
             .ok_or_else(|| DomainError::internal("Paste creation failed"))?;
-        Ok((paste, false, operation_token))
+        Ok(match operation_token {
+            Some(token) => PasteCreation::Pending {
+                paste,
+                ownership: CreationOwnership::Idempotent {
+                    key: key.to_owned(),
+                    token,
+                },
+            },
+            None => PasteCreation::Complete(paste),
+        })
     }
 
     async fn existing_idempotent_create(
@@ -671,7 +686,10 @@ impl PasteService {
                 "Idempotency key was already used with a different request",
             ));
         }
-        let state: String = row.try_get("state").map_err(DomainError::internal)?;
+        let state = IdempotencyState::parse(
+            &row.try_get::<String, _>("state")
+                .map_err(DomainError::internal)?,
+        )?;
         let paste_id: Option<String> = row.try_get("paste_id").map_err(DomainError::internal)?;
         let paste_id = paste_id.ok_or_else(|| {
             DomainError::conflict(
@@ -689,7 +707,7 @@ impl PasteService {
                     "Idempotency resource no longer exists",
                 )
             })?;
-        if state == "pending" {
+        if state == IdempotencyState::Pending {
             let expected: i64 = row
                 .try_get("expected_attachment_count")
                 .map_err(DomainError::internal)?;
@@ -756,8 +774,11 @@ impl PasteService {
             return Ok(false);
         };
         use sqlx::Row;
-        let state: String = row.try_get("state").map_err(DomainError::internal)?;
-        if state == "completed" {
+        let state = IdempotencyState::parse(
+            &row.try_get::<String, _>("state")
+                .map_err(DomainError::internal)?,
+        )?;
+        if state == IdempotencyState::Completed {
             transaction.commit().await.map_err(DomainError::internal)?;
             return Ok(true);
         }
@@ -1046,7 +1067,7 @@ async fn load_paste_for_read(
 async fn create_read_grant(
     transaction: &mut sqlx::Transaction<'_, Any>,
     paste: &Paste,
-    expires_at: i64,
+    expires_at: ReadCapabilityExpiry,
 ) -> DomainResult<Option<String>> {
     if paste.read_limit.is_none() {
         return Ok(None);
@@ -1055,7 +1076,7 @@ async fn create_read_grant(
     sqlx::query("INSERT INTO paste_read_grants(token_hash,paste_id,expires_at) VALUES($1,$2,$3)")
         .bind(hash_token(&token))
         .bind(&paste.id)
-        .bind(expires_at)
+        .bind(expires_at.timestamp())
         .execute(&mut **transaction)
         .await
         .map_err(DomainError::internal)?;
