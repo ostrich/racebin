@@ -1,26 +1,23 @@
 <script lang="ts">
-  import { login } from "../api";
   import { showNotice } from "../app/notices";
   import { navigate } from "../navigation";
-  import { replaceSession } from "../app/session";
+  import { signIn, authenticationState } from "../app/session";
 
-  let submitting = $state(false);
+  let submitting = $derived($authenticationState.phase === "authenticating");
 
   async function submit(event: SubmitEvent): Promise<void> {
     const data = new FormData(event.currentTarget as HTMLFormElement);
-    submitting = true;
+    if (submitting) return;
     try {
-      const session = await login({
+      const session = await signIn({
         username: String(data.get("username") ?? ""),
         password: String(data.get("password") ?? ""),
         remember: data.has("remember")
       });
-      replaceSession({ ...session, authenticated: true });
+      if (!session) return;
       await navigate("/pastes");
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Login failed", "error");
-    } finally {
-      submitting = false;
     }
   }
 </script>

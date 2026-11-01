@@ -1,4 +1,5 @@
 import { tick } from "svelte";
+import { NavigationTransaction } from "./transaction";
 import { get, writable } from "svelte/store";
 import { clearUnsavedChangesGuard, confirmDiscardChanges, startUnloadGuard } from "./guards";
 import { parseLocation, routeTitle, type RouteLocation } from "./routes";
@@ -17,20 +18,11 @@ type AccessPolicy = (location: RouteLocation) => string | null | Promise<string 
 type NavigationOptions = { replace?: boolean; discardConfirmed?: boolean };
 type RuntimeOptions = { accessPolicy?: AccessPolicy; siteName?: () => string };
 
-type NavigationTransaction = {
-  id: number;
-  pending: number;
-  sealed: boolean;
-  ready: Promise<void>;
-  resolve: () => void;
-};
-
 export const locationState = writable<RouteLocation>(
   parseLocation(location.pathname, location.search, location.hash)
 );
 export const navigationReady = writable(false);
 
-let transactionSequence = 0;
 let activeTransaction: NavigationTransaction | undefined;
 let currentIndex = 0;
 let currentPath = `${location.pathname}${location.search}${location.hash}`;
@@ -72,33 +64,12 @@ function scheduleScrollCheckpoint(): void {
   }, scrollCheckpointDelay);
 }
 
-function transaction(): NavigationTransaction {
-  let resolve = () => {};
-  const ready = new Promise<void>((complete) => {
-    resolve = complete;
-  });
-  return { id: ++transactionSequence, pending: 0, sealed: false, ready, resolve };
-}
-
-function settle(candidate: NavigationTransaction): void {
-  if (candidate.sealed && candidate.pending === 0) candidate.resolve();
-}
-
 /**
  * Holds completion of the navigation that mounted the calling page. The
  * release function is idempotent and cannot affect a later navigation.
  */
 export function holdNavigation(): () => void {
-  const owner = activeTransaction;
-  if (!owner || owner.sealed) return () => {};
-  owner.pending += 1;
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    owner.pending -= 1;
-    settle(owner);
-  };
+  return activeTransaction?.hold() ?? (() => {});
 }
 
 async function allowedLocation(path: string): Promise<{ path: string; location: RouteLocation }> {
@@ -172,46 +143,54 @@ async function commit(
   position: ScrollPosition,
   state?: unknown
 ): Promise<boolean> {
-  const owner = transaction();
-  activeTransaction?.resolve();
+  const owner = new NavigationTransaction();
+  activeTransaction?.cancel();
   activeTransaction = owner;
   scrollPaused = true;
 
-  const allowed = await allowedLocation(requestedPath);
-  if (activeTransaction !== owner) return false;
+  try {
+    const allowed = await allowedLocation(requestedPath);
+    if (activeTransaction !== owner) return false;
 
-  if (kind === "initial") {
-    currentIndex = historyIndex(state) ?? 0;
-    history.replaceState(stateWithNavigation(currentIndex, position, state), "", allowed.path);
-  } else if (kind === "push") {
-    currentIndex += 1;
-    history.pushState(stateWithNavigation(currentIndex, position), "", allowed.path);
-  } else if (kind === "replace") {
-    history.replaceState(stateWithNavigation(currentIndex, position), "", allowed.path);
-  } else if (allowed.path !== requestedPath) {
-    history.replaceState(stateWithNavigation(currentIndex, position, state), "", allowed.path);
+    if (kind === "initial") {
+      currentIndex = historyIndex(state) ?? 0;
+      history.replaceState(stateWithNavigation(currentIndex, position, state), "", allowed.path);
+    } else if (kind === "push") {
+      currentIndex += 1;
+      history.pushState(stateWithNavigation(currentIndex, position), "", allowed.path);
+    } else if (kind === "replace") {
+      history.replaceState(stateWithNavigation(currentIndex, position), "", allowed.path);
+    } else if (allowed.path !== requestedPath) {
+      history.replaceState(stateWithNavigation(currentIndex, position, state), "", allowed.path);
+    }
+
+    owner.publish();
+    currentPath = allowed.path;
+    navigationReady.set(true);
+    locationState.set(allowed.location);
+    updateDocument(allowed.location);
+    await tick();
+    owner.seal();
+    await owner.ready;
+    if (activeTransaction !== owner) return false;
+    await tick();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    if (activeTransaction !== owner) return false;
+    const revealedFragment = revealFragment(allowed.location.hash);
+    if (!revealedFragment) restoreScroll(position);
+    const settledPosition = revealedFragment ? currentScroll() : position;
+    scrollPositions.set(currentIndex, settledPosition);
+    replaceSavedScroll(currentIndex, settledPosition);
+    scrollPaused = false;
+    owner.complete();
+    if (!revealedFragment && (kind === "push" || kind === "replace")) focusRoute();
+    return true;
+  } catch (error) {
+    owner.cancel();
+    if (activeTransaction !== owner) return false;
+    scrollPaused = false;
+    throw error;
   }
-
-  currentPath = allowed.path;
-  navigationReady.set(true);
-  locationState.set(allowed.location);
-  updateDocument(allowed.location);
-  await tick();
-  owner.sealed = true;
-  settle(owner);
-  await owner.ready;
-  if (activeTransaction !== owner) return false;
-  await tick();
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-  if (activeTransaction !== owner) return false;
-  const revealedFragment = revealFragment(allowed.location.hash);
-  if (!revealedFragment) restoreScroll(position);
-  const settledPosition = revealedFragment ? currentScroll() : position;
-  scrollPositions.set(currentIndex, settledPosition);
-  replaceSavedScroll(currentIndex, settledPosition);
-  scrollPaused = false;
-  if (!revealedFragment && (kind === "push" || kind === "replace")) focusRoute();
-  return true;
 }
 
 export async function navigate(path: string, navigation: NavigationOptions = {}): Promise<boolean> {
@@ -289,7 +268,7 @@ export async function startNavigation(runtimeOptions: RuntimeOptions = {}): Prom
     window.removeEventListener("popstate", onPopState);
     window.removeEventListener("pagehide", onPageHide);
     stopUnloadGuard();
-    activeTransaction?.resolve();
+    activeTransaction?.cancel();
     activeTransaction = undefined;
     clearUnsavedChangesGuard();
     stopRuntime = undefined;

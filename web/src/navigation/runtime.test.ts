@@ -55,6 +55,20 @@ describe("navigation runtime", () => {
     stop();
   });
 
+  it("recovers from a failed policy without committing or poisoning later navigation", async () => {
+    const stop = await startNavigation({
+      accessPolicy: (location) => {
+        if (location.path === "/help") throw new Error("policy failed");
+        return null;
+      }
+    });
+    await expect(navigate("/help")).rejects.toThrow("policy failed");
+    expect(location.pathname).toBe("/");
+    expect(await navigate("/explore")).toBe(true);
+    expect(location.pathname).toBe("/explore");
+    stop();
+  });
+
   it("waits for the mounted page's readiness hold before completing", async () => {
     let release = () => {};
     let markHeld = () => {};

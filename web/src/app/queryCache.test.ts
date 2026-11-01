@@ -47,4 +47,22 @@ describe("query cache", () => {
     await pending;
     expect(cachedQuery("/items")).toBeUndefined();
   });
+
+  it("retains the last ready value during and after a failed refresh", async () => {
+    await loadQuery("/items", async () => "cached");
+    let reject!: (error: Error) => void;
+    const refresh = loadQuery(
+      "/items",
+      () =>
+        new Promise((_, fail) => {
+          reject = fail;
+        }),
+      { freshForMs: 0 }
+    );
+    expect(cachedQuery("/items")).toBe("cached");
+    reject(new Error("offline"));
+    await expect(refresh).rejects.toThrow("offline");
+    expect(cachedQuery("/items")).toBe("cached");
+    expect(await loadQuery("/items", async () => "recovered", { freshForMs: 0 })).toBe("recovered");
+  });
 });

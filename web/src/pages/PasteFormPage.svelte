@@ -24,6 +24,12 @@
   import { confirmAction } from "../app/confirmations";
   import { useDirtyForm } from "../app/dirtyForm";
   import { stagePasteHandoff } from "../app/pasteHandoff";
+  import {
+    isSaving,
+    transitionSave,
+    type SaveState,
+    type ConversionState
+  } from "../app/editorWorkflow";
   import { normalizeLanguage } from "../languages";
   import { showNotice } from "../app/notices";
   import { holdNavigation, navigate } from "../navigation";
@@ -52,15 +58,16 @@
   let expirationMode = $state<ExpirationMode>("never");
   let expiresAt = $state("");
   let readLimit = $state("");
-  let submitting = $state(false);
-  let switching = $state(false);
+  let saveState = $state<SaveState>({ phase: "idle" });
+  let conversionState = $state<ConversionState>({ phase: "idle" });
+  let submitting = $derived(isSaving(saveState));
+  let switching = $derived(conversionState.phase !== "idle");
   let editorHeight = $state(410);
   let editorHeightCustomized = false;
   let baseline = $state("");
   let initialized = $state(false);
   const dirtyGuard = useDirtyForm(() => dirty);
   const initialLoadReady = holdNavigation();
-  const drafts = new Map<ContentKind, string>();
   const minimumEditorHeight = 240;
   const minimumAutomaticEditorHeight = 340;
   const defaultPageBottomBuffer = 42;
@@ -225,7 +232,6 @@
         ? localDateTime(new Date(Date.now() + $appState.config.default_expiration_seconds * 1000))
         : "";
     readLimit = source?.read_limit ? String(source.read_limit) : "";
-    drafts.set(contentKind, content);
     void tick().then(() => {
       baseline = snapshot();
       initialized = true;
@@ -276,14 +282,19 @@
     const source = contentKind;
     const target = selector.value as ContentKind;
     selector.value = source;
-    if (source === target) return;
-    switching = true;
+    if (source === target || submitting || switching) return;
+    const original = source === "markdown" ? markdown : content;
+    conversionState = { phase: "converting", source, target, original };
+    function ensureCurrent(): void {
+      if (original !== (source === "markdown" ? markdown : content)) {
+        throw new Error("Content changed during conversion. Try again.");
+      }
+    }
     try {
       if (
         (source === "text" && target === "markdown" && !content) ||
         (source === "markdown" && target === "text" && !markdown)
       ) {
-        drafts.set(source, source === "markdown" ? markdown : content);
         if (target === "markdown") markdown = "";
         else content = "";
         contentKind = target;
@@ -291,14 +302,22 @@
       }
       if (source === "markdown") {
         const converted = await convert("markdown", "text");
+        ensureCurrent();
         const convertedText = converted.body.content;
+        conversionState = { phase: "confirming", source, target, original, preview: convertedText };
         if (convertedText && !(await conversionDialog.ask(target, convertedText))) return;
-        drafts.set(target, convertedText);
         content = convertedText;
       } else if (target === "markdown") {
-        drafts.set(source, content);
         const converted = await convert("text", "markdown");
+        ensureCurrent();
         const convertedMarkdown = converted.body.content;
+        conversionState = {
+          phase: "confirming",
+          source,
+          target,
+          original,
+          preview: convertedMarkdown
+        };
         if (content && !(await conversionDialog.ask(target, convertedMarkdown))) return;
         markdown = convertedMarkdown;
       }
@@ -306,24 +325,30 @@
     } catch (reason) {
       showNotice(reason instanceof Error ? reason.message : "Conversion failed", "error");
     } finally {
-      switching = false;
+      conversionState = { phase: "idle" };
     }
   }
 
   async function showVisualEditor(): Promise<void> {
-    if (richMode === "visual") return;
+    if (richMode === "visual" || submitting || switching) return;
+    const original = markdown;
+    conversionState = { phase: "validating-visual", original };
     try {
       await convert("markdown", "markdown");
+      if (markdown !== original) throw new Error("Markdown changed during validation. Try again.");
       richMode = "visual";
     } catch (reason) {
       showNotice(
         reason instanceof Error ? reason.message : "Markdown cannot be opened visually",
         "error"
       );
+    } finally {
+      conversionState = { phase: "idle" };
     }
   }
 
   async function submit(): Promise<void> {
+    if (submitting || switching) return;
     const canonicalLanguage = contentKind === "text" ? normalizeLanguage(language) : "plaintext";
     if (!canonicalLanguage) {
       showNotice("Choose a supported language.", "error");
@@ -357,7 +382,7 @@
       showNotice("Selected attachments exceed the server upload limit.", "error");
       return;
     }
-    submitting = true;
+    saveState = transitionSave(saveState, { type: "start" });
     let created: Paste | undefined;
     try {
       const body = {
@@ -397,14 +422,22 @@
       } else {
         created = await createPaste(body as CreatePasteInput, crypto.randomUUID());
       }
+      saveState = transitionSave(saveState, {
+        type: "content-saved",
+        paste: created,
+        uploadAttachments: Boolean(pasteId && selected.length)
+      });
       if (pasteId && selected.length) {
         try {
           await uploadAttachments(created.id, selected, created._etag ?? "*");
+          saveState = transitionSave(saveState, { type: "attachments-saved" });
         } catch (reason) {
+          const message = reason instanceof Error ? reason.message : "upload failed";
+          saveState = transitionSave(saveState, { type: "attachments-failed", message });
           paste = created;
           baseline = snapshot("");
           showNotice(
-            `Paste changes were saved, but attachments were not uploaded: ${reason instanceof Error ? reason.message : "upload failed"}`,
+            `Paste changes were saved, but attachments were not uploaded: ${message}`,
             "error"
           );
           return;
@@ -415,13 +448,14 @@
       if (!pasteId || !selected.length) stagePasteHandoff(created);
       await navigate(`/pastes/${created.id}`, { discardConfirmed: true });
     } catch (reason) {
-      showNotice(reason instanceof Error ? reason.message : "Unable to save paste", "error");
-    } finally {
-      submitting = false;
+      const message = reason instanceof Error ? reason.message : "Unable to save paste";
+      saveState = transitionSave(saveState, { type: "failed", message });
+      showNotice(message, "error");
     }
   }
 
   async function deletePaste(): Promise<void> {
+    if (submitting || switching) return;
     if (
       !pasteId ||
       !(await confirmAction({
@@ -492,6 +526,7 @@
                 type="button"
                 class:active={richMode === "visual"}
                 aria-pressed={richMode === "visual"}
+                disabled={switching || submitting}
                 onclick={() => {
                   void showVisualEditor();
                 }}>Visual</button
@@ -500,6 +535,7 @@
                 type="button"
                 class:active={richMode === "markdown"}
                 aria-pressed={richMode === "markdown"}
+                disabled={switching || submitting}
                 onclick={() => {
                   richMode = "markdown";
                 }}>Markdown</button
@@ -530,7 +566,11 @@
       </div>
       <div class:without-folder={!canOrganize} class="form-grid">
         <label class="field type-field"
-          ><span>Type</span><select value={contentKind} disabled={switching} onchange={changeKind}>
+          ><span>Type</span><select
+            value={contentKind}
+            disabled={switching || submitting}
+            onchange={changeKind}
+          >
             {#each $appState.config.formats as format}<option value={format}
                 >{format === "markdown" ? "Rich text" : "Text"}</option
               >{/each}
@@ -618,7 +658,11 @@
           >{submitting ? "Saving…" : paste ? "Save changes" : "Create paste"}</button
         >
         <Link class="button" href={paste ? `/pastes/${paste.id}` : "/pastes"}>Cancel</Link>
-        {#if paste}<button class="button danger" type="button" onclick={deletePaste}>Delete</button
+        {#if paste}<button
+            class="button danger"
+            type="button"
+            disabled={submitting || switching}
+            onclick={deletePaste}>Delete</button
           >{/if}
       </div>
     </form>

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { mockApi, paste } from "./support/mockApi";
+import { deferred } from "./support/deferred";
 
 test("untouched paste form navigates without a discard prompt", async ({ page }) => {
   await mockApi(page, true);
@@ -280,6 +281,52 @@ test("text conversion previews the converted Markdown", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Convert to rich text?" })).toBeVisible();
   await expect(page.locator(".site-dialog pre")).toContainText(paste.content);
   await expect(page.locator(".site-dialog pre")).not.toContainText("Original plain text");
+});
+
+test("cancelled conversion retains the original format and content and can be retried", async ({
+  page
+}) => {
+  await mockApi(page, true, { convertedMarkdown: "Converted Markdown" });
+  await page.goto("/pastes/new");
+  const content = page.getByRole("textbox", { name: "Paste content" });
+  const type = page.getByRole("combobox", { name: "Type", exact: true });
+  await content.fill("Original plain text");
+  await type.selectOption("markdown");
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(type).toHaveValue("text");
+  await expect(content).toHaveValue("Original plain text");
+  await type.selectOption("markdown");
+  await page.getByRole("dialog").getByRole("button", { name: "Convert", exact: true }).click();
+  await expect(type).toHaveValue("markdown");
+  await expect(page.locator(".tiptap")).toContainText("Converted Markdown");
+});
+
+test("a late conversion cannot overwrite content edited while its request was pending", async ({
+  page
+}) => {
+  await mockApi(page, true);
+  const started = deferred();
+  const finish = deferred();
+  await page.route("**/api/v1/content-conversions", async (route) => {
+    started.release();
+    await finish.promise;
+    await route.fulfill({
+      json: { body: { format: "markdown", content: "Old converted content" } }
+    });
+  });
+  await page.goto("/pastes/new");
+  const content = page.getByRole("textbox", { name: "Paste content" });
+  const type = page.getByRole("combobox", { name: "Type", exact: true });
+  await content.fill("Original plain text");
+  await type.selectOption("markdown");
+  await started.promise;
+  await content.fill("Newer text");
+  finish.release();
+  await expect(page.getByRole("status")).toContainText("Content changed during conversion");
+  await expect(type).toHaveValue("text");
+  await expect(type).toBeEnabled();
+  await expect(content).toHaveValue("Newer text");
+  await expect(page.getByRole("dialog")).not.toBeVisible();
 });
 
 test("paste form labels share the same dark-mode color", async ({ page }) => {

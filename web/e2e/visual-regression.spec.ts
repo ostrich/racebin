@@ -108,9 +108,9 @@ test("help page", { tag: "@visual" }, async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/help");
   await expect(page.getByRole("heading", { name: "Using Racebin" })).toBeVisible();
+  // Removing horizontal scrollbars changes document height. Apply the fixture
+  // before measuring stability, not transiently between screenshot captures.
+  await page.addStyleTag({ content: ".help-content pre { overflow-x: hidden !important; }" });
   await waitForStableDocumentLayout(page);
-  await expect(page).toHaveScreenshot("help-desktop.png", {
-    ...screenshot,
-    style: ".help-content pre { overflow-x: hidden !important; }"
-  });
+  await expect(page).toHaveScreenshot("help-desktop.png", screenshot);
 });

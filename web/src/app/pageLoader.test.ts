@@ -86,4 +86,18 @@ describe("page loader", () => {
     expect(failure).not.toHaveBeenCalled();
     expect(releaseNavigation).toHaveBeenCalledOnce();
   });
+
+  it("cannot restart after disposal and releases a cancelled request exactly once", async () => {
+    const loader = createPageLoader(() => {});
+    const pending = deferred<string>();
+    loader.load(() => pending.promise, { success: vi.fn(), failure: vi.fn() });
+    loader.dispose();
+    pending.resolve("old");
+    await pending.promise;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(releaseNavigation).toHaveBeenCalledOnce();
+    const request = vi.fn(async () => "new");
+    loader.load(request, { success: vi.fn(), failure: vi.fn() });
+    expect(request).not.toHaveBeenCalled();
+  });
 });

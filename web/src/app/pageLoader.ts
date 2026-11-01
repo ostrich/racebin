@@ -14,10 +14,12 @@ type PageLoadCallbacks<T> = {
  */
 export function createPageLoader(registerDisposal: (dispose: () => void) => void = onDestroy) {
   let generation = 0;
+  let lifecycle: "active" | "disposed" = "active";
   let initialNavigationRelease: (() => void) | undefined = holdNavigation();
   const activeLoads = new Set<() => void>();
 
   function dispose(): void {
+    lifecycle = "disposed";
     generation += 1;
     initialNavigationRelease?.();
     initialNavigationRelease = undefined;
@@ -27,13 +29,14 @@ export function createPageLoader(registerDisposal: (dispose: () => void) => void
   registerDisposal(dispose);
 
   function load<T>(request: () => Promise<T>, callbacks: PageLoadCallbacks<T>): () => void {
+    if (lifecycle === "disposed") return () => {};
     const current = ++generation;
     const releaseNavigation = initialNavigationRelease ?? holdNavigation();
     initialNavigationRelease = undefined;
-    let active = true;
+    let phase: "pending" | "cancelled" | "settled" = "pending";
     const cancel = () => {
-      if (!active) return;
-      active = false;
+      if (phase !== "pending") return;
+      phase = "cancelled";
       activeLoads.delete(cancel);
       if (current === generation) generation += 1;
       releaseNavigation();
@@ -42,15 +45,19 @@ export function createPageLoader(registerDisposal: (dispose: () => void) => void
 
     void request()
       .then((value) => {
-        if (active && current === generation) callbacks.success(value);
+        if (phase === "pending" && current === generation) callbacks.success(value);
       })
       .catch((reason: unknown) => {
-        if (active && current === generation) callbacks.failure(reason);
+        if (phase === "pending" && current === generation) callbacks.failure(reason);
       })
       .finally(() => {
-        if (active && current === generation) callbacks.settled?.();
-        activeLoads.delete(cancel);
-        releaseNavigation();
+        try {
+          if (phase === "pending" && current === generation) callbacks.settled?.();
+        } finally {
+          if (phase === "pending") releaseNavigation();
+          phase = "settled";
+          activeLoads.delete(cancel);
+        }
       });
 
     return cancel;

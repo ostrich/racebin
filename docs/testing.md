@@ -34,6 +34,8 @@ below.
 
 The Rust suite includes:
 
+- local lifecycle-transition tests for creation states, upload ownership and
+  commit ordering, read-capability expiry, and protected account transitions;
 - database-infrastructure and schema tests;
 - a shared SQLite/PostgreSQL backend contract for pastes, folders, accounts,
   sessions, invitations, password resets, API keys, expiration, and cascades;
@@ -115,7 +117,9 @@ different responsibilities:
 - Vitest covers route parsing, navigation transactions, access policy,
   readiness holds, superseded navigation, history/scroll state, dirty-form
   ownership, replaceable page requests, query caching, formatting, API
-  transport/resource normalization, and Svelte components in jsdom.
+  transport/resource normalization, and Svelte components in jsdom. Lifecycle
+  tests cover rejected transitions, partial save recovery, concurrent discard
+  prompts, late session responses, and cancelled/disposed request ownership.
 - Functional Playwright tests use deterministic API fixtures for editing,
   highlighting, folder/list behavior, caching, back/forward restoration,
   administration, responsive geometry, and WCAG A/AA accessibility scans of
@@ -151,6 +155,11 @@ npm run test:visual -- --update-snapshots
 Snapshot updates are review artifacts, not substitutes for diagnosing a diff.
 Prefer a geometry assertion when the important behavior can be stated without
 depending on a particular rendering host.
+
+If a screenshot fixture needs a layout-changing style, install it before the
+layout-stability wait and retain it throughout capture. Applying and removing
+such a style inside each screenshot attempt can change the document height
+between measurements and make an otherwise static page appear unstable.
 
 ## API contract and frontend boundary
 

@@ -3,7 +3,12 @@ export type DiscardPrompt = () => Promise<boolean>;
 type GuardOwner = { token: symbol; check: () => boolean };
 export type DirtyFormGuard = { disarm: () => void; unregister: () => void };
 
-let unsavedGuard: GuardOwner | undefined;
+type GuardState =
+  | { phase: "idle" }
+  | { phase: "armed"; owner: GuardOwner }
+  | { phase: "confirming"; owner: GuardOwner; response: Promise<boolean> };
+
+let state: GuardState = { phase: "idle" };
 let discardPrompt: DiscardPrompt = async () => false;
 
 export function setDiscardPrompt(prompt: DiscardPrompt): void {
@@ -13,23 +18,33 @@ export function setDiscardPrompt(prompt: DiscardPrompt): void {
 /** Registers the single form owned by the current route. */
 export function guardUnsavedChanges(check: () => boolean): DirtyFormGuard {
   const owner = { token: Symbol("dirty form"), check };
-  unsavedGuard = owner;
+  state = { phase: "armed", owner };
   const release = () => {
-    if (unsavedGuard?.token === owner.token) unsavedGuard = undefined;
+    if (state.phase !== "idle" && state.owner.token === owner.token) state = { phase: "idle" };
   };
   return { disarm: release, unregister: release };
 }
 
 export function clearUnsavedChangesGuard(): void {
-  unsavedGuard = undefined;
+  state = { phase: "idle" };
 }
 
 export function hasUnsavedChanges(): boolean {
-  return unsavedGuard?.check() ?? false;
+  return state.phase !== "idle" && state.owner.check();
 }
 
 export async function confirmDiscardChanges(): Promise<boolean> {
-  return !hasUnsavedChanges() || discardPrompt();
+  if (state.phase === "idle" || !state.owner.check()) return true;
+  if (state.phase === "confirming") return state.response;
+  const owner = state.owner;
+  const response = Promise.resolve()
+    .then(discardPrompt)
+    .then((accepted) => state.phase !== "idle" && state.owner === owner && accepted)
+    .finally(() => {
+      if (state.phase === "confirming" && state.owner === owner) state = { phase: "armed", owner };
+    });
+  state = { phase: "confirming", owner, response };
+  return response;
 }
 
 export function startUnloadGuard(): () => void {

@@ -42,4 +42,41 @@ describe("navigation guards", () => {
     stale.unregister();
     expect(hasUnsavedChanges()).toBe(false);
   });
+
+  it("shares one pending confirmation and keeps guarding after acceptance", async () => {
+    let answer!: (accepted: boolean) => void;
+    const prompt = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          answer = resolve;
+        })
+    );
+    setDiscardPrompt(prompt);
+    guardUnsavedChanges(() => true);
+    const first = confirmDiscardChanges();
+    const second = confirmDiscardChanges();
+    await Promise.resolve();
+    expect(prompt).toHaveBeenCalledOnce();
+    answer(true);
+    expect(await first).toBe(true);
+    expect(await second).toBe(true);
+    expect(hasUnsavedChanges()).toBe(true);
+  });
+
+  it("does not apply an old form's discard response to a replacement form", async () => {
+    let answer!: (accepted: boolean) => void;
+    setDiscardPrompt(
+      () =>
+        new Promise<boolean>((resolve) => {
+          answer = resolve;
+        })
+    );
+    guardUnsavedChanges(() => true);
+    const pending = confirmDiscardChanges();
+    await Promise.resolve();
+    guardUnsavedChanges(() => true);
+    answer(true);
+    expect(await pending).toBe(false);
+    expect(hasUnsavedChanges()).toBe(true);
+  });
 });

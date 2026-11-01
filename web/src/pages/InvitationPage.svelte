@@ -17,7 +17,7 @@
         password: String(data.get("password") ?? "")
       });
       try {
-        await refreshSession();
+        if (!(await refreshSession())) return;
         await navigate("/pastes");
       } catch (error) {
         showNotice(

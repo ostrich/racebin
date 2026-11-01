@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { isSessionInvalidError, logout as logoutSession } from "../api";
   import { appState } from "../app/state";
-  import { replaceSession } from "../app/session";
+  import { signOut, authenticationState } from "../app/session";
   import { confirmDiscardChanges, navigate } from "../navigation";
   import { clearNotice, notice, showNotice } from "../app/notices";
   import { setColorTheme, uiPreferences, type ColorTheme } from "../app/uiPreferences";
@@ -21,14 +20,11 @@
   async function logout(): Promise<void> {
     if (!(await confirmDiscardChanges())) return;
     try {
-      await logoutSession();
+      if (!(await signOut())) return;
     } catch (error) {
-      if (!isSessionInvalidError(error)) {
-        showNotice(error instanceof Error ? error.message : "Unable to log out", "error");
-        return;
-      }
+      showNotice(error instanceof Error ? error.message : "Unable to log out", "error");
+      return;
     }
-    replaceSession({ authenticated: false, permissions: [] });
     await navigate("/", { discardConfirmed: true });
     clearNotice();
   }
@@ -94,6 +90,7 @@
           type="button"
           title="Log out"
           aria-label="Log out"
+          disabled={$authenticationState.phase === "signing-out"}
           onclick={logout}
         >
           <Icon name="log-out" />

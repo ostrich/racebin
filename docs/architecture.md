@@ -22,6 +22,31 @@ The application is intentionally not divided into independently deployed
 services. Its internal layers provide separation of concerns while remaining
 part of one process.
 
+### Lifecycle modeling
+
+Racebin uses small, local state models rather than a shared state-machine
+framework. Persisted SQL states and public API representations are unchanged by
+these internal models. Independent dimensions, such as an account's role and
+password-change requirement, should not be flattened into a giant global enum.
+
+| Workflow | State owner and transition rules |
+| --- | --- |
+| Paste creation and idempotency | `pastes/lifecycle.rs` distinguishes complete, owned pending, and replayed creations. Only pending creations carry rollback/completion ownership. A completed replay can repair missing attachment metadata but must never roll back the published paste. Persisted idempotency states are parsed as a closed set. |
+| Attachment lifecycle | `attachment_storage.rs` owns staged, promoted, and committed uploads. A lease is either on one path or transferring between two protected paths. Only promoted uploads can commit; dropping an uncommitted upload removes its bytes. |
+| Editor saving | `app/editorWorkflow.ts` models saving content, uploading attachments, partial attachment failure, completion, and failure. Partial failure retains the saved paste/revision; retry must not create another paste. |
+| Limited reads and capabilities | `pastes/lifecycle.rs` decides exempt versus counted/final reads. Capability expiry belongs to the logical read, so a receipt replay cannot extend its lifetime. SQL transactions continue to own consumption and grant revocation. |
+| Navigation | `navigation/transaction.ts` owns resolving, publishing, waiting, finalizing, complete, and cancelled phases. Only publication accepts readiness holds; sealing waits for all outstanding holds. Superseded transactions release their waiters without finalizing another route. |
+| Editor conversion | `ConversionState` distinguishes conversion, preview confirmation, and visual-editor validation. Conversion and save operations cannot start over each other; cancelled or failed conversion preserves the original content and format. |
+| Browser authentication | `app/session.ts` owns bootstrap, stable anonymous/authenticated state, authentication, refresh, and logout. Operation generations prevent an obsolete response from resurrecting a replaced session. Changing identities clears cached data. |
+| Dirty forms | `navigation/guards.ts` owns idle, armed, and confirming states. Concurrent navigation requests share a confirmation. An old form's response cannot authorize discarding a replacement form, and acceptance alone does not disarm the mounted form. |
+| Requests and cached queries | `app/pageLoader.ts` distinguishes pending, cancelled, and settled requests and permanently disposes component-owned loaders. `app/queryCache.ts` distinguishes ready values from in-flight loads with optional previous values. Cache invalidation and request replacement retain separate generation ownership. |
+| Account security | `accounts/lifecycle.rs` models active/disabled accounts and user/admin/owner roles. Domain transitions validate owner protection and administrator succession before SQL changes; session/reset-token revocation and privileged-key disabling remain in the same transaction as the account update. |
+
+New transitions should have focused tests for valid paths, rejected ordering,
+stale completion, and cleanup ownership. Database/filesystem and browser tests
+remain necessary: testing a local transition model alone does not establish
+cross-resource correctness.
+
 ## System overview
 
 ```mermaid
