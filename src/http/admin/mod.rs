@@ -35,7 +35,7 @@ async fn require_manageable_key(
     services: &PasteService,
     principal: &Principal,
     key_id: i64,
-) -> Result<(), HttpResponse> {
+) -> Result<api_keys::ApiKey, HttpResponse> {
     let key = api_keys::get(&services.storage, key_id)
         .await
         .map_err(domain_error)?
@@ -43,7 +43,7 @@ async fn require_manageable_key(
     if let Some(user_id) = key.user_id {
         require_manageable_user(services, principal, user_id).await?;
     }
-    Ok(())
+    Ok(key)
 }
 
 pub(super) fn configure(config: &mut web::ServiceConfig) {

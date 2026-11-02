@@ -100,17 +100,16 @@ pub async fn list_page(
         "SELECT COUNT(*) FROM audit_events{condition}"
     )))
     .bind(&search)
-    .fetch_one(repo.pool())
-    .await
-    .map_err(DomainError::from)?;
+    .fetch_one(repo.pool());
     let items = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT id,actor_user_id,actor_username,actor_api_key_id,action,target_type,target_id,target_label,details,created_at
          FROM audit_events{condition} ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3"
     )))
-    .bind(search)
+    .bind(&search)
     .bind(i64::from(page_size))
     .bind(i64::from(page.saturating_sub(1)) * i64::from(page_size))
-    .fetch_all(repo.pool()).await.map_err(DomainError::from)?;
+    .fetch_all(repo.pool());
+    let (total_items, items) = futures::try_join!(total_items, items).map_err(DomainError::from)?;
     Ok(Page {
         items,
         page,

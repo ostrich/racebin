@@ -9,6 +9,7 @@ async fn sqlite_backend_contract_and_concurrency() {
     backend_contract(repo.clone()).await;
     concurrency_contract(repo.clone()).await;
     account_security_contract(&repo).await;
+    super::hot_paths::hot_path_contract(&repo).await;
     drop(repo);
     let _ = std::fs::remove_dir_all(data_dir);
 }
@@ -37,6 +38,7 @@ async fn postgres_backend_contract_concurrency_and_copy() {
     concurrency_contract(repo.clone()).await;
     account_security_contract(&repo).await;
     super::paste_security::paste_content_contract(&repo).await;
+    super::hot_paths::hot_path_contract(&repo).await;
     drop(repo);
 
     sqlx::query(

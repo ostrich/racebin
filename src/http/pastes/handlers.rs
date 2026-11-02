@@ -20,11 +20,28 @@ pub(crate) async fn list_pastes(
     services: web::Data<PasteService>,
     query: web::Query<ApiPasteQuery>,
 ) -> HttpResponse {
-    let principal = match principal(&services, &req).await {
+    let query = query.into_inner().into_internal();
+    // The private workspace is independent of public-discovery policy. Do not
+    // fetch settings for owner=me (or a query that will be rejected anyway).
+    let discovery_settings = async {
+        if query
+            .as_ref()
+            .is_ok_and(|query| !query.mine.unwrap_or(false))
+        {
+            crate::instance::settings::get(&services.storage)
+                .await
+                .map(Some)
+        } else {
+            Ok(None)
+        }
+    };
+    let (resolved_principal, settings) =
+        futures::join!(principal(&services, &req), discovery_settings,);
+    let principal = match resolved_principal {
         Ok(value) => value,
         Err(response) => return response,
     };
-    let query = match query.into_inner().into_internal() {
+    let query = match query {
         Ok(value) => value,
         Err(message) => return error(StatusCode::BAD_REQUEST, "invalid_query", message),
     };
@@ -35,8 +52,9 @@ pub(crate) async fn list_pastes(
             "Authentication required for owner=me",
         );
     }
-    let public_explore_enabled = match crate::instance::settings::get(&services.storage).await {
-        Ok(settings) => settings.public_explore_enabled,
+    let public_explore_enabled = match settings {
+        Ok(Some(settings)) => settings.public_explore_enabled,
+        Ok(None) => true,
         Err(value) => return domain_error(value),
     };
     if !query.mine.unwrap_or(false) && !public_explore_enabled {
@@ -161,18 +179,27 @@ pub(crate) async fn create_paste(
             "Creation query parameters are accepted only with text/plain, text/markdown, or text/html bodies",
         );
     }
-    let parsed = if content_type == "multipart/form-data" {
-        parse_multipart(&req, payload, &services).await
+    let (parsed, settings) = if content_type == "multipart/form-data" {
+        // Multipart policy and defaults use one settings snapshot, rather than
+        // fetching settings again after a potentially long upload.
+        let settings = match crate::instance::settings::get(&services.storage).await {
+            Ok(settings) => settings,
+            Err(value) => return domain_error(value),
+        };
+        let parsed = parse_multipart(&req, payload, &services, settings.attachments_enabled).await;
+        (parsed, Ok(settings))
     } else {
-        parse_non_multipart(&content_type, query, payload)
-            .await
-            .map(|request| (request, Vec::new()))
+        let (request, settings) = futures::join!(
+            parse_non_multipart(&content_type, query, payload),
+            crate::instance::settings::get(&services.storage),
+        );
+        (request.map(|request| (request, Vec::new())), settings)
     };
     let (mut request, mut staged) = match parsed {
         Ok(value) => value,
         Err(response) => return response,
     };
-    let settings = match crate::instance::settings::get(&services.storage).await {
+    let settings = match settings {
         Ok(settings) => settings,
         Err(error) => return domain_error(error),
     };

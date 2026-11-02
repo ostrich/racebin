@@ -47,6 +47,42 @@ stale completion, and cleanup ownership. Database/filesystem and browser tests
 remain necessary: testing a local transition model alone does not establish
 cross-resource correctness.
 
+### Async work and hot paths
+
+Independent count and page queries run concurrently for paste, folder, user,
+invitation, API-key, and audit listings. API-key page scope loading depends on
+the selected IDs, but does not wait for the independent total count. These
+listings are not transactional snapshots: concurrent mutations can change a
+page and its count, just as with separate sequential queries. The administration
+summary instead uses one aggregate statement for one snapshot and round trip.
+Administrative paste pages select owner names with the page itself rather than
+issuing a follow-up owner lookup; ordinary listings do not populate that field.
+
+Authentication reads API-key metadata and scopes in one statement. Session and
+key activity timestamps are refreshed at most once per five-minute interval;
+recent credentials skip the UPDATE entirely, rather than issuing a write that
+SQL will discard. Conditional UPDATE predicates still protect concurrent
+refreshes. Identity and policy reads can overlap, but resource access remains
+behind the authorization and feature checks. `owner=me` listings skip the
+irrelevant public-discovery settings lookup entirely. Paste creation uses one multipart
+settings snapshot; raw-body parsing overlaps its independent settings read.
+Invitation and reset throttling checks filter out expired attempts without
+first deleting them; scheduled cleanup owns physical pruning.
+
+File promotions use bounded concurrency (four files), retain selection order,
+and drain every started operation before returning an error. File writes must
+flush before promotion; metadata publication follows successful promotion.
+Ordinary error handling must not cancel a filesystem future and then remove
+paths while its underlying operation may still be running.
+
+Do not parallelize SQL operations on one transaction, read-limit consumption,
+credential verification and session issuance, authorization-dependent resource
+access, ordered multipart streaming, or mutation-then-refresh workflows.
+Frontend bootstrap, workspace/dashboard reads, and independent highlighting
+already run concurrently; their readiness and stale-result guards remain
+separate from request scheduling. Increasing concurrency is not a substitute
+for removing redundant queries, and should not require unbounded task spawning.
+
 ## System overview
 
 ```mermaid

@@ -478,7 +478,7 @@ pub(crate) fn summary(
         language: (paste.content_kind == "text").then_some(paste.language),
         visibility: paste.visibility,
         owner_id: own.then_some(paste.owner_id).flatten(),
-        owner_username: None,
+        owner_username: administrative.then_some(paste.owner_username).flatten(),
         folder_id: own.then_some(paste.folder_id).flatten(),
         created_at: format_timestamp(paste.created_at),
         updated_at: format_timestamp(paste.updated_at),

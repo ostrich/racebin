@@ -198,3 +198,66 @@ test("multipart attachment creation supports final-read download grants", async 
     await anonymous.dispose();
   }
 });
+
+test("multi-file creation and later uploads publish complete bytes in selection order", async ({
+  request
+}) => {
+  const csrf = await login(request);
+  function batch(start: number, count: number) {
+    const form = new FormData();
+    const expected = Array.from({ length: count }, (_, offset) => {
+      const index = start + offset;
+      const filename = `example-${index}.txt`;
+      const content = `${index}: ${"x".repeat((index + 1) * 8192)}`;
+      form.append("file", new Blob([content], { type: "text/plain" }), filename);
+      return { filename, content };
+    });
+    return { form, expected };
+  }
+
+  // Exceed the promotion concurrency bound to exercise more than one batch.
+  const initial = batch(0, 7);
+  initial.form.set("visibility", "private");
+  const created = await request.post("/api/v1/pastes", {
+    headers: { "X-CSRF-Token": csrf, "Idempotency-Key": crypto.randomUUID() },
+    multipart: initial.form
+  });
+  expect(created.status()).toBe(201);
+  const paste = await created.json();
+  expect(paste.attachments.map((file: { filename: string }) => file.filename)).toEqual(
+    initial.expected.map((file) => file.filename)
+  );
+
+  const additional = batch(7, 3);
+  const uploaded = await request.post(`/api/v1/pastes/${paste.id}/attachments`, {
+    headers: { "X-CSRF-Token": csrf, "If-Match": created.headers().etag },
+    multipart: additional.form
+  });
+  expect(uploaded.status()).toBe(201);
+  const metadata = await request.get(`/api/v1/pastes/${paste.id}`);
+  expect(metadata.status()).toBe(200);
+  expect(metadata.headers().etag).toBe(uploaded.headers().etag);
+  const current = await metadata.json();
+  const expected = [...initial.expected, ...additional.expected];
+  expect(current.attachments.map((file: { filename: string }) => file.filename)).toEqual(
+    expected.map((file) => file.filename)
+  );
+  await Promise.all(
+    current.attachments.map(async (file: { url: string }, index: number) => {
+      const downloaded = await request.get(file.url);
+      expect(downloaded.status()).toBe(200);
+      expect(await downloaded.text()).toBe(expected[index].content);
+    })
+  );
+  const [administrative, personal] = await Promise.all([
+    request.get("/api/v1/admin/pastes", { params: { q: paste.id } }),
+    request.get("/api/v1/pastes", { params: { owner: "me", q: paste.id } })
+  ]);
+  expect(administrative.status()).toBe(200);
+  expect(personal.status()).toBe(200);
+  const [adminPage, personalPage] = await Promise.all([administrative.json(), personal.json()]);
+  expect(adminPage.items).toHaveLength(1);
+  expect(adminPage.items[0].owner_username).toBe(credentials.username);
+  expect(personalPage.items).toHaveLength(1);
+  expect(personalPage.items[0]).not.toHaveProperty("owner_username");
+});

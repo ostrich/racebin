@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use futures::{stream, StreamExt};
 use uuid::Uuid;
 
 pub(crate) const CLEANUP_GRACE_SECONDS: i64 = 3600;
@@ -182,6 +183,27 @@ enum UploadState {
 }
 
 impl StagedUpload {
+    /// Promotion is independent per file, but all filesystem futures must drain
+    /// before reporting an error: dropping a Tokio filesystem future does not
+    /// necessarily cancel its underlying operation before upload cleanup runs.
+    pub(crate) async fn promote_all(
+        uploads: &mut [Self],
+        data_dir: &Path,
+        paste_id: &str,
+    ) -> Result<(), String> {
+        const CONCURRENT_PROMOTIONS: usize = 4;
+        let results = stream::iter(uploads.iter_mut())
+            .map(|upload| upload.promote(data_dir, paste_id))
+            .buffered(CONCURRENT_PROMOTIONS)
+            .collect::<Vec<_>>()
+            .await;
+        // Preserve input-order errors and attachment ordering, not completion order.
+        results
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map(|_| ())
+    }
+
     pub(crate) async fn create(
         data_dir: &Path,
         leases: UploadLeaseRegistry,
@@ -357,5 +379,46 @@ mod tests {
         drop(upload);
         assert!(!final_path.exists());
         assert!(registry.claim_cleanup(&final_path).is_some());
+    }
+
+    #[actix_web::test]
+    async fn batch_promotion_drains_successful_files_before_returning_an_error() {
+        let directory = tempfile::tempdir().unwrap();
+        let registry = UploadLeaseRegistry::default();
+        let mut uploads = Vec::new();
+        for index in 0..7 {
+            let upload = StagedUpload::create(
+                directory.path(),
+                registry.clone(),
+                format!("example-{index}.txt"),
+            )
+            .await
+            .unwrap();
+            // The first rename fails. Every later file must still finish before
+            // the caller can drop the batch and clean up its owned paths.
+            if index > 0 {
+                tokio::fs::write(upload.path(), b"example").await.unwrap();
+            }
+            uploads.push(upload);
+        }
+        assert!(
+            StagedUpload::promote_all(&mut uploads, directory.path(), "example")
+                .await
+                .is_err()
+        );
+        let promoted = uploads
+            .iter()
+            .skip(1)
+            .map(|upload| upload.path().to_path_buf())
+            .collect::<Vec<_>>();
+        for path in &promoted {
+            assert!(path.exists());
+            assert!(registry.claim_cleanup(path).is_none());
+        }
+        drop(uploads);
+        for path in &promoted {
+            assert!(!path.exists());
+            assert!(registry.claim_cleanup(path).is_some());
+        }
     }
 }

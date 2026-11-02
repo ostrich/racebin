@@ -80,7 +80,11 @@ pub(crate) async fn upload_attachments(
     paste_id: web::Path<String>,
     mut payload: Multipart,
 ) -> HttpResponse {
-    let attachments_enabled = match crate::instance::settings::get(&services.storage).await {
+    let (settings, resolved_principal) = futures::join!(
+        crate::instance::settings::get(&services.storage),
+        principal(&services, &req),
+    );
+    let attachments_enabled = match settings {
         Ok(settings) => settings.attachments_enabled,
         Err(value) => return domain_error(value),
     };
@@ -91,10 +95,7 @@ pub(crate) async fn upload_attachments(
             "Attachments are disabled",
         );
     }
-    let value = match principal(&services, &req)
-        .await
-        .and_then(|p| require_mutation(&services, &req, p))
-    {
+    let value = match resolved_principal.and_then(|p| require_mutation(&services, &req, p)) {
         Ok(value) => value,
         Err(response) => return response,
     };
@@ -183,13 +184,22 @@ pub(crate) async fn upload_attachments(
                 return internal(e.to_string());
             }
         }
+        // Tokio file writes may still be in flight after write_all returns.
+        // Publication must wait for them, even when promotions run concurrently.
+        if let Err(error) = output.flush().await {
+            return internal(error.to_string());
+        }
         upload.size_bytes = size as i64;
         staged.push(upload);
     }
-    for upload in &mut staged {
-        if let Err(e) = upload.promote(&services.storage.data_dir, &paste.id).await {
-            return internal(e.to_string());
-        }
+    if let Err(error) = crate::attachment_storage::StagedUpload::promote_all(
+        &mut staged,
+        &services.storage.data_dir,
+        &paste.id,
+    )
+    .await
+    {
+        return internal(error);
     }
     let inputs = staged
         .iter()

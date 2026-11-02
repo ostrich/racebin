@@ -235,26 +235,11 @@ pub(crate) async fn admin_pastes(
     match services.list_pastes(&value, &query, true).await {
         Ok(page) => {
             let total_pages = contract::total_pages(page.total_items, page.page_size);
-            let owner_names = match accounts::usernames_by_ids(
-                &services.storage,
-                page.items.iter().filter_map(|paste| paste.owner_id),
-            )
-            .await
-            {
-                Ok(names) => names,
-                Err(error) => return domain_error(error),
-            };
             HttpResponse::Ok().json(contract::PastePage {
                 items: page
                     .items
                     .into_iter()
-                    .map(|paste| {
-                        let owner_username =
-                            paste.owner_id.and_then(|id| owner_names.get(&id).cloned());
-                        let mut summary = contract::summary(&req, &value, paste, true);
-                        summary.owner_username = owner_username;
-                        summary
-                    })
+                    .map(|paste| contract::summary(&req, &value, paste, true))
                     .collect(),
                 pagination: contract::Pagination {
                     page: page.page,

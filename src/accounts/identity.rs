@@ -359,11 +359,12 @@ pub async fn session_user(repo: &Database, token: &str) -> DomainResult<Option<S
         password_change_required: i64,
         csrf_token: String,
         session_id: i64,
+        last_used_at: i64,
         reauthenticated_at: Option<i64>,
     }
     let row = sqlx::query_as::<_, SessionRow>(
         "SELECT u.id,u.username,u.role,u.is_owner,u.enabled,u.password_change_required,
-                s.csrf_token,s.id AS session_id,s.reauthenticated_at
+                s.csrf_token,s.id AS session_id,s.reauthenticated_at,s.last_used_at
          FROM sessions s JOIN users u ON u.id=s.user_id
          WHERE s.token_hash=$1 AND s.expires_at>$2 AND u.enabled=1",
     )
@@ -372,14 +373,17 @@ pub async fn session_user(repo: &Database, token: &str) -> DomainResult<Option<S
     .fetch_optional(repo.pool())
     .await
     .map_err(DomainError::from)?;
+    let current = unix_timestamp();
     if let Some(value) = &row {
-        let current = unix_timestamp();
-        let _ =
-            sqlx::query("UPDATE sessions SET last_used_at=$2 WHERE id=$1 AND last_used_at<$2-300")
-                .bind(value.session_id)
-                .bind(current)
-                .execute(repo.pool())
-                .await;
+        if super::activity_refresh_due(Some(value.last_used_at), current) {
+            let _ =
+                sqlx::query("UPDATE sessions SET last_used_at=$2 WHERE id=$1 AND last_used_at<$3")
+                    .bind(value.session_id)
+                    .bind(current)
+                    .bind(current.saturating_sub(super::ACTIVITY_REFRESH_SECONDS))
+                    .execute(repo.pool())
+                    .await;
+        }
     }
     Ok(row.map(|value| SessionUser {
         user: User {

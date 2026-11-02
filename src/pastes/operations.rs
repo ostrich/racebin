@@ -36,6 +36,7 @@ impl PasteService {
             .unwrap_or(crate::limits::DEFAULT_PAGE_SIZE)
             .clamp(1, crate::limits::MAX_PAGE_SIZE);
         let offset = i64::from(page - 1).saturating_mul(i64::from(page_size));
+        let now = unix_timestamp();
         let user_id = principal.user_id();
         let owner_can_read = matches!(principal, Principal::Session(_))
             || matches!(principal, Principal::ApiKey(key) if key.has_scope("paste:read"));
@@ -125,14 +126,14 @@ impl PasteService {
              AND ($18 IS NULL OR folder_id=$18)
              AND ($19 IS NULL OR ($19=1 AND folder_id IS NULL))"
         );
-        let total: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        let total = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(format!(
             "SELECT count(*) FROM pastes WHERE {filter}"
         )))
         .bind(i64::from(admin))
         .bind(user_id)
         .bind(visibility)
         .bind(owner)
-        .bind(unix_timestamp())
+        .bind(now)
         .bind(&search)
         .bind(content_kind)
         .bind(language)
@@ -149,11 +150,11 @@ impl PasteService {
         .bind(unfiled)
         .bind(i64::from(principal.can("paste:manage")))
         .bind(i64::from(owner_can_read))
-        .fetch_one(self.storage.pool())
-        .await
-        .map_err(DomainError::internal)?;
+        .fetch_one(self.storage.pool());
         let items = sqlx::query_as::<_, Paste>(sqlx::AssertSqlSafe(format!(
             "SELECT id,owner_id,folder_id,title,CASE WHEN {preview_content} THEN substr(content,1,500) ELSE '' END AS content,
+                    CASE WHEN $1=1 THEN (SELECT username FROM users WHERE users.id=pastes.owner_id)
+                         ELSE NULL END AS owner_username,
                     content_kind,language,visibility,created_at,updated_at,modified_at,revision,consumed_at,
                     expires_at,last_read_at,read_count,read_limit,
                     (SELECT count(*) FROM attachments summary_files
@@ -170,8 +171,8 @@ impl PasteService {
         .bind(user_id)
         .bind(visibility)
         .bind(owner)
-        .bind(unix_timestamp())
-        .bind(search)
+        .bind(now)
+        .bind(&search)
         .bind(content_kind)
         .bind(language)
         .bind(has_attachments)
@@ -189,9 +190,8 @@ impl PasteService {
         .bind(i64::from(owner_can_read))
         .bind(i64::from(page_size))
         .bind(offset)
-        .fetch_all(self.storage.pool())
-        .await
-        .map_err(DomainError::internal)?;
+        .fetch_all(self.storage.pool());
+        let (total, items) = futures::try_join!(total, items).map_err(DomainError::internal)?;
         Ok(Page {
             items: items
                 .into_iter()
@@ -1153,6 +1153,7 @@ mod tests {
         Paste {
             id: "example".to_string(),
             owner_id: Some(7),
+            owner_username: None,
             folder_id: None,
             title: String::new(),
             content: "secret".to_string(),

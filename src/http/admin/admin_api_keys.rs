@@ -138,19 +138,16 @@ pub(crate) async fn admin_update_key(
     if let Err(r) = require_admin(&value, "api_key:manage") {
         return r;
     }
-    if let Err(response) = require_manageable_key(&services, &value, *id).await {
-        return response;
-    }
+    let target = match require_manageable_key(&services, &value, *id).await {
+        Ok(key) => key,
+        Err(response) => return response,
+    };
     if body.enabled {
         if let Principal::ApiKey(actor) = &value {
-            match api_keys::get(&services.storage, *id).await {
-                Ok(Some(target)) if target.scopes.iter().any(|scope| !actor.has_scope(scope)) => {
-                    return domain_error(crate::domain_error::DomainError::forbidden(
-                        "A key can only enable scopes it holds",
-                    ));
-                }
-                Err(error) => return domain_error(error),
-                _ => {}
+            if target.scopes.iter().any(|scope| !actor.has_scope(scope)) {
+                return domain_error(crate::domain_error::DomainError::forbidden(
+                    "A key can only enable scopes it holds",
+                ));
             }
         }
     }

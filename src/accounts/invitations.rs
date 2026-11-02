@@ -58,10 +58,7 @@ pub async fn list_invitations(
     if let Some(search) = &search {
         count = count.bind(search);
     }
-    let total_items = count
-        .fetch_one(repo.pool())
-        .await
-        .map_err(DomainError::from)?;
+    let total_items = count.fetch_one(repo.pool());
     let limit_parameter = if search.is_some() { "$3" } else { "$2" };
     let offset_parameter = if search.is_some() { "$4" } else { "$3" };
     let query_sql = sqlx::AssertSqlSafe(format!(
@@ -82,9 +79,8 @@ pub async fn list_invitations(
     let items = query
         .bind(i64::from(page_size))
         .bind(i64::from(page.saturating_sub(1)) * i64::from(page_size))
-        .fetch_all(repo.pool())
-        .await
-        .map_err(DomainError::from)?;
+        .fetch_all(repo.pool());
+    let (total_items, items) = futures::try_join!(total_items, items).map_err(DomainError::from)?;
     Ok(crate::pastes::Page {
         items,
         page,

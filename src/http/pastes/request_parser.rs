@@ -59,11 +59,8 @@ pub(super) async fn parse_multipart(
     req: &HttpRequest,
     payload: web::Payload,
     services: &PasteService,
+    attachments_enabled: bool,
 ) -> Result<(CreatePasteRequest, Vec<StagedFile>), HttpResponse> {
-    let attachments_enabled = crate::instance::settings::get(&services.storage)
-        .await
-        .map_err(domain_error)?
-        .attachments_enabled;
     let mut multipart = Multipart::new(req.headers(), payload);
     let mut values = HashMap::<String, String>::new();
     let mut files = Vec::new();
@@ -148,6 +145,10 @@ pub(super) async fn parse_multipart(
                     .await
                     .map_err(|error| internal(error.to_string()))?;
             }
+            output
+                .flush()
+                .await
+                .map_err(|error| internal(error.to_string()))?;
             staged.size_bytes = size as i64;
             staged.digest = lower_hex(&digest.finalize());
             files.push(staged);
@@ -229,11 +230,9 @@ pub(super) async fn promote_created_files(
     paste: &mut crate::pastes::Paste,
     staged: &mut [StagedFile],
 ) -> crate::pastes::DomainResult<()> {
-    for file in staged.iter_mut() {
-        file.promote(&services.storage.data_dir, &paste.id)
-            .await
-            .map_err(crate::pastes::DomainError::internal)?;
-    }
+    StagedFile::promote_all(staged, &services.storage.data_dir, &paste.id)
+        .await
+        .map_err(crate::pastes::DomainError::internal)?;
     let inputs = staged
         .iter()
         .map(|file| crate::pastes::NewAttachment {

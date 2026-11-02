@@ -124,6 +124,24 @@ fn from_row(row: sqlx::any::AnyRow, scopes: Vec<String>) -> DomainResult<ApiKey>
     })
 }
 
+/// Single-key reads load metadata and scopes in one statement/snapshot. The
+/// paginated list retains its bounded page-wide scope query instead of copying
+/// joined key metadata into every scope row across a whole page.
+fn from_scoped_rows(rows: Vec<sqlx::any::AnyRow>) -> DomainResult<Option<ApiKey>> {
+    let scopes = rows
+        .iter()
+        .map(|row| row.try_get::<Option<String>, _>("scope"))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(DomainError::from)?
+        .into_iter()
+        .flatten()
+        .collect();
+    rows.into_iter()
+        .next()
+        .map(|row| from_row(row, scopes))
+        .transpose()
+}
+
 pub async fn create(
     repo: &Database,
     user_id: Option<i64>,
@@ -195,35 +213,39 @@ pub async fn authenticate(repo: &Database, token: &str) -> DomainResult<Option<A
     if !token.starts_with("rbk_") {
         return Ok(None);
     }
-    let row = sqlx::query(
-        "SELECT k.id,k.user_id,k.name,k.token_prefix,k.created_at,k.last_used_at,k.enabled,u.username AS owner_username
+    let rows = sqlx::query(
+        "SELECT k.id,k.user_id,k.name,k.token_prefix,k.created_at,k.last_used_at,k.enabled,u.username AS owner_username,
+                scopes.scope
          FROM api_keys k LEFT JOIN users u ON u.id=k.user_id
+         LEFT JOIN api_key_scopes scopes ON scopes.api_key_id=k.id
          WHERE k.token_hash=$1 AND k.enabled=1
            AND (k.user_id IS NULL OR (u.enabled=1 AND (
              u.role='admin' OR u.is_owner=1 OR NOT EXISTS (
                SELECT 1 FROM api_key_scopes s WHERE s.api_key_id=k.id
                AND s.scope IN ('paste:manage','user:manage','invitation:manage','api_key:manage')
              )
-           )))",
+           ))) ORDER BY scopes.scope",
     )
     .bind(token_hash(token))
-    .fetch_optional(repo.pool())
+    .fetch_all(repo.pool())
     .await
     .map_err(DomainError::from)?;
-    let Some(row) = row else {
+    let Some(key) = from_scoped_rows(rows)? else {
         return Ok(None);
     };
-    let id = row.try_get("id").map_err(DomainError::from)?;
-    let key = from_row(row, scopes_for(repo.pool(), id).await?)?;
-    sqlx::query(
-        "UPDATE api_keys SET last_used_at=$2 WHERE id=$1
-         AND (last_used_at IS NULL OR last_used_at<$2-300)",
-    )
-    .bind(key.id)
-    .bind(unix_timestamp())
-    .execute(repo.pool())
-    .await
-    .map_err(DomainError::from)?;
+    let now = unix_timestamp();
+    if super::activity_refresh_due(key.last_used_at, now) {
+        sqlx::query(
+            "UPDATE api_keys SET last_used_at=$2 WHERE id=$1
+         AND (last_used_at IS NULL OR last_used_at<$3)",
+        )
+        .bind(key.id)
+        .bind(now)
+        .bind(now.saturating_sub(super::ACTIVITY_REFRESH_SECONDS))
+        .execute(repo.pool())
+        .await
+        .map_err(DomainError::from)?;
+    }
     Ok(Some(key))
 }
 
@@ -272,9 +294,7 @@ pub async fn list_page(
     .bind(privileged)
     .bind(&search)
     .bind(enabled_value)
-    .fetch_one(repo.pool())
-    .await
-    .map_err(DomainError::from)?;
+    .fetch_one(repo.pool());
     let sort_field = match query.sort {
         "name" => "LOWER(k.name)",
         "owner" => "LOWER(COALESCE(u.username,''))",
@@ -287,46 +307,54 @@ pub async fn list_page(
          FROM api_keys k LEFT JOIN users u ON u.id=k.user_id{where_clause}
          ORDER BY {sort_field} {direction},k.id {direction} LIMIT $5 OFFSET $6"
     ));
-    let rows = sqlx::query(sql)
-        .bind(owner_id)
-        .bind(privileged)
-        .bind(search)
-        .bind(enabled_value)
-        .bind(i64::from(query.page_size))
-        .bind(i64::from(query.page.saturating_sub(1)) * i64::from(query.page_size))
-        .fetch_all(repo.pool())
-        .await
-        .map_err(DomainError::from)?;
-    let page_ids = rows
-        .iter()
-        .map(|row| row.try_get::<i64, _>("id").map_err(DomainError::from))
-        .collect::<DomainResult<Vec<_>>>()?;
-    let mut scopes_by_key = std::collections::HashMap::<i64, Vec<String>>::new();
-    if !page_ids.is_empty() {
-        let mut query = sqlx::query(sqlx::AssertSqlSafe(scopes_for_page_sql(page_ids.len())));
-        for id in page_ids {
-            query = query.bind(id);
-        }
-        for row in query
+    // Scope loading depends on the page IDs, not on the independent count.
+    let items = async {
+        let rows = sqlx::query(sql)
+            .bind(owner_id)
+            .bind(privileged)
+            .bind(&search)
+            .bind(enabled_value)
+            .bind(i64::from(query.page_size))
+            .bind(i64::from(query.page.saturating_sub(1)) * i64::from(query.page_size))
             .fetch_all(repo.pool())
             .await
-            .map_err(DomainError::from)?
-        {
-            let key_id = row.try_get("api_key_id").map_err(DomainError::from)?;
-            scopes_by_key
-                .entry(key_id)
-                .or_default()
-                .push(row.try_get("scope").map_err(DomainError::from)?);
+            .map_err(DomainError::from)?;
+        let page_ids = rows
+            .iter()
+            .map(|row| row.try_get::<i64, _>("id").map_err(DomainError::from))
+            .collect::<DomainResult<Vec<_>>>()?;
+        let mut scopes_by_key = std::collections::HashMap::<i64, Vec<String>>::new();
+        if !page_ids.is_empty() {
+            let mut query = sqlx::query(sqlx::AssertSqlSafe(scopes_for_page_sql(page_ids.len())));
+            for id in page_ids {
+                query = query.bind(id);
+            }
+            for row in query
+                .fetch_all(repo.pool())
+                .await
+                .map_err(DomainError::from)?
+            {
+                let key_id = row.try_get("api_key_id").map_err(DomainError::from)?;
+                scopes_by_key
+                    .entry(key_id)
+                    .or_default()
+                    .push(row.try_get("scope").map_err(DomainError::from)?);
+            }
         }
-    }
-    let mut items = Vec::with_capacity(rows.len());
-    for row in rows {
-        let id = row.try_get("id").map_err(DomainError::from)?;
-        items.push(from_row(
-            row,
-            scopes_by_key.remove(&id).unwrap_or_default(),
-        )?);
-    }
+        let mut items = Vec::with_capacity(rows.len());
+        for row in rows {
+            let id = row.try_get("id").map_err(DomainError::from)?;
+            items.push(from_row(
+                row,
+                scopes_by_key.remove(&id).unwrap_or_default(),
+            )?);
+        }
+        Ok::<_, DomainError>(items)
+    };
+    let (total_items, items) = futures::try_join!(
+        async { total_items.await.map_err(DomainError::from) },
+        items,
+    )?;
     Ok(crate::pastes::Page {
         items,
         page: query.page,
@@ -336,21 +364,18 @@ pub async fn list_page(
 }
 
 pub async fn get(repo: &Database, id: i64) -> DomainResult<Option<ApiKey>> {
-    let row = sqlx::query(
-        "SELECT k.id,k.user_id,k.name,k.token_prefix,k.created_at,k.last_used_at,k.enabled,u.username AS owner_username
-         FROM api_keys k LEFT JOIN users u ON u.id=k.user_id WHERE k.id=$1",
+    let rows = sqlx::query(
+        "SELECT k.id,k.user_id,k.name,k.token_prefix,k.created_at,k.last_used_at,k.enabled,u.username AS owner_username,
+                scopes.scope
+         FROM api_keys k LEFT JOIN users u ON u.id=k.user_id
+         LEFT JOIN api_key_scopes scopes ON scopes.api_key_id=k.id
+         WHERE k.id=$1 ORDER BY scopes.scope",
     )
     .bind(id)
-    .fetch_optional(repo.pool())
+    .fetch_all(repo.pool())
     .await
     .map_err(DomainError::from)?;
-    match row {
-        Some(row) => {
-            let id = row.try_get("id").map_err(DomainError::from)?;
-            from_row(row, scopes_for(repo.pool(), id).await?).map(Some)
-        }
-        None => Ok(None),
-    }
+    from_scoped_rows(rows)
 }
 
 pub async fn set_enabled_for_user(

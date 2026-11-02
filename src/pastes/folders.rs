@@ -49,17 +49,15 @@ impl PasteService {
              FROM folders f WHERE f.owner_id=$1 ORDER BY f.name_key,f.id",
         )
         .bind(owner)
-        .fetch_all(self.storage.pool())
-        .await
-        .map_err(DomainError::internal)?;
-        let (total_count, unfiled_count): (i64, i64) = sqlx::query_as(
+        .fetch_all(self.storage.pool());
+        let counts = sqlx::query_as::<_, (i64, i64)>(
             "SELECT count(*),coalesce(sum(CASE WHEN folder_id IS NULL THEN 1 ELSE 0 END),0)
              FROM pastes WHERE owner_id=$1 AND creation_state='complete'",
         )
         .bind(owner)
-        .fetch_one(self.storage.pool())
-        .await
-        .map_err(DomainError::internal)?;
+        .fetch_one(self.storage.pool());
+        let (items, (total_count, unfiled_count)) =
+            futures::try_join!(items, counts).map_err(DomainError::internal)?;
         Ok(FolderOverview {
             items,
             total_count,

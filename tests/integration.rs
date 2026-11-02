@@ -19,6 +19,8 @@ mod cache;
 mod concurrency;
 #[path = "integration/copy.rs"]
 mod copy;
+#[path = "integration/hot_paths.rs"]
+mod hot_paths;
 #[path = "integration/http.rs"]
 mod http;
 #[path = "integration/migration.rs"]

@@ -6,6 +6,9 @@ use sqlx::{FromRow, Row};
 pub struct Paste {
     pub id: String,
     pub owner_id: Option<i64>,
+    /// Loaded only for administrative summaries; never a direct wire field.
+    #[serde(skip)]
+    pub owner_username: Option<String>,
     pub folder_id: Option<i64>,
     pub title: String,
     pub content: String,
@@ -40,6 +43,7 @@ impl<'r> FromRow<'r, AnyRow> for Paste {
         Ok(Self {
             id: row.try_get("id")?,
             owner_id: row.try_get("owner_id")?,
+            owner_username: row.try_get("owner_username").unwrap_or(None),
             folder_id: row.try_get("folder_id").unwrap_or(None),
             title: row.try_get("title")?,
             content: row.try_get("content")?,

@@ -1,8 +1,7 @@
 use super::lifecycle::AccountState;
 use super::*;
-use std::collections::{HashMap, HashSet};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, sqlx::FromRow)]
 pub struct AdminSummary {
     pub user_count: i64,
     pub paste_count: i64,
@@ -20,53 +19,24 @@ pub async fn admin_summary(repo: &Database) -> DomainResult<AdminSummary> {
         "length(CAST(p.content AS BLOB))"
     };
     let now = unix_timestamp();
-    let user_count = sqlx::query_scalar("SELECT COUNT(*) FROM users")
-        .fetch_one(repo.pool())
-        .await
-        .map_err(DomainError::from)?;
-    let paste_count =
-        sqlx::query_scalar("SELECT COUNT(*) FROM pastes WHERE creation_state='complete'")
-            .fetch_one(repo.pool())
-            .await
-            .map_err(DomainError::from)?;
-    let storage_bytes = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-        "SELECT CAST(COALESCE(SUM({text_size} + COALESCE((SELECT SUM(a.size_bytes) FROM attachments a WHERE a.paste_id=p.id),0)),0) AS BIGINT) FROM pastes p WHERE p.creation_state='complete'"
-    ))).fetch_one(repo.pool()).await.map_err(DomainError::from)?;
-    let active_session_count =
-        sqlx::query_scalar("SELECT COUNT(*) FROM sessions WHERE expires_at>$1")
-            .bind(now)
-            .fetch_one(repo.pool())
-            .await
-            .map_err(DomainError::from)?;
-    let active_invitation_count = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM invitations WHERE redeemed=0 AND revoked=0 AND expires_at>$1",
-    )
-    .bind(now)
-    .fetch_one(repo.pool())
-    .await
-    .map_err(DomainError::from)?;
-    let expiring_invitation_count = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM invitations WHERE redeemed=0 AND revoked=0 AND expires_at>$1 AND expires_at<=$2",
-    )
+    // One statement gives the overview one snapshot without seven round trips
+    // or monopolizing seven pool connections for independent aggregates.
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT
+          (SELECT COUNT(*) FROM users) AS user_count,
+          (SELECT COUNT(*) FROM pastes WHERE creation_state='complete') AS paste_count,
+          (SELECT CAST(COALESCE(SUM({text_size} + COALESCE((SELECT SUM(a.size_bytes) FROM attachments a WHERE a.paste_id=p.id),0)),0) AS BIGINT)
+             FROM pastes p WHERE p.creation_state='complete') AS storage_bytes,
+          (SELECT COUNT(*) FROM sessions WHERE expires_at>$1) AS active_session_count,
+          (SELECT COUNT(*) FROM invitations WHERE redeemed=0 AND revoked=0 AND expires_at>$1) AS active_invitation_count,
+          (SELECT COUNT(*) FROM invitations WHERE redeemed=0 AND revoked=0 AND expires_at>$1 AND expires_at<=$2) AS expiring_invitation_count,
+          (SELECT COUNT(*) FROM users WHERE password_change_required=1) AS password_change_required_count"
+    )))
     .bind(now)
     .bind(now + 4 * 60 * 60)
     .fetch_one(repo.pool())
     .await
-    .map_err(DomainError::from)?;
-    let password_change_required_count =
-        sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE password_change_required=1")
-            .fetch_one(repo.pool())
-            .await
-            .map_err(DomainError::from)?;
-    Ok(AdminSummary {
-        user_count,
-        paste_count,
-        storage_bytes,
-        active_session_count,
-        active_invitation_count,
-        expiring_invitation_count,
-        password_change_required_count,
-    })
+    .map_err(DomainError::from)
 }
 
 fn admin_user_query(repo: &Database) -> String {
@@ -128,9 +98,7 @@ pub async fn list_admin_users(
     .bind(search_value)
     .bind(role_value)
     .bind(enabled_value)
-    .fetch_one(repo.pool())
-    .await
-    .map_err(DomainError::from)?;
+    .fetch_one(repo.pool());
 
     let sql = format!(
         "{}{list_where} ORDER BY {sort_field} {direction},u.id {direction} LIMIT $5 OFFSET $6",
@@ -143,9 +111,8 @@ pub async fn list_admin_users(
         .bind(enabled_value)
         .bind(i64::from(query.page_size))
         .bind(i64::from(query.page.saturating_sub(1)) * i64::from(query.page_size))
-        .fetch_all(repo.pool())
-        .await
-        .map_err(DomainError::from)?;
+        .fetch_all(repo.pool());
+    let (total_items, items) = futures::try_join!(total_items, items).map_err(DomainError::from)?;
     Ok(crate::pastes::Page {
         items,
         page: query.page,
@@ -164,32 +131,6 @@ pub async fn admin_user(repo: &Database, id: i64) -> DomainResult<Option<AdminUs
     .fetch_optional(repo.pool())
     .await
     .map_err(DomainError::from)
-}
-
-pub async fn usernames_by_ids(
-    repo: &Database,
-    ids: impl IntoIterator<Item = i64>,
-) -> DomainResult<HashMap<i64, String>> {
-    let ids = ids.into_iter().collect::<HashSet<_>>();
-    if ids.is_empty() {
-        return Ok(HashMap::new());
-    }
-    let mut query =
-        sqlx::QueryBuilder::<sqlx::Any>::new("SELECT id,username FROM users WHERE id IN (");
-    let mut separated = query.separated(",");
-    for id in ids {
-        separated.push_bind(id);
-    }
-    separated.push_unseparated(")");
-    query
-        .build()
-        .fetch_all(repo.pool())
-        .await
-        .map_err(DomainError::from)?
-        .into_iter()
-        .map(|row| Ok((row.try_get("id")?, row.try_get("username")?)))
-        .collect::<Result<HashMap<_, _>, sqlx::Error>>()
-        .map_err(DomainError::from)
 }
 
 pub async fn set_enabled(repo: &Database, id: i64, enabled: bool) -> DomainResult<()> {

@@ -10,11 +10,8 @@ fn account_subject(username: &str) -> String {
 async fn retry_after(repo: &Database, keys: &[(&str, String, i64)]) -> DomainResult<Option<u64>> {
     let now = unix_timestamp();
     let cutoff = now - ATTEMPT_WINDOW_SECONDS;
-    sqlx::query("DELETE FROM auth_attempts WHERE occurred_at<=$1")
-        .bind(cutoff)
-        .execute(repo.pool())
-        .await
-        .map_err(DomainError::from)?;
+    // The indexed lookup already excludes expired attempts. Physical pruning
+    // belongs to purge_expired, not a write on every rate-limit check.
     let mut retry = None;
     for (kind, subject, limit) in keys {
         let (count, first): (i64, Option<i64>) = sqlx::query_as(

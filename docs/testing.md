@@ -39,6 +39,8 @@ The Rust suite includes:
 - database-infrastructure and schema tests;
 - a shared SQLite/PostgreSQL backend contract for pastes, folders, accounts,
   sessions, invitations, password resets, API keys, expiration, and cascades;
+- hot-path contracts for empty/nonempty pagination, folder totals, aggregate
+  summaries including UTF-8 byte sizes, and activity timestamp refreshes;
 - concurrency tests for consuming reads, invitation/reset redemption,
   administrator invariants, ETags, and attachment ordering;
 - migration repeatability, checksum, and query-index tests;
@@ -48,6 +50,17 @@ The Rust suite includes:
   administration, paginated list bounds and filtering, canonical Markdown,
   HTML import, and the attachment lifecycle; and
 - OpenAPI structural and behavioral contract assertions.
+
+The authentication hot-path contract temporarily makes every connection in its
+disposable pool read-only. Warm bearer authentication must succeed without an
+UPDATE; a cold key must fail its genuinely required timestamp write. This tests
+the absence of a write, not just the unchanged value after a no-op UPDATE.
+Invitation/reset throttling checks must also work read-only and ignore expired
+attempts without synchronously pruning them.
+The real-stack upload tests check selection order and immediately downloaded
+bytes across both multipart creation and later multi-file uploads. Promotion
+unit tests also require successful filesystem operations to finish before a
+mixed-success batch returns its error and releases cleanup ownership.
 
 ### Test placement
 
