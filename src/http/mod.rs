@@ -1,3 +1,8 @@
+// HTTP helpers deliberately return ready-to-send responses for early rejection.
+// Actix's response type exceeds Clippy's size threshold; boxing every rejection
+// would add allocations solely to accommodate that upstream representation.
+#![allow(clippy::result_large_err)]
+
 use crate::accounts::{self as accounts, api_keys};
 use crate::args::ARGS;
 use crate::pastes::{PasteInput, PasteQuery, PasteService, Principal};

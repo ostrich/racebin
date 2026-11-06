@@ -5,8 +5,8 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | Package | Version | License |
 | --- | --- | --- |
 | [actix-codec](https://github.com/actix/actix-net) | 0.5.2 | MIT OR Apache-2.0 |
-| [actix-files](https://github.com/actix/actix-web) | 0.6.10 | MIT OR Apache-2.0 |
-| [actix-http](https://github.com/actix/actix-web) | 3.13.3 | MIT OR Apache-2.0 |
+| [actix-files](https://github.com/actix/actix-web) | 0.7.4 | MIT OR Apache-2.0 |
+| [actix-http](https://github.com/actix/actix-web) | 3.20.3 | MIT OR Apache-2.0 |
 | [actix-macros](https://github.com/actix/actix-net.git) | 0.2.4 | MIT OR Apache-2.0 |
 | [actix-multipart](https://github.com/actix/actix-web) | 0.8.1 | MIT OR Apache-2.0 |
 | [actix-multipart-derive](https://github.com/actix/actix-web) | 0.8.0 | MIT OR Apache-2.0 |
@@ -15,12 +15,12 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [actix-server](https://github.com/actix/actix-net/tree/main/actix-server) | 2.9.0 | MIT OR Apache-2.0 |
 | [actix-service](https://github.com/actix/actix-net) | 2.0.3 | MIT OR Apache-2.0 |
 | [actix-utils](https://github.com/actix/actix-net) | 3.0.1 | MIT OR Apache-2.0 |
-| [actix-web](https://github.com/actix/actix-web) | 4.14.1 | MIT OR Apache-2.0 |
-| [actix-web-codegen](https://github.com/actix/actix-web) | 4.3.0 | MIT OR Apache-2.0 |
+| [actix-web](https://github.com/actix/actix-web) | 4.18.2 | MIT OR Apache-2.0 |
+| [actix-web-codegen](https://github.com/actix/actix-web) | 4.5.0 | MIT OR Apache-2.0 |
 | [adler2](https://github.com/oyvindln/adler2) | 2.0.1 | 0BSD OR MIT OR Apache-2.0 |
 | [aho-corasick](https://github.com/BurntSushi/aho-corasick) | 1.1.5 | Unlicense OR MIT |
-| [alloc-no-stdlib](https://github.com/dropbox/rust-alloc-no-stdlib) | 2.0.4 | BSD-3-Clause |
-| [alloc-stdlib](https://github.com/dropbox/rust-alloc-no-stdlib) | 0.2.4 | BSD-3-Clause |
+| [alloc-no-stdlib](https://github.com/dropbox/rust-alloc-no-stdlib) | 3.0.0 | BSD-3-Clause |
+| [alloc-stdlib](https://github.com/dropbox/rust-alloc-no-stdlib) | 0.3.0 | BSD-3-Clause |
 | [allocator-api2](https://github.com/zakarumych/allocator-api2) | 0.2.21 | MIT OR Apache-2.0 |
 | [ammonia](https://github.com/rust-ammonia/ammonia) | 4.2.4 | MIT OR Apache-2.0 |
 | [anstream](https://github.com/rust-cli/anstyle.git) | 1.0.0 | MIT OR Apache-2.0 |
@@ -40,8 +40,8 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [blake2](https://github.com/RustCrypto/hashes) | 0.10.6 | MIT OR Apache-2.0 |
 | [block-buffer](https://github.com/RustCrypto/utils) | 0.10.4 | MIT OR Apache-2.0 |
 | [block-buffer](https://github.com/RustCrypto/utils) | 0.12.1 | MIT OR Apache-2.0 |
-| [brotli](https://github.com/dropbox/rust-brotli) | 8.0.4 | BSD-3-Clause AND MIT |
-| [brotli-decompressor](https://github.com/dropbox/rust-brotli-decompressor) | 5.0.3 | BSD-3-Clause OR MIT |
+| [brotli](https://github.com/dropbox/rust-brotli) | 9.1.1 | BSD-3-Clause AND MIT |
+| [brotli-decompressor](https://github.com/dropbox/rust-brotli-decompressor) | 6.3.0 | BSD-3-Clause OR MIT |
 | [bumpalo](https://github.com/fitzgen/bumpalo) | 3.20.3 | MIT OR Apache-2.0 |
 | [bytemuck](https://github.com/Lokathor/bytemuck) | 1.25.2 | Zlib OR Apache-2.0 OR MIT |
 | [byteorder](https://github.com/BurntSushi/byteorder) | 1.5.0 | Unlicense OR MIT |
@@ -130,7 +130,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [html5ever](https://github.com/servo/html5ever) | 0.39.0 | MIT OR Apache-2.0 |
 | [html5ever](https://github.com/servo/html5ever) | 0.40.1 | MIT OR Apache-2.0 |
 | [http](https://github.com/hyperium/http) | 0.2.12 | MIT OR Apache-2.0 |
-| [http-range](https://github.com/bancek/rust-http-range.git) | 0.1.5 | MIT |
+| [http-range](https://github.com/bancek/rust-http-range.git) | 0.1.6 | MIT |
 | [httparse](https://github.com/seanmonstar/httparse) | 1.10.1 | MIT OR Apache-2.0 |
 | [httpdate](https://github.com/pyfisch/httpdate) | 1.0.3 | MIT OR Apache-2.0 |
 | [hybrid-array](https://github.com/RustCrypto/hybrid-array) | 0.4.14 | MIT OR Apache-2.0 |
@@ -276,7 +276,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [tinystr](https://github.com/unicode-org/icu4x) | 0.8.4 | Unicode-3.0 |
 | [tinyvec](https://github.com/Lokathor/tinyvec) | 1.12.0 | Zlib OR Apache-2.0 OR MIT |
 | [tinyvec_macros](https://github.com/Soveu/tinyvec_macros) | 0.1.1 | MIT OR Apache-2.0 OR Zlib |
-| [tokio](https://github.com/tokio-rs/tokio) | 1.53.1 | MIT |
+| [tokio](https://github.com/tokio-rs/tokio) | 1.54.1 | MIT |
 | [tokio-stream](https://github.com/tokio-rs/tokio) | 0.1.19 | MIT |
 | [tokio-util](https://github.com/tokio-rs/tokio) | 0.7.19 | MIT |
 | [tracing](https://github.com/tokio-rs/tracing) | 0.1.44 | MIT |
@@ -300,7 +300,8 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [utoipa](https://github.com/juhaku/utoipa) | 5.5.0 | MIT OR Apache-2.0 |
 | [utoipa-gen](https://github.com/juhaku/utoipa) | 5.5.0 | MIT OR Apache-2.0 |
 | [uuid](https://github.com/uuid-rs/uuid) | 1.25.0 | Apache-2.0 OR MIT |
-| [v_htmlescape](https://github.com/botika/v_escape) | 0.15.8 | MIT OR Apache-2.0 |
+| [v_escape-base](https://github.com/zzau13/v_escape) | 0.1.0 | MIT OR Apache-2.0 |
+| [v_htmlescape](https://github.com/zzau13/v_escape) | 0.17.0 | MIT OR Apache-2.0 |
 | [vcpkg](https://github.com/mcgoo/vcpkg-rs) | 0.2.15 | MIT OR Apache-2.0 |
 | [version_check](https://github.com/SergioBenitez/version_check) | 0.9.5 | MIT OR Apache-2.0 |
 | [wait-timeout](https://github.com/alexcrichton/wait-timeout) | 0.2.1 | MIT OR Apache-2.0 |
@@ -310,6 +311,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [web_atoms](https://github.com/servo/html5ever) | 0.3.0 | MIT OR Apache-2.0 |
 | [webpki-roots](https://github.com/rustls/webpki-roots) | 1.0.10 | CDLA-Permissive-2.0 |
 | [whoami](https://github.com/ardaku/whoami) | 2.1.3 | Apache-2.0 OR BSL-1.0 OR MIT |
+| [winapi-util](https://github.com/BurntSushi/winapi-util) | 0.1.11 | Unlicense OR MIT |
 | [windows-link](https://github.com/microsoft/windows-rs) | 0.2.1 | MIT OR Apache-2.0 |
 | [windows-sys](https://github.com/microsoft/windows-rs) | 0.52.0 | MIT OR Apache-2.0 |
 | [windows-sys](https://github.com/microsoft/windows-rs) | 0.59.0 | MIT OR Apache-2.0 |
