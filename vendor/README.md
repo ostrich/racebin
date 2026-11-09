@@ -20,3 +20,10 @@ SQLx version supports `libsqlite3-sys` 0.39 or newer. Update the lockfile,
 regenerate the Rust license notice, and run both SQLite and PostgreSQL
 integration suites when doing so. Do not refactor or reformat this upstream
 source as part of Racebin changes.
+
+The scheduled/manual dependency-audit job runs
+`python3 -B scripts/check-sqlx-backport.py`. It resolves the latest published
+stable SQLx independently of this repository's patch and lockfile, without
+building it. Once that release selects patched SQLite, the check fails with
+removal instructions in the CI annotation and job summary. It does not run in
+the normal push gate, and becomes a no-op after the patch is removed.

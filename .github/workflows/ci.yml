@@ -309,3 +309,8 @@ jobs:
       - name: Audit production frontend dependencies
         working-directory: web
         run: npm audit --omit=dev
+      - name: Check whether the temporary SQLx backport can be removed
+        if: ${{ !cancelled() }}
+        run: |
+          python3 -B scripts/test_sqlx_backport.py
+          python3 -B scripts/check-sqlx-backport.py
