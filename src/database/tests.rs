@@ -1,6 +1,28 @@
 use super::Database;
 
 #[actix_web::test]
+async fn bundled_sqlite_includes_the_wal_page_size_security_fix() {
+    let pool = sqlx::sqlite::SqlitePoolOptions::new()
+        .connect("sqlite::memory:")
+        .await
+        .unwrap();
+    let version: String = sqlx::query_scalar("SELECT sqlite_version()")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let parts: Vec<u32> = version
+        .split('.')
+        .map(|part| part.parse().unwrap())
+        .collect();
+    // RUSTSEC-2026-0459 / CVE-2026-119375 is fixed in SQLite 3.54.0.
+    assert!(
+        parts.as_slice() >= [3, 54, 0].as_slice(),
+        "SQLite {version}"
+    );
+    pool.close().await;
+}
+
+#[actix_web::test]
 async fn sqlite_schema_is_repeatable() {
     let data_dir = std::env::temp_dir().join(format!("racebin-schema-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&data_dir).unwrap();

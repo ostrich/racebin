@@ -154,7 +154,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [jiff-core](https://github.com/BurntSushi/jiff) | 0.1.0 | Unlicense OR MIT |
 | [language-tags](https://github.com/pyfisch/rust-language-tags) | 0.3.2 | MIT OR Apache-2.0 |
 | [libc](https://github.com/rust-lang/libc) | 0.2.189 | MIT OR Apache-2.0 |
-| [libsqlite3-sys](https://github.com/rusqlite/rusqlite) | 0.37.0 | MIT |
+| [libsqlite3-sys](https://github.com/rusqlite/rusqlite) | 0.39.1 | MIT |
 | [linux-raw-sys](https://github.com/sunfishcode/linux-raw-sys) | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | [litemap](https://github.com/unicode-org/icu4x) | 0.8.3 | Unicode-3.0 |
 | [local-waker](https://github.com/actix/actix-net) | 0.1.4 | MIT OR Apache-2.0 |

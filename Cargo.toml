@@ -45,6 +45,10 @@ comrak = { version = "0.54.0", default-features = false }
 [dev-dependencies]
 proptest = "1.11"
 
+[patch.crates-io]
+# Temporary SQLx 0.9 compatibility backport; see vendor/README.md.
+sqlx-sqlite = { path = "vendor/sqlx-sqlite" }
+
 [profile.release]
 lto = true
 strip = true
