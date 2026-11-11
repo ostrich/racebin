@@ -86,9 +86,17 @@
     const current = ++printRevision;
     const source = code;
     const sourceLanguage = language;
-    const results = await Promise.all(
-      source.split("\n").map((line) => highlight(line || " ", sourceLanguage))
-    );
+    const results = [];
+    let deadline = performance.now() + 8;
+    for (const line of source.split("\n")) {
+      if (current !== printRevision) return;
+      results.push(await highlight(line || " ", sourceLanguage));
+      if (performance.now() >= deadline) {
+        // A timer yields to input and painting, unlike a resolved Promise.
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        deadline = performance.now() + 8;
+      }
+    }
     if (current !== printRevision || source !== code || sourceLanguage !== language) return;
     printLines = results.map((result) => result.html);
     await tick();

@@ -49,16 +49,14 @@
 
   function blur(event: FocusEvent): void {
     const target = event.currentTarget as HTMLInputElement;
-    window.setTimeout(() => {
-      open = false;
-      if (!target.isConnected) return;
-      const normalized = normalizeLanguage(target.value);
-      if (normalized) value = normalized;
-      else target.value = value;
-    }, 100);
+    open = false;
+    const normalized = normalizeLanguage(target.value);
+    if (normalized) value = normalized;
+    else target.value = value;
   }
 
   function keydown(event: KeyboardEvent): void {
+    if (event.isComposing || event.keyCode === 229) return;
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       open = true;

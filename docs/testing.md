@@ -18,6 +18,30 @@ npm --prefix web ci
 The Playwright install command may require distribution packages when run on a
 minimal Linux host; CI uses `playwright install --with-deps chromium`.
 
+## Browser platform and performance checks
+
+The browser suite includes IME-safe picker interaction, native popover dismissal
+and focus restoration, and enlarged-default-text reflow. When changing shared
+controls, run `cd web && npx playwright test e2e/platform-behavior.spec.ts` as well
+as the accessibility and layout suites. Enlarging the root font in the fixture
+models a changed browser default; it is not a substitute for manual OS text
+scaling or assistive-technology validation.
+
+For opt-in, disposable large-paste measurements, run from `web/`:
+
+```bash
+RACEBIN_PERFORMANCE=1 npx playwright test e2e/performance.spec.ts --workers=1
+```
+
+This uses mocked API data and fourfold Chromium CPU throttling (override with
+`RACEBIN_CPU_THROTTLE=1` for an already slow host). It produces an editor CPU
+profile and attaches render timings as JSON. It measures the application's input
+and render pipeline, not native text insertion/undo bookkeeping or network time.
+DOM snapshot tracing is disabled because it can distort large-document results.
+There is deliberately no machine-dependent millisecond pass threshold. Compare
+on the same machine and inspect the profile to distinguish highlighting work
+from browser rendering before optimizing.
+
 ## Rust quality gates
 
 Run the same formatting, linting, and test options used by CI:
