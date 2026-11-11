@@ -76,12 +76,20 @@
   <div
     bind:this={popup}
     popover="auto"
-    ontoggle={(event) => {
-      open = event.newState === "open";
+    onbeforetoggle={() => {
+      // Native opening can paint before the queued toggle event. Keep the
+      // measured popup hidden until its final coordinates have been applied.
+      delete popup.dataset.positioned;
       query = "";
       managedFolderId = null;
-      position();
-      if (open) popup.querySelector<HTMLInputElement>("input")?.focus();
+    }}
+    ontoggle={(event) => {
+      open = event.newState === "open";
+      if (open) {
+        position();
+        popup.dataset.positioned = "true";
+        popup.querySelector<HTMLInputElement>("input")?.focus();
+      }
     }}
     class="folder-picker-popover"
     id={popoverId}

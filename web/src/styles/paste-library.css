@@ -228,6 +228,9 @@
 .folder-picker-popover:popover-open {
   display: grid;
 }
+.folder-picker-popover:popover-open:not([data-positioned]) {
+  visibility: hidden;
+}
 .folder-picker-search {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

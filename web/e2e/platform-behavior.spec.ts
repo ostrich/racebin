@@ -5,6 +5,31 @@ test.beforeEach(async ({ page }) => {
   await mockApi(page, true);
 });
 
+test("cold folder popup is positioned before its first paint", async ({ page }) => {
+  await page.goto("/pastes");
+  const trigger = page.locator(".folder-picker-trigger").first();
+  await expect(trigger).toBeVisible();
+  const firstPosition = await trigger.evaluate(async (element) => {
+    (element as HTMLButtonElement).click();
+    await Promise.resolve();
+    const popup = document.querySelector<HTMLElement>(".folder-picker-popover:popover-open")!;
+    const bounds = popup.getBoundingClientRect();
+    const anchor = element.getBoundingClientRect();
+    return {
+      visible: getComputedStyle(popup).visibility !== "hidden",
+      left: bounds.left,
+      top: bounds.top,
+      anchorLeft: anchor.left,
+      anchorBottom: anchor.bottom
+    };
+  });
+  if (firstPosition.visible) {
+    expect(firstPosition.left).toBeCloseTo(firstPosition.anchorLeft, 0);
+    expect(firstPosition.top).toBeCloseTo(firstPosition.anchorBottom + 6, 0);
+  }
+  await expect(page.getByRole("dialog", { name: "Browse folders" })).toBeVisible();
+});
+
 test("folder popover dismisses natively and restores keyboard focus", async ({ page }) => {
   await page.goto("/pastes");
   const trigger = page.locator(".folder-picker-trigger").first();
