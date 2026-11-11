@@ -177,9 +177,11 @@ test("multipart attachment creation supports final-read download grants", async 
     const paste = await created.json();
     expect(paste.attachments).toHaveLength(1);
 
-    const consumed = await anonymous.post(`/api/v1/pastes/${paste.id}/reads`, {
+    const rejectedRetryKey = await anonymous.post(`/api/v1/pastes/${paste.id}/reads`, {
       headers: { "Idempotency-Key": crypto.randomUUID() }
     });
+    expect(rejectedRetryKey.status()).toBe(400);
+    const consumed = await anonymous.post(`/api/v1/pastes/${paste.id}/reads`);
     expect(consumed.ok()).toBe(true);
     expect(consumed.headers()["read-token"]).toBeTruthy();
     const finalRead = await consumed.json();
@@ -189,9 +191,7 @@ test("multipart attachment creation supports final-read download grants", async 
     expect(download.ok()).toBe(true);
     expect(await download.text()).toBe("attachment body");
 
-    const exhausted = await anonymous.post(`/api/v1/pastes/${paste.id}/reads`, {
-      headers: { "Idempotency-Key": crypto.randomUUID() }
-    });
+    const exhausted = await anonymous.post(`/api/v1/pastes/${paste.id}/reads`);
     expect(exhausted.status()).toBe(404);
   } finally {
     await bearer.dispose();

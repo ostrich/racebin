@@ -7,6 +7,8 @@ pub(super) async fn concurrency_contract(repo: Database) {
         .unwrap();
     insert_user(&repo, 10, "concurrency-admin", "admin").await;
     insert_user(&repo, 11, "second-admin", "admin").await;
+    insert_user(&repo, 12, "read-client", "user").await;
+    insert_user(&repo, 13, "other-read-client", "user").await;
     let services = PasteService::new(repo.clone());
     let admin = principal(10, "concurrency-admin", "admin");
 
@@ -35,15 +37,43 @@ pub(super) async fn concurrency_contract(repo: Database) {
         .create_paste(&admin, &replay_limited)
         .await
         .unwrap();
-    services
+    let read_client = principal(12, "read-client", "user");
+    let other_client = principal(13, "other-read-client", "user");
+    assert!(services
         .read_paste(
             &Principal::Anonymous,
+            &replay_limited.id,
+            Some("final-read-key")
+        )
+        .await
+        .is_err());
+    services
+        .read_paste(&read_client, &replay_limited.id, Some("final-read-key"))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(services
+        .read_paste(&other_client, &replay_limited.id, Some("final-read-key"))
+        .await
+        .unwrap()
+        .is_none());
+    let (other_credential, _) = api_keys::create(
+        &repo,
+        Some(12),
+        "other reader credential",
+        &["paste:read".into()],
+    )
+    .await
+    .unwrap();
+    assert!(services
+        .read_paste(
+            &Principal::ApiKey(other_credential),
             &replay_limited.id,
             Some("final-read-key"),
         )
         .await
         .unwrap()
-        .unwrap();
+        .is_none());
     let replay_deadline = racebin::time::unix_timestamp() + 60;
     sqlx::query("UPDATE paste_read_receipts SET expires_at=$2 WHERE paste_id=$1")
         .bind(&replay_limited.id)
@@ -57,11 +87,7 @@ pub(super) async fn concurrency_contract(repo: Database) {
         .await
         .unwrap();
     let replay = services
-        .read_paste(
-            &Principal::Anonymous,
-            &replay_limited.id,
-            Some("final-read-key"),
-        )
+        .read_paste(&read_client, &replay_limited.id, Some("final-read-key"))
         .await
         .unwrap()
         .unwrap();
@@ -81,11 +107,7 @@ pub(super) async fn concurrency_contract(repo: Database) {
         .await
         .unwrap();
     assert!(services
-        .read_paste(
-            &Principal::Anonymous,
-            &replay_limited.id,
-            Some("final-read-key"),
-        )
+        .read_paste(&read_client, &replay_limited.id, Some("final-read-key"))
         .await
         .unwrap()
         .is_none());

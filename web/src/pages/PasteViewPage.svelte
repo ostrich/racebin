@@ -53,7 +53,7 @@
       paste = handedOff;
       return;
     }
-    void readPaste(pasteId, crypto.randomUUID())
+    void readPaste(pasteId, $appState.session.authenticated ? crypto.randomUUID() : undefined)
       .then((result) => result.paste)
       .then((result) => {
         paste = result;

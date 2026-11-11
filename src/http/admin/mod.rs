@@ -12,6 +12,15 @@ pub(crate) use invitations::*;
 pub(crate) use user_security::*;
 pub(crate) use users::*;
 
+fn management_authority(principal: &Principal) -> accounts::AdminTargetAuthority {
+    let owner_session_user_id = if principal.is_owner() {
+        principal.user_id()
+    } else {
+        None
+    };
+    accounts::AdminTargetAuthority::new(owner_session_user_id)
+}
+
 async fn require_manageable_user(
     services: &PasteService,
     principal: &Principal,

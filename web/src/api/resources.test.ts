@@ -145,6 +145,13 @@ describe("typed API resources", () => {
     );
   });
 
+  it("omits read retry keys for anonymous reads", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    await readPaste("example-paste");
+    expect(new Headers(fetchMock.mock.calls[0]![1].headers).has("Idempotency-Key")).toBe(false);
+  });
+
   it("keeps owner settings and password confirmation behind the typed API layer", async () => {
     const settings = {
       site_name: "Example",

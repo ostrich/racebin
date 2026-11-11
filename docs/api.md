@@ -190,7 +190,11 @@ count, last-read timestamp, revision, or read-limit state. API-key reads retain
 normal API read semantics.
 
 `POST /api/v1/pastes/{id}/reads` performs a read and returns content. Send an
-`Idempotency-Key` when retrying. Owners and administrators receive a
+`Idempotency-Key` when retrying an authenticated read. The retry receipt is
+bound to the current browser session or API key; use a fresh key for each
+logical read and reuse it only for that read's retries. Anonymous readers must
+omit this header: there is no credential to bind a replay to, so an exhausted
+anonymous read cannot be retried. Owners and administrators receive a
 `source_url`; retrieving that URL does not consume a read.
 
 For a permitted read of a read-limited paste, Racebin returns a short-lived

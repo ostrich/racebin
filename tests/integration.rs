@@ -83,7 +83,7 @@ fn principal(id: i64, username: &str, role: &str) -> Principal {
             enabled: true,
             password_change_required: false,
         },
-        csrf_token: "csrf".to_string(),
+        csrf_token: format!("csrf-{id}"),
         reauthenticated_at: None,
     })
 }

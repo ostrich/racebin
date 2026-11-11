@@ -4314,7 +4314,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Recommended key for safely retrying a consuming read */
+                /** @description Optional retry key for authenticated clients, scoped to their current session or API key. Anonymous readers must omit it. */
                 "Idempotency-Key"?: string;
             };
             path: {

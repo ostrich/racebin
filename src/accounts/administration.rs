@@ -1,6 +1,78 @@
 use super::lifecycle::AccountState;
 use super::*;
 
+/// The owner session may manage administrator accounts; other administrators
+/// may manage ordinary accounts only. Recheck this at the final database write.
+#[derive(Clone, Copy, Debug)]
+pub struct AdminTargetAuthority {
+    owner_session_user_id: Option<i64>,
+}
+
+impl AdminTargetAuthority {
+    pub fn new(owner_session_user_id: Option<i64>) -> Self {
+        Self {
+            owner_session_user_id,
+        }
+    }
+
+    async fn require_current_owner(
+        self,
+        repo: &Database,
+        tx: &mut sqlx::Transaction<'_, sqlx::Any>,
+    ) -> DomainResult<()> {
+        let owner_id = self.owner_session_user_id.ok_or_else(|| {
+            DomainError::forbidden_code(
+                "owner_required",
+                "Only the owner can manage an administrator account",
+            )
+        })?;
+        let lock = if repo.kind() == DatabaseKind::Postgres {
+            " FOR UPDATE"
+        } else {
+            ""
+        };
+        let current_owner: Option<i64> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "SELECT id FROM users WHERE id=$1 AND is_owner=1 AND enabled=1{lock}"
+        )))
+        .bind(owner_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(DomainError::from)?;
+        if current_owner.is_none() {
+            return Err(DomainError::forbidden_code(
+                "owner_required",
+                "Only the current owner can manage an administrator account",
+            ));
+        }
+        Ok(())
+    }
+}
+
+pub(crate) async fn require_manageable_target(
+    repo: &Database,
+    tx: &mut sqlx::Transaction<'_, sqlx::Any>,
+    target_id: i64,
+    authority: AdminTargetAuthority,
+) -> DomainResult<()> {
+    let lock = if repo.kind() == DatabaseKind::Postgres {
+        " FOR UPDATE"
+    } else {
+        ""
+    };
+    let target: Option<(String, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT role,is_owner FROM users WHERE id=$1{lock}"
+    )))
+    .bind(target_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(DomainError::from)?;
+    let (role, is_owner) = target.ok_or_else(|| DomainError::not_found("User not found"))?;
+    if role == "admin" || is_owner != 0 {
+        authority.require_current_owner(repo, tx).await?;
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, sqlx::FromRow)]
 pub struct AdminSummary {
     pub user_count: i64,
@@ -147,8 +219,34 @@ pub async fn update_user(
     enabled: Option<bool>,
     admin: Option<bool>,
 ) -> DomainResult<()> {
+    update_user_with_authority(repo, id, enabled, admin, None).await
+}
+
+pub async fn update_user_managed(
+    repo: &Database,
+    id: i64,
+    enabled: Option<bool>,
+    admin: Option<bool>,
+    authority: AdminTargetAuthority,
+) -> DomainResult<()> {
+    update_user_with_authority(repo, id, enabled, admin, Some(authority)).await
+}
+
+async fn update_user_with_authority(
+    repo: &Database,
+    id: i64,
+    enabled: Option<bool>,
+    admin: Option<bool>,
+    authority: Option<AdminTargetAuthority>,
+) -> DomainResult<()> {
     let _write_guard = repo.lock_writes().await;
     let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
+    if let Some(authority) = authority {
+        require_manageable_target(repo, &mut tx, id, authority).await?;
+        if admin.is_some() {
+            authority.require_current_owner(repo, &mut tx).await?;
+        }
+    }
     let lock = if repo.kind() == DatabaseKind::Postgres {
         " FOR UPDATE"
     } else {
@@ -328,10 +426,31 @@ pub async fn create_password_reset(
     user_id: i64,
     created_by_user_id: i64,
 ) -> DomainResult<String> {
+    create_password_reset_with_authority(repo, user_id, created_by_user_id, None).await
+}
+
+pub async fn create_password_reset_managed(
+    repo: &Database,
+    user_id: i64,
+    created_by_user_id: i64,
+    authority: AdminTargetAuthority,
+) -> DomainResult<String> {
+    create_password_reset_with_authority(repo, user_id, created_by_user_id, Some(authority)).await
+}
+
+async fn create_password_reset_with_authority(
+    repo: &Database,
+    user_id: i64,
+    created_by_user_id: i64,
+    authority: Option<AdminTargetAuthority>,
+) -> DomainResult<String> {
     let _write_guard = repo.lock_writes().await;
     let token = random_token(64);
     let now = unix_timestamp();
     let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
+    if let Some(authority) = authority {
+        require_manageable_target(repo, &mut tx, user_id, authority).await?;
+    }
     let enabled: Option<i64> = sqlx::query_scalar("SELECT enabled FROM users WHERE id=$1")
         .bind(user_id)
         .fetch_optional(&mut *tx)
@@ -442,4 +561,21 @@ pub async fn revoke_sessions(repo: &Database, user_id: i64) -> DomainResult<bool
         .await
         .map(|_| true)
         .map_err(DomainError::from)
+}
+
+pub async fn revoke_sessions_managed(
+    repo: &Database,
+    user_id: i64,
+    authority: AdminTargetAuthority,
+) -> DomainResult<bool> {
+    let _write_guard = repo.lock_writes().await;
+    let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
+    require_manageable_target(repo, &mut tx, user_id, authority).await?;
+    sqlx::query("DELETE FROM sessions WHERE user_id=$1")
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(DomainError::from)?;
+    tx.commit().await.map_err(DomainError::from)?;
+    Ok(true)
 }

@@ -302,6 +302,16 @@ fn protected_operations_and_protocol_headers_are_explicit() {
     }
     assert!(parameter_names("post", "/pastes").contains("Idempotency-Key"));
     assert!(parameter_names("post", "/pastes/{paste_id}/reads").contains("Idempotency-Key"));
+    let read_retry_key = operation("post", "/pastes/{paste_id}/reads")["parameters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|parameter| parameter["name"] == "Idempotency-Key")
+        .unwrap();
+    assert!(read_retry_key["description"]
+        .as_str()
+        .unwrap()
+        .contains("Anonymous readers must omit"));
     for (method, path) in [
         ("patch", "/pastes/{paste_id}"),
         ("delete", "/pastes/{paste_id}"),

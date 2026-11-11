@@ -68,6 +68,16 @@ impl Principal {
         }
     }
 
+    /// A consuming-read retry belongs to one authenticated credential, not
+    /// merely to a user (or to anyone who knows an anonymous retry key).
+    pub(super) fn read_receipt_subject(&self) -> Option<String> {
+        match self {
+            Self::Session(session) => Some(format!("session:{}", session.csrf_token)),
+            Self::ApiKey(key) => Some(format!("api-key:{}", key.id)),
+            Self::Anonymous => None,
+        }
+    }
+
     pub fn is_admin(&self) -> bool {
         matches!(self, Self::Session(session) if session.user.is_admin())
     }

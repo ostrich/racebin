@@ -474,7 +474,7 @@ pub(crate) async fn get_paste_raw(
     post, path = "/pastes/{paste_id}/reads", tag = "pastes",
     description = "Consumes a permitted read and returns JSON by default. An authorized owner or paste manager does not increment the read count or consume the read limit. Clients may instead negotiate text/plain, or text/html for rich-text pastes.",
     params(("paste_id" = String, Path, description = "Paste ID"),
-        ("Idempotency-Key" = Option<String>, Header, description = "Recommended key for safely retrying a consuming read")),
+        ("Idempotency-Key" = Option<String>, Header, description = "Optional retry key for authenticated clients, scoped to their current session or API key. Anonymous readers must omit it.")),
     responses(
         (status = 200, description = "Paste content; this may consume a limited read",
             content(

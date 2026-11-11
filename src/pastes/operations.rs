@@ -270,6 +270,19 @@ impl PasteService {
         id: &str,
         idempotency_key: Option<&str>,
     ) -> DomainResult<Option<PasteRead>> {
+        let key_hash = idempotency_key
+            .map(|key| {
+                principal
+                    .read_receipt_subject()
+                    .map(|subject| hash_token(&format!("read-receipt\0{subject}\0{key}")))
+                    .ok_or_else(|| {
+                        DomainError::validation_code(
+                            "invalid_idempotency_key",
+                            "Anonymous consuming reads cannot use Idempotency-Key",
+                        )
+                    })
+            })
+            .transpose()?;
         let _write_guard = self.storage.lock_writes().await;
         let mut tx = self
             .storage
@@ -278,7 +291,6 @@ impl PasteService {
             .await
             .map_err(DomainError::internal)?;
         let now = unix_timestamp();
-        let key_hash = idempotency_key.map(hash_token);
         if let Some(key_hash) = key_hash.as_deref() {
             let replay_expires_at: Option<i64> = sqlx::query_scalar(
                 "SELECT expires_at FROM paste_read_receipts

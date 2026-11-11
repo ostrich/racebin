@@ -7,7 +7,9 @@ pub(super) async fn paste_content_contract(repo: &Database) {
         .await
         .unwrap();
     insert_user(repo, 201, "content-owner", "user").await;
+    insert_user(repo, 202, "content-reader", "user").await;
     let owner = principal(201, "content-owner", "user");
+    let reader = principal(202, "content-reader", "user");
     let services = PasteService::new(repo.clone());
     let private = services
         .create_paste(
@@ -97,7 +99,7 @@ pub(super) async fn paste_content_contract(repo: &Database) {
         0
     );
     let read = services
-        .read_paste(&Principal::Anonymous, &limited.id, Some("logical-read"))
+        .read_paste(&reader, &limited.id, Some("logical-read"))
         .await
         .unwrap()
         .unwrap();
@@ -147,7 +149,7 @@ pub(super) async fn paste_content_contract(repo: &Database) {
         .unwrap()
         .is_none());
     assert!(services
-        .read_paste(&Principal::Anonymous, &limited.id, Some("logical-read"))
+        .read_paste(&reader, &limited.id, Some("logical-read"))
         .await
         .unwrap()
         .is_none());

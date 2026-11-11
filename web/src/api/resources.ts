@@ -87,10 +87,10 @@ export type ConsumingRead = {
   readToken: string | null;
   idempotencyReplayed: boolean;
 };
-export async function readPaste(pasteId: string, idempotencyKey: string): Promise<ConsumingRead> {
+export async function readPaste(pasteId: string, idempotencyKey?: string): Promise<ConsumingRead> {
   const result = await transport<Schema["PasteResource"]>(`/pastes/${id(pasteId)}/reads`, {
     method: "POST",
-    headers: { "Idempotency-Key": idempotencyKey },
+    headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     invalidateQueries: false
   });
   return {

@@ -1,6 +1,7 @@
 use rand::{distr::Alphanumeric, RngExt};
 use sqlx::{Any, Row};
 
+use super::administration::{require_manageable_target, AdminTargetAuthority};
 use crate::crypto::sha256_hex;
 use crate::database::Database;
 use crate::domain_error::{DomainError, DomainResult};
@@ -384,7 +385,7 @@ pub async fn set_enabled_for_user(
     user_id: i64,
     enabled: bool,
 ) -> DomainResult<bool> {
-    change_enabled(repo, id, Some(user_id), enabled).await
+    change_enabled(repo, id, Some(user_id), enabled, None).await
 }
 
 pub async fn delete_for_user(repo: &Database, id: i64, user_id: i64) -> DomainResult<bool> {
@@ -398,7 +399,16 @@ pub async fn delete_for_user(repo: &Database, id: i64, user_id: i64) -> DomainRe
 }
 
 pub async fn set_enabled(repo: &Database, id: i64, enabled: bool) -> DomainResult<bool> {
-    change_enabled(repo, id, None, enabled).await
+    change_enabled(repo, id, None, enabled, None).await
+}
+
+pub async fn set_enabled_managed(
+    repo: &Database,
+    id: i64,
+    enabled: bool,
+    authority: AdminTargetAuthority,
+) -> DomainResult<bool> {
+    change_enabled(repo, id, None, enabled, Some(authority)).await
 }
 
 async fn change_enabled(
@@ -406,6 +416,7 @@ async fn change_enabled(
     id: i64,
     owner: Option<i64>,
     enabled: bool,
+    authority: Option<AdminTargetAuthority>,
 ) -> DomainResult<bool> {
     let _write_guard = repo.lock_writes().await;
     let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
@@ -418,6 +429,9 @@ async fn change_enabled(
     let Some(key_owner) = key_owner else {
         return Ok(false);
     };
+    if let (Some(authority), Some(user_id)) = (authority, key_owner) {
+        require_manageable_target(repo, &mut tx, user_id, authority).await?;
+    }
     if owner.is_some() && owner != key_owner {
         return Ok(false);
     }
@@ -444,6 +458,33 @@ pub async fn delete(repo: &Database, id: i64) -> DomainResult<bool> {
         .map_err(DomainError::from)
 }
 
+pub async fn delete_managed(
+    repo: &Database,
+    id: i64,
+    authority: AdminTargetAuthority,
+) -> DomainResult<bool> {
+    let _write_guard = repo.lock_writes().await;
+    let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
+    let owner: Option<Option<i64>> = sqlx::query_scalar("SELECT user_id FROM api_keys WHERE id=$1")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(DomainError::from)?;
+    let Some(owner) = owner else {
+        return Ok(false);
+    };
+    if let Some(owner) = owner {
+        require_manageable_target(repo, &mut tx, owner, authority).await?;
+    }
+    let result = sqlx::query("DELETE FROM api_keys WHERE id=$1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(DomainError::from)?;
+    tx.commit().await.map_err(DomainError::from)?;
+    Ok(result.rows_affected() == 1)
+}
+
 pub async fn delete_all_for_user(repo: &Database, user_id: i64) -> DomainResult<u64> {
     sqlx::query("DELETE FROM api_keys WHERE user_id=$1")
         .bind(user_id)
@@ -451,6 +492,23 @@ pub async fn delete_all_for_user(repo: &Database, user_id: i64) -> DomainResult<
         .await
         .map(|result| result.rows_affected())
         .map_err(DomainError::from)
+}
+
+pub async fn delete_all_for_user_managed(
+    repo: &Database,
+    user_id: i64,
+    authority: AdminTargetAuthority,
+) -> DomainResult<u64> {
+    let _write_guard = repo.lock_writes().await;
+    let mut tx = repo.pool().begin().await.map_err(DomainError::from)?;
+    require_manageable_target(repo, &mut tx, user_id, authority).await?;
+    let result = sqlx::query("DELETE FROM api_keys WHERE user_id=$1")
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(DomainError::from)?;
+    tx.commit().await.map_err(DomainError::from)?;
+    Ok(result.rows_affected())
 }
 
 #[cfg(test)]

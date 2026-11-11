@@ -34,7 +34,14 @@ pub(crate) async fn admin_create_password_reset(
     if let Err(response) = require_manageable_user(&services, &value, *id).await {
         return response;
     }
-    match accounts::create_password_reset(&services.storage, *id, created_by_user_id).await {
+    match accounts::create_password_reset_managed(
+        &services.storage,
+        *id,
+        created_by_user_id,
+        management_authority(&value),
+    )
+    .await
+    {
         Ok(token) => {
             let _ = crate::instance::audit::record(
                 &services.storage,
@@ -85,7 +92,9 @@ pub(crate) async fn admin_revoke_user_sessions(
     if let Err(response) = require_manageable_user(&services, &value, *id).await {
         return response;
     }
-    match accounts::revoke_sessions(&services.storage, *id).await {
+    match accounts::revoke_sessions_managed(&services.storage, *id, management_authority(&value))
+        .await
+    {
         Ok(true) => {
             let _ = crate::instance::audit::record(
                 &services.storage,
@@ -133,7 +142,13 @@ pub(crate) async fn admin_revoke_user_keys(
         return response;
     }
     match require_manageable_user(&services, &value, *id).await {
-        Ok(_) => match api_keys::delete_all_for_user(&services.storage, *id).await {
+        Ok(_) => match api_keys::delete_all_for_user_managed(
+            &services.storage,
+            *id,
+            management_authority(&value),
+        )
+        .await
+        {
             Ok(_) => {
                 let _ = crate::instance::audit::record(
                     &services.storage,

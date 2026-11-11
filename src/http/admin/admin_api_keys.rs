@@ -151,7 +151,14 @@ pub(crate) async fn admin_update_key(
             }
         }
     }
-    match api_keys::set_enabled(&services.storage, *id, body.enabled).await {
+    match api_keys::set_enabled_managed(
+        &services.storage,
+        *id,
+        body.enabled,
+        management_authority(&value),
+    )
+    .await
+    {
         Ok(true) => {
             let _ = crate::instance::audit::record(
                 &services.storage,
@@ -201,7 +208,7 @@ pub(crate) async fn admin_delete_key(
     if let Err(response) = require_manageable_key(&services, &value, *id).await {
         return response;
     }
-    match api_keys::delete(&services.storage, *id).await {
+    match api_keys::delete_managed(&services.storage, *id, management_authority(&value)).await {
         Ok(true) => {
             let _ = crate::instance::audit::record(
                 &services.storage,

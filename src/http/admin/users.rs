@@ -321,7 +321,14 @@ pub(crate) async fn admin_update_user(
     if let Err(response) = require_manageable_user(&services, &value, *id).await {
         return response;
     }
-    let result = accounts::update_user(&services.storage, *id, body.enabled, None).await;
+    let result = accounts::update_user_managed(
+        &services.storage,
+        *id,
+        body.enabled,
+        None,
+        management_authority(&value),
+    )
+    .await;
     match result {
         Ok(()) => {
             let _ = crate::instance::audit::record(
@@ -377,7 +384,15 @@ pub(crate) async fn admin_update_user_role(
             )
         }
     };
-    match accounts::set_role(&services.storage, *id, admin).await {
+    match accounts::update_user_managed(
+        &services.storage,
+        *id,
+        None,
+        Some(admin),
+        management_authority(&value),
+    )
+    .await
+    {
         Ok(()) => {
             let _ = crate::instance::audit::record(
                 &services.storage,
