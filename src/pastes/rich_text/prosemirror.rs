@@ -743,6 +743,26 @@ mod tests {
     }
 
     #[test]
+    fn html_import_excludes_foreign_namespace_mutation_xss() {
+        // Namespace-switching cases from Ammonia's RUSTSEC-2026-0533 fix.
+        // Racebin must never opt these foreign/raw-text elements into its
+        // allowlist, even when sanitizer dependencies change.
+        for input in [
+            "<svg><foreignObject><math><iframe><!--</iframe><img src onerror=alert(1)>",
+            "<math><mi><svg><iframe><!--</iframe><img src onerror=alert(1)>",
+        ] {
+            let document = html_to_document(input).unwrap();
+            let output = document_to_html(&document);
+            for forbidden in ["<svg", "<math", "<iframe", "<img", "onerror="] {
+                assert!(
+                    !output.contains(forbidden),
+                    "unexpected {forbidden}: {output}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn html_import_removes_active_content_and_normalizes_links() {
         let document = html_to_document(
             "<script>alert(1)</script><p onclick=\"bad()\"><a href=\"javascript:alert(2)\">bad</a><a href=\"/help\" target=\"popup\" class=\"foreign\">good</a></p>",
