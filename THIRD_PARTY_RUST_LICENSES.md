@@ -6,7 +6,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | --- | --- | --- |
 | [actix-codec](https://github.com/actix/actix-net) | 0.5.2 | MIT OR Apache-2.0 |
 | [actix-files](https://github.com/actix/actix-web) | 0.7.4 | MIT OR Apache-2.0 |
-| [actix-http](https://github.com/actix/actix-web) | 3.20.3 | MIT OR Apache-2.0 |
+| [actix-http](https://github.com/actix/actix-web) | 3.21.3 | MIT OR Apache-2.0 |
 | [actix-macros](https://github.com/actix/actix-net.git) | 0.2.4 | MIT OR Apache-2.0 |
 | [actix-multipart](https://github.com/actix/actix-web) | 0.8.1 | MIT OR Apache-2.0 |
 | [actix-multipart-derive](https://github.com/actix/actix-web) | 0.8.0 | MIT OR Apache-2.0 |
@@ -53,7 +53,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [cc](https://github.com/rust-lang/cc-rs) | 1.4.4 | MIT OR Apache-2.0 |
 | [cfg-if](https://github.com/rust-lang/cfg-if) | 1.0.4 | MIT OR Apache-2.0 |
 | [cfg_aliases](https://github.com/katharostech/cfg_aliases) | 0.2.2 | MIT |
-| [chacha20](https://github.com/RustCrypto/stream-ciphers) | 0.10.1 | MIT OR Apache-2.0 |
+| [chacha20](https://github.com/RustCrypto/stream-ciphers) | 0.10.2 | MIT OR Apache-2.0 |
 | [clap](https://github.com/clap-rs/clap) | 4.6.6 | MIT OR Apache-2.0 |
 | [clap_builder](https://github.com/clap-rs/clap) | 4.6.6 | MIT OR Apache-2.0 |
 | [clap_derive](https://github.com/clap-rs/clap) | 4.6.4 | MIT OR Apache-2.0 |
@@ -225,7 +225,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [rtoolbox](https://github.com/conradkleinespel/rtoolbox) | 0.0.5 | Apache-2.0 |
 | [rustc-hash](https://github.com/rust-lang/rustc-hash) | 2.1.3 | Apache-2.0 OR MIT |
 | [rustc_version](https://github.com/djc/rustc-version-rs) | 0.4.1 | MIT OR Apache-2.0 |
-| [rustix](https://github.com/bytecodealliance/rustix) | 1.1.4 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
+| [rustix](https://github.com/bytecodealliance/rustix) | 1.1.6 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | [rustls](https://github.com/rustls/rustls) | 0.23.46 | Apache-2.0 OR ISC OR MIT |
 | [rustls-pki-types](https://github.com/rustls/pki-types) | 1.15.1 | MIT OR Apache-2.0 |
 | [rustls-webpki](https://github.com/rustls/webpki) | 0.103.16 | ISC |
@@ -337,7 +337,7 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [zerotrie](https://github.com/unicode-org/icu4x) | 0.2.5 | Unicode-3.0 |
 | [zerovec](https://github.com/unicode-org/icu4x) | 0.11.8 | Unicode-3.0 |
 | [zerovec-derive](https://github.com/unicode-org/icu4x) | 0.11.6 | Unicode-3.0 |
-| [zip](https://github.com/zip-rs/zip2) | 9.0.4 | MIT |
+| [zip](https://github.com/zip-rs/zip2) | 9.0.5 | MIT |
 | [zlib-rs](https://github.com/trifectatechfoundation/zlib-rs) | 0.6.7 | Zlib |
 | [zmij](https://github.com/dtolnay/zmij) | 1.0.23 | MIT |
 | [zopfli](https://github.com/zopfli-rs/zopfli) | 0.8.3 | Apache-2.0 |
