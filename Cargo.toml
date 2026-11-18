@@ -27,7 +27,7 @@ markup5ever_rcdom = "0.39"
 qrcode-generator = "6"
 rand = "0.10"
 rpassword = "7.3"
-sqlx = { version = "0.9", default-features = false, features = [
+sqlx = { version = "0.9.1", default-features = false, features = [
 "runtime-tokio", "tls-rustls", "any", "sqlite", "postgres", "migrate", "macros"] }
 serde_json = "1.0.114"
 serde = { version = "1.0.197", features = ["derive"] }
@@ -44,10 +44,6 @@ comrak = { version = "0.54.0", default-features = false }
 
 [dev-dependencies]
 proptest = "1.11"
-
-[patch.crates-io]
-# Temporary SQLx 0.9 compatibility backport; see vendor/README.md.
-sqlx-sqlite = { path = "vendor/sqlx-sqlite" }
 
 [profile.release]
 lto = true

@@ -154,7 +154,8 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [jiff-core](https://github.com/BurntSushi/jiff) | 0.1.0 | Unlicense OR MIT |
 | [language-tags](https://github.com/pyfisch/rust-language-tags) | 0.3.2 | MIT OR Apache-2.0 |
 | [libc](https://github.com/rust-lang/libc) | 0.2.189 | MIT OR Apache-2.0 |
-| [libsqlite3-sys](https://github.com/rusqlite/rusqlite) | 0.39.1 | MIT |
+| [libredox](https://gitlab.redox-os.org/redox-os/libredox.git) | 0.1.25 | MIT |
+| [libsqlite3-sys](https://github.com/rusqlite/rusqlite) | 0.40.0 | MIT |
 | [linux-raw-sys](https://github.com/sunfishcode/linux-raw-sys) | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | [litemap](https://github.com/unicode-org/icu4x) | 0.8.3 | Unicode-3.0 |
 | [local-waker](https://github.com/actix/actix-net) | 0.1.4 | MIT OR Apache-2.0 |
@@ -175,6 +176,8 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [nix](https://github.com/nix-rust/nix) | 0.31.3 | MIT |
 | [num-conv](https://github.com/jhpratt/num-conv) | 0.2.2 | MIT OR Apache-2.0 |
 | [num-traits](https://github.com/rust-num/num-traits) | 0.2.19 | MIT OR Apache-2.0 |
+| [objc2-core-foundation](https://github.com/madsmtm/objc2) | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
+| [objc2-system-configuration](https://github.com/madsmtm/objc2) | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
 | [once_cell](https://github.com/matklad/once_cell) | 1.21.4 | MIT OR Apache-2.0 |
 | [once_cell_polyfill](https://github.com/polyfill-rs/once_cell_polyfill) | 1.70.2 | MIT OR Apache-2.0 |
 | [parking](https://github.com/smol-rs/parking) | 2.2.1 | Apache-2.0 OR MIT |
@@ -239,7 +242,6 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [serde_json](https://github.com/serde-rs/json) | 1.0.151 | MIT OR Apache-2.0 |
 | [serde_plain](https://github.com/mitsuhiko/serde-plain) | 1.0.2 | MIT OR Apache-2.0 |
 | [serde_urlencoded](https://github.com/nox/serde_urlencoded) | 0.7.1 | MIT OR Apache-2.0 |
-| [sha2](https://github.com/RustCrypto/hashes) | 0.10.9 | MIT OR Apache-2.0 |
 | [sha2](https://github.com/RustCrypto/hashes) | 0.11.0 | MIT OR Apache-2.0 |
 | [shlex](https://github.com/comex/rust-shlex) | 2.0.1 | MIT OR Apache-2.0 |
 | [signal-hook-registry](https://github.com/vorner/signal-hook) | 1.4.8 | MIT OR Apache-2.0 |
@@ -249,12 +251,12 @@ This document lists Rust crates incorporated into Racebin and their licenses.
 | [smallvec](https://github.com/servo/rust-smallvec) | 1.15.2 | MIT OR Apache-2.0 |
 | [socket2](https://github.com/rust-lang/socket2) | 0.6.5 | MIT OR Apache-2.0 |
 | [spin](https://github.com/mvdnes/spin-rs.git) | 0.9.9 | MIT |
-| [sqlx](https://github.com/launchbadge/sqlx) | 0.9.0 | MIT OR Apache-2.0 |
-| [sqlx-core](https://github.com/launchbadge/sqlx) | 0.9.0 | MIT OR Apache-2.0 |
-| [sqlx-macros](https://github.com/launchbadge/sqlx) | 0.9.0 | MIT OR Apache-2.0 |
-| [sqlx-macros-core](https://github.com/launchbadge/sqlx) | 0.9.0 | MIT OR Apache-2.0 |
-| [sqlx-postgres](https://github.com/launchbadge/sqlx) | 0.9.0 | MIT OR Apache-2.0 |
-| [sqlx-sqlite](https://github.com/launchbadge/sqlx) | 0.9.0 | MIT OR Apache-2.0 |
+| [sqlx](https://github.com/launchbadge/sqlx) | 0.9.1 | MIT OR Apache-2.0 |
+| [sqlx-core](https://github.com/launchbadge/sqlx) | 0.9.1 | MIT OR Apache-2.0 |
+| [sqlx-macros](https://github.com/launchbadge/sqlx) | 0.9.1 | MIT OR Apache-2.0 |
+| [sqlx-macros-core](https://github.com/launchbadge/sqlx) | 0.9.1 | MIT OR Apache-2.0 |
+| [sqlx-postgres](https://github.com/launchbadge/sqlx) | 0.9.1 | MIT OR Apache-2.0 |
+| [sqlx-sqlite](https://github.com/launchbadge/sqlx) | 0.9.1 | MIT OR Apache-2.0 |
 | [stable_deref_trait](https://github.com/storyyeller/stable_deref_trait) | 1.2.1 | MIT OR Apache-2.0 |
 | [string_cache](https://github.com/servo/string-cache) | 0.9.0 | MIT OR Apache-2.0 |
 | [string_cache](https://github.com/servo/string-cache) | 0.11.0 | MIT OR Apache-2.0 |
