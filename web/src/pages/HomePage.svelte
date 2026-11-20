@@ -29,7 +29,6 @@
 
 <section class="welcome">
   <div>
-    <p class="eyebrow">Simple sharing for code, notes, and files.</p>
     <h1>{$appState.config.site_name}</h1>
     {#if $appState.config.public_explore_enabled}
       <p>

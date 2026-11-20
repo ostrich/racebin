@@ -558,7 +558,7 @@ arrangement between components. Fixed dimensions and sticky offsets must come
 from tokens when they participate in shared alignment. This keeps layout
 behavior consistent and prevents page-specific overrides from becoming a
 second design system. Primary route pages use the shared `page-layout` and
-`page-heading` contract so their title origin, eyebrow rhythm, and
+`page-heading` contract so their title origin and
 first-content boundary remain consistent even when the content itself uses a
 sidebar.
 

@@ -40,7 +40,6 @@
       void submit(event);
     }}
   >
-    <p class="eyebrow">Invitation</p>
     <h1>Create your account</h1>
     <label class="field"
       ><span>Username</span><input name="username" autocomplete="username" required /></label

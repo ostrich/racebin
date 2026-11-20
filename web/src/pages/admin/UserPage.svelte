@@ -170,7 +170,6 @@
   {:else}
     <div class="page-heading">
       <div>
-        <p class="eyebrow">Users</p>
         <h1>{user.username}</h1>
         <div class="badge-group">
           <span class="badge"

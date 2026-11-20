@@ -70,14 +70,6 @@ select:hover:not(:disabled) {
 .result-count {
   color: var(--color-muted);
 }
-.eyebrow {
-  margin: 0;
-  color: var(--color-accent);
-  font-size: 12px;
-  font-weight: 750;
-  text-transform: uppercase;
-}
-
 .page-heading,
 .section-heading {
   display: flex;

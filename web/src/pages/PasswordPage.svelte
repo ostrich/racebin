@@ -41,7 +41,6 @@
       void submit(event);
     }}
   >
-    <p class="eyebrow">Security</p>
     <h1>Change password</h1>
     <label class="field"
       ><span>Current password</span><input

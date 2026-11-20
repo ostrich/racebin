@@ -197,10 +197,10 @@ test("paste editors fill available viewport space without displacing form contro
 
   const geometry = async () =>
     page
-      .locator(".site-header, .editor .eyebrow, .content-editor, .editor > form > .actions")
-      .evaluateAll(([header, eyebrow, editor, actions]) => ({
+      .locator(".site-header, .editor h1, .content-editor, .editor > form > .actions")
+      .evaluateAll(([header, title, editor, actions]) => ({
         editorHeight: editor!.getBoundingClientRect().height,
-        topGap: eyebrow!.getBoundingClientRect().top - header!.getBoundingClientRect().bottom,
+        topGap: title!.getBoundingClientRect().top - header!.getBoundingClientRect().bottom,
         bottomGap:
           (window.visualViewport?.height ?? window.innerHeight) -
           actions!.getBoundingClientRect().bottom

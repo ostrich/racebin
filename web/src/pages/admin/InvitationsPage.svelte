@@ -111,7 +111,6 @@
 <section class="page-layout" aria-busy={loading}>
   <div class="page-heading">
     <div>
-      <p class="eyebrow">Administration</p>
       <h1>Invitations</h1>
     </div>
     {#if $appState.config.invitations_enabled}<div class="page-heading-actions">

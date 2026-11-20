@@ -32,12 +32,10 @@
 
 <section class="auth-card panel">
   {#if complete}
-    <p class="eyebrow">Account recovery</p>
     <h1>Password reset</h1>
     <p>Your password has been changed and existing sessions have been signed out.</p>
     <Link class="button primary" href="/login">Log in</Link>
   {:else}
-    <p class="eyebrow">Account recovery</p>
     <h1>Choose a new password</h1>
     <p class="muted">This one-time link expires one hour after it was created.</p>
     <form class="stack" onsubmit={submit}>

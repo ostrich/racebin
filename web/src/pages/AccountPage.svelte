@@ -129,7 +129,6 @@
 <section class="page-layout">
   <div class="page-heading">
     <div>
-      <p class="eyebrow">Settings</p>
       <h1>Account</h1>
     </div>
     <div class="page-heading-actions">

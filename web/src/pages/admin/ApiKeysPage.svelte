@@ -87,7 +87,6 @@
 <section class="page-layout">
   <div class="page-heading">
     <div>
-      <p class="eyebrow">Administration</p>
       <h1>API keys</h1>
     </div>
   </div>

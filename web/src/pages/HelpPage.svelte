@@ -76,7 +76,6 @@
 <section class="help-page page-layout">
   <div class="page-heading">
     <div>
-      <p class="eyebrow">Help</p>
       <h1>Using Racebin</h1>
     </div>
     <div class="page-heading-actions">

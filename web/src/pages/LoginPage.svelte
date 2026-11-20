@@ -29,7 +29,6 @@
       void submit(event);
     }}
   >
-    <p class="eyebrow">Account</p>
     <h1>Log in</h1>
     <label class="field"
       ><span>Username</span><input name="username" autocomplete="username" required /></label

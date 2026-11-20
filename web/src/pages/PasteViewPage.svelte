@@ -137,7 +137,6 @@
   <article class="paste-view page-layout">
     <div class="page-heading">
       <div>
-        <p class="eyebrow">{paste.visibility} · {pasteFormatLabel(paste)}</p>
         <h1>{pasteDisplayTitle(paste)}</h1>
         <p class="paste-print-metadata">
           <span
@@ -277,6 +276,7 @@
       </section>
     {/if}
     <footer class="paste-stats">
+      <span class="paste-screen-metadata">{paste.visibility} · {pasteFormatLabel(paste)}</span>
       <span>Created {formatDate(paste.created_at)}</span>
       {#if paste.modified_at}<span>Modified {formatDate(paste.modified_at)}</span>{/if}
       <span>Expires {formatDate(paste.expires_at)}</span>

@@ -19,6 +19,7 @@
   .paste-view .page-heading .actions,
   .paste-view-options,
   .paste-floating-scrollbar,
+  .paste-screen-metadata,
   .paste-code-shell,
   .attachment-row .icon-button {
     display: none;
@@ -32,10 +33,6 @@
 
   .paste-view .page-heading {
     margin-bottom: var(--space-4);
-  }
-
-  .paste-view .page-heading .eyebrow {
-    display: none;
   }
 
   .paste-view .page-heading h1 {

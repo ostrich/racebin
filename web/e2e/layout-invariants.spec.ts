@@ -118,19 +118,13 @@ test("workspace sections share a common content edge", async ({ page }) => {
   }
 });
 
-test("page headings use consistent eyebrow-to-title spacing", async ({ page }) => {
-  const headingGap = async () =>
-    page.locator(".page-heading").evaluate((heading) => {
-      const eyebrow = heading.querySelector<HTMLElement>(".eyebrow")!.getBoundingClientRect();
-      const title = heading.querySelector<HTMLElement>("h1")!.getBoundingClientRect();
-      return title.top - eyebrow.bottom;
-    });
-
-  await page.goto("/pastes");
-  const standardGap = await headingGap();
+test("paste visibility and format appear in the footer rather than above the title", async ({
+  page
+}) => {
   await page.goto("/pastes/example-paste");
-
-  expect(await headingGap()).toBeCloseTo(standardGap, 1);
+  await expect(page.locator(".page-heading h1")).toBeVisible();
+  await expect(page.locator(".paste-stats")).toContainText("unlisted · javascript");
+  await expect(page.locator(".page-heading")).not.toContainText("unlisted · javascript");
 });
 
 test("page-level actions share one heading alignment", async ({ page }) => {

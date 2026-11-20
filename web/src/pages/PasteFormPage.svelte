@@ -490,7 +490,6 @@
   <section class="editor page-layout">
     <div class="page-heading">
       <div>
-        <p class="eyebrow">{paste ? "Edit" : "Create"}</p>
         <h1>{paste ? pasteDisplayTitle(paste) : "New paste"}</h1>
       </div>
     </div>

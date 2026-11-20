@@ -62,7 +62,6 @@
 <section class="page-layout">
   <div class="page-heading">
     <div>
-      <p class="eyebrow">Owner</p>
       <h1>Site settings</h1>
     </div>
     <div class="page-heading-actions">

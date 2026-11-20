@@ -110,7 +110,6 @@
 <section class="page-layout" aria-busy={loading}>
   <div class="page-heading">
     <div>
-      <p class="eyebrow">Administration</p>
       <h1>All pastes</h1>
     </div>
   </div>
