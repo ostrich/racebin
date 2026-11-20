@@ -175,52 +175,92 @@ test("desktop side navigation uses the standard sticky header clearance", async 
   }
 });
 
-test("primary pages share one heading-to-content boundary", async ({ page }) => {
-  test.setTimeout(60_000);
-  const routes = [
-    "/pastes",
-    "/explore",
-    "/pastes/new",
-    "/pastes/sample-paste",
-    "/account",
-    "/help",
-    "/admin",
-    "/admin/pastes",
-    "/admin/users",
-    "/admin/users/1",
-    "/admin/invitations",
-    "/admin/api-keys",
-    "/admin/settings",
-    "/admin/audit"
-  ];
+for (const width of [1440, 390]) {
+  test(`primary pages share one heading-to-content boundary at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    test.setTimeout(60_000);
+    const routes = [
+      "/pastes",
+      "/explore",
+      "/pastes/new",
+      "/pastes/sample-paste",
+      "/account",
+      "/help",
+      "/admin",
+      "/admin/pastes",
+      "/admin/users",
+      "/admin/users/1",
+      "/admin/invitations",
+      "/admin/api-keys",
+      "/admin/settings",
+      "/admin/audit"
+    ];
 
-  let headingTop: number | undefined;
-  for (const route of routes) {
-    await page.goto(route);
-    const heading = page.locator(".page-heading");
-    await expect(heading, `${route} should render its page heading`).toBeVisible();
-    const geometry = await heading.evaluate((element) => {
-      const content = element.nextElementSibling;
-      if (!(content instanceof HTMLElement)) throw new Error("Page heading has no content sibling");
-      const headingBox = element.getBoundingClientRect();
-      const contentBox = content.getBoundingClientRect();
-      return {
-        parentClass: element.parentElement?.className,
-        top: headingBox.top,
-        gap: contentBox.top - headingBox.bottom
-      };
-    });
-    expect(String(geometry.parentClass), `${route} should use the shared page layout`).toContain(
-      "page-layout"
-    );
-    headingTop ??= geometry.top;
-    expect(geometry.top, `${route} heading top`).toBeCloseTo(headingTop, 1);
-    expect(geometry.gap, `${route} heading boundary`).toBeCloseTo(20, 1);
-  }
+    let origin: { left: number; top: number; right: number } | undefined;
+    for (const route of routes) {
+      await page.goto(route);
+      const heading = page.locator(".page-heading");
+      await expect(heading, `${route} should render its page heading`).toBeVisible();
+      const geometry = await heading.evaluate((element) => {
+        const content = element.nextElementSibling;
+        if (!(content instanceof HTMLElement))
+          throw new Error("Page heading has no content sibling");
+        const headingBox = element.getBoundingClientRect();
+        const contentBox = content.getBoundingClientRect();
+        return {
+          parentClass: element.parentElement?.className,
+          edge: { left: headingBox.left, top: headingBox.top, right: headingBox.right },
+          titleLeft: element.querySelector("h1")!.getBoundingClientRect().left,
+          contentLeft: contentBox.left,
+          contentRight: contentBox.right,
+          gap: contentBox.top - headingBox.bottom
+        };
+      });
+      expect(String(geometry.parentClass), `${route} should use the shared page layout`).toContain(
+        "page-layout"
+      );
+      origin ??= geometry.edge;
+      expect(geometry.edge, `${route} heading grid`).toEqual(origin);
+      expect(geometry.titleLeft, `${route} title left edge`).toBe(origin.left);
+      expect(geometry.contentLeft, `${route} content left edge`).toBe(origin.left);
+      expect(geometry.contentRight, `${route} content right edge`).toBe(origin.right);
+      expect(geometry.gap, `${route} heading boundary`).toBeCloseTo(20, 1);
+    }
 
-  await page.goto("/pastes");
-  await expect(page.locator(".paste-filter-form")).toHaveCSS("border-top-style", "none");
-});
+    await page.goto("/pastes");
+    await expect(page.locator(".paste-filter-form")).toHaveCSS("border-top-style", "none");
+  });
+}
+
+for (const width of [1440, 390]) {
+  test(`paste lists keep the same heading and search grid at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const geometry = () =>
+      page.locator(".paste-workspace-main").evaluate((list) => {
+        const selectors = [
+          ".page-heading",
+          "h1",
+          ".paste-filter-toolbar",
+          ".paste-search label span",
+          ".paste-search input"
+        ];
+        return selectors.map((selector) => {
+          const { x, y, width, height } = list.querySelector(selector)!.getBoundingClientRect();
+          return { x, y, width, height };
+        });
+      });
+    await page.goto("/pastes");
+    await expect(page.getByRole("heading", { name: "My pastes" })).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    const workspace = await geometry();
+    await page.locator(".primary-nav").getByRole("link", { name: "Explore" }).click();
+    await expect(page.getByRole("heading", { name: "Explore" })).toBeVisible();
+    const explore = await geometry();
+    // The title can have a different available width; its origin must not move.
+    expect(explore[1]).toMatchObject({ x: workspace[1]!.x, y: workspace[1]!.y });
+    expect([explore[0], ...explore.slice(2)]).toEqual([workspace[0], ...workspace.slice(2)]);
+  });
+}
 
 test("filter expansion preserves the search toolbar boundary", async ({ page }) => {
   await page.goto("/pastes");

@@ -242,7 +242,7 @@
 
 <section class:paste-workspace={mine} aria-busy={loading}>
   <div class="paste-workspace-main">
-    <div class="page-layout paste-list-intro">
+    <div class="page-layout">
       <div class="page-heading">
         <div>
           <h1>{mine ? currentFolderName : "Explore"}</h1>

@@ -81,6 +81,9 @@ select:hover:not(:disabled) {
 .section-heading > div {
   min-width: 0;
 }
+.page-heading {
+  min-block-size: var(--control-height);
+}
 .page-heading:has(> .page-heading-details) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
