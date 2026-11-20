@@ -81,6 +81,14 @@ select:hover:not(:disabled) {
 .section-heading > div {
   min-width: 0;
 }
+.page-heading:has(> .page-heading-details) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: var(--space-1);
+}
+.page-heading-details {
+  grid-column: 1 / -1;
+}
 .page-heading > :first-child {
   display: grid;
   gap: var(--space-1);
@@ -257,9 +265,6 @@ select:hover:not(:disabled) {
 }
 
 @media (max-width: 760px) {
-  .page-heading {
-    align-items: flex-start;
-  }
   .page-heading-actions {
     justify-content: flex-start;
   }

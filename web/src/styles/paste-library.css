@@ -77,6 +77,22 @@
 .paste-list > .paste-row {
   padding: var(--space-3) var(--space-1);
 }
+.paste-list-row {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Stretch the real title link without adding a second keyboard stop. */
+.paste-list-row .paste-title::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  content: "";
+}
+.paste-list-row :is(a:not(.paste-title), button, input) {
+  position: relative;
+  z-index: 2;
+}
 .paste-list-row:not(.admin-paste-row) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

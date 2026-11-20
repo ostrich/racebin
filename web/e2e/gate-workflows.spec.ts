@@ -1,6 +1,32 @@
 import { expect, test } from "@playwright/test";
 import { mockApi, paste } from "./support/mockApi";
 
+for (const route of ["/", "/explore", "/pastes", "/admin/pastes"]) {
+  test(`paste row opens from its padding on ${route}`, async ({ page }) => {
+    await mockApi(page, route === "/pastes" || route === "/admin/pastes");
+    await page.goto(route);
+    const row = page.locator(".paste-list-row").first();
+    await row.click({ position: { x: 2, y: 2 } });
+    await expect(page).toHaveURL(/\/pastes\/sample-paste$/);
+  });
+}
+
+test("workspace row controls keep their own actions in both layouts", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/pastes");
+  const row = page.locator(".paste-list-row").first();
+  await row.getByRole("checkbox").check();
+  await expect(page).toHaveURL(/\/pastes$/);
+  await row.getByRole("link", { name: "javascript", exact: true }).click();
+  await expect(page).toHaveURL(/\/pastes\?language=javascript$/);
+  await page.getByRole("button", { name: "Compact", exact: true }).click();
+  await row.click({ position: { x: 2, y: 2 } });
+  await expect(page).toHaveURL(/\/pastes\/sample-paste$/);
+  await page.goBack();
+  await row.getByRole("link", { name: "Edit" }).click();
+  await expect(page).toHaveURL(/\/pastes\/sample-paste\/edit$/);
+});
+
 test("created paste is handed directly to the viewer", async ({ page }) => {
   await mockApi(page, true);
   const reads: string[] = [];

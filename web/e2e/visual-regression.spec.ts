@@ -87,6 +87,7 @@ test("paste view and administration", { tag: "@visual" }, async ({ page }) => {
   await page.goto("/admin/pastes");
   await expect(page).toHaveScreenshot("admin-pastes-desktop.png", screenshot);
   await page.goto("/admin/settings");
+  await expect(page.getByRole("button", { name: "Save settings" })).toBeEnabled();
   await expect(page).toHaveScreenshot("admin-settings-desktop.png", screenshot);
   await page.goto("/admin/invitations");
   await expect(page).toHaveScreenshot("admin-invitations-desktop.png", screenshot);

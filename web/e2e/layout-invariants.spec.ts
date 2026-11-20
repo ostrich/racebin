@@ -127,30 +127,33 @@ test("paste visibility and format appear in the footer rather than above the tit
   await expect(page.locator(".page-heading")).not.toContainText("unlisted · javascript");
 });
 
-test("page-level actions share one heading alignment", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  for (const route of [
-    "/pastes",
-    "/account",
-    "/help",
-    "/admin/users",
-    "/admin/users/1",
-    "/admin/invitations",
-    "/admin/settings"
-  ]) {
-    await page.goto(route);
-    const alignment = await page.locator(".page-heading").evaluate((heading) => {
-      const actions = heading.querySelector<HTMLElement>(".page-heading-actions");
-      if (!actions) throw new Error("Page heading has no standard action container");
-      const headingBox = heading.getBoundingClientRect();
-      const actionBox = actions.getBoundingClientRect();
-      return Math.abs(
-        headingBox.top + headingBox.height / 2 - (actionBox.top + actionBox.height / 2)
-      );
-    });
-    expect(alignment, `${route} should center its page action`).toBeLessThan(1);
-  }
-});
+for (const width of [1440, 390]) {
+  test(`page titles align directly with their actions at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    for (const route of [
+      "/pastes",
+      "/account",
+      "/help",
+      "/admin/users",
+      "/admin/users/1",
+      "/admin/invitations",
+      "/admin/settings"
+    ]) {
+      await page.goto(route);
+      const alignment = await page.locator(".page-heading").evaluate((heading) => {
+        const title = heading.querySelector("h1");
+        const action = heading.querySelector(".page-heading-actions > :is(a, button)");
+        if (!title || !action) throw new Error("Page heading is missing its title or action");
+        const headingBox = title.getBoundingClientRect();
+        const actionBox = action.getBoundingClientRect();
+        return Math.abs(
+          headingBox.top + headingBox.height / 2 - (actionBox.top + actionBox.height / 2)
+        );
+      });
+      expect(alignment, `${route} should center its page action`).toBeLessThan(1);
+    }
+  });
+}
 
 test("desktop side navigation uses the standard sticky header clearance", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 700 });

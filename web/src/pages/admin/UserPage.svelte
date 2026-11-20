@@ -171,20 +171,20 @@
     <div class="page-heading">
       <div>
         <h1>{user.username}</h1>
-        <div class="badge-group">
-          <span class="badge"
-            >{user.role === "owner"
-              ? "Owner"
-              : user.role === "admin"
-                ? "Administrator"
-                : "User"}</span
-          ><span class:danger={!user.enabled} class="badge"
-            >{user.enabled ? "Enabled" : "Disabled"}</span
-          >
-        </div>
       </div>
       <div class="page-heading-actions">
         <Link class="button" href={`/admin/pastes?owner_id=${user.id}`}>View pastes</Link>
+      </div>
+      <div class="page-heading-details badge-group">
+        <span class="badge"
+          >{user.role === "owner"
+            ? "Owner"
+            : user.role === "admin"
+              ? "Administrator"
+              : "User"}</span
+        ><span class:danger={!user.enabled} class="badge"
+          >{user.enabled ? "Enabled" : "Disabled"}</span
+        >
       </div>
     </div>
     <div class="section-layout">
