@@ -305,7 +305,15 @@ jobs:
       - name: Audit Rust dependencies
         run: |
           cargo install cargo-audit --locked
-          cargo audit
+          # Actix still uses cookie 0.16. RUSTSEC-2026-0594 affects only
+          # private (encrypted) cookies, which Racebin does not compile in.
+          # Remove this exception once Actix uses a patched cookie release.
+          cookie_features=$(cargo tree --locked --all-features --edges features --prefix none --invert cookie)
+          if grep -Fq 'cookie feature "private"' <<< "$cookie_features"; then
+            echo '::error::The cookie private feature is enabled; remove the audit exception and upgrade cookie.'
+            exit 1
+          fi
+          cargo audit --ignore RUSTSEC-2026-0594
       - name: Audit production frontend dependencies
         working-directory: web
         run: npm audit --omit=dev
